@@ -9,7 +9,8 @@ extends Node2D
 
 
 func _ready() -> void:
-	_build_animation()
+	if sprite.sprite_frames == null or sprite.sprite_frames.get_frame_count("capture") == 0:
+		_build_animation()
 	_center_sprite()
 	_update_status()
 
@@ -59,5 +60,7 @@ func _center_sprite() -> void:
 
 
 func _update_status() -> void:
-	status_label.text = "Loaded frames from %s" % frames_folder
-
+	var frame_count := 0
+	if sprite.sprite_frames != null and sprite.sprite_frames.has_animation("capture"):
+		frame_count = sprite.sprite_frames.get_frame_count("capture")
+	status_label.text = "Loaded %d frames from %s" % [frame_count, frames_folder]
