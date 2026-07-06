@@ -1,6 +1,8 @@
 extends Node2D
 
 @export var frames_folder: String = "res://assets/frames/renamed_trimmed_sequence"
+@export var sprite_frames_path: String = "res://assets/frames/renamed_trimmed_sequence/capture_frames.tres"
+@export var animation_name: String = "capture"
 @export var playback_fps: float = 24.0
 @export var sprite_scale: float = 2.0
 
@@ -9,10 +11,28 @@ extends Node2D
 
 
 func _ready() -> void:
-	if sprite.sprite_frames == null or sprite.sprite_frames.get_frame_count("capture") == 0:
+	if not _load_baked_animation():
 		_build_animation()
 	_center_sprite()
 	_update_status()
+
+
+func _load_baked_animation() -> bool:
+	if sprite_frames_path.is_empty():
+		return false
+	if not ResourceLoader.exists(sprite_frames_path):
+		return false
+	var resource := load(sprite_frames_path)
+	if resource is not SpriteFrames:
+		return false
+	sprite.sprite_frames = resource
+	if sprite.sprite_frames.has_animation(animation_name):
+		sprite.animation = animation_name
+	elif sprite.sprite_frames.get_animation_names().size() > 0:
+		sprite.animation = sprite.sprite_frames.get_animation_names()[0]
+	sprite.scale = Vector2.ONE * sprite_scale
+	sprite.play()
+	return true
 
 
 func _process(_delta: float) -> void:
@@ -63,6 +83,10 @@ func _center_sprite() -> void:
 
 func _update_status() -> void:
 	var frame_count := 0
-	if sprite.sprite_frames != null and sprite.sprite_frames.has_animation("capture"):
-		frame_count = sprite.sprite_frames.get_frame_count("capture")
-	status_label.text = "Loaded %d frames from %s" % [frame_count, frames_folder]
+	var current_animation := animation_name
+	if sprite.sprite_frames != null and sprite.sprite_frames.has_animation(current_animation):
+		frame_count = sprite.sprite_frames.get_frame_count(current_animation)
+	elif sprite.sprite_frames != null and sprite.sprite_frames.get_animation_names().size() > 0:
+		current_animation = sprite.sprite_frames.get_animation_names()[0]
+		frame_count = sprite.sprite_frames.get_frame_count(current_animation)
+	status_label.text = "Loaded %d frames for %s from %s" % [frame_count, current_animation, frames_folder]
