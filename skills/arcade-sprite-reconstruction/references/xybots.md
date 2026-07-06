@@ -97,6 +97,26 @@ ranges:
 
 The next untested pose/block starts at `0102`.
 
+Pose 003:
+
+```text
+start 0102
+pattern: 6x3, 5x3, 5x3, 4x2, 4x2, 3x2, 3x2, 3x1, 2x1, 2x1
+ranges:
+0102-0113
+0114-0122
+0123-0131
+0132-0139
+013A-0141
+0142-0147
+0148-014D
+014E-0150
+0151-0152
+0153-0154
+```
+
+The next untested pose/block starts at `0155`.
+
 ## Candidate Selection Heuristics
 
 - If a candidate looks like it is standing on a head, reduce height.

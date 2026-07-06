@@ -36,13 +36,23 @@ col 2: start+A, start+B, start+C, start+D, start+E
 ## Output Hygiene
 
 - Put exploratory candidates in a `candidates` subfolder for that LOD.
-- Put accepted PNGs in the pose folder with numeric names:
+- Put accepted PNGs in a separate finals tree so review folders can be deleted later:
 
 ```text
-pose_0002/lod_00_00AA-00B8_5x3.png
-pose_0002/lod_01_00B9-00C7_5x3.png
-pose_0002/pose_0002_lod_strip.png
-pose_0002/pose_0002_manifest.csv
+exports/sprites/reconstructed_pose_finals/
+├── all_final_pose_lod_strips.png
+├── pose_0000_lod_strip.png
+├── pose_0001_lod_strip.png
+└── individual_final_pngs/
+    ├── pose_0000/
+    └── pose_0001/
+```
+
+- Put accepted PNGs in each final pose folder with numeric names:
+
+```text
+individual_final_pngs/pose_0002/lod_00_00AA-00BB_6x3.png
+individual_final_pngs/pose_0002/lod_01_00BC-00CA_5x3.png
 ```
 
 - Once a pose is accepted, candidates can be deleted or moved aside.
