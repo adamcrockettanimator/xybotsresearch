@@ -81,18 +81,18 @@ Pose 002:
 
 ```text
 start 00AA
-pattern: 6x3, 5x3, 5x2, 4x3, 4x2, 4x2, 3x2, 3x2, 3x1, 2x1
+pattern: 6x3, 5x3, 5x3, 4x2, 4x2, 4x2, 3x2, 3x2, 3x1, 1x1
 ranges:
 00AA-00BB
 00BC-00CA
-00CB-00D4
-00D5-00E0
-00E1-00E8
-00E9-00F0
-00F1-00F6
-00F7-00FC
-00FD-00FF
-0100-0101
+00CB-00D9
+00DA-00E1
+00E2-00E9
+00EA-00F1
+00F2-00F7
+00F8-00FD
+00FE-0100
+0101-0101
 ```
 
 The next untested pose/block starts at `0102`.
