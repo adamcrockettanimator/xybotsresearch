@@ -1,6 +1,6 @@
 extends Node2D
 
-@export var frames_folder: String = "res://assets/frames/session_2026-07-05_214147"
+@export var frames_folder: String = "res://assets/frames/renamed_trimmed_sequence"
 @export var playback_fps: float = 24.0
 @export var sprite_scale: float = 2.0
 
@@ -45,8 +45,10 @@ func _build_animation() -> void:
 	frames.set_animation_speed("capture", playback_fps)
 
 	for file_name in file_names:
-		var texture := load(frames_folder.path_join(file_name))
-		if texture is Texture2D:
+		var image_path := ProjectSettings.globalize_path(frames_folder.path_join(file_name))
+		var image := Image.load_from_file(image_path)
+		if image and not image.is_empty():
+			var texture := ImageTexture.create_from_image(image)
 			frames.add_frame("capture", texture)
 
 	sprite.sprite_frames = frames

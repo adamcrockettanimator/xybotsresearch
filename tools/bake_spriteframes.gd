@@ -2,8 +2,8 @@ extends SceneTree
 
 
 func _initialize() -> void:
-	var source_dir := "res://assets/frames/session_2026-07-05_214147"
-	var output_path := "res://assets/frames/session_2026-07-05_214147/capture_frames.tres"
+	var source_dir := "res://assets/frames/renamed_trimmed_sequence"
+	var output_path := "res://assets/frames/renamed_trimmed_sequence/capture_frames.tres"
 
 	var dir := DirAccess.open(source_dir)
 	if dir == null:
@@ -31,8 +31,10 @@ func _initialize() -> void:
 	frames.set_animation_speed("capture", 24.0)
 
 	for file_name in file_names:
-		var texture := load(source_dir.path_join(file_name))
-		if texture is Texture2D:
+		var image_path := ProjectSettings.globalize_path(source_dir.path_join(file_name))
+		var image := Image.load_from_file(image_path)
+		if image and not image.is_empty():
+			var texture := ImageTexture.create_from_image(image)
 			frames.add_frame("capture", texture)
 
 	var result := ResourceSaver.save(frames, output_path)

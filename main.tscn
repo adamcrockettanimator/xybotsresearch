@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/frame_sequence_viewer.gd" id="1"]
-[ext_resource type="SpriteFrames" path="res://assets/frames/session_2026-07-05_214147/capture_frames.tres" id="2"]
+[ext_resource type="SpriteFrames" path="res://assets/frames/renamed_trimmed_sequence/capture_frames.tres" id="2"]
 
 [sub_resource type="CanvasItemMaterial" id="1"]
 blend_mode = 0
