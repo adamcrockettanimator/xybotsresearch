@@ -30,7 +30,8 @@ col 2: start+A, start+B, start+C, start+D, start+E
    - gun edge, backpack, feet, or side silhouette is cut off
    - torso reads correctly but weapon column is missing
 9. Save review files with numeric LOD names, e.g. `lod_00`, `lod_01`, `lod_02`. Avoid written numbers such as `eight` or `nine`.
-10. Keep derived ROM artwork local unless the user explicitly requests otherwise. Commit reusable scripts, manifests, and documentation, not copyrighted/private art exports.
+10. Treat an unexpected size anomaly as an alignment warning. For Xybots player poses, a sudden `1x1` LOD after larger player silhouettes usually means an earlier LOD consumed the wrong number of tiles.
+11. Keep derived ROM artwork local unless the user explicitly requests otherwise. Commit reusable scripts, manifests, and documentation, not copyrighted/private art exports.
 
 ## Output Hygiene
 
