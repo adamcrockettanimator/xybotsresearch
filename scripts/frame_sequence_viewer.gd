@@ -1,0 +1,63 @@
+extends Node2D
+
+@export var frames_folder: String = "res://assets/frames/session_2026-07-05_214147"
+@export var playback_fps: float = 24.0
+@export var sprite_scale: float = 2.0
+
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var status_label: Label = $CanvasLayer/StatusLabel
+
+
+func _ready() -> void:
+	_build_animation()
+	_center_sprite()
+	_update_status()
+
+
+func _process(_delta: float) -> void:
+	_center_sprite()
+
+
+func _build_animation() -> void:
+	var dir := DirAccess.open(frames_folder)
+	if dir == null:
+		push_error("Unable to open frame folder: %s" % frames_folder)
+		return
+
+	var file_names: PackedStringArray = []
+	dir.list_dir_begin()
+	while true:
+		var file_name := dir.get_next()
+		if file_name.is_empty():
+			break
+		if dir.current_is_dir():
+			continue
+		if file_name.to_lower().ends_with(".png"):
+			file_names.append(file_name)
+	dir.list_dir_end()
+
+	file_names.sort()
+
+	var frames := SpriteFrames.new()
+	frames.add_animation("capture")
+	frames.set_animation_loop("capture", true)
+	frames.set_animation_speed("capture", playback_fps)
+
+	for file_name in file_names:
+		var texture := load(frames_folder.path_join(file_name))
+		if texture is Texture2D:
+			frames.add_frame("capture", texture)
+
+	sprite.sprite_frames = frames
+	sprite.animation = "capture"
+	sprite.scale = Vector2.ONE * sprite_scale
+	sprite.play()
+
+
+func _center_sprite() -> void:
+	sprite.position = get_viewport_rect().size * 0.5
+
+
+func _update_status() -> void:
+	status_label.text = "Loaded frames from %s" % frames_folder
+
