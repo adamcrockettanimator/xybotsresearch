@@ -13,6 +13,7 @@ $state = [ordered]@{
     JunkX = $null
     JunkY = $null
 }
+$stateHistory = New-Object System.Collections.Generic.Stack[object]
 
 function Get-Photoshop {
     try {
@@ -43,6 +44,43 @@ function Update-Status {
     $junk = Get-PointText $state.JunkX $state.JunkY
     $top = if ($null -eq $state.TopRowY) { '--' } else { $state.TopRowY }
     $script:statusLabel.Text = "Copy $copy   Paste $paste`r`nTopY $top   Junk $junk"
+}
+
+function Copy-State {
+    return [ordered]@{
+        TopRowY = $state.TopRowY
+        CopyX = $state.CopyX
+        CopyY = $state.CopyY
+        PasteX = $state.PasteX
+        PasteY = $state.PasteY
+        JunkX = $state.JunkX
+        JunkY = $state.JunkY
+    }
+}
+
+function Restore-State {
+    param([Parameter(Mandatory)]$PreviousState)
+
+    foreach ($key in $PreviousState.Keys) {
+        $state[$key] = $PreviousState[$key]
+    }
+    Update-Status
+}
+
+function Undo-Photoshop {
+    $script = @'
+(function () {
+    if (!app.documents.length) {
+        throw new Error("Open the Photoshop document first.");
+    }
+    var doc = app.activeDocument;
+    if (doc.historyStates.length < 2) {
+        return;
+    }
+    doc.activeHistoryState = doc.historyStates[doc.historyStates.length - 2];
+})();
+'@
+    Invoke-PhotoshopScript $script | Out-Null
 }
 
 function Get-SelectedTile {
@@ -138,30 +176,19 @@ function Move-Tile {
     }
 
     function xybotsTileMoverMove() {
+        var baseLayer = doc.activeLayer;
+
         selectTile(sourceX, sourceY);
-        doc.selection.copy(false);
+        executeAction(charIDToTypeID("CpTL"), undefined, DialogModes.NO);
+        var movedLayer = doc.activeLayer;
 
-        // Photoshop paste bounds collapse to non-transparent pixels. Probe once
-        // so sparse 8x8 tiles keep their internal offset when moved.
-        var probe = doc.paste();
-        doc.activeLayer = probe;
-        var probeBounds = probe.bounds;
-        var offsetX = Math.round(probeBounds[0].as("px")) - sourceX;
-        var offsetY = Math.round(probeBounds[1].as("px")) - sourceY;
-        probe.remove();
-
+        doc.activeLayer = baseLayer;
         selectTile(sourceX, sourceY);
         doc.selection.clear();
 
-        selectTile(targetX, targetY);
-        var pasted = doc.paste();
-        doc.activeLayer = pasted;
-        var bounds = pasted.bounds;
-        pasted.translate(
-            targetX + offsetX - Math.round(bounds[0].as("px")),
-            targetY + offsetY - Math.round(bounds[1].as("px"))
-        );
-        doc.activeLayer = pasted.merge();
+        doc.activeLayer = movedLayer;
+        movedLayer.translate(targetX - sourceX, targetY - sourceY);
+        doc.activeLayer = movedLayer.merge();
         selectTile(finalSelectX, finalSelectY);
     }
 
@@ -183,7 +210,7 @@ function Show-Error {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Xybots Tile Mover'
-$form.Size = New-Object System.Drawing.Size(120, 305)
+$form.Size = New-Object System.Drawing.Size(120, 335)
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow
 $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.TopMost = $true
@@ -262,6 +289,7 @@ Add-Button 'Junk' 8 128 {
     try {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Junk' $state.JunkX $state.JunkY
+        $stateHistory.Push((Copy-State))
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY
         Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY $nextCopyX $nextCopyY
@@ -293,6 +321,7 @@ Add-Button 'Move' 8 188 {
     try {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Paste' $state.PasteX $state.PasteY
+        $stateHistory.Push((Copy-State))
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY
         Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY $nextCopyX $nextCopyY
@@ -305,9 +334,22 @@ Add-Button 'Move' 8 188 {
     }
 } 56
 
+Add-Button 'Undo' 8 248 {
+    try {
+        Undo-Photoshop
+        if ($stateHistory.Count -gt 0) {
+            Restore-State $stateHistory.Pop()
+        } else {
+            Update-Status
+        }
+    } catch {
+        Show-Error $_
+    }
+}
+
 $script:statusLabel = New-Object System.Windows.Forms.Label
 $script:statusLabel.Size = New-Object System.Drawing.Size(96, 48)
-$script:statusLabel.Location = New-Object System.Drawing.Point(8, 250)
+$script:statusLabel.Location = New-Object System.Drawing.Point(8, 280)
 $form.Controls.Add($script:statusLabel)
 
 Update-Status

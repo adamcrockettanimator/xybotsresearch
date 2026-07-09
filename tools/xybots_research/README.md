@@ -94,11 +94,14 @@ Workflow:
 - `Junk` moves the current copy tile into the next junk tile, clears the source
   tile, advances copy right 8 px, advances junk right 8 px, and leaves paste
   unchanged.
+- `Undo` runs one Photoshop undo and restores the mover's previous copy, paste,
+  and junk positions. Use this instead of Photoshop `Ctrl+Z` when you want the
+  tool coordinates to rewind too.
 
-The script edits the currently active layer by clearing the source selection,
-creating a temporary pasted layer, translating it into place, and immediately
-merging it down. Tile moves are wrapped in Photoshop history so one undo should
-reverse one button press.
+The script edits the currently active layer by using Photoshop's Layer via Copy
+on the selected 8x8 tile, clearing the source selection, translating the copied
+layer by an exact tile-origin delta, and immediately merging it down. That keeps
+sparse pixels in the same position inside their 8x8 tile.
 
 `XybotsTileMover.jsx` is kept as an in-Photoshop ScriptUI version, but the
 PowerShell launcher is the more reliable tool.
