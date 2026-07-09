@@ -63,6 +63,34 @@ Import-XybotsStitchedLayers.jsx
 That script asks Photoshop to import each PNG as a layer and save the PSD itself.
 It is slower, but it uses Photoshop's own file writer.
 
+## Photoshop 8x8 Tile Mover
+
+Use this when manually arranging `xybots_sprites_raw_8x8_tiles_clean_1x.psd`
+inside Photoshop:
+
+```text
+XybotsTileMover.jsx
+```
+
+Run it from `File > Scripts > Browse...`. The script opens a small floating
+Photoshop palette.
+
+Workflow:
+
+- Select an 8x8 tile with the rectangular marquee.
+- Click `SetTop`, `SetCopy`, `SetPaste`, or `SetJunk` to store that tile
+  position.
+- `Move` moves the current copy tile into the current paste tile, clears the
+  source tile, then advances copy right 8 px and paste down 8 px.
+- `Return` moves paste right 8 px and back to the stored top row.
+- `Junk` moves the current copy tile into the next junk tile, clears the source
+  tile, advances copy right 8 px, advances junk right 8 px, and leaves paste
+  unchanged.
+
+The script edits the currently active layer by clearing the source selection,
+creating a temporary pasted layer, translating it into place, and immediately
+merging it down.
+
 ## Other Scripts
 
 The remaining scripts are historical and practical helpers from the research
