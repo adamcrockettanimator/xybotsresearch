@@ -98,6 +98,9 @@ Workflow:
 - `Undo` runs one Photoshop undo and restores the mover's previous copy, paste,
   and junk positions. Use this instead of Photoshop `Ctrl+Z` when you want the
   tool coordinates to rewind too.
+- Empty source tiles are treated as valid tiles. The tool advances Source and
+  Target/Junk normally and shows `Empty source tile` in its status text without
+  interrupting the workflow.
 
 The script uses Photoshop's Layer via Cut on the selected 8x8 source tile, moves
 the isolated 8x8 fragment by the exact source-to-target tile delta, then attempts

@@ -14,6 +14,7 @@ $state = [ordered]@{
     JunkY = $null
     LayerId = $null
     LayerName = $null
+    Last = 'Ready'
 }
 $stateHistory = New-Object System.Collections.Generic.Stack[object]
 
@@ -41,12 +42,12 @@ function Get-PointText {
 }
 
 function Update-Status {
-    $copy = Get-PointText $state.CopyX $state.CopyY
-    $paste = Get-PointText $state.PasteX $state.PasteY
+    $source = Get-PointText $state.CopyX $state.CopyY
+    $target = Get-PointText $state.PasteX $state.PasteY
     $junk = Get-PointText $state.JunkX $state.JunkY
     $top = if ($null -eq $state.TopRowY) { '--' } else { $state.TopRowY }
     $layer = if ($null -eq $state.LayerName) { '--' } else { $state.LayerName }
-    $script:statusLabel.Text = "Copy $copy   Paste $paste`r`nTopY $top   Junk $junk`r`nLayer $layer"
+    $script:statusLabel.Text = "Source $source`r`nTarget $target`r`nTopY $top   Junk $junk`r`n$($state.Last)`r`nLayer $layer"
 }
 
 function Copy-State {
@@ -60,6 +61,7 @@ function Copy-State {
         JunkY = $state.JunkY
         LayerId = $state.LayerId
         LayerName = $state.LayerName
+        Last = $state.Last
     }
 }
 
@@ -196,6 +198,7 @@ function Move-Tile {
     var finalSelectY = $FinalSelectY;
     var layerId = $LayerId;
     var doc = app.activeDocument;
+    var xybotsMoveResult = "moved";
 
     function selectLayerById(id) {
         var ref = new ActionReference();
@@ -220,7 +223,16 @@ function Move-Tile {
         var sourceLayer = doc.activeLayer;
 
         selectTile(sourceX, sourceY);
-        executeAction(charIDToTypeID("CtTL"), undefined, DialogModes.NO);
+        try {
+            executeAction(charIDToTypeID("CtTL"), undefined, DialogModes.NO);
+        } catch (cutError) {
+            if (!/empty/i.test(cutError.message)) {
+                throw cutError;
+            }
+            xybotsMoveResult = "empty";
+            selectTile(finalSelectX, finalSelectY);
+            return;
+        }
         var movedLayer = doc.activeLayer;
         if (movedLayer == sourceLayer) {
             throw new Error("Photoshop did not isolate the selected 8x8 tile; aborting before moving the source layer.");
@@ -243,9 +255,10 @@ function Move-Tile {
     }
 
     doc.suspendHistory("Xybots Tile Move", "xybotsTileMoverMove()");
+    return xybotsMoveResult;
 })();
 "@
-    Invoke-PhotoshopScript $script | Out-Null
+    return Invoke-PhotoshopScript $script
 }
 
 function Show-Error {
@@ -260,7 +273,7 @@ function Show-Error {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Xybots Tile Mover'
-$form.Size = New-Object System.Drawing.Size(120, 335)
+$form.Size = New-Object System.Drawing.Size(132, 355)
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow
 $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.TopMost = $true
@@ -279,7 +292,7 @@ function Add-Button {
 
     $button = New-Object System.Windows.Forms.Button
     $button.Text = $Text
-    $button.Size = New-Object System.Drawing.Size(86, $Height)
+    $button.Size = New-Object System.Drawing.Size(98, $Height)
     $button.Location = New-Object System.Drawing.Point($X, $Y)
     $button.Add_Click($OnClick)
     $form.Controls.Add($button)
@@ -343,13 +356,15 @@ Add-Button 'Junk' 8 128 {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Junk' $state.JunkX $state.JunkY
         if ($null -eq $state.LayerId) { throw 'Source first so the tool can lock onto the source layer.' }
-        $stateHistory.Push((Copy-State))
+        $previousState = Copy-State
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY
-        Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY $nextCopyX $nextCopyY $state.LayerId
+        $result = Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY $nextCopyX $nextCopyY $state.LayerId
+        $stateHistory.Push([pscustomobject]@{ State = $previousState; Photoshop = ($result -ne 'empty') })
         $state.CopyX = $nextCopyX
         $state.CopyY = $nextCopyY
         $state.JunkX += $tileSize
+        $state.Last = if ($result -eq 'empty') { 'Empty source tile' } else { 'Moved to junk' }
         Update-Status
     } catch {
         Show-Error $_
@@ -376,13 +391,15 @@ Add-Button 'Move' 8 188 {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Paste' $state.PasteX $state.PasteY
         if ($null -eq $state.LayerId) { throw 'Source first so the tool can lock onto the source layer.' }
-        $stateHistory.Push((Copy-State))
+        $previousState = Copy-State
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY
-        Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY $nextCopyX $nextCopyY $state.LayerId
+        $result = Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY $nextCopyX $nextCopyY $state.LayerId
+        $stateHistory.Push([pscustomobject]@{ State = $previousState; Photoshop = ($result -ne 'empty') })
         $state.CopyX = $nextCopyX
         $state.CopyY = $nextCopyY
         $state.PasteY += $tileSize
+        $state.Last = if ($result -eq 'empty') { 'Empty source tile' } else { 'Moved' }
         Update-Status
     } catch {
         Show-Error $_
@@ -391,9 +408,17 @@ Add-Button 'Move' 8 188 {
 
 Add-Button 'Undo' 8 248 {
     try {
-        Undo-Photoshop
         if ($stateHistory.Count -gt 0) {
-            Restore-State $stateHistory.Pop()
+            $entry = $stateHistory.Pop()
+            if ($entry.PSObject.Properties.Name -contains 'Photoshop') {
+                if ($entry.Photoshop) {
+                    Undo-Photoshop
+                }
+                Restore-State $entry.State
+            } else {
+                Undo-Photoshop
+                Restore-State $entry
+            }
         } else {
             Update-Status
         }
@@ -403,7 +428,7 @@ Add-Button 'Undo' 8 248 {
 }
 
 $script:statusLabel = New-Object System.Windows.Forms.Label
-$script:statusLabel.Size = New-Object System.Drawing.Size(96, 66)
+$script:statusLabel.Size = New-Object System.Drawing.Size(112, 82)
 $script:statusLabel.Location = New-Object System.Drawing.Point(8, 280)
 $form.Controls.Add($script:statusLabel)
 
