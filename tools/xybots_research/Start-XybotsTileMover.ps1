@@ -109,7 +109,9 @@ function Move-Tile {
         [Parameter(Mandatory)][int]$SourceX,
         [Parameter(Mandatory)][int]$SourceY,
         [Parameter(Mandatory)][int]$TargetX,
-        [Parameter(Mandatory)][int]$TargetY
+        [Parameter(Mandatory)][int]$TargetY,
+        [Parameter(Mandatory)][int]$FinalSelectX,
+        [Parameter(Mandatory)][int]$FinalSelectY
     )
 
     $script = @"
@@ -122,6 +124,8 @@ function Move-Tile {
     var sourceY = $SourceY;
     var targetX = $TargetX;
     var targetY = $TargetY;
+    var finalSelectX = $FinalSelectX;
+    var finalSelectY = $FinalSelectY;
     var doc = app.activeDocument;
 
     function selectTile(x, y) {
@@ -133,16 +137,21 @@ function Move-Tile {
         ]);
     }
 
-    selectTile(sourceX, sourceY);
-    doc.selection.copy(false);
-    doc.selection.clear();
+    function xybotsTileMoverMove() {
+        selectTile(sourceX, sourceY);
+        doc.selection.copy(false);
+        doc.selection.clear();
 
-    selectTile(targetX, targetY);
-    var pasted = doc.paste();
-    doc.activeLayer = pasted;
-    var bounds = pasted.bounds;
-    pasted.translate(targetX - Math.round(bounds[0].as("px")), targetY - Math.round(bounds[1].as("px")));
-    doc.activeLayer = pasted.merge();
+        selectTile(targetX, targetY);
+        var pasted = doc.paste();
+        doc.activeLayer = pasted;
+        var bounds = pasted.bounds;
+        pasted.translate(targetX - Math.round(bounds[0].as("px")), targetY - Math.round(bounds[1].as("px")));
+        doc.activeLayer = pasted.merge();
+        selectTile(finalSelectX, finalSelectY);
+    }
+
+    doc.suspendHistory("Xybots Tile Move", "xybotsTileMoverMove()");
 })();
 "@
     Invoke-PhotoshopScript $script | Out-Null
@@ -160,7 +169,7 @@ function Show-Error {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Xybots Tile Mover'
-$form.Size = New-Object System.Drawing.Size(370, 155)
+$form.Size = New-Object System.Drawing.Size(120, 305)
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedToolWindow
 $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.TopMost = $true
@@ -173,12 +182,13 @@ function Add-Button {
         [Parameter(Mandatory)][string]$Text,
         [Parameter(Mandatory)][int]$X,
         [Parameter(Mandatory)][int]$Y,
-        [Parameter(Mandatory)]$OnClick
+        [Parameter(Mandatory)]$OnClick,
+        [int]$Height = 26
     )
 
     $button = New-Object System.Windows.Forms.Button
     $button.Text = $Text
-    $button.Size = New-Object System.Drawing.Size(78, 26)
+    $button.Size = New-Object System.Drawing.Size(86, $Height)
     $button.Location = New-Object System.Drawing.Point($X, $Y)
     $button.Add_Click($OnClick)
     $form.Controls.Add($button)
@@ -198,7 +208,7 @@ Add-Button 'SetTop' 8 8 {
     }
 }
 
-Add-Button 'SetCopy' 91 8 {
+Add-Button 'SetCopy' 8 38 {
     try {
         $point = Get-SelectedTile
         $state.CopyX = $point.X
@@ -209,7 +219,7 @@ Add-Button 'SetCopy' 91 8 {
     }
 }
 
-Add-Button 'SetPaste' 174 8 {
+Add-Button 'SetPaste' 8 68 {
     try {
         $point = Get-SelectedTile
         $state.PasteX = $point.X
@@ -223,21 +233,34 @@ Add-Button 'SetPaste' 174 8 {
     }
 }
 
-Add-Button 'Move' 8 40 {
+Add-Button 'SetJunk' 8 98 {
     try {
-        Require-Point 'Copy' $state.CopyX $state.CopyY
-        Require-Point 'Paste' $state.PasteX $state.PasteY
-        Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY
-        $state.CopyX += $tileSize
-        $state.PasteY += $tileSize
-        Select-Tile $state.CopyX $state.CopyY
+        $point = Get-SelectedTile
+        $state.JunkX = $point.X
+        $state.JunkY = $point.Y
         Update-Status
     } catch {
         Show-Error $_
     }
 }
 
-Add-Button 'Return' 91 40 {
+Add-Button 'Junk' 8 128 {
+    try {
+        Require-Point 'Copy' $state.CopyX $state.CopyY
+        Require-Point 'Junk' $state.JunkX $state.JunkY
+        $nextCopyX = $state.CopyX + $tileSize
+        $nextCopyY = $state.CopyY
+        Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY $nextCopyX $nextCopyY
+        $state.CopyX = $nextCopyX
+        $state.CopyY = $nextCopyY
+        $state.JunkX += $tileSize
+        Update-Status
+    } catch {
+        Show-Error $_
+    }
+}
+
+Add-Button 'Return' 8 158 {
     try {
         Require-Point 'Paste' $state.PasteX $state.PasteY
         if ($null -eq $state.TopRowY) {
@@ -252,34 +275,25 @@ Add-Button 'Return' 91 40 {
     }
 }
 
-Add-Button 'SetJunk' 8 72 {
-    try {
-        $point = Get-SelectedTile
-        $state.JunkX = $point.X
-        $state.JunkY = $point.Y
-        Update-Status
-    } catch {
-        Show-Error $_
-    }
-}
-
-Add-Button 'Junk' 91 72 {
+Add-Button 'Move' 8 188 {
     try {
         Require-Point 'Copy' $state.CopyX $state.CopyY
-        Require-Point 'Junk' $state.JunkX $state.JunkY
-        Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY
-        $state.CopyX += $tileSize
-        $state.JunkX += $tileSize
-        Select-Tile $state.CopyX $state.CopyY
+        Require-Point 'Paste' $state.PasteX $state.PasteY
+        $nextCopyX = $state.CopyX + $tileSize
+        $nextCopyY = $state.CopyY
+        Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY $nextCopyX $nextCopyY
+        $state.CopyX = $nextCopyX
+        $state.CopyY = $nextCopyY
+        $state.PasteY += $tileSize
         Update-Status
     } catch {
         Show-Error $_
     }
-}
+} 56
 
 $script:statusLabel = New-Object System.Windows.Forms.Label
-$script:statusLabel.Size = New-Object System.Drawing.Size(340, 34)
-$script:statusLabel.Location = New-Object System.Drawing.Point(8, 105)
+$script:statusLabel.Size = New-Object System.Drawing.Size(96, 48)
+$script:statusLabel.Location = New-Object System.Drawing.Point(8, 250)
 $form.Controls.Add($script:statusLabel)
 
 Update-Status

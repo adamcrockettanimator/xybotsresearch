@@ -97,7 +97,8 @@ Workflow:
 
 The script edits the currently active layer by clearing the source selection,
 creating a temporary pasted layer, translating it into place, and immediately
-merging it down.
+merging it down. Tile moves are wrapped in Photoshop history so one undo should
+reverse one button press.
 
 `XybotsTileMover.jsx` is kept as an in-Photoshop ScriptUI version, but the
 PowerShell launcher is the more reliable tool.
