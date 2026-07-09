@@ -160,12 +160,17 @@ snap/xybots_capture/auto/
     stitched/
         stitched_00001_frame_12345_parts_3.png
         ...
+    characters/
+        character_00001_frame_12345_parts_6.png
+        ...
 ```
 
 `strips` are the individual Xybots motion objects. `stitched` images are
 candidate assembled sprites made by grouping adjacent visible strips with the
-same color and priority. They are intentionally heuristic review output, not a
-claim that the game has a formal "character object" at that level.
+same color and priority. `characters` are a second, more relaxed grouping pass
+that merges nearby same-frame strips with matching color and priority into
+larger logical sprite candidates. They are intentionally heuristic review output,
+not a claim that the game has a formal "character object" at that level.
 
 ## Changed Source Files
 
@@ -175,8 +180,8 @@ claim that the game has a formal "character object" at that level.
 - Checks `MAME_XYBOTS_CAPTURE` in `machine_start()`.
 - Uses `F12` to toggle automatic unique capture after `m_mob->draw_async(cliprect)`
   and before the playfield merge.
-- Exports new unique strip PNGs and stitched candidate PNGs while auto capture
-  is running.
+- Exports new unique strip PNGs, conservative stitched candidate PNGs, and
+  relaxed character candidate PNGs while auto capture is running.
 - Writes a final one-frame dump with `sprite_layer.png`, per-slot object PNGs,
   `metadata.json`, and `sprite_layer_debug.png` when auto capture is stopped.
 
@@ -207,8 +212,8 @@ claim that the game has a formal "character object" at that level.
   motion-object games.
 - Slot decoding is mirrored in the driver from the Xybots motion-object config.
   It is intentionally not a generic callback from `render_object()` yet.
-- Stitched images are heuristic. They group adjacent visible strips with matching
-  color and priority, which is useful for reviewing player/enemy captures but
-  can also group unrelated nearby objects.
+- Stitched and character images are heuristic. They group visible strips with
+  matching color and priority, which is useful for reviewing player/enemy
+  captures but can also group unrelated nearby objects.
 - Object PNGs are rendered in local strip space. Wrapped screen-space placement
   is represented in metadata and the sprite-layer/debug images.

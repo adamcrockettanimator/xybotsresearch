@@ -1,5 +1,5 @@
 diff --git a/src/mame/atari/xybots.cpp b/src/mame/atari/xybots.cpp
-index cef61caa..95095d9b 100644
+index cef61caa..d9e733a2 100644
 --- a/src/mame/atari/xybots.cpp
 +++ b/src/mame/atari/xybots.cpp
 @@ -27,17 +27,53 @@
@@ -56,7 +56,7 @@ index cef61caa..95095d9b 100644
  class xybots_state : public driver_device
  {
  public:
-@@ -73,6 +109,13 @@ private:
+@@ -73,6 +109,15 @@ private:
  	required_ioport m_ffe200;
  
  	uint16_t m_h256 = 0;
@@ -65,12 +65,14 @@ index cef61caa..95095d9b 100644
 +	int m_xybots_capture_index = 0;
 +	int m_xybots_unique_strip_index = 0;
 +	int m_xybots_unique_stitched_index = 0;
++	int m_xybots_unique_character_index = 0;
 +	std::unordered_set<u64> m_xybots_seen_strips;
 +	std::unordered_set<u64> m_xybots_seen_stitched;
++	std::unordered_set<u64> m_xybots_seen_characters;
  
  	void video_int_ack_w(uint16_t data = 0);
  	uint16_t special_port1_r();
-@@ -80,6 +123,25 @@ private:
+@@ -80,6 +125,26 @@ private:
  	TILE_GET_INFO_MEMBER(get_playfield_tile_info);
  	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
  	void main_map(address_map &map) ATTR_COLD;
@@ -87,6 +89,7 @@ index cef61caa..95095d9b 100644
 +	u64 xybots_hash_bitmap(const bitmap_argb32 &bitmap);
 +	bool xybots_screen_rect(const xybots_mo_capture_record &object, const rectangle &cliprect, rectangle &rect);
 +	bool xybots_group_rects_touch(const rectangle &left, const rectangle &right);
++	bool xybots_group_rects_character_related(const rectangle &left, const rectangle &right);
 +	void xybots_blit_argb(bitmap_argb32 &dest, const bitmap_argb32 &src, int dest_x, int dest_y);
 +	void xybots_write_png(const char *path, const bitmap_argb32 &bitmap);
 +	void xybots_write_metadata(const char *path, const std::vector<xybots_mo_capture_record> &objects, screen_device &screen, const rectangle &cliprect, const char *capture_dir);
@@ -96,7 +99,7 @@ index cef61caa..95095d9b 100644
  
  	static const atari_motion_objects_config s_mob_config;
  };
-@@ -163,6 +225,20 @@ uint32_t xybots_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
+@@ -163,6 +228,20 @@ uint32_t xybots_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
  	// start drawing
  	m_mob->draw_async(cliprect);
  
@@ -117,7 +120,7 @@ index cef61caa..95095d9b 100644
  	// draw the playfield
  	m_playfield_tilemap->draw(screen, bitmap, cliprect, 0, 0);
  
-@@ -226,6 +302,614 @@ uint32_t xybots_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
+@@ -226,6 +305,718 @@ uint32_t xybots_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
  }
  
  
@@ -175,9 +178,11 @@ index cef61caa..95095d9b 100644
 +	std::string const capture_dir = "xybots_capture/auto";
 +	xybots_create_capture_dirs(capture_dir + "/strips", false);
 +	xybots_create_capture_dirs(capture_dir + "/stitched", false);
++	xybots_create_capture_dirs(capture_dir + "/characters", false);
 +
 +	int new_strips = 0;
 +	int new_stitched = 0;
++	int new_characters = 0;
 +	std::vector<int> stitch_candidates;
 +	std::vector<rectangle> candidate_rects;
 +
@@ -290,8 +295,85 @@ index cef61caa..95095d9b 100644
 +		}
 +	}
 +
-+	if (new_strips || new_stitched)
-+		osd_printf_info("[xybots-capture] frame %llu: %d new strips, %d new stitched\n", (unsigned long long)screen.frame_number(), new_strips, new_stitched);
++	std::vector<bool> character_consumed(stitch_candidates.size(), false);
++	for (int start = 0; start < stitch_candidates.size(); start++)
++	{
++		if (character_consumed[start])
++			continue;
++
++		std::vector<int> group;
++		std::vector<int> queue;
++		character_consumed[start] = true;
++		queue.push_back(start);
++
++		while (!queue.empty())
++		{
++			int const current = queue.back();
++			queue.pop_back();
++			group.push_back(current);
++
++			xybots_mo_capture_record const &current_object = objects[stitch_candidates[current]];
++			for (int other = 0; other < stitch_candidates.size(); other++)
++			{
++				if (character_consumed[other])
++					continue;
++
++				xybots_mo_capture_record const &other_object = objects[stitch_candidates[other]];
++				if (current_object.color != other_object.color || current_object.priority != other_object.priority)
++					continue;
++				if (!xybots_group_rects_character_related(candidate_rects[current], candidate_rects[other]))
++					continue;
++
++				rectangle trial_bounds = candidate_rects[current];
++				trial_bounds |= candidate_rects[other];
++				if (trial_bounds.width() > 96 || trial_bounds.height() > 112)
++					continue;
++
++				character_consumed[other] = true;
++				queue.push_back(other);
++			}
++		}
++
++		if (group.size() < 2)
++			continue;
++
++		rectangle bounds = candidate_rects[group[0]];
++		for (int member : group)
++			bounds |= candidate_rects[member];
++
++		if (bounds.width() > 96 || bounds.height() > 112)
++			continue;
++
++		bitmap_argb32 character(bounds.width(), bounds.height());
++		character.fill(rgb_t::transparent());
++		for (int member : group)
++		{
++			xybots_mo_capture_record const &object = objects[stitch_candidates[member]];
++			bitmap_ind16 object_ind(object.width_tiles * 8, object.height_tiles * 8);
++			xybots_render_object_bitmap(object, object_ind);
++
++			bitmap_argb32 object_argb(object_ind.width(), object_ind.height());
++			xybots_convert_mobitmap(object_argb, object_ind, object_ind.cliprect());
++			xybots_blit_argb(character, object_argb, object.rendered_x - bounds.left(), object.rendered_y - bounds.top());
++		}
++
++		u64 const character_hash = xybots_hash_bitmap(character);
++		if (m_xybots_seen_characters.insert(character_hash).second)
++		{
++			m_xybots_unique_character_index++;
++			std::string const image = util::string_format(
++					"%s/characters/character_%05d_frame_%llu_parts_%d.png",
++					capture_dir,
++					m_xybots_unique_character_index,
++					(unsigned long long)screen.frame_number(),
++					int(group.size()));
++			xybots_write_png(image.c_str(), character);
++			new_characters++;
++		}
++	}
++
++	if (new_strips || new_stitched || new_characters)
++		osd_printf_info("[xybots-capture] frame %llu: %d new strips, %d new stitched, %d new characters\n", (unsigned long long)screen.frame_number(), new_strips, new_stitched, new_characters);
 +}
 +
 +
@@ -378,6 +460,31 @@ index cef61caa..95095d9b 100644
 +	rectangle expanded(left.left() - 2, left.right() + 2, left.top() - 2, left.bottom() + 2);
 +	expanded &= right;
 +	return !expanded.empty();
++}
++
++
++bool xybots_state::xybots_group_rects_character_related(const rectangle &left, const rectangle &right)
++{
++	rectangle expanded(left.left() - 16, left.right() + 16, left.top() - 16, left.bottom() + 16);
++	expanded &= right;
++	if (expanded.empty())
++		return false;
++
++	rectangle bounds = left;
++	bounds |= right;
++	if (bounds.width() > 96 || bounds.height() > 112)
++		return false;
++
++	bool const horizontal_overlap = !(left.right() < right.left() || right.right() < left.left());
++	bool const vertical_overlap = !(left.bottom() < right.top() || right.bottom() < left.top());
++	if (horizontal_overlap || vertical_overlap)
++		return true;
++
++	int const left_cx = (left.left() + left.right()) / 2;
++	int const left_cy = (left.top() + left.bottom()) / 2;
++	int const right_cx = (right.left() + right.right()) / 2;
++	int const right_cy = (right.top() + right.bottom()) / 2;
++	return std::abs(left_cx - right_cx) <= 48 && std::abs(left_cy - right_cy) <= 64;
 +}
 +
 +
@@ -732,7 +839,7 @@ index cef61caa..95095d9b 100644
  /*************************************
   *
   *  Initialization & interrupts
-@@ -570,6 +1254,16 @@ void xybots_state::machine_start()
+@@ -570,6 +1361,18 @@ void xybots_state::machine_start()
  {
  	m_slapstic_bank->configure_entries(0, 4, memregion("maincpu")->base() + 0x8000, 0x2000);
  	m_h256 = 0x0400;
@@ -741,8 +848,10 @@ index cef61caa..95095d9b 100644
 +	m_xybots_capture_index = 0;
 +	m_xybots_unique_strip_index = 0;
 +	m_xybots_unique_stitched_index = 0;
++	m_xybots_unique_character_index = 0;
 +	m_xybots_seen_strips.clear();
 +	m_xybots_seen_stitched.clear();
++	m_xybots_seen_characters.clear();
 +
 +	if (m_xybots_capture_enabled)
 +		osd_printf_info("[xybots-capture] Enabled; press F12 to toggle automatic unique sprite capture\n");
