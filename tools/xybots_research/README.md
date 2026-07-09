@@ -101,6 +101,8 @@ Workflow:
 - Empty source tiles are treated as valid tiles. The tool advances Source and
   Target/Junk normally and shows `Empty source tile` in its status text without
   interrupting the workflow.
+- When Source advances past the right edge of the document, it wraps to the
+  first tile of the next row and shows `source wrapped` in the status text.
 
 The script uses Photoshop's Layer via Cut on the selected 8x8 source tile, moves
 the isolated 8x8 fragment by the exact source-to-target tile delta, then attempts

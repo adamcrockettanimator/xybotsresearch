@@ -14,6 +14,8 @@ $state = [ordered]@{
     JunkY = $null
     LayerId = $null
     LayerName = $null
+    DocWidth = $null
+    DocHeight = $null
     Last = 'Ready'
 }
 $stateHistory = New-Object System.Collections.Generic.Stack[object]
@@ -61,6 +63,8 @@ function Copy-State {
         JunkY = $state.JunkY
         LayerId = $state.LayerId
         LayerName = $state.LayerName
+        DocWidth = $state.DocWidth
+        DocHeight = $state.DocHeight
         Last = $state.Last
     }
 }
@@ -111,6 +115,44 @@ function Get-ActiveLayerInfo {
     return @{
         Id = [int]$parts[0]
         Name = $parts[1]
+    }
+}
+
+function Get-DocumentInfo {
+    $script = @'
+(function () {
+    if (!app.documents.length) {
+        throw new Error("Open the Photoshop document first.");
+    }
+    var doc = app.activeDocument;
+    return Math.round(doc.width.as("px")) + "," + Math.round(doc.height.as("px"));
+})();
+'@
+
+    $result = Invoke-PhotoshopScript $script
+    $parts = "$result".Split(',')
+    return @{
+        Width = [int]$parts[0]
+        Height = [int]$parts[1]
+    }
+}
+
+function Get-NextSourcePoint {
+    param(
+        [Parameter(Mandatory)][int]$X,
+        [Parameter(Mandatory)][int]$Y
+    )
+
+    $nextX = $X + $tileSize
+    $nextY = $Y
+    if ($null -ne $state.DocWidth -and ($nextX + $tileSize) -gt $state.DocWidth) {
+        $nextX = 0
+        $nextY += $tileSize
+    }
+    return @{
+        X = $nextX
+        Y = $nextY
+        Wrapped = ($nextX -eq 0 -and $nextY -ne $Y)
     }
 }
 
@@ -316,10 +358,13 @@ Add-Button 'Source' 8 38 {
     try {
         $point = Get-SelectedTile
         $layer = Get-ActiveLayerInfo
+        $docInfo = Get-DocumentInfo
         $state.CopyX = $point.X
         $state.CopyY = $point.Y
         $state.LayerId = $layer.Id
         $state.LayerName = $layer.Name
+        $state.DocWidth = $docInfo.Width
+        $state.DocHeight = $docInfo.Height
         Update-Status
     } catch {
         Show-Error $_
@@ -357,14 +402,15 @@ Add-Button 'Junk' 8 128 {
         Require-Point 'Junk' $state.JunkX $state.JunkY
         if ($null -eq $state.LayerId) { throw 'Source first so the tool can lock onto the source layer.' }
         $previousState = Copy-State
-        $nextCopyX = $state.CopyX + $tileSize
-        $nextCopyY = $state.CopyY
+        $nextSource = Get-NextSourcePoint $state.CopyX $state.CopyY
+        $nextCopyX = $nextSource.X
+        $nextCopyY = $nextSource.Y
         $result = Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY $nextCopyX $nextCopyY $state.LayerId
         $stateHistory.Push([pscustomobject]@{ State = $previousState; Photoshop = ($result -ne 'empty') })
         $state.CopyX = $nextCopyX
         $state.CopyY = $nextCopyY
         $state.JunkX += $tileSize
-        $state.Last = if ($result -eq 'empty') { 'Empty source tile' } else { 'Moved to junk' }
+        $state.Last = if ($result -eq 'empty') { 'Empty source tile' } elseif ($nextSource.Wrapped) { 'Moved to junk; source wrapped' } else { 'Moved to junk' }
         Update-Status
     } catch {
         Show-Error $_
@@ -392,14 +438,15 @@ Add-Button 'Move' 8 188 {
         Require-Point 'Paste' $state.PasteX $state.PasteY
         if ($null -eq $state.LayerId) { throw 'Source first so the tool can lock onto the source layer.' }
         $previousState = Copy-State
-        $nextCopyX = $state.CopyX + $tileSize
-        $nextCopyY = $state.CopyY
+        $nextSource = Get-NextSourcePoint $state.CopyX $state.CopyY
+        $nextCopyX = $nextSource.X
+        $nextCopyY = $nextSource.Y
         $result = Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY $nextCopyX $nextCopyY $state.LayerId
         $stateHistory.Push([pscustomobject]@{ State = $previousState; Photoshop = ($result -ne 'empty') })
         $state.CopyX = $nextCopyX
         $state.CopyY = $nextCopyY
         $state.PasteY += $tileSize
-        $state.Last = if ($result -eq 'empty') { 'Empty source tile' } else { 'Moved' }
+        $state.Last = if ($result -eq 'empty') { 'Empty source tile' } elseif ($nextSource.Wrapped) { 'Moved; source wrapped' } else { 'Moved' }
         Update-Status
     } catch {
         Show-Error $_
