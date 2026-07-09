@@ -88,7 +88,15 @@ function Undo-Photoshop {
     if (doc.historyStates.length < 2) {
         return;
     }
-    doc.activeHistoryState = doc.historyStates[doc.historyStates.length - 2];
+    var current = doc.activeHistoryState;
+    for (var i = doc.historyStates.length - 1; i >= 0; i--) {
+        if (doc.historyStates[i] == current) {
+            if (i > 0) {
+                doc.activeHistoryState = doc.historyStates[i - 1];
+            }
+            return;
+        }
+    }
 })();
 '@
     Invoke-PhotoshopScript $script | Out-Null
@@ -420,12 +428,15 @@ Add-Button 'Junk' 8 128 {
 Add-Button 'Return' 8 158 {
     try {
         Require-Point 'Paste' $state.PasteX $state.PasteY
+        $previousState = Copy-State
         if ($null -eq $state.TopRowY) {
             $state.TopRowY = $state.PasteY
         }
         $state.PasteX += $tileSize
         $state.PasteY = $state.TopRowY
         Select-Tile $state.PasteX $state.PasteY
+        $stateHistory.Push([pscustomobject]@{ State = $previousState; Photoshop = $false })
+        $state.Last = 'Returned target'
         Update-Status
     } catch {
         Show-Error $_

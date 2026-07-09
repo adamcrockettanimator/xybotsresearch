@@ -95,9 +95,9 @@ Workflow:
 - `Junk` moves the current copy tile into the next junk tile, clears the source
   tile, advances copy right 8 px, advances junk right 8 px, and leaves paste
   unchanged.
-- `Undo` runs one Photoshop undo and restores the mover's previous copy, paste,
-  and junk positions. Use this instead of Photoshop `Ctrl+Z` when you want the
-  tool coordinates to rewind too.
+- `Undo` steps back through the tool's own action stack. It runs Photoshop undo
+  for pixel-moving actions and restores the previous Source, Target, and Junk
+  positions. It also rewinds tool-only actions such as `Return`.
 - Empty source tiles are treated as valid tiles. The tool advances Source and
   Target/Junk normally and shows `Empty source tile` in its status text without
   interrupting the workflow.
