@@ -176,18 +176,18 @@ function Move-Tile {
     }
 
     function xybotsTileMoverMove() {
-        var baseLayer = doc.activeLayer;
-
         selectTile(sourceX, sourceY);
-        executeAction(charIDToTypeID("CpTL"), undefined, DialogModes.NO);
-        var movedLayer = doc.activeLayer;
+        var desc = new ActionDescriptor();
+        var ref = new ActionReference();
+        ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"));
+        desc.putReference(charIDToTypeID("null"), ref);
 
-        doc.activeLayer = baseLayer;
-        selectTile(sourceX, sourceY);
-        doc.selection.clear();
+        var offset = new ActionDescriptor();
+        offset.putUnitDouble(charIDToTypeID("Hrzn"), charIDToTypeID("#Pxl"), targetX - sourceX);
+        offset.putUnitDouble(charIDToTypeID("Vrtc"), charIDToTypeID("#Pxl"), targetY - sourceY);
+        desc.putObject(charIDToTypeID("T   "), charIDToTypeID("Ofst"), offset);
 
-        doc.activeLayer = movedLayer;
-        movedLayer.translate(targetX - sourceX, targetY - sourceY);
+        executeAction(charIDToTypeID("move"), desc, DialogModes.NO);
         selectTile(finalSelectX, finalSelectY);
     }
 
