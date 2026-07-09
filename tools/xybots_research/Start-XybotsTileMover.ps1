@@ -140,13 +140,27 @@ function Move-Tile {
     function xybotsTileMoverMove() {
         selectTile(sourceX, sourceY);
         doc.selection.copy(false);
+
+        // Photoshop paste bounds collapse to non-transparent pixels. Probe once
+        // so sparse 8x8 tiles keep their internal offset when moved.
+        var probe = doc.paste();
+        doc.activeLayer = probe;
+        var probeBounds = probe.bounds;
+        var offsetX = Math.round(probeBounds[0].as("px")) - sourceX;
+        var offsetY = Math.round(probeBounds[1].as("px")) - sourceY;
+        probe.remove();
+
+        selectTile(sourceX, sourceY);
         doc.selection.clear();
 
         selectTile(targetX, targetY);
         var pasted = doc.paste();
         doc.activeLayer = pasted;
         var bounds = pasted.bounds;
-        pasted.translate(targetX - Math.round(bounds[0].as("px")), targetY - Math.round(bounds[1].as("px")));
+        pasted.translate(
+            targetX + offsetX - Math.round(bounds[0].as("px")),
+            targetY + offsetY - Math.round(bounds[1].as("px"))
+        );
         doc.activeLayer = pasted.merge();
         selectTile(finalSelectX, finalSelectY);
     }
