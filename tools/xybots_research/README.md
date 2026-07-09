@@ -69,12 +69,19 @@ Use this when manually arranging `xybots_sprites_raw_8x8_tiles_clean_1x.psd`
 inside Photoshop:
 
 ```text
-XybotsTileMover.jsx
+Start-XybotsTileMover.ps1
 ```
 
-Run it from Photoshop with `File > Scripts > Browse...`. Do not double-click the
-`.jsx` in Explorer; it needs to be launched by Photoshop so the floating palette
-belongs to the active Photoshop session.
+Run it from PowerShell while Photoshop is open:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\Godot\xybotsResearch\tools\Start-XybotsTileMover.ps1
+```
+
+This opens a small always-on-top Windows tool that controls the active Photoshop
+document through Photoshop scripting. This path is preferred over the ScriptUI
+`.jsx` palette because recent Photoshop builds can fail to show modeless
+ExtendScript palettes reliably.
 
 Workflow:
 
@@ -91,6 +98,9 @@ Workflow:
 The script edits the currently active layer by clearing the source selection,
 creating a temporary pasted layer, translating it into place, and immediately
 merging it down.
+
+`XybotsTileMover.jsx` is kept as an in-Photoshop ScriptUI version, but the
+PowerShell launcher is the more reliable tool.
 
 ## Other Scripts
 
