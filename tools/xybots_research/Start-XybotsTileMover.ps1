@@ -188,7 +188,13 @@ function Move-Tile {
 
         doc.activeLayer = movedLayer;
         movedLayer.translate(targetX - sourceX, targetY - sourceY);
-        doc.activeLayer = movedLayer.merge();
+        try {
+            executeAction(charIDToTypeID("Mrg2"), undefined, DialogModes.NO);
+        } catch (mergeError) {
+            // Some Photoshop/layer states refuse scripted merge-down. Keep the
+            // moved tile layer instead of failing the button press.
+            movedLayer.name = "xybots moved tile";
+        }
         selectTile(finalSelectX, finalSelectY);
     }
 
