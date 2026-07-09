@@ -2,6 +2,7 @@
 #targetengine "xybotsTileMover"
 
 (function () {
+    try {
     var TILE = 8;
     var state = {
         topRowY: null,
@@ -195,7 +196,15 @@
     }
 
     var status;
-    var window = buildWindow();
-    window.center();
-    window.show();
+    if ($.global.xybotsTileMoverWindow && $.global.xybotsTileMoverWindow.visible) {
+        $.global.xybotsTileMoverWindow.active = true;
+        return;
+    }
+
+    $.global.xybotsTileMoverWindow = buildWindow();
+    $.global.xybotsTileMoverWindow.center();
+    $.global.xybotsTileMoverWindow.show();
+    } catch (error) {
+        alert("Xybots Tile Mover failed:\n\n" + error.message + "\n\nLine: " + error.line);
+    }
 })();

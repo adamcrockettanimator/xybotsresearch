@@ -72,8 +72,9 @@ inside Photoshop:
 XybotsTileMover.jsx
 ```
 
-Run it from `File > Scripts > Browse...`. The script opens a small floating
-Photoshop palette.
+Run it from Photoshop with `File > Scripts > Browse...`. Do not double-click the
+`.jsx` in Explorer; it needs to be launched by Photoshop so the floating palette
+belongs to the active Photoshop session.
 
 Workflow:
 
