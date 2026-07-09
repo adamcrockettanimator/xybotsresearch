@@ -98,10 +98,11 @@ Workflow:
   and junk positions. Use this instead of Photoshop `Ctrl+Z` when you want the
   tool coordinates to rewind too.
 
-The script edits the currently active layer by using Photoshop's Layer via Copy
-on the selected 8x8 tile, clearing the source selection, translating the copied
-layer by an exact tile-origin delta, and immediately merging it down. That keeps
-sparse pixels in the same position inside their 8x8 tile.
+The script uses Photoshop's Layer via Copy on the selected 8x8 tile, clears the
+source selection, and translates the copied layer by an exact tile-origin delta.
+That keeps sparse pixels in the same position inside their 8x8 tile. The moved
+tile remains as a small layer so Photoshop does not reject scripted merge-down
+operations during rapid manual assembly.
 
 `XybotsTileMover.jsx` is kept as an in-Photoshop ScriptUI version, but the
 PowerShell launcher is the more reliable tool.
