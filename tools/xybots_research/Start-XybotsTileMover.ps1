@@ -220,15 +220,14 @@ function Move-Tile {
         var sourceLayer = doc.activeLayer;
 
         selectTile(sourceX, sourceY);
-        executeAction(charIDToTypeID("CpTL"), undefined, DialogModes.NO);
+        executeAction(charIDToTypeID("CtTL"), undefined, DialogModes.NO);
         var movedLayer = doc.activeLayer;
+        if (movedLayer == sourceLayer) {
+            throw new Error("Photoshop did not isolate the selected 8x8 tile; aborting before moving the source layer.");
+        }
         movedLayer.name = "xybots tile move";
         movedLayer.blendMode = BlendMode.NORMAL;
         movedLayer.opacity = 100;
-
-        selectLayerById(layerId);
-        selectTile(sourceX, sourceY);
-        doc.selection.clear();
 
         doc.activeLayer = movedLayer;
         movedLayer.translate(targetX - sourceX, targetY - sourceY);
@@ -300,7 +299,7 @@ Add-Button 'SetTop' 8 8 {
     }
 }
 
-Add-Button 'SetCopy' 8 38 {
+Add-Button 'Source' 8 38 {
     try {
         $point = Get-SelectedTile
         $layer = Get-ActiveLayerInfo
@@ -314,7 +313,7 @@ Add-Button 'SetCopy' 8 38 {
     }
 }
 
-Add-Button 'SetPaste' 8 68 {
+Add-Button 'Target' 8 68 {
     try {
         $point = Get-SelectedTile
         $state.PasteX = $point.X
@@ -343,7 +342,7 @@ Add-Button 'Junk' 8 128 {
     try {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Junk' $state.JunkX $state.JunkY
-        if ($null -eq $state.LayerId) { throw 'SetCopy first so the tool can lock onto the source layer.' }
+        if ($null -eq $state.LayerId) { throw 'Source first so the tool can lock onto the source layer.' }
         $stateHistory.Push((Copy-State))
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY
@@ -376,7 +375,7 @@ Add-Button 'Move' 8 188 {
     try {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Paste' $state.PasteX $state.PasteY
-        if ($null -eq $state.LayerId) { throw 'SetCopy first so the tool can lock onto the source layer.' }
+        if ($null -eq $state.LayerId) { throw 'Source first so the tool can lock onto the source layer.' }
         $stateHistory.Push((Copy-State))
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY

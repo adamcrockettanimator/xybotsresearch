@@ -86,8 +86,8 @@ ExtendScript palettes reliably.
 Workflow:
 
 - Select an 8x8 tile with the rectangular marquee.
-- Click `SetTop`, `SetCopy`, `SetPaste`, or `SetJunk` to store that tile
-  position. `SetCopy` also locks the tool onto the current source layer, so
+- Click `SetTop`, `Source`, `Target`, or `SetJunk` to store that tile
+  position. `Source` also locks the tool onto the current source layer, so
   later moves do not accidentally operate on temporary layers.
 - `Move` moves the current copy tile into the current paste tile, clears the
   source tile, then advances copy right 8 px and paste down 8 px.
@@ -99,11 +99,10 @@ Workflow:
   and junk positions. Use this instead of Photoshop `Ctrl+Z` when you want the
   tool coordinates to rewind too.
 
-The script uses Photoshop's Layer via Copy on the selected 8x8 source tile,
-clears that source tile, moves the isolated 8x8 fragment by the exact
-source-to-target tile delta, then attempts to merge it back down. If Photoshop
-refuses the merge, it leaves the small moved-tile layer in place, but later moves
-continue using the source layer captured by `SetCopy`.
+The script uses Photoshop's Layer via Cut on the selected 8x8 source tile, moves
+the isolated 8x8 fragment by the exact source-to-target tile delta, then attempts
+to merge it back down. If Photoshop does not actually isolate the tile, the move
+aborts before the source layer can be translated.
 
 `XybotsTileMover.jsx` is kept as an in-Photoshop ScriptUI version, but the
 PowerShell launcher is the more reliable tool.
