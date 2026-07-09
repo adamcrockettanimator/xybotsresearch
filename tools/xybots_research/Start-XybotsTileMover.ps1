@@ -12,6 +12,8 @@ $state = [ordered]@{
     PasteY = $null
     JunkX = $null
     JunkY = $null
+    LayerId = $null
+    LayerName = $null
 }
 $stateHistory = New-Object System.Collections.Generic.Stack[object]
 
@@ -43,7 +45,8 @@ function Update-Status {
     $paste = Get-PointText $state.PasteX $state.PasteY
     $junk = Get-PointText $state.JunkX $state.JunkY
     $top = if ($null -eq $state.TopRowY) { '--' } else { $state.TopRowY }
-    $script:statusLabel.Text = "Copy $copy   Paste $paste`r`nTopY $top   Junk $junk"
+    $layer = if ($null -eq $state.LayerName) { '--' } else { $state.LayerName }
+    $script:statusLabel.Text = "Copy $copy   Paste $paste`r`nTopY $top   Junk $junk`r`nLayer $layer"
 }
 
 function Copy-State {
@@ -55,6 +58,8 @@ function Copy-State {
         PasteY = $state.PasteY
         JunkX = $state.JunkX
         JunkY = $state.JunkY
+        LayerId = $state.LayerId
+        LayerName = $state.LayerName
     }
 }
 
@@ -81,6 +86,30 @@ function Undo-Photoshop {
 })();
 '@
     Invoke-PhotoshopScript $script | Out-Null
+}
+
+function Get-ActiveLayerInfo {
+    $script = @'
+(function () {
+    if (!app.documents.length) {
+        throw new Error("Open the Photoshop document first.");
+    }
+
+    var ref = new ActionReference();
+    ref.putProperty(charIDToTypeID("Prpr"), stringIDToTypeID("layerID"));
+    ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"));
+    var id = executeActionGet(ref).getInteger(stringIDToTypeID("layerID"));
+
+    return id + "|" + app.activeDocument.activeLayer.name;
+})();
+'@
+
+    $result = Invoke-PhotoshopScript $script
+    $parts = "$result".Split('|', 2)
+    return @{
+        Id = [int]$parts[0]
+        Name = $parts[1]
+    }
 }
 
 function Get-SelectedTile {
@@ -149,7 +178,8 @@ function Move-Tile {
         [Parameter(Mandatory)][int]$TargetX,
         [Parameter(Mandatory)][int]$TargetY,
         [Parameter(Mandatory)][int]$FinalSelectX,
-        [Parameter(Mandatory)][int]$FinalSelectY
+        [Parameter(Mandatory)][int]$FinalSelectY,
+        [Parameter(Mandatory)][int]$LayerId
     )
 
     $script = @"
@@ -164,7 +194,17 @@ function Move-Tile {
     var targetY = $TargetY;
     var finalSelectX = $FinalSelectX;
     var finalSelectY = $FinalSelectY;
+    var layerId = $LayerId;
     var doc = app.activeDocument;
+
+    function selectLayerById(id) {
+        var ref = new ActionReference();
+        ref.putIdentifier(charIDToTypeID("Lyr "), id);
+        var desc = new ActionDescriptor();
+        desc.putReference(charIDToTypeID("null"), ref);
+        desc.putBoolean(charIDToTypeID("MkVs"), false);
+        executeAction(charIDToTypeID("slct"), desc, DialogModes.NO);
+    }
 
     function selectTile(x, y) {
         doc.selection.select([
@@ -176,18 +216,30 @@ function Move-Tile {
     }
 
     function xybotsTileMoverMove() {
+        selectLayerById(layerId);
+        var sourceLayer = doc.activeLayer;
+
         selectTile(sourceX, sourceY);
-        var desc = new ActionDescriptor();
-        var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"));
-        desc.putReference(charIDToTypeID("null"), ref);
+        executeAction(charIDToTypeID("CpTL"), undefined, DialogModes.NO);
+        var movedLayer = doc.activeLayer;
+        movedLayer.name = "xybots tile move";
+        movedLayer.blendMode = BlendMode.NORMAL;
+        movedLayer.opacity = 100;
 
-        var offset = new ActionDescriptor();
-        offset.putUnitDouble(charIDToTypeID("Hrzn"), charIDToTypeID("#Pxl"), targetX - sourceX);
-        offset.putUnitDouble(charIDToTypeID("Vrtc"), charIDToTypeID("#Pxl"), targetY - sourceY);
-        desc.putObject(charIDToTypeID("T   "), charIDToTypeID("Ofst"), offset);
+        selectLayerById(layerId);
+        selectTile(sourceX, sourceY);
+        doc.selection.clear();
 
-        executeAction(charIDToTypeID("move"), desc, DialogModes.NO);
+        doc.activeLayer = movedLayer;
+        movedLayer.translate(targetX - sourceX, targetY - sourceY);
+
+        try {
+            executeAction(charIDToTypeID("Mrg2"), undefined, DialogModes.NO);
+        } catch (mergeError) {
+            // If merge-down is refused, leave the small moved-tile layer. The
+            // source layer remains locked by id for later operations.
+        }
+
         selectTile(finalSelectX, finalSelectY);
     }
 
@@ -251,8 +303,11 @@ Add-Button 'SetTop' 8 8 {
 Add-Button 'SetCopy' 8 38 {
     try {
         $point = Get-SelectedTile
+        $layer = Get-ActiveLayerInfo
         $state.CopyX = $point.X
         $state.CopyY = $point.Y
+        $state.LayerId = $layer.Id
+        $state.LayerName = $layer.Name
         Update-Status
     } catch {
         Show-Error $_
@@ -288,10 +343,11 @@ Add-Button 'Junk' 8 128 {
     try {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Junk' $state.JunkX $state.JunkY
+        if ($null -eq $state.LayerId) { throw 'SetCopy first so the tool can lock onto the source layer.' }
         $stateHistory.Push((Copy-State))
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY
-        Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY $nextCopyX $nextCopyY
+        Move-Tile $state.CopyX $state.CopyY $state.JunkX $state.JunkY $nextCopyX $nextCopyY $state.LayerId
         $state.CopyX = $nextCopyX
         $state.CopyY = $nextCopyY
         $state.JunkX += $tileSize
@@ -320,10 +376,11 @@ Add-Button 'Move' 8 188 {
     try {
         Require-Point 'Copy' $state.CopyX $state.CopyY
         Require-Point 'Paste' $state.PasteX $state.PasteY
+        if ($null -eq $state.LayerId) { throw 'SetCopy first so the tool can lock onto the source layer.' }
         $stateHistory.Push((Copy-State))
         $nextCopyX = $state.CopyX + $tileSize
         $nextCopyY = $state.CopyY
-        Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY $nextCopyX $nextCopyY
+        Move-Tile $state.CopyX $state.CopyY $state.PasteX $state.PasteY $nextCopyX $nextCopyY $state.LayerId
         $state.CopyX = $nextCopyX
         $state.CopyY = $nextCopyY
         $state.PasteY += $tileSize
@@ -347,7 +404,7 @@ Add-Button 'Undo' 8 248 {
 }
 
 $script:statusLabel = New-Object System.Windows.Forms.Label
-$script:statusLabel.Size = New-Object System.Drawing.Size(96, 48)
+$script:statusLabel.Size = New-Object System.Drawing.Size(96, 66)
 $script:statusLabel.Location = New-Object System.Drawing.Point(8, 280)
 $form.Controls.Add($script:statusLabel)
 
