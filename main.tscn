@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://tatc6vqosurj"]
 
-[ext_resource type="Script" path="res://scripts/xybots_character_controller.gd" id="1"]
+[ext_resource type="Script" uid="uid://cpnvlque6nky1" path="res://scripts/xybots_character_controller.gd" id="1"]
 [ext_resource type="SpriteFrames" uid="uid://csgmhji6y1w3y" path="res://assets/frames/renamed_trimmed_sequence/capture_frames.tres" id="2"]
 
 [sub_resource type="CanvasItemMaterial" id="1"]
