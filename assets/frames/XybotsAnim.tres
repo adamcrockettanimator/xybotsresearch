@@ -1,0 +1,50 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://c7woiw7p1jn2"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_rffho"]
+load_path = "res://.godot/imported/RunN_AimN_0000_Layer-2.png-8185500ae1a6453e537378cd460c254a.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_cclio"]
+load_path = "res://.godot/imported/RunN_AimN_0001_Layer-3.png-1bd8c3539b1af8823e8d4a2c01715757.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_2ii7q"]
+load_path = "res://.godot/imported/RunN_AimN_0002_Layer-4.png-571aabc189a1aaa041ef4919f8d34026.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_4hnws"]
+load_path = "res://.godot/imported/RunN_AimN_0003_Layer-5.png-9f9d53b0cea61ae64575054cb14636f6.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_y6o8j"]
+load_path = "res://.godot/imported/RunN_AimN_0004_Layer-6.png-29f2af60168f8360f32c12e370cd636f.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_3ewbg"]
+load_path = "res://.godot/imported/RunN_AimN_0011_Layer-1.png-ffb98d78f7092b14df7b236976efbe1b.ctex"
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("CompressedTexture2D_rffho")
+}, {
+"duration": 1.0,
+"texture": SubResource("CompressedTexture2D_cclio")
+}, {
+"duration": 1.0,
+"texture": SubResource("CompressedTexture2D_2ii7q")
+}, {
+"duration": 1.0,
+"texture": SubResource("CompressedTexture2D_4hnws")
+}, {
+"duration": 1.0,
+"texture": SubResource("CompressedTexture2D_y6o8j")
+}, {
+"duration": 1.0,
+"texture": SubResource("CompressedTexture2D_3ewbg")
+}],
+"loop": true,
+"name": &"WalkN_AnimN",
+"speed": 5.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
