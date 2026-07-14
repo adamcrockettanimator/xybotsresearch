@@ -1,0 +1,2 @@
+from_capture_frame,to_capture_frame,from_mame_frame,to_mame_frame,changed_tiles,bounds,rows,image
+1,64,5365,5428,1,"168,16-175,23",2:1,keyframes/frame_00064_mame_5428.png

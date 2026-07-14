@@ -1,0 +1,3 @@
+key_index,capture_frame,mame_frame,source_png,review_png,tile_hash,png_hash
+1,1,5365,..\..\mame-src\snap\xybots_capture\wall_turn_recordings\session_0004\playfield\frame_00001_mame_5365.png,keyframes/key_0001.png,1e30a138bae27c81f9871d013f3859bee5ef848e,59b92e8aba70fee3cc9b164da9f04caf0c4e7c37
+2,64,5428,..\..\mame-src\snap\xybots_capture\wall_turn_recordings\session_0004\playfield\frame_00064_mame_5428.png,keyframes/key_0002.png,bf129d2572afc85e0c049842ea79fc757671761b,0d6ddfa4c764e4ab5d5526dbde4c75792fbafa62

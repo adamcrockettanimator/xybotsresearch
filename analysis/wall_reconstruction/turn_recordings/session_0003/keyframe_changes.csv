@@ -1,0 +1,19 @@
+from_capture_frame,to_capture_frame,from_mame_frame,to_mame_frame,changed_tiles,bounds,rows,image
+1,9,4025,4033,1,"152,16-159,23",2:1,keyframes/frame_00009_mame_4033.png
+9,11,4033,4035,2,"168,8-175,23",1:1 2:1,keyframes/frame_00011_mame_4035.png
+11,41,4035,4065,1,"152,16-159,23",2:1,keyframes/frame_00041_mame_4065.png
+41,43,4065,4067,1,"176,64-183,71",8:1,keyframes/frame_00043_mame_4067.png
+43,44,4067,4068,31,"144,56-183,239",7:1 15:2 16:2 17:2 18:2 19:2 20:2 21:2 22:2 23:2 24:2 25:2 26:2 27:2 28:2 29:2,keyframes/frame_00044_mame_4068.png
+44,51,4068,4075,1,"168,8-175,15",1:1,keyframes/frame_00051_mame_4075.png
+51,52,4075,4076,2,"160,16-175,23",2:2,keyframes/frame_00052_mame_4076.png
+52,81,4076,4105,1,"152,16-159,23",2:1,keyframes/frame_00081_mame_4105.png
+81,82,4105,4106,1,"160,16-167,23",2:1,keyframes/frame_00082_mame_4106.png
+82,91,4106,4115,1,"168,8-175,15",1:1,keyframes/frame_00091_mame_4115.png
+91,113,4115,4137,1,"152,16-159,23",2:1,keyframes/frame_00113_mame_4137.png
+113,122,4137,4146,1,"160,16-167,23",2:1,keyframes/frame_00122_mame_4146.png
+122,123,4146,4147,1,"168,8-175,15",1:1,keyframes/frame_00123_mame_4147.png
+123,132,4147,4156,1,"56,24-63,31",3:1,keyframes/frame_00132_mame_4156.png
+132,140,4156,4164,1,"176,56-183,63",7:1,keyframes/frame_00140_mame_4164.png
+140,141,4164,4165,1,"176,48-183,55",6:1,keyframes/frame_00141_mame_4165.png
+141,153,4165,4177,2,"152,8-159,23",1:1 2:1,keyframes/frame_00153_mame_4177.png
+153,154,4177,4178,1,"160,16-167,23",2:1,keyframes/frame_00154_mame_4178.png

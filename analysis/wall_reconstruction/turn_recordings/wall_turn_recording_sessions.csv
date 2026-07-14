@@ -1,0 +1,6 @@
+session,raw_frames,unique_visible_tile_states,unique_pngs,consecutive_keyframes,selected_keyframes,contact_sheet,corridor_contact_sheet,first_mame_frame,last_mame_frame
+session_0001,641,86,445,86,80,contact_sheet.png,contact_sheet_corridor.png,2513,3153
+session_0002,263,42,201,42,42,contact_sheet.png,contact_sheet_corridor.png,3517,3779
+session_0003,157,19,93,19,19,contact_sheet.png,contact_sheet_corridor.png,4025,4181
+session_0004,244,2,16,2,2,contact_sheet.png,contact_sheet_corridor.png,5365,5608
+session_0005,2302,219,1197,239,80,contact_sheet.png,contact_sheet_corridor.png,5954,8255

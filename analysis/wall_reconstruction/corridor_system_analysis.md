@@ -56,6 +56,39 @@ What we do not yet know:
 To answer that, capture every frame during a turn instead of waiting for the
 view to settle.
 
+## Every-Frame Turn Capture
+
+The F10 wall-turn recorder captures the playfield layer and playfield tile JSON
+every emulated frame while recording is enabled. This avoids missing transition
+frames by manually pressing a one-shot capture key.
+
+Latest reduced output:
+
+- [turn recording analysis](turn_recordings/wall_turn_recording_analysis.md)
+- [session summary CSV](turn_recordings/wall_turn_recording_sessions.csv)
+- [largest cropped turn contact sheet](turn_recordings/session_0005/contact_sheet_corridor.png)
+
+Captured sessions from the July 14, 2026 run:
+
+| Session | Raw Frames | Unique Visible Tile States | Consecutive Keyframes | Selected Review Frames |
+|---|---:|---:|---:|---:|
+| session_0001 | 641 | 86 | 86 | 80 |
+| session_0002 | 263 | 42 | 42 | 42 |
+| session_0003 | 157 | 19 | 19 | 19 |
+| session_0004 | 244 | 2 | 2 | 2 |
+| session_0005 | 2302 | 219 | 239 | 80 |
+
+The contact sheets show many intermediate turn and side-wall views. This
+answers the previous open question: at least during the captured turns, the
+game does not only jump between settled corridor plates. It writes a sequence
+of different tilemap states while the view changes.
+
+Those frames still look like assembled tilemap plates, not a transformed
+bitmap. The side walls, floor, and ceiling shift through different 8x8 tile
+arrangements. For a Godot recreation, the practical asset target is therefore
+a set of discrete corridor view plates or tilemap templates, plus animation
+timing between them.
+
 ## Captured Asset Counts
 
 Current automated reconstruction from the available captures:
