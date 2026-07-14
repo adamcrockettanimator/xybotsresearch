@@ -1,0 +1,4 @@
+type,count,min_width,max_width,min_height,max_height,total_area
+ceiling,182,16,176,18,54,295031
+floor,105,40,162,10,72,617217
+wall,161,10,176,18,120,1274703
