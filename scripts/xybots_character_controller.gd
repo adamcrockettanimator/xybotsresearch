@@ -1194,7 +1194,7 @@ func _side_limits_for_depth(local_depth: float) -> Vector2:                     
 	var projected_width := maxf(x_max - x_min, 0.001)                                         # Avoid division by zero while converting screen bounds back to local x.
 	var half_sprite_width := _current_player_texture_width() * _player_sprite_scale_for_depth(depth) * 0.5 # Measure half the current frame width after scaling.
 	var sprite_screen_margin := half_sprite_width / VIEWPORT_SIZE.x                            # Convert the sprite half-width into normalized playfield space.
-	var side_line_margin := lerpf(sprite_screen_margin * 0.35, sprite_screen_margin, depth)     # Keep near sprites fully in crop but keep far sprites inside the sloped wall lines.
+	var side_line_margin := sprite_screen_margin * 0.25                                        # Use a smaller foot/contact margin for the sloped wall line than for the full sprite crop.
 	var min_screen_ratio := maxf(sprite_screen_margin, x_min + side_line_margin)                # Use the stricter left bound from the screen edge or the corridor wall line.
 	var max_screen_ratio := minf(1.0 - sprite_screen_margin, x_max - side_line_margin)          # Use the stricter right bound from the screen edge or the corridor wall line.
 	return Vector2(                                                                            # Return the local x span that keeps the sprite inside the cropped view.
