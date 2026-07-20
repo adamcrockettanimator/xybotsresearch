@@ -1366,10 +1366,14 @@ func _apply_grid_result(sequence_name: String) -> void:                         
 # _reset_local_position_after_transition: Recenters the local player offset on the axis affected by the completed transition.
 func _reset_local_position_after_transition(sequence_name: String) -> void:                 # Declare this function.
 	match sequence_name:                                                                       # Branch behavior based on this value.
-		"forward", "backward":                                                                    # Start this block.
-			local_floor_position.y = HOME_LOCAL_FLOOR_POSITION.y                                     # Compute and store this value for the current step.
-		"strafe_left", "strafe_right":                                                            # Start this block.
-			local_floor_position.x = HOME_LOCAL_FLOOR_POSITION.x                                     # Compute and store this value for the current step.
+		"forward":                                                                                # Handle a forward cell crossing.
+			local_floor_position.y = BACKWARD_WALL_CONTACT_Y                                         # Enter the new cell from its back edge instead of snapping to center.
+		"backward":                                                                               # Handle a backward cell crossing.
+			local_floor_position.y = FORWARD_WALL_CONTACT_Y                                          # Enter the new cell from its front edge instead of snapping to center.
+		"strafe_left":                                                                            # Handle a camera-left cell crossing.
+			local_floor_position.x = _side_limits_for_depth(local_floor_position.y).y                # Enter the new cell from its camera-right side instead of snapping to center.
+		"strafe_right":                                                                           # Handle a camera-right cell crossing.
+			local_floor_position.x = _side_limits_for_depth(local_floor_position.y).x                # Enter the new cell from its camera-left side instead of snapping to center.
 		"turn_left", "turn_right":                                                                # Start this block.
 			local_floor_position = _rotated_local_position_for_turn(sequence_name)                   # Preserve the player's tile offset while rotating it into the new camera frame.
 
