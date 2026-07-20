@@ -1178,10 +1178,21 @@ func _position_player() -> void:                                                
 	var screen_x := lerpf(x_min, x_max, local_floor_position.x) * VIEWPORT_SIZE.x              # Project unclamped side movement so wall contact can reach the visible side lines.
 	var screen_y := lerpf(FAR_FLOOR_Y, NEAR_FLOOR_Y, depth) * VIEWPORT_SIZE.y                  # Store mutable runtime state for assets, rendering, movement, or debug output.
 	var sprite_scale := lerpf(0.72, 1.18, depth)                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
+	var half_sprite_width := _current_player_texture_width() * sprite_scale * 0.5              # Measure half the current frame width after scale so the sprite stays inside the playfield.
 	var half_sprite_height := _current_player_texture_height() * sprite_scale * 0.5            # Store mutable runtime state for assets, rendering, movement, or debug output.
+	screen_x = clampf(screen_x, half_sprite_width, VIEWPORT_SIZE.x - half_sprite_width)        # Keep the player bitmap inside the left and right edges of the cropped playfield.
 	screen_y = minf(screen_y, VIEWPORT_SIZE.y - half_sprite_height)                            # Compute and store this value for the current step.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
+
+
+
+# _current_player_texture_width: Returns the current player frame width so the sprite can be clamped inside the playfield.
+func _current_player_texture_width() -> float:                                              # Declare this function.
+	var texture := player_sprite.sprite_frames.get_frame_texture(player_sprite.animation, player_sprite.frame) # Store mutable runtime state for assets, rendering, movement, or debug output.
+	if texture == null:                                                                        # Run the following block only when this condition is true.
+		return 34.0                                                                               # Return a conservative fallback width for the player sprite.
+	return float(texture.get_width())                                                          # Return this computed result to the caller.
 
 
 
