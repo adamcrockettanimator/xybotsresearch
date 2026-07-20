@@ -18,8 +18,6 @@ const MOVE_UNITS_PER_SECOND := 0.85                                             
 const HOME_LOCAL_FLOOR_POSITION := Vector2(0.5, 0.68)                                       # Set the resting local position inside a tile.
 const FORWARD_TRIGGER_Y := 0.56                                                             # Set the forward threshold where crossing into the next tile begins.
 const BACKWARD_TRIGGER_Y := 0.84                                                            # Set the backward threshold where crossing into the previous tile begins.
-const STRAFE_LEFT_TRIGGER_X := -0.08                                                        # Set the left strafe threshold where the sprite center reaches the visible side line.
-const STRAFE_RIGHT_TRIGGER_X := 1.08                                                        # Set the right strafe threshold where the sprite center reaches the visible side line.
 const STRAFE_LEFT_WALL_CONTACT_X := -0.08                                                   # Set the closest blocked-wall contact position on the viewer's left.
 const STRAFE_RIGHT_WALL_CONTACT_X := 1.08                                                   # Set the closest blocked-wall contact position on the viewer's right.
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
@@ -232,10 +230,10 @@ func _process(delta: float) -> void:                                            
 
 	var movement := _read_movement()                                                           # Store mutable runtime state for assets, rendering, movement, or debug output.
 	if movement != Vector2.ZERO:                                                               # Run the following block only when this condition is true.
-		_move_inside_tile(movement, delta)                                                        # Call a helper function as part of the current controller step.
 		run_dir = _movement_to_first_player_run_dir(movement)                                     # Compute and store this value for the current step.
 		aim_dir = DIR_N                                                                           # Compute and store this value for the current step.
 		_play_best_animation(true)                                                                # Call a helper function as part of the current controller step.
+		_move_inside_tile(movement, delta)                                                        # Move after choosing the animation so sprite-width collision bounds match the visible frame.
 	else:                                                                                      # Run this fallback branch when previous conditions were not met.
 		run_dir = DIR_N                                                                           # Compute and store this value for the current step.
 		aim_dir = DIR_N                                                                           # Compute and store this value for the current step.
@@ -1122,6 +1120,7 @@ func _read_movement() -> Vector2:                                               
 # _move_inside_tile: Moves the player locally, crossing open edges at trigger thresholds and sliding to wall contact on blocked edges.
 func _move_inside_tile(movement: Vector2, delta: float) -> void:                            # Declare this function.
 	local_floor_position += movement * MOVE_UNITS_PER_SECOND * delta                           # Continue the controller logic for this section.
+	var side_limits := _side_limits_for_depth(local_floor_position.y)                          # Compute visible side limits so logic and sprite registration stay coupled.
 
 	if movement.y < 0.0 and local_floor_position.y <= FORWARD_TRIGGER_Y:                       # Run the following block only when this condition is true.
 		if _can_cross_edge(grid_position, _facing_vector()):                                      # Check whether the forward tile edge is open.
@@ -1137,23 +1136,24 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 		else:                                                                                     # Handle a blocked back wall.
 			local_floor_position.y = minf(local_floor_position.y, BACKWARD_WALL_CONTACT_Y)           # Let the player reach the back wall contact instead of crossing.
 			last_blocked_direction = "back"                                                          # Report the blocked back edge in the debug status.
-	elif movement.x < 0.0 and local_floor_position.x <= STRAFE_LEFT_TRIGGER_X:                 # Run this alternate branch when the previous conditions failed and this one is true.
+	elif movement.x < 0.0 and local_floor_position.x <= side_limits.x:                         # Run this alternate branch when the player reaches the visible left-side limit.
 		if _can_cross_edge(grid_position, _left_vector()):                                        # Check whether the camera-left tile edge is open.
-			local_floor_position.x = STRAFE_LEFT_TRIGGER_X                                           # Hold the local position at the crossing threshold during the transition.
+			local_floor_position.x = side_limits.x                                                   # Hold the local position at the crossing threshold during the transition.
 			_try_cross_tile("strafe_left", _left_vector(), "left")                                   # Start the left strafe tile-crossing transition.
 		else:                                                                                     # Handle a blocked left wall.
-			local_floor_position.x = maxf(local_floor_position.x, STRAFE_LEFT_WALL_CONTACT_X)        # Let the player reach the left wall contact instead of crossing.
+			local_floor_position.x = maxf(local_floor_position.x, side_limits.x)                     # Let the player reach the left visible contact limit instead of crossing.
 			last_blocked_direction = "left"                                                          # Report the blocked left edge in the debug status.
-	elif movement.x > 0.0 and local_floor_position.x >= STRAFE_RIGHT_TRIGGER_X:                # Run this alternate branch when the previous conditions failed and this one is true.
+	elif movement.x > 0.0 and local_floor_position.x >= side_limits.y:                         # Run this alternate branch when the player reaches the visible right-side limit.
 		if _can_cross_edge(grid_position, -_left_vector()):                                       # Check whether the camera-right tile edge is open.
-			local_floor_position.x = STRAFE_RIGHT_TRIGGER_X                                          # Hold the local position at the crossing threshold during the transition.
+			local_floor_position.x = side_limits.y                                                  # Hold the local position at the crossing threshold during the transition.
 			_try_cross_tile("strafe_right", -_left_vector(), "right")                                # Start the right strafe tile-crossing transition.
 		else:                                                                                     # Handle a blocked right wall.
-			local_floor_position.x = minf(local_floor_position.x, STRAFE_RIGHT_WALL_CONTACT_X)       # Let the player reach the right wall contact instead of crossing.
+			local_floor_position.x = minf(local_floor_position.x, side_limits.y)                    # Let the player reach the right visible contact limit instead of crossing.
 			last_blocked_direction = "right"                                                         # Report the blocked right edge in the debug status.
 
 	if not is_transitioning:                                                                   # Keep free local movement bounded when no tile-crossing transition started.
-		local_floor_position.x = clampf(local_floor_position.x, STRAFE_LEFT_WALL_CONTACT_X, STRAFE_RIGHT_WALL_CONTACT_X) # Clamp horizontal local movement to the reachable wall-contact span.
+		side_limits = _side_limits_for_depth(local_floor_position.y)                              # Recompute side limits after any depth clamp changed the projected floor width.
+		local_floor_position.x = clampf(local_floor_position.x, side_limits.x, side_limits.y)      # Clamp horizontal movement to the visible sprite-safe wall-contact span.
 		local_floor_position.y = clampf(local_floor_position.y, FORWARD_WALL_CONTACT_Y, BACKWARD_WALL_CONTACT_Y) # Clamp depth movement to the reachable front/back contact span.
 
 
@@ -1177,13 +1177,34 @@ func _position_player() -> void:                                                
 	var x_max := 0.5 + half_width                                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
 	var screen_x := lerpf(x_min, x_max, local_floor_position.x) * VIEWPORT_SIZE.x              # Project unclamped side movement so wall contact can reach the visible side lines.
 	var screen_y := lerpf(FAR_FLOOR_Y, NEAR_FLOOR_Y, depth) * VIEWPORT_SIZE.y                  # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var sprite_scale := lerpf(0.72, 1.18, depth)                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var half_sprite_width := _current_player_texture_width() * sprite_scale * 0.5              # Measure half the current frame width after scale so the sprite stays inside the playfield.
+	var sprite_scale := _player_sprite_scale_for_depth(depth)                                  # Compute player scale from depth using the shared registration helper.
 	var half_sprite_height := _current_player_texture_height() * sprite_scale * 0.5            # Store mutable runtime state for assets, rendering, movement, or debug output.
-	screen_x = clampf(screen_x, half_sprite_width, VIEWPORT_SIZE.x - half_sprite_width)        # Keep the player bitmap inside the left and right edges of the cropped playfield.
 	screen_y = minf(screen_y, VIEWPORT_SIZE.y - half_sprite_height)                            # Compute and store this value for the current step.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
+
+
+
+# _side_limits_for_depth: Returns local x limits that keep the current sprite fully inside the playable crop at this depth.
+func _side_limits_for_depth(local_depth: float) -> Vector2:                                 # Declare this function.
+	var depth := clampf(local_depth, 0.0, 1.0)                                                 # Clamp depth before using it for projection math.
+	var half_width := lerpf(FAR_FLOOR_HALF_WIDTH, NEAR_FLOOR_HALF_WIDTH, depth)                # Compute the floor trapezoid half-width at this depth.
+	var x_min := 0.5 - half_width                                                              # Compute the left projection boundary at this depth.
+	var x_max := 0.5 + half_width                                                              # Compute the right projection boundary at this depth.
+	var projected_width := maxf(x_max - x_min, 0.001)                                         # Avoid division by zero while converting screen bounds back to local x.
+	var half_sprite_width := _current_player_texture_width() * _player_sprite_scale_for_depth(depth) * 0.5 # Measure half the current frame width after scaling.
+	var min_screen_ratio := half_sprite_width / VIEWPORT_SIZE.x                                # Convert the left screen-safe edge into normalized playfield space.
+	var max_screen_ratio := (VIEWPORT_SIZE.x - half_sprite_width) / VIEWPORT_SIZE.x            # Convert the right screen-safe edge into normalized playfield space.
+	return Vector2(                                                                            # Return the local x span that keeps the sprite inside the cropped view.
+		(min_screen_ratio - x_min) / projected_width,                                             # Convert the left screen-safe x back into local tile space.
+		(max_screen_ratio - x_min) / projected_width                                              # Convert the right screen-safe x back into local tile space.
+	)                                                                                         # Close the local side-limit vector.
+
+
+
+# _player_sprite_scale_for_depth: Returns the character scale used by both projection and movement bounds.
+func _player_sprite_scale_for_depth(depth: float) -> float:                                # Declare this function.
+	return lerpf(0.72, 1.18, clampf(depth, 0.0, 1.0))                                         # Return the depth-scaled player size.
 
 
 
