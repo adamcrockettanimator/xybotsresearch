@@ -1,32 +1,25 @@
 [gd_scene format=3 uid="uid://tatc6vqosurj"]
 
 [ext_resource type="Script" uid="uid://cpnvlque6nky1" path="res://scripts/xybots_character_controller.gd" id="1"]
-[ext_resource type="SpriteFrames" uid="uid://csgmhji6y1w3y" path="res://assets/frames/renamed_trimmed_sequence/capture_frames.tres" id="2"]
 
-[sub_resource type="CanvasItemMaterial" id="1"]
-
-[node name="Main" type="Node2D" unique_id=2112346095]
+[node name="Main" type="Node2D" unique_id=1276873369]
 script = ExtResource("1")
+diagnostic_3d_camera_fov = 45.0
 
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=215844696]
+[node name="MazeViewport" type="Node2D" parent="." unique_id=586654540]
+
+[node name="Playfield" type="Sprite2D" parent="MazeViewport" unique_id=407791470]
+z_index = -10
 texture_filter = 1
-position = Vector2(674, 479)
-sprite_frames = ExtResource("2")
-animation = &"RunS_AimS"
 
-[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1913347451]
+[node name="PlayerSprite" type="AnimatedSprite2D" parent="MazeViewport" unique_id=740276649]
+z_index = 10
+texture_filter = 1
 
-[node name="Background" type="ColorRect" parent="CanvasLayer" unique_id=35704250]
-visible = false
-material = SubResource("1")
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-color = Color(0, 0, 0, 1)
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1017544048]
 
-[node name="StatusLabel" type="Label" parent="CanvasLayer" unique_id=1657689874]
+[node name="StatusLabel" type="Label" parent="CanvasLayer" unique_id=916702260]
 offset_left = 12.0
 offset_top = 10.0
-offset_right = 900.0
-offset_bottom = 36.0
-text = "Loading..."
+offset_right = 980.0
+offset_bottom = 56.0

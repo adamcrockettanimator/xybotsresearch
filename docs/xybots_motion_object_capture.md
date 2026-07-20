@@ -1,3 +1,4 @@
+e
 # Xybots Motion Object Capture
 
 This is a developer-only inspection path for Xybots motion objects. It observes
@@ -50,9 +51,9 @@ metadata.json
 sprite_layer.png
 sprite_layer_debug.png
 objects/
-    slot_00.png
-    slot_01.png
-    ...
+	slot_00.png
+	slot_01.png
+	...
 ```
 
 `sprite_layer.png` is the complete motion-object bitmap for the visible frame,
@@ -78,45 +79,45 @@ Example:
   "capture_dir": "xybots_capture/capture_0001",
   "trigger": "MAME_XYBOTS_CAPTURE=1 and KEYCODE_F12",
   "screen": {
-    "width": 336,
-    "height": 240
+	"width": 336,
+	"height": 240
   },
   "motion_object_space": {
-    "width": 512,
-    "height": 512
+	"width": 512,
+	"height": 512
   },
   "objects": [
-    {
-      "slot": 17,
-      "raw_words": ["0x04B0", "0x0005", "0x6405", "0x3203"],
-      "code": 1200,
-      "code_hex": "0x04B0",
-      "source_tiles": [1200, 1201, 1202, 1203, 1204, 1205],
-      "color": 3,
-      "priority": 5,
-      "raw_position": {
-        "x": 100,
-        "y": 200
-      },
-      "rendered_position": {
-        "x": 100,
-        "y": 264
-      },
-      "size_tiles": {
-        "width": 1,
-        "height": 6
-      },
-      "size_pixels": {
-        "width": 8,
-        "height": 48
-      },
-      "flip": {
-        "x": false,
-        "y": false
-      },
-      "visible": true,
-      "image": "objects/slot_17.png"
-    }
+	{
+	  "slot": 17,
+	  "raw_words": ["0x04B0", "0x0005", "0x6405", "0x3203"],
+	  "code": 1200,
+	  "code_hex": "0x04B0",
+	  "source_tiles": [1200, 1201, 1202, 1203, 1204, 1205],
+	  "color": 3,
+	  "priority": 5,
+	  "raw_position": {
+		"x": 100,
+		"y": 200
+	  },
+	  "rendered_position": {
+		"x": 100,
+		"y": 264
+	  },
+	  "size_tiles": {
+		"width": 1,
+		"height": 6
+	  },
+	  "size_pixels": {
+		"width": 8,
+		"height": 48
+	  },
+	  "flip": {
+		"x": false,
+		"y": false
+	  },
+	  "visible": true,
+	  "image": "objects/slot_17.png"
+	}
   ]
 }
 ```
@@ -154,15 +155,15 @@ Automatic capture writes:
 
 ```text
 snap/xybots_capture/auto/
-    strips/
-        strip_00001_slot_37_code_04B0_h6_c3_p5.png
-        ...
-    stitched/
-        stitched_00001_frame_12345_parts_3.png
-        ...
-    characters/
-        character_00001_frame_12345_parts_6.png
-        ...
+	strips/
+		strip_00001_slot_37_code_04B0_h6_c3_p5.png
+		...
+	stitched/
+		stitched_00001_frame_12345_parts_3.png
+		...
+	characters/
+		character_00001_frame_12345_parts_6.png
+		...
 ```
 
 `strips` are the individual Xybots motion objects. `stitched` images are
