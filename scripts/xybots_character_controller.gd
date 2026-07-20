@@ -47,6 +47,8 @@ const VIEW_LEFT := "left"                                                       
 const VIEW_RIGHT := "right"                                                                 # Define a fixed value used by the movement, rendering, or asset-loading system.
 const DEBUG_MAP_CELL_SIZE := 24.0                                                           # Set the top-down debug map cell size inside the 160x120 diagnostic panel.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                                    # Center the 4x4 debug maze inside the source-map panel.
+const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
+const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Draw the diagnostic view cone wide enough to cover the straight wall slot fan.
 const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
@@ -581,6 +583,8 @@ func _update_debug_map_overlay() -> void:                                       
 
 	var home_center := _debug_map_cell_center(grid_position)                                    # Convert the current cell center into an overlay reference position.
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
+	_add_debug_view_cone(home_center)                                                           # Draw the camera/view cone from the cell-locked camera anchor.
+	_add_debug_visible_wall_slots()                                                            # Highlight the wall slots selected by the renderer on the source map.
 	_add_debug_player_bounds(home_center)                                                       # Draw the playable/contact footprint inside the current cell.
 	_add_debug_player_marker(home_center, Color(1.0, 1.0, 1.0, 0.35))                           # Draw a faint marker at the home center for offset comparison.
 	var facing_end := player_center + Vector2(_facing_vector()) * (DEBUG_MAP_CELL_SIZE * 0.34)  # Compute the arrow tip from the actual current player position.
@@ -607,6 +611,95 @@ func _debug_map_player_position() -> Vector2:                                   
 	var local_offset := _local_position_to_tile_offset(local_floor_position)                   # Convert art-space position into right/forward tile offset.
 	var world_offset := Vector2(-_left_vector()) * local_offset.x + Vector2(_facing_vector()) * local_offset.y # Rotate the local offset into world grid axes.
 	return _debug_map_cell_center(grid_position) + world_offset * (DEBUG_MAP_CELL_SIZE * 0.42) # Return the overlay coordinate for the true intra-cell player position.
+
+
+
+# _add_debug_view_cone: Draws the cell-locked camera cone on top of the source-of-truth map.
+func _add_debug_view_cone(origin: Vector2) -> void:                                        # Declare this function.
+	var cone_color := Color(0.0, 0.75, 1.0, 0.22)                                            # Use translucent cyan for the cone fill.
+	var cone_line_color := Color(0.0, 0.95, 1.0, 0.75)                                       # Use brighter cyan for the cone boundary lines.
+	var forward := Vector2(_facing_vector())                                                  # Convert the current camera-facing grid direction to overlay space.
+	var left := Vector2(_left_vector())                                                       # Convert camera-left to overlay space.
+	var far_center := origin + forward * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_DEPTH)        # Compute the center of the far end of the view cone.
+	var far_left := far_center + left * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_HALF_WIDTH)    # Compute the left boundary point at the far end of the cone.
+	var far_right := far_center - left * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_HALF_WIDTH)   # Compute the right boundary point at the far end of the cone.
+	var cone := Polygon2D.new()                                                               # Create a filled triangle for the view cone area.
+	cone.polygon = PackedVector2Array([origin, far_left, far_right])                          # Define the triangle from camera origin to far left/right limits.
+	cone.color = cone_color                                                                   # Tint the cone fill without hiding the wall map.
+	cone.z_index = -1                                                                         # Draw the cone above the panel background but below wall highlights.
+	debug_map_overlay.add_child(cone)                                                         # Add the cone fill to the top-down overlay.
+	_add_debug_line(origin, far_left, cone_line_color, 1.0)                                   # Draw the left cone boundary line.
+	_add_debug_line(origin, far_right, cone_line_color, 1.0)                                  # Draw the right cone boundary line.
+	_add_debug_line(origin, far_center, cone_line_color, 1.0)                                 # Draw the center sightline for camera-facing reference.
+
+
+
+# _add_debug_visible_wall_slots: Highlights the renderer-selected wall slots as green edge segments on the top-down map.
+func _add_debug_visible_wall_slots() -> void:                                               # Declare this function.
+	var highlight_color := Color(0.0, 1.0, 0.25, 0.95)                                       # Use green to mark wall slots that the renderer currently selected.
+	var visible_slots := _build_straight_render_list()                                       # Rebuild the same visible-slot list used by the 2D wall renderer.
+	var labeled_segments := {}                                                                # Track label positions so repeated physical edges do not stack identical labels.
+	for slot in visible_slots:                                                                # Iterate through every wall slot currently selected for drawing.
+		var wall_id := int(slot["id"])                                                          # Read the numbered 2D wall-slot id.
+		var segment := _debug_wall_slot_segment(slot)                                           # Convert that wall slot into a top-down physical edge segment.
+		if segment.size() < 2:                                                                  # Skip invalid slot metadata that cannot map to a segment.
+			continue                                                                               # Continue to the next visible wall slot.
+		_add_debug_line(segment[0], segment[1], highlight_color, 5.0)                            # Draw the selected physical wall segment in green.
+		var label_position := (segment[0] + segment[1]) * 0.5                                    # Place the label at the center of the highlighted edge.
+		var segment_key := "%d,%d" % [int(round(label_position.x)), int(round(label_position.y))] # Build a coarse key for stacking labels on the same edge.
+		var label_offset := float(labeled_segments.get(segment_key, 0)) * 7.0                    # Offset repeated labels so companion slots remain readable.
+		labeled_segments[segment_key] = int(labeled_segments.get(segment_key, 0)) + 1            # Store that another label used this edge midpoint.
+		_add_debug_wall_slot_label(label_position + Vector2(0.0, label_offset), wall_id, highlight_color) # Add the wall-slot number beside the green segment.
+
+
+
+# _debug_wall_slot_segment: Converts a visible 2D wall slot into its corresponding source-map edge segment.
+func _debug_wall_slot_segment(slot: Dictionary) -> Array[Vector2]:                          # Declare this function.
+	var lateral := int(slot["lateral"])                                                       # Read the view-relative lateral slot coordinate.
+	var depth := int(slot["depth"])                                                           # Read the view-relative depth slot coordinate.
+	var edge := String(slot["edge"])                                                          # Read which face of the view-relative cell this slot represents.
+	var cell := _view_cell(lateral, depth)                                                    # Convert the view-relative slot coordinate into a world-grid cell.
+	match edge:                                                                               # Convert the slot's face type into a world-grid edge vector.
+		VIEW_FRONT:                                                                              # Handle front-facing wall slots.
+			return _debug_cell_edge_segment(cell, _facing_vector())                                # Return the front edge of the slot's cell.
+		VIEW_LEFT:                                                                               # Handle camera-left wall slots.
+			return _debug_cell_edge_segment(cell, _left_vector())                                  # Return the left edge of the slot's cell.
+		VIEW_RIGHT:                                                                              # Handle camera-right wall slots.
+			return _debug_cell_edge_segment(cell, -_left_vector())                                 # Return the right edge of the slot's cell.
+		_:                                                                                       # Handle unknown slot metadata defensively.
+			return []                                                                               # Return no segment for invalid metadata.
+
+
+
+# _debug_cell_edge_segment: Converts one cell edge into two top-down overlay points.
+func _debug_cell_edge_segment(cell: Vector2i, delta: Vector2i) -> Array[Vector2]:           # Declare this function.
+	var top_left := _debug_map_cell_top_left(cell)                                            # Convert the cell to the top-left corner of its debug-map square.
+	var top_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, 0.0)                             # Compute the top-right corner of the cell.
+	var bottom_left := top_left + Vector2(0.0, DEBUG_MAP_CELL_SIZE)                           # Compute the bottom-left corner of the cell.
+	var bottom_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, DEBUG_MAP_CELL_SIZE)          # Compute the bottom-right corner of the cell.
+	if delta == Vector2i(0, -1):                                                              # Handle the north edge.
+		return [top_left, top_right]                                                            # Return the north edge segment.
+	if delta == Vector2i(1, 0):                                                               # Handle the east edge.
+		return [top_right, bottom_right]                                                        # Return the east edge segment.
+	if delta == Vector2i(0, 1):                                                               # Handle the south edge.
+		return [bottom_left, bottom_right]                                                      # Return the south edge segment.
+	if delta == Vector2i(-1, 0):                                                              # Handle the west edge.
+		return [top_left, bottom_left]                                                          # Return the west edge segment.
+	return []                                                                                 # Return no segment for invalid edge vectors.
+
+
+
+# _add_debug_wall_slot_label: Adds a green wall-slot number to the top-down debug map.
+func _add_debug_wall_slot_label(position: Vector2, wall_id: int, color: Color) -> void:      # Declare this function.
+	var label := Label.new()                                                                   # Create a small 2D label for the top-down wall-slot number.
+	label.text = "%02d" % wall_id                                                              # Match the two-digit wall labels shown on the player view.
+	label.add_theme_color_override("font_color", color)                                       # Use the same green as the highlighted wall segment.
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 1.0))            # Add a black shadow so the label reads on white walls.
+	label.add_theme_constant_override("shadow_offset_x", 1)                                   # Offset the label shadow one pixel right.
+	label.add_theme_constant_override("shadow_offset_y", 1)                                   # Offset the label shadow one pixel down.
+	label.scale = Vector2(0.32, 0.32)                                                         # Keep the debug label compact inside the 160x120 map panel.
+	label.position = position + Vector2(-4.0, -4.0)                                           # Center the small label around the requested point.
+	debug_map_overlay.add_child(label)                                                        # Add the wall-slot label to the top-down overlay.
 
 
 
