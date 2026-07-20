@@ -964,7 +964,29 @@ func _build_straight_render_list() -> Array:                                    
 		return render_list                                                                        # Stop deeper visibility because the near wall occludes anything behind it.
 	for branch in STRAIGHT_VISIBILITY_BRANCHES:                                                # Iterate across each near-to-far top-view sightline branch.
 		_walk_visibility_branch(render_list, emitted_ids, branch)                                 # Add visible walls from this branch and stop when an occluding wall blocks it.
+	_add_empirical_companion_wall_slots(render_list, emitted_ids)                              # Add art-only companion pieces observed while testing larger maps.
 	return render_list                                                                         # Return the final wall-slot list to the renderer.
+
+
+
+# _add_empirical_companion_wall_slots: Adds wall-art pieces that share another slot's map edge but need their own draw layer.
+func _add_empirical_companion_wall_slots(render_list: Array, emitted_ids: Dictionary) -> void: # Declare this function.
+	if emitted_ids.has(21) and emitted_ids.has(12) and not emitted_ids.has(20):                # Detect the far-right wall case where slot 13 sits behind slot 21.
+		_append_wall_slot_unchecked(render_list, emitted_ids, 13)                                 # Add the rear/right companion wall behind slot 21.
+	if emitted_ids.has(21) and emitted_ids.has(20):                                           # Detect the near-right wall case where slot 25 should occlude slot 21.
+		_append_wall_slot_unchecked(render_list, emitted_ids, 25)                                 # Add the nearer center wall piece in front of slot 21.
+
+
+
+# _append_wall_slot_unchecked: Adds one numbered slot without rerunning the map-edge visibility test.
+func _append_wall_slot_unchecked(render_list: Array, emitted_ids: Dictionary, wall_id: int) -> void: # Declare this function.
+	if emitted_ids.has(wall_id):                                                               # Avoid adding a duplicate slot when another branch already emitted it.
+		return                                                                                    # Return without changing the render list.
+	var slot := _straight_slot_by_id(wall_id)                                                   # Look up this wall id's texture and draw-order metadata.
+	if slot.is_empty():                                                                        # Skip ids that are not in the straight-wall slot table.
+		return                                                                                    # Return without changing the render list.
+	render_list.append(slot)                                                                   # Add this empirically required companion wall to the render list.
+	emitted_ids[wall_id] = true                                                                # Mark the wall id as emitted so later rules do not duplicate it.
 
 
 
