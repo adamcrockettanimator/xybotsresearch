@@ -4,7 +4,10 @@
 
 [node name="Main" type="Node2D" unique_id=1276873369]
 script = ExtResource("1")
-diagnostic_3d_camera_fov = 45.0
+diagnostic_3d_camera_fov = 93.0
+diagnostic_3d_camera_height = 0.62
+diagnostic_3d_camera_target_distance = 1.65
+diagnostic_3d_camera_target_height = 0.17
 
 [node name="MazeViewport" type="Node2D" parent="." unique_id=586654540]
 
