@@ -132,6 +132,9 @@ const STRAIGHT_VISIBILITY_BRANCHES := [                                         
 	],                                                                                         # Close the extreme far-front branch.
 ]                                                                                           # Close the visibility-tree branch list.
 
+@export_group("Movement Phases")                                                            # Group inspector controls for captured movement and turn phase playback.
+@export var use_captured_transitions := false                                                # Snap movement/turns by default until the matching transition art is rebuilt.
+
 @export_group("Diagnostics")                                                                # Group inspector toggles for temporary visual debugging tools.
 @export var enable_3d_diagnostic := false                                                    # Keep the experimental 3D view disabled unless it is explicitly needed.
 @export var show_top_down_source_overlay := true                                             # Show the 2D source-of-truth map overlay during wall/collision debugging.
@@ -183,6 +186,8 @@ var pending_grid_delta := Vector2i.ZERO                                         
 var last_blocked_direction := ""                                                            # Store the most recent blocked movement label for debug display.
 var wall_edges: Dictionary = {}                                                             # Store explicit thin-wall edge flags for each open cell.
 var last_visible_wall_ids: Array[int] = []                                                   # Store the currently selected straight-wall ids for debug display.
+var was_left_turn_pressed := false                                                          # Track previous-frame left turn input so snapped turns only fire once per press.
+var was_right_turn_pressed := false                                                         # Track previous-frame right turn input so snapped turns only fire once per press.
 
 
 
@@ -222,10 +227,10 @@ func _process(delta: float) -> void:                                            
 
 	var turn_direction := _read_turn()                                                         # Store mutable runtime state for assets, rendering, movement, or debug output.
 	if turn_direction < 0:                                                                     # Run the following block only when this condition is true.
-		_start_transition("turn_left")                                                            # Call a helper function as part of the current controller step.
+		_request_transition("turn_left")                                                           # Turn left through a captured phase or immediate snap.
 		return                                                                                    # Return to the caller without producing a value.
 	if turn_direction > 0:                                                                     # Run the following block only when this condition is true.
-		_start_transition("turn_right")                                                           # Call a helper function as part of the current controller step.
+		_request_transition("turn_right")                                                          # Turn right through a captured phase or immediate snap.
 		return                                                                                    # Return to the caller without producing a value.
 
 	var movement := _read_movement()                                                           # Store mutable runtime state for assets, rendering, movement, or debug output.
@@ -1094,9 +1099,15 @@ func _slot_z_index(slot_name: String) -> int:                                   
 
 # _read_turn: Reads Q/E or arrow-key turning input and returns the requested turn direction.
 func _read_turn() -> int:                                                                   # Declare this function.
-	if Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_LEFT):                          # Run the following block only when this condition is true.
+	var left_pressed := Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_LEFT)          # Read the current raw left-turn key state.
+	var right_pressed := Input.is_key_pressed(KEY_E) or Input.is_key_pressed(KEY_RIGHT)        # Read the current raw right-turn key state.
+	var left_just_pressed := left_pressed and not was_left_turn_pressed                        # Detect the first frame of a left-turn key press.
+	var right_just_pressed := right_pressed and not was_right_turn_pressed                     # Detect the first frame of a right-turn key press.
+	was_left_turn_pressed = left_pressed                                                      # Store current left-turn state for next frame.
+	was_right_turn_pressed = right_pressed                                                    # Store current right-turn state for next frame.
+	if left_just_pressed:                                                                      # Turn once per key press when phase animations are disabled.
 		return -1                                                                                 # Return this computed result to the caller.
-	if Input.is_key_pressed(KEY_E) or Input.is_key_pressed(KEY_RIGHT):                         # Run the following block only when this condition is true.
+	if right_just_pressed:                                                                     # Turn once per key press when phase animations are disabled.
 		return 1                                                                                  # Return this computed result to the caller.
 	return 0                                                                                   # Return this computed result to the caller.
 
@@ -1163,7 +1174,7 @@ func _try_cross_tile(sequence_name: String, grid_delta: Vector2i, blocked_label:
 	if _can_cross_edge(grid_position, grid_delta):                                             # Run the following block only when this condition is true.
 		pending_grid_delta = grid_delta                                                           # Compute and store this value for the current step.
 		last_blocked_direction = ""                                                               # Compute and store this value for the current step.
-		_start_transition(sequence_name)                                                          # Call a helper function as part of the current controller step.
+		_request_transition(sequence_name)                                                         # Cross through a captured phase or immediate snap.
 	else:                                                                                      # Run this fallback branch when previous conditions were not met.
 		last_blocked_direction = blocked_label                                                    # Compute and store this value for the current step.
 
@@ -1292,6 +1303,33 @@ func _first_animation_with_prefix(prefix: String) -> StringName:                
 		if String(animation).begins_with(prefix):                                                 # Run the following block only when this condition is true.
 			return StringName(animation)                                                             # Return this computed result to the caller.
 	return &""                                                                                 # Return this computed result to the caller.
+
+
+
+# _request_transition: Starts a captured phase or immediately snaps the transition result based on the phase toggle.
+func _request_transition(sequence_name: String) -> void:                                    # Declare this function.
+	if use_captured_transitions:                                                               # Use the captured phase art only when that temporary option is enabled.
+		_start_transition(sequence_name)                                                          # Play the captured transition sequence.
+		return                                                                                    # Return after starting captured phase playback.
+	active_sequence_name = sequence_name                                                       # Store the requested transition name so the shared result helpers can apply it.
+	_finish_snap_transition(sequence_name)                                                     # Apply the transition result immediately with no captured phase playback.
+
+
+
+# _finish_snap_transition: Applies a movement or turn result immediately and redraws the stable view.
+func _finish_snap_transition(sequence_name: String) -> void:                                # Declare this function.
+	is_transitioning = false                                                                   # Ensure the controller stays in stable/input mode.
+	_apply_grid_result(sequence_name)                                                          # Apply the pending cell delta or facing rotation.
+	_reset_local_position_after_transition(sequence_name)                                      # Put the player on the correct entry edge in the new cell or facing.
+	active_sequence = []                                                                       # Clear any previous captured sequence frames.
+	phase_index = 0                                                                            # Reset captured phase bookkeeping.
+	phase_timer = 0.0                                                                          # Reset captured phase timing.
+	_show_stable()                                                                             # Redraw the environment for the new cell/facing immediately.
+	_position_player()                                                                         # Reposition the player sprite for the snapped state.
+	if enable_3d_diagnostic:                                                                   # Keep optional diagnostics in sync when enabled.
+		_update_3d_diagnostic()                                                                   # Sync the deprecated 3D diagnostic.
+	_update_debug_map_overlay()                                                                # Redraw the right-side top-down source map for the snapped state.
+	_update_status()                                                                           # Refresh the status label after the snap.
 
 
 
