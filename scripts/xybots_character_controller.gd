@@ -45,8 +45,8 @@ const WALL_EDGE_W := 3                                                          
 const VIEW_FRONT := "front"                                                                 # Define a fixed value used by the movement, rendering, or asset-loading system.
 const VIEW_LEFT := "left"                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
 const VIEW_RIGHT := "right"                                                                 # Define a fixed value used by the movement, rendering, or asset-loading system.
-const DEBUG_MAP_CELL_SIZE := 22.0                                                           # Set the top-down debug map cell size in screen pixels.
-const DEBUG_MAP_MARGIN := Vector2(10.0, 68.0)                                               # Offset the top-down debug map inside the scaled playfield area.
+const DEBUG_MAP_CELL_SIZE := 24.0                                                           # Set the top-down debug map cell size inside the 160x120 diagnostic panel.
+const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(68.0, 12.0)                                    # Center the one-cell-wide four-cell hallway inside the debug panel.
 const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
@@ -504,17 +504,27 @@ func _make_3d_material(color: Color) -> StandardMaterial3D:                     
 # _layout_viewport: Scales and centers the 160x120 playfield crop inside the current Godot window.
 func _layout_viewport() -> void:                                                            # Declare this function.
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var combined_size := VIEWPORT_SIZE                                                         # Start with the single cropped 2D playfield layout size.
-	if enable_3d_diagnostic and diagnostic_3d_display != null:                                 # Expand the layout only while the deprecated 3D panel is active.
-		combined_size = Vector2(VIEWPORT_SIZE.x * 2.0 + SIDE_BY_SIDE_GUTTER, VIEWPORT_SIZE.y)     # Compute the unscaled side-by-side diagnostic layout size.
+	var panel_count := 1                                                                       # Start with the main 2D playfield panel.
+	if show_top_down_source_overlay and debug_map_overlay != null:                             # Reserve a side panel for the enlarged source-of-truth map.
+		panel_count += 1                                                                          # Count the top-down map panel in the side-by-side layout.
+	if enable_3d_diagnostic and diagnostic_3d_display != null:                                 # Reserve an extra panel only while the deprecated 3D diagnostic is active.
+		panel_count += 1                                                                          # Count the optional 3D diagnostic panel after the map.
+	var combined_size := Vector2(VIEWPORT_SIZE.x * float(panel_count) + SIDE_BY_SIDE_GUTTER * float(panel_count - 1), VIEWPORT_SIZE.y) # Compute the unscaled multi-panel layout size.
 	var view_scale := minf(viewport_size.x / combined_size.x, viewport_size.y / combined_size.y) # Store mutable runtime state for assets, rendering, movement, or debug output.
 	var scaled_size := combined_size * view_scale                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
 	var layout_origin := (viewport_size - scaled_size) * 0.5                                    # Compute the centered top-left of both playfield panels.
 	maze_viewport.scale = Vector2.ONE * view_scale                                             # Update the cropped playfield container transform.
 	maze_viewport.position = layout_origin                                                     # Update the cropped 2D playfield container transform.
+	var next_panel_x := layout_origin.x + (VIEWPORT_SIZE.x + SIDE_BY_SIDE_GUTTER) * view_scale # Compute the x coordinate for the next right-side diagnostic panel.
+	if debug_map_overlay != null:                                                              # Layout the enlarged top-down map when its node exists.
+		debug_map_overlay.visible = show_top_down_source_overlay                                  # Hide or show the source map based on the inspector toggle.
+		debug_map_overlay.scale = Vector2.ONE * view_scale                                        # Scale the map panel at the same pixel size as the 2D playfield.
+		debug_map_overlay.position = Vector2(next_panel_x, layout_origin.y)                       # Place the map in the first right-side diagnostic panel.
+		if show_top_down_source_overlay:                                                         # Advance the panel cursor only when the source map is visible.
+			next_panel_x += (VIEWPORT_SIZE.x + SIDE_BY_SIDE_GUTTER) * view_scale                     # Move the next optional panel to the right of the map.
 	if enable_3d_diagnostic and diagnostic_3d_display != null:                                 # Only layout the 3D view after it has been created and enabled.
 		diagnostic_3d_display.scale = Vector2.ONE * view_scale                                    # Scale the 3D viewport texture at the same pixel size as the 2D view.
-		diagnostic_3d_display.position = layout_origin + Vector2((VIEWPORT_SIZE.x + SIDE_BY_SIDE_GUTTER) * view_scale, 0.0) # Place the 3D view immediately to the right of the 2D view.
+		diagnostic_3d_display.position = Vector2(next_panel_x, layout_origin.y)                   # Place the optional 3D panel to the right of the map panel.
 		diagnostic_3d_display.visible = true                                                      # Show the deprecated 3D panel when it is enabled.
 	elif diagnostic_3d_display != null:                                                        # Hide an existing 3D display if the toggle is turned off during a run.
 		diagnostic_3d_display.visible = false                                                     # Keep the deprecated 3D panel out of the default prototype view.
@@ -539,9 +549,9 @@ func _update_debug_map_overlay() -> void:                                       
 	if not show_top_down_source_overlay:                                                       # Avoid rebuilding hidden debug primitives when the overlay is off.
 		return                                                                                    # Return without drawing the map.
 
-	debug_map_overlay.position = maze_viewport.position + DEBUG_MAP_MARGIN                      # Place the map on top of the scaled game view.
 	for child in debug_map_overlay.get_children():                                             # Remove previous line and marker nodes before redrawing.
 		child.free()                                                                              # Free the previous debug primitive immediately.
+	_add_debug_panel_background()                                                             # Draw the dark 160x120 panel behind the source-of-truth map.
 
 	var open_color := Color(0.2, 0.45, 0.55, 0.55)                                             # Define the color for non-blocking cell guide lines.
 	var wall_color := Color(1.0, 1.0, 1.0, 0.95)                                               # Define the color for blocking wall edges.
@@ -579,7 +589,7 @@ func _update_debug_map_overlay() -> void:                                       
 
 # _debug_map_cell_top_left: Converts a grid cell coordinate into a debug overlay top-left pixel position.
 func _debug_map_cell_top_left(cell: Vector2i) -> Vector2:                                    # Declare this function.
-	return Vector2(float(cell.x) * DEBUG_MAP_CELL_SIZE, float(cell.y) * DEBUG_MAP_CELL_SIZE)    # Return the cell's top-left overlay coordinate.
+	return DEBUG_MAP_PANEL_GRID_ORIGIN + Vector2(float(cell.x) * DEBUG_MAP_CELL_SIZE, float(cell.y) * DEBUG_MAP_CELL_SIZE) # Return the cell's top-left panel coordinate.
 
 
 
@@ -609,6 +619,21 @@ func _add_debug_player_bounds(center: Vector2) -> void:                         
 	_add_debug_line(top_right, bottom_right, bounds_color, 1.0)                               # Draw the right contact/limit guide.
 	_add_debug_line(bottom_left, bottom_right, bounds_color, 1.0)                             # Draw the back contact/limit guide.
 	_add_debug_line(top_left, bottom_left, bounds_color, 1.0)                                 # Draw the left contact/limit guide.
+
+
+
+# _add_debug_panel_background: Adds a 160x120 dark panel behind the enlarged top-down source map.
+func _add_debug_panel_background() -> void:                                                 # Declare this function.
+	var background := Polygon2D.new()                                                          # Create a filled rectangle for the diagnostic panel background.
+	background.polygon = PackedVector2Array([                                                  # Define the four corners of the 160x120 source map panel.
+		Vector2.ZERO,                                                                             # Add the top-left corner.
+		Vector2(VIEWPORT_SIZE.x, 0.0),                                                            # Add the top-right corner.
+		VIEWPORT_SIZE,                                                                            # Add the bottom-right corner.
+		Vector2(0.0, VIEWPORT_SIZE.y),                                                            # Add the bottom-left corner.
+	])                                                                                          # Close the panel polygon point list.
+	background.color = Color(0.04, 0.05, 0.06, 0.92)                                           # Fill the panel with a dark diagnostic background.
+	background.z_index = -10                                                                    # Keep the background behind the map lines and markers.
+	debug_map_overlay.add_child(background)                                                     # Add the background to the map panel.
 
 
 
