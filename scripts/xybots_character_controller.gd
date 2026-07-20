@@ -22,7 +22,9 @@ const STRAFE_LEFT_WALL_CONTACT_X := -0.08                                       
 const STRAFE_RIGHT_WALL_CONTACT_X := 1.08                                                   # Set the closest blocked-wall contact position on the viewer's right.
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
-const HALLWAY_LENGTH := 4                                                                   # Set the number of cells in the current test hallway.
+const MAP_WIDTH := 4                                                                        # Set the generated test map width in thin-wall cells.
+const MAP_HEIGHT := 4                                                                       # Set the generated test map height in thin-wall cells.
+const MAP_EXTRA_OPENING_CHANCE := 0.18                                                      # Add a few loops after maze carving so the interior is not a strict tree.
 
 const PHASE_ROOT := "res://assets/reference_xybots_local/playfield_phases"                  # Point to captured full-frame movement and turn phase assets.
 const STABLE_VIEW_ROOT := "res://assets/reference_xybots_local/stable_views"                # Point to old full-frame stable-view fallback assets.
@@ -44,7 +46,7 @@ const VIEW_FRONT := "front"                                                     
 const VIEW_LEFT := "left"                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
 const VIEW_RIGHT := "right"                                                                 # Define a fixed value used by the movement, rendering, or asset-loading system.
 const DEBUG_MAP_CELL_SIZE := 24.0                                                           # Set the top-down debug map cell size inside the 160x120 diagnostic panel.
-const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(68.0, 12.0)                                    # Center the one-cell-wide four-cell hallway inside the debug panel.
+const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                                    # Center the 4x4 debug maze inside the source-map panel.
 const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
@@ -176,7 +178,7 @@ var phase_timer := 0.0                                                          
 var is_transitioning := false                                                               # Track whether a captured transition animation is currently playing.
 
 var facing := 0                                                                             # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
-var grid_position := Vector2i(0, 3)                                                         # Track the current cell in the top-down hallway map.
+var grid_position := Vector2i(0, 3)                                                         # Track the current cell in the top-down maze map.
 var local_floor_position := HOME_LOCAL_FLOOR_POSITION                                       # Track the character position inside the current tile.
 var run_dir := DIR_N                                                                        # Track the body movement direction used for animation selection.
 var aim_dir := DIR_N                                                                        # Track the aiming direction used for animation selection.
@@ -191,9 +193,9 @@ var was_right_turn_pressed := false                                             
 
 
 
-# _ready: Initializes the hallway wall data, loads textures, creates renderer nodes, and draws the starting view.
+# _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
 func _ready() -> void:                                                                      # Declare this function.
-	_build_test_hallway_wall_edges()                                                           # Call a helper function as part of the current controller step.
+	_build_random_maze_wall_edges()                                                             # Generate the current 4x4 thin-wall maze before rendering.
 	_load_phase_textures()                                                                     # Call a helper function as part of the current controller step.
 	_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
 	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
@@ -308,7 +310,7 @@ func _setup_environment_layer() -> void:                                        
 
 
 
-# _setup_3d_diagnostic: Builds a 160x120 3D SubViewport that visualizes the same hallway map beside the 2D renderer.
+# _setup_3d_diagnostic: Builds a 160x120 3D SubViewport that visualizes the same maze map beside the 2D renderer.
 func _setup_3d_diagnostic() -> void:                                                        # Declare this function.
 	if not enable_3d_diagnostic:                                                              # Keep the deprecated diagnostic dormant unless the inspector toggle is enabled.
 		return                                                                                    # Return without creating any 3D diagnostic nodes.
@@ -362,7 +364,7 @@ func _setup_3d_diagnostic() -> void:                                            
 
 
 
-# _build_3d_hallway_geometry: Creates visible 3D floor, ceiling, and wall cubes from the thin-wall hallway data.
+# _build_3d_hallway_geometry: Creates visible 3D floor, ceiling, and wall cubes from the thin-wall maze data.
 func _build_3d_hallway_geometry() -> void:                                                  # Declare this function.
 	var floor_material := _make_3d_material(Color(0.76, 0.49, 0.24, 1.0))                      # Create the diagnostic floor material.
 	var ceiling_material := _make_3d_material(Color(0.52, 0.35, 0.18, 1.0))                    # Create the diagnostic ceiling material.
@@ -370,25 +372,21 @@ func _build_3d_hallway_geometry() -> void:                                      
 	var end_wall_material := _make_3d_material(Color(0.20, 0.25, 0.42, 1.0))                   # Create the diagnostic end-wall material.
 	var separator_material := _make_3d_material(Color(0.02, 0.02, 0.02, 1.0))                  # Create a dark material for cell boundary guide strips.
 
-	for y in range(HALLWAY_LENGTH):                                                            # Generate one cubic cell for each row of the test hallway.
-		var cell := Vector2i(0, y)                                                                # Build the current hallway cell coordinate.
-		var center := _grid_cell_center_to_3d(cell)                                               # Convert this cell center into 3D world space.
-		_add_3d_box("Floor_%d" % y, center + Vector3(0.0, -0.025, 0.0), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, 0.05, 1.0), floor_material) # Add a thin floor slab for this widened cell.
-		_add_3d_box("Ceiling_%d" % y, center + Vector3(0.0, DIAGNOSTIC_3D_WALL_HEIGHT, 0.0), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, 0.05, 1.0), ceiling_material) # Add a thin ceiling slab for this widened cell.
-		if _has_wall_edge(cell, Vector2i(-1, 0)):                                                  # Check the west edge for a thin wall.
-			_add_3d_box("Wall_W_%d" % y, Vector3(0.0 - DIAGNOSTIC_3D_WALL_THICKNESS * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) + 0.5), Vector3(DIAGNOSTIC_3D_WALL_THICKNESS, DIAGNOSTIC_3D_WALL_HEIGHT, 1.0), wall_material) # Add a west wall segment.
-		if _has_wall_edge(cell, Vector2i(1, 0)):                                                   # Check the east edge for a thin wall.
-			_add_3d_box("Wall_E_%d" % y, Vector3(DIAGNOSTIC_3D_CELL_WIDTH + DIAGNOSTIC_3D_WALL_THICKNESS * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) + 0.5), Vector3(DIAGNOSTIC_3D_WALL_THICKNESS, DIAGNOSTIC_3D_WALL_HEIGHT, 1.0), wall_material) # Add an east wall segment.
-		if _has_wall_edge(cell, Vector2i(0, -1)):                                                  # Check the north edge for a thin wall.
-			_add_3d_box("Wall_N_%d" % y, Vector3(DIAGNOSTIC_3D_CELL_WIDTH * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) - DIAGNOSTIC_3D_WALL_THICKNESS * 0.5), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, DIAGNOSTIC_3D_WALL_HEIGHT, DIAGNOSTIC_3D_WALL_THICKNESS), end_wall_material) # Add a north end-wall segment.
-		if _has_wall_edge(cell, Vector2i(0, 1)):                                                   # Check the south edge for a thin wall.
-			_add_3d_box("Wall_S_%d" % y, Vector3(DIAGNOSTIC_3D_CELL_WIDTH * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) + 1.0 + DIAGNOSTIC_3D_WALL_THICKNESS * 0.5), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, DIAGNOSTIC_3D_WALL_HEIGHT, DIAGNOSTIC_3D_WALL_THICKNESS), end_wall_material) # Add a south end-wall segment.
-
-	for boundary in range(HALLWAY_LENGTH + 1):                                                # Add visible cross-lines at every cell boundary along the hallway.
-		var z := float(boundary)                                                                 # Convert this boundary index into 3D z space.
-		_add_3d_box("FloorBoundary_%d" % boundary, Vector3(DIAGNOSTIC_3D_CELL_WIDTH * 0.5, 0.012, z), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, DIAGNOSTIC_3D_SEPARATOR_THICKNESS, DIAGNOSTIC_3D_SEPARATOR_THICKNESS), separator_material) # Draw a dark line across the floor.
-		_add_3d_box("WestWallBoundary_%d" % boundary, Vector3(0.012, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, z), Vector3(DIAGNOSTIC_3D_SEPARATOR_THICKNESS, DIAGNOSTIC_3D_WALL_HEIGHT, DIAGNOSTIC_3D_SEPARATOR_THICKNESS), separator_material) # Draw a dark divider on the west wall.
-		_add_3d_box("EastWallBoundary_%d" % boundary, Vector3(DIAGNOSTIC_3D_CELL_WIDTH - 0.012, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, z), Vector3(DIAGNOSTIC_3D_SEPARATOR_THICKNESS, DIAGNOSTIC_3D_WALL_HEIGHT, DIAGNOSTIC_3D_SEPARATOR_THICKNESS), separator_material) # Draw a dark divider on the east wall.
+	for y in range(MAP_HEIGHT):                                                               # Generate one row of 3D diagnostic cells for each maze row.
+		for x in range(MAP_WIDTH):                                                              # Generate one 3D diagnostic cell for each maze column.
+			var cell := Vector2i(x, y)                                                              # Build the current maze cell coordinate.
+			var center := _grid_cell_center_to_3d(cell)                                             # Convert this cell center into 3D world space.
+			_add_3d_box("Floor_%d_%d" % [x, y], center + Vector3(0.0, -0.025, 0.0), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, 0.05, 1.0), floor_material) # Add a thin floor slab for this widened cell.
+			_add_3d_box("Ceiling_%d_%d" % [x, y], center + Vector3(0.0, DIAGNOSTIC_3D_WALL_HEIGHT, 0.0), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, 0.05, 1.0), ceiling_material) # Add a thin ceiling slab for this widened cell.
+			if _has_wall_edge(cell, Vector2i(-1, 0)):                                                # Check the west edge for a thin wall.
+				_add_3d_box("Wall_W_%d_%d" % [x, y], Vector3(float(x) * DIAGNOSTIC_3D_CELL_WIDTH - DIAGNOSTIC_3D_WALL_THICKNESS * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) + 0.5), Vector3(DIAGNOSTIC_3D_WALL_THICKNESS, DIAGNOSTIC_3D_WALL_HEIGHT, 1.0), wall_material) # Add a west wall segment.
+			if _has_wall_edge(cell, Vector2i(1, 0)):                                                 # Check the east edge for a thin wall.
+				_add_3d_box("Wall_E_%d_%d" % [x, y], Vector3(float(x + 1) * DIAGNOSTIC_3D_CELL_WIDTH + DIAGNOSTIC_3D_WALL_THICKNESS * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) + 0.5), Vector3(DIAGNOSTIC_3D_WALL_THICKNESS, DIAGNOSTIC_3D_WALL_HEIGHT, 1.0), wall_material) # Add an east wall segment.
+			if _has_wall_edge(cell, Vector2i(0, -1)):                                                # Check the north edge for a thin wall.
+				_add_3d_box("Wall_N_%d_%d" % [x, y], Vector3(float(x) * DIAGNOSTIC_3D_CELL_WIDTH + DIAGNOSTIC_3D_CELL_WIDTH * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) - DIAGNOSTIC_3D_WALL_THICKNESS * 0.5), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, DIAGNOSTIC_3D_WALL_HEIGHT, DIAGNOSTIC_3D_WALL_THICKNESS), end_wall_material) # Add a north wall segment.
+			if _has_wall_edge(cell, Vector2i(0, 1)):                                                 # Check the south edge for a thin wall.
+				_add_3d_box("Wall_S_%d_%d" % [x, y], Vector3(float(x) * DIAGNOSTIC_3D_CELL_WIDTH + DIAGNOSTIC_3D_CELL_WIDTH * 0.5, DIAGNOSTIC_3D_WALL_HEIGHT * 0.5, float(y) + 1.0 + DIAGNOSTIC_3D_WALL_THICKNESS * 0.5), Vector3(DIAGNOSTIC_3D_CELL_WIDTH, DIAGNOSTIC_3D_WALL_HEIGHT, DIAGNOSTIC_3D_WALL_THICKNESS), end_wall_material) # Add a south wall segment.
+			_add_3d_box("FloorCenter_%d_%d" % [x, y], center + Vector3(0.0, 0.012, 0.0), Vector3(DIAGNOSTIC_3D_SEPARATOR_THICKNESS, DIAGNOSTIC_3D_SEPARATOR_THICKNESS, DIAGNOSTIC_3D_SEPARATOR_THICKNESS), separator_material) # Mark each diagnostic floor cell center.
 
 
 
@@ -544,7 +542,7 @@ func _setup_debug_map_overlay() -> void:                                        
 
 
 
-# _update_debug_map_overlay: Redraws the top-down hallway, thin-wall edges, player cell, and facing arrow.
+# _update_debug_map_overlay: Redraws the top-down maze, thin-wall edges, player cell, and facing arrow.
 func _update_debug_map_overlay() -> void:                                                    # Declare this function.
 	if debug_map_overlay == null:                                                              # Skip drawing if the overlay has not been created yet.
 		return                                                                                    # Return without drawing the map.
@@ -560,24 +558,25 @@ func _update_debug_map_overlay() -> void:                                       
 	var wall_color := Color(1.0, 1.0, 1.0, 0.95)                                               # Define the color for blocking wall edges.
 	var player_color := Color(0.0, 0.95, 1.0, 0.95)                                           # Define the color for the player marker and facing arrow.
 
-	for y in range(HALLWAY_LENGTH):                                                            # Draw every cell in the current four-cell test hallway.
-		var cell := Vector2i(0, y)                                                                # Build the map cell coordinate for this hallway row.
-		var top_left := _debug_map_cell_top_left(cell)                                           # Convert the map cell to overlay pixel coordinates.
-		var top_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, 0.0)                            # Compute the top-right corner of the cell.
-		var bottom_left := top_left + Vector2(0.0, DEBUG_MAP_CELL_SIZE)                          # Compute the bottom-left corner of the cell.
-		var bottom_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, DEBUG_MAP_CELL_SIZE)         # Compute the bottom-right corner of the cell.
-		_add_debug_line(top_left, top_right, open_color, 1.0)                                    # Draw the north guide edge for this cell.
-		_add_debug_line(top_right, bottom_right, open_color, 1.0)                                # Draw the east guide edge for this cell.
-		_add_debug_line(bottom_left, bottom_right, open_color, 1.0)                              # Draw the south guide edge for this cell.
-		_add_debug_line(top_left, bottom_left, open_color, 1.0)                                  # Draw the west guide edge for this cell.
-		if _has_wall_edge(cell, Vector2i(0, -1)):                                                # Check whether the north edge is blocked by a thin wall.
-			_add_debug_line(top_left, top_right, wall_color, 3.0)                                   # Draw the north wall edge as a thick line.
-		if _has_wall_edge(cell, Vector2i(1, 0)):                                                 # Check whether the east edge is blocked by a thin wall.
-			_add_debug_line(top_right, bottom_right, wall_color, 3.0)                               # Draw the east wall edge as a thick line.
-		if _has_wall_edge(cell, Vector2i(0, 1)):                                                 # Check whether the south edge is blocked by a thin wall.
-			_add_debug_line(bottom_left, bottom_right, wall_color, 3.0)                             # Draw the south wall edge as a thick line.
-		if _has_wall_edge(cell, Vector2i(-1, 0)):                                                # Check whether the west edge is blocked by a thin wall.
-			_add_debug_line(top_left, bottom_left, wall_color, 3.0)                                  # Draw the west wall edge as a thick line.
+	for y in range(MAP_HEIGHT):                                                               # Draw every row in the generated 4x4 maze.
+		for x in range(MAP_WIDTH):                                                              # Draw every column in the generated 4x4 maze.
+			var cell := Vector2i(x, y)                                                              # Build the map cell coordinate for this maze cell.
+			var top_left := _debug_map_cell_top_left(cell)                                         # Convert the map cell to overlay pixel coordinates.
+			var top_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, 0.0)                          # Compute the top-right corner of the cell.
+			var bottom_left := top_left + Vector2(0.0, DEBUG_MAP_CELL_SIZE)                        # Compute the bottom-left corner of the cell.
+			var bottom_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, DEBUG_MAP_CELL_SIZE)       # Compute the bottom-right corner of the cell.
+			_add_debug_line(top_left, top_right, open_color, 1.0)                                  # Draw the north guide edge for this cell.
+			_add_debug_line(top_right, bottom_right, open_color, 1.0)                              # Draw the east guide edge for this cell.
+			_add_debug_line(bottom_left, bottom_right, open_color, 1.0)                            # Draw the south guide edge for this cell.
+			_add_debug_line(top_left, bottom_left, open_color, 1.0)                                # Draw the west guide edge for this cell.
+			if _has_wall_edge(cell, Vector2i(0, -1)):                                              # Check whether the north edge is blocked by a thin wall.
+				_add_debug_line(top_left, top_right, wall_color, 3.0)                                 # Draw the north wall edge as a thick line.
+			if _has_wall_edge(cell, Vector2i(1, 0)):                                               # Check whether the east edge is blocked by a thin wall.
+				_add_debug_line(top_right, bottom_right, wall_color, 3.0)                             # Draw the east wall edge as a thick line.
+			if _has_wall_edge(cell, Vector2i(0, 1)):                                               # Check whether the south edge is blocked by a thin wall.
+				_add_debug_line(bottom_left, bottom_right, wall_color, 3.0)                           # Draw the south wall edge as a thick line.
+			if _has_wall_edge(cell, Vector2i(-1, 0)):                                              # Check whether the west edge is blocked by a thin wall.
+				_add_debug_line(top_left, bottom_left, wall_color, 3.0)                                # Draw the west wall edge as a thick line.
 
 	var home_center := _debug_map_cell_center(grid_position)                                    # Convert the current cell center into an overlay reference position.
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
@@ -1566,17 +1565,90 @@ func _left_vector() -> Vector2i:                                                
 
 
 
-# _build_test_hallway_wall_edges: Builds the current four-cell one-wide hallway using explicit north/east/south/west thin-wall edges.
-func _build_test_hallway_wall_edges() -> void:                                              # Declare this function.
-	wall_edges.clear()                                                                         # Continue the controller logic for this section.
-	for y in range(HALLWAY_LENGTH):                                                            # Iterate across this collection or range.
-		var cell := Vector2i(0, y)                                                                # Store mutable runtime state for assets, rendering, movement, or debug output.
-		wall_edges[cell] = {                                                                      # Compute and store this value for the current step.
-			WALL_EDGE_N: y == 0,                                                                     # Continue the controller logic for this section.
-			WALL_EDGE_E: true,                                                                       # Continue the controller logic for this section.
-			WALL_EDGE_S: y == HALLWAY_LENGTH - 1,                                                    # Continue the controller logic for this section.
-			WALL_EDGE_W: true,                                                                       # Continue the controller logic for this section.
-		}                                                                                         # Close the current list, dictionary, call, or expression.
+# _build_random_maze_wall_edges: Builds a generated 4x4 thin-wall maze with closed outside borders.
+func _build_random_maze_wall_edges() -> void:                                               # Declare this function.
+	wall_edges.clear()                                                                         # Clear any previous map wall data before generating the maze.
+	for y in range(MAP_HEIGHT):                                                                # Iterate through every row in the 4x4 map.
+		for x in range(MAP_WIDTH):                                                               # Iterate through every column in the 4x4 map.
+			var cell := Vector2i(x, y)                                                              # Build the current map cell coordinate.
+			wall_edges[cell] = {                                                                    # Start each cell as a closed box before carving passages.
+				WALL_EDGE_N: true,                                                                    # Close the north edge until the maze carver opens it.
+				WALL_EDGE_E: true,                                                                    # Close the east edge until the maze carver opens it.
+				WALL_EDGE_S: true,                                                                    # Close the south edge until the maze carver opens it.
+				WALL_EDGE_W: true,                                                                    # Close the west edge until the maze carver opens it.
+			}                                                                                       # Close the cell wall dictionary.
+	var rng := RandomNumberGenerator.new()                                                     # Create a local random source for this generated test maze.
+	rng.randomize()                                                                            # Seed the random source from the current run so the maze changes between launches.
+	var visited: Dictionary = {}                                                               # Track which cells have already been reached by the maze carver.
+	var start_cell := Vector2i(0, MAP_HEIGHT - 1)                                              # Start the test player in the southwest corner of the generated map.
+	_carve_maze_from(start_cell, visited, rng)                                                 # Carve a connected maze from the starting cell.
+	_add_extra_maze_openings(rng)                                                              # Open a few extra internal walls so the map has some loops.
+	grid_position = start_cell                                                                 # Place the player at the start of the generated maze.
+	facing = 0                                                                                 # Face north so the first view looks into the map.
+	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Reset the player to the normal local tile position.
+	pending_grid_delta = Vector2i.ZERO                                                         # Clear any stale cell-crossing request.
+	last_blocked_direction = ""                                                                # Clear any stale blocked-movement status.
+
+
+
+# _carve_maze_from: Recursively carves passages through internal wall edges to make all cells reachable.
+func _carve_maze_from(cell: Vector2i, visited: Dictionary, rng: RandomNumberGenerator) -> void: # Declare this function.
+	visited[cell] = true                                                                       # Mark this cell as part of the carved maze.
+	for delta in _shuffled_cardinal_directions(rng):                                           # Visit neighboring cells in random order.
+		var next_cell := cell + delta                                                            # Compute the adjacent cell in this direction.
+		if not _is_open_cell(next_cell):                                                          # Skip neighbors outside the 4x4 map.
+			continue                                                                                 # Continue to the next shuffled direction.
+		if visited.has(next_cell):                                                                # Skip neighbors that have already been carved.
+			continue                                                                                 # Continue to the next shuffled direction.
+		_set_wall_between(cell, delta, false)                                                     # Open the wall between this cell and the unvisited neighbor.
+		_carve_maze_from(next_cell, visited, rng)                                                 # Continue carving from that newly reached neighbor.
+
+
+
+# _add_extra_maze_openings: Opens a small number of remaining internal walls to make the maze less linear.
+func _add_extra_maze_openings(rng: RandomNumberGenerator) -> void:                          # Declare this function.
+	for y in range(MAP_HEIGHT):                                                                # Iterate through every row in the generated map.
+		for x in range(MAP_WIDTH):                                                               # Iterate through every column in the generated map.
+			var cell := Vector2i(x, y)                                                              # Build the current map cell coordinate.
+			for delta in [Vector2i(1, 0), Vector2i(0, 1)]:                                         # Check only east and south so each shared edge is considered once.
+				if not _is_open_cell(cell + delta):                                                   # Keep outside borders walled by skipping out-of-map neighbors.
+					continue                                                                              # Continue to the next candidate edge.
+				if rng.randf() <= MAP_EXTRA_OPENING_CHANCE:                                           # Randomly decide whether to add a loop at this internal wall.
+					_set_wall_between(cell, delta, false)                                                # Open this internal wall while keeping both cells consistent.
+
+
+
+# _shuffled_cardinal_directions: Returns the four grid movement directions in random order.
+func _shuffled_cardinal_directions(rng: RandomNumberGenerator) -> Array[Vector2i]:          # Declare this function.
+	var directions: Array[Vector2i] = [                                                       # Start with all four possible neighboring directions.
+		Vector2i(0, -1),                                                                          # Include north.
+		Vector2i(1, 0),                                                                           # Include east.
+		Vector2i(0, 1),                                                                           # Include south.
+		Vector2i(-1, 0),                                                                          # Include west.
+	]                                                                                          # Close the direction list.
+	for i in range(directions.size() - 1, 0, -1):                                             # Walk backward through the list for a Fisher-Yates shuffle.
+		var j := rng.randi_range(0, i)                                                           # Pick a random earlier-or-current index.
+		var temp := directions[i]                                                                 # Store the current direction before swapping.
+		directions[i] = directions[j]                                                            # Move the random direction into this slot.
+		directions[j] = temp                                                                      # Move the stored direction into the random slot.
+	return directions                                                                          # Return the shuffled direction list.
+
+
+
+# _set_wall_between: Sets a shared edge on both neighboring cells so the thin-wall map stays symmetric.
+func _set_wall_between(cell: Vector2i, delta: Vector2i, has_wall: bool) -> void:             # Declare this function.
+	var edge := _edge_from_delta(delta)                                                        # Convert the neighbor direction into this cell's edge id.
+	if edge < 0:                                                                               # Ignore invalid neighbor directions defensively.
+		return                                                                                    # Return without changing the map.
+	var cell_edges: Dictionary = wall_edges.get(cell, {})                                      # Read this cell's mutable edge dictionary.
+	cell_edges[edge] = has_wall                                                                # Set the requested wall state on this cell.
+	wall_edges[cell] = cell_edges                                                              # Store the updated edge dictionary back into the wall map.
+	var other_cell := cell + delta                                                             # Compute the neighboring cell sharing the same edge.
+	if not _is_open_cell(other_cell):                                                          # Skip mirrored updates for out-of-map space.
+		return                                                                                    # Return after updating the in-map side.
+	var other_edges: Dictionary = wall_edges.get(other_cell, {})                               # Read the neighboring cell's edge dictionary.
+	other_edges[_opposite_edge(edge)] = has_wall                                               # Mirror the wall state onto the neighbor's opposite edge.
+	wall_edges[other_cell] = other_edges                                                       # Store the mirrored edge dictionary back into the wall map.
 
 
 
@@ -1649,9 +1721,9 @@ func _opposite_edge(edge: int) -> int:                                          
 
 
 
-# _is_open_cell: Returns whether a cell belongs to the current test hallway footprint.
+# _is_open_cell: Returns whether a cell belongs to the generated 4x4 map footprint.
 func _is_open_cell(cell: Vector2i) -> bool:                                                 # Declare this function.
-	return cell.x == 0 and cell.y >= 0 and cell.y < HALLWAY_LENGTH                             # Return this computed result to the caller.
+	return cell.x >= 0 and cell.x < MAP_WIDTH and cell.y >= 0 and cell.y < MAP_HEIGHT          # Return whether this coordinate is inside the 4x4 map.
 
 
 
@@ -1666,7 +1738,7 @@ func _update_status() -> void:                                                  
 
 	status_label.text = (                                                                      # Update the on-screen debug status label.
 		"Xybots phase prototype | %s | Facing %s | Cell %d,%d | Local %.2f,%.2f | Anim %s | Walls %s%s\n" # Continue the controller logic for this section.
-		+ "Four-cell thin-wall hallway. WASD moves inside tile; boundary crossing checks the edge wall. Q/E or arrows turn." # Continue the controller logic for this section.
+		+ "Generated 4x4 thin-wall maze. WASD moves inside tile; boundary crossing checks the edge wall. Q/E or arrows turn." # Continue the controller logic for this section.
 	) % [                                                                                      # Close the current list, dictionary, call, or expression.
 		phase_text,                                                                               # Continue the controller logic for this section.
 		facing_name,                                                                              # Continue the controller logic for this section.
