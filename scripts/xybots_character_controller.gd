@@ -196,7 +196,7 @@ var was_right_turn_pressed := false                                             
 
 # _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
 func _ready() -> void:                                                                      # Declare this function.
-	_build_random_maze_wall_edges()                                                             # Generate the current 4x4 thin-wall maze before rendering.
+	_build_fixed_reference_maze_wall_edges()                                                     # Load the current fixed 4x4 thin-wall test maze before rendering.
 	_load_phase_textures()                                                                     # Call a helper function as part of the current controller step.
 	_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
 	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
@@ -1566,6 +1566,34 @@ func _left_vector() -> Vector2i:                                                
 
 
 
+# _build_fixed_reference_maze_wall_edges: Restores the current hand-tested 4x4 thin-wall maze instead of rerolling on startup.
+func _build_fixed_reference_maze_wall_edges() -> void:                                     # Declare this function.
+	wall_edges.clear()                                                                         # Clear any previous map wall data before loading the fixed reference map.
+	for y in range(MAP_HEIGHT):                                                                # Iterate through every row in the fixed 4x4 map.
+		for x in range(MAP_WIDTH):                                                               # Iterate through every column in the fixed 4x4 map.
+			var cell := Vector2i(x, y)                                                              # Build the current map cell coordinate.
+			wall_edges[cell] = {                                                                    # Start with only the outside border walls closed.
+				WALL_EDGE_N: y == 0,                                                                 # Close the north map border.
+				WALL_EDGE_E: x == MAP_WIDTH - 1,                                                     # Close the east map border.
+				WALL_EDGE_S: y == MAP_HEIGHT - 1,                                                    # Close the south map border.
+				WALL_EDGE_W: x == 0,                                                                 # Close the west map border.
+			}                                                                                       # Close the cell wall dictionary.
+	_set_wall_between(Vector2i(1, 0), Vector2i(0, 1), true)                                  # Restore the wall between cells 1,0 and 1,1.
+	_set_wall_between(Vector2i(2, 0), Vector2i(0, 1), true)                                  # Restore the wall between cells 2,0 and 2,1.
+	_set_wall_between(Vector2i(0, 1), Vector2i(0, 1), true)                                  # Restore the wall between cells 0,1 and 0,2.
+	_set_wall_between(Vector2i(0, 3), Vector2i(1, 0), true)                                  # Restore the wall between cells 0,3 and 1,3.
+	_set_wall_between(Vector2i(1, 2), Vector2i(1, 0), true)                                  # Restore the wall between cells 1,2 and 2,2.
+	_set_wall_between(Vector2i(2, 1), Vector2i(1, 0), true)                                  # Restore the wall between cells 2,1 and 3,1.
+	_set_wall_between(Vector2i(2, 2), Vector2i(1, 0), true)                                  # Restore the wall between cells 2,2 and 3,2.
+	_set_wall_between(Vector2i(2, 3), Vector2i(1, 0), true)                                  # Restore the wall between cells 2,3 and 3,3.
+	grid_position = Vector2i(1, 1)                                                            # Start on the screenshot's test cell so visibility fixes are easy to recheck.
+	facing = 1                                                                                 # Face east to recreate the previous missing-wall test view.
+	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Reset the player to the normal local tile position.
+	pending_grid_delta = Vector2i.ZERO                                                         # Clear any stale cell-crossing request.
+	last_blocked_direction = ""                                                                # Clear any stale blocked-movement status.
+
+
+
 # _build_random_maze_wall_edges: Builds a generated 4x4 thin-wall maze with closed outside borders.
 func _build_random_maze_wall_edges() -> void:                                               # Declare this function.
 	wall_edges.clear()                                                                         # Clear any previous map wall data before generating the maze.
@@ -1739,7 +1767,7 @@ func _update_status() -> void:                                                  
 
 	status_label.text = (                                                                      # Update the on-screen debug status label.
 		"Xybots phase prototype | %s | Facing %s | Cell %d,%d | Local %.2f,%.2f | Anim %s | Walls %s%s\n" # Continue the controller logic for this section.
-		+ "Generated 4x4 thin-wall maze. WASD moves inside tile; boundary crossing checks the edge wall. Q/E or arrows turn." # Continue the controller logic for this section.
+		+ "Fixed 4x4 thin-wall maze. WASD moves inside tile; boundary crossing checks the edge wall. Q/E or arrows turn." # Continue the controller logic for this section.
 	) % [                                                                                      # Close the current list, dictionary, call, or expression.
 		phase_text,                                                                               # Continue the controller logic for this section.
 		facing_name,                                                                              # Continue the controller logic for this section.
