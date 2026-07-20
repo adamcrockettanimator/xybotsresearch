@@ -1185,7 +1185,7 @@ func _position_player() -> void:                                                
 
 
 
-# _side_limits_for_depth: Returns local x limits that keep the current sprite fully inside the playable crop at this depth.
+# _side_limits_for_depth: Returns local x limits that keep the player registered inside the visible floor trapezoid at this depth.
 func _side_limits_for_depth(local_depth: float) -> Vector2:                                 # Declare this function.
 	var depth := clampf(local_depth, 0.0, 1.0)                                                 # Clamp depth before using it for projection math.
 	var half_width := lerpf(FAR_FLOOR_HALF_WIDTH, NEAR_FLOOR_HALF_WIDTH, depth)                # Compute the floor trapezoid half-width at this depth.
@@ -1193,8 +1193,10 @@ func _side_limits_for_depth(local_depth: float) -> Vector2:                     
 	var x_max := 0.5 + half_width                                                              # Compute the right projection boundary at this depth.
 	var projected_width := maxf(x_max - x_min, 0.001)                                         # Avoid division by zero while converting screen bounds back to local x.
 	var half_sprite_width := _current_player_texture_width() * _player_sprite_scale_for_depth(depth) * 0.5 # Measure half the current frame width after scaling.
-	var min_screen_ratio := half_sprite_width / VIEWPORT_SIZE.x                                # Convert the left screen-safe edge into normalized playfield space.
-	var max_screen_ratio := (VIEWPORT_SIZE.x - half_sprite_width) / VIEWPORT_SIZE.x            # Convert the right screen-safe edge into normalized playfield space.
+	var sprite_screen_margin := half_sprite_width / VIEWPORT_SIZE.x                            # Convert the sprite half-width into normalized playfield space.
+	var side_line_margin := lerpf(sprite_screen_margin * 0.35, sprite_screen_margin, depth)     # Keep near sprites fully in crop but keep far sprites inside the sloped wall lines.
+	var min_screen_ratio := maxf(sprite_screen_margin, x_min + side_line_margin)                # Use the stricter left bound from the screen edge or the corridor wall line.
+	var max_screen_ratio := minf(1.0 - sprite_screen_margin, x_max - side_line_margin)          # Use the stricter right bound from the screen edge or the corridor wall line.
 	return Vector2(                                                                            # Return the local x span that keeps the sprite inside the cropped view.
 		(min_screen_ratio - x_min) / projected_width,                                             # Convert the left screen-safe x back into local tile space.
 		(max_screen_ratio - x_min) / projected_width                                              # Convert the right screen-safe x back into local tile space.
