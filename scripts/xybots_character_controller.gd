@@ -95,6 +95,7 @@ const STRAIGHT_VISIBILITY_BRANCHES := [                                         
 	],                                                                                         # Close the center sightline branch.
 	[                                                                                          # Start the left-center side branch.
 		{"id": 27, "occludes": false},                                                           # Draw the immediate left hallway edge without hiding farther left wall segments.
+		{"id": 21, "occludes": false},                                                           # Draw the near left wall shoulder when the current cell has a left wall.
 		{"id": 22, "occludes": false},                                                           # Draw the next left hallway wall segment.
 		{"id": 16, "occludes": false},                                                           # Draw the mid-distance left hallway wall segment.
 		{"id": 7, "occludes": true},                                                             # Check the far left wall edge.
