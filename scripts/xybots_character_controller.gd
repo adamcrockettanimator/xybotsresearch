@@ -45,6 +45,13 @@ const WALL_EDGE_W := 3                                                          
 const VIEW_FRONT := "front"                                                                 # Define a fixed value used by the movement, rendering, or asset-loading system.
 const VIEW_LEFT := "left"                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
 const VIEW_RIGHT := "right"                                                                 # Define a fixed value used by the movement, rendering, or asset-loading system.
+const ACTION_MOVE_LEFT := "xybots_move_left"                                                # Name the explicit input action for moving camera-left inside the current tile.
+const ACTION_MOVE_RIGHT := "xybots_move_right"                                              # Name the explicit input action for moving camera-right inside the current tile.
+const ACTION_MOVE_FORWARD := "xybots_move_forward"                                          # Name the explicit input action for moving toward the camera-facing edge.
+const ACTION_MOVE_BACKWARD := "xybots_move_backward"                                        # Name the explicit input action for moving away from the camera-facing edge.
+const ACTION_TURN_LEFT := "xybots_turn_left"                                                # Name the explicit input action for rotating the view left.
+const ACTION_TURN_RIGHT := "xybots_turn_right"                                              # Name the explicit input action for rotating the view right.
+const ACTION_REGENERATE_MAP := "xybots_regenerate_map"                                      # Name the explicit input action for rerolling the debug maze at runtime.
 const DEBUG_MAP_CELL_SIZE := 24.0                                                           # Set the top-down debug map cell size inside the 160x120 diagnostic panel.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                                    # Center the 4x4 debug maze inside the source-map panel.
 const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
@@ -196,11 +203,14 @@ var wall_edges: Dictionary = {}                                                 
 var last_visible_wall_ids: Array[int] = []                                                   # Store the currently selected straight-wall ids for debug display.
 var was_left_turn_pressed := false                                                          # Track previous-frame left turn input so snapped turns only fire once per press.
 var was_right_turn_pressed := false                                                         # Track previous-frame right turn input so snapped turns only fire once per press.
+var was_regenerate_map_pressed := false                                                      # Track previous-frame map-regenerate input so it fires once per key press.
+var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
 
 
 
 # _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
 func _ready() -> void:                                                                      # Declare this function.
+	_ensure_input_actions()                                                                    # Register local input actions before the first input polling frame.
 	_build_fixed_reference_maze_wall_edges()                                                     # Load the current fixed 4x4 thin-wall test maze before rendering.
 	_load_phase_textures()                                                                     # Call a helper function as part of the current controller step.
 	_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
@@ -221,6 +231,15 @@ func _ready() -> void:                                                          
 
 
 
+# _input: Records keyboard press and release events so movement does not depend only on raw polling.
+func _input(event: InputEvent) -> void:                                                     # Declare this function.
+	if event is InputEventKey and not event.echo:                                             # Only handle real keyboard press/release events once.
+		held_keycodes[int(event.keycode)] = event.pressed                                       # Store whether this logical key is currently held.
+		if event.physical_keycode != 0:                                                         # Preserve physical key bindings when Godot supplies them.
+			held_keycodes[int(event.physical_keycode)] = event.pressed                            # Store the physical key state as another lookup option.
+
+
+
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
@@ -234,6 +253,9 @@ func _process(delta: float) -> void:                                            
 		return                                                                                    # Return to the caller without producing a value.
 
 	var turn_direction := _read_turn()                                                         # Store mutable runtime state for assets, rendering, movement, or debug output.
+	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
+		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
+		return                                                                                    # Skip movement this frame because the player was reset into the new map.
 	if turn_direction < 0:                                                                     # Run the following block only when this condition is true.
 		_request_transition("turn_left")                                                           # Turn left through a captured phase or immediate snap.
 		return                                                                                    # Return to the caller without producing a value.
@@ -1490,10 +1512,53 @@ func _slot_z_index(slot_name: String) -> int:                                   
 
 
 
+# _ensure_input_actions: Creates runtime input actions for the prototype controls so manual keys and test input use the same path.
+func _ensure_input_actions() -> void:                                                       # Declare this function.
+	_ensure_key_action(ACTION_MOVE_LEFT, [KEY_A])                                             # Bind A to local strafe-left movement.
+	_ensure_key_action(ACTION_MOVE_RIGHT, [KEY_D])                                            # Bind D to local strafe-right movement.
+	_ensure_key_action(ACTION_MOVE_FORWARD, [KEY_W, KEY_UP])                                  # Bind W and up-arrow to local forward movement.
+	_ensure_key_action(ACTION_MOVE_BACKWARD, [KEY_S, KEY_DOWN])                               # Bind S and down-arrow to local backward movement.
+	_ensure_key_action(ACTION_TURN_LEFT, [KEY_Q, KEY_LEFT])                                   # Bind Q and left-arrow to snapped left turns.
+	_ensure_key_action(ACTION_TURN_RIGHT, [KEY_E, KEY_RIGHT])                                 # Bind E and right-arrow to snapped right turns.
+	_ensure_key_action(ACTION_REGENERATE_MAP, [KEY_R])                                        # Bind R to runtime maze regeneration.
+
+
+
+# _ensure_key_action: Adds one named InputMap action and any missing keyboard events for it.
+func _ensure_key_action(action_name: String, keycodes: Array) -> void:                      # Declare this function.
+	if not InputMap.has_action(action_name):                                                  # Check whether this prototype action is absent from the input map.
+		InputMap.add_action(action_name)                                                         # Create the action at runtime when it is missing.
+	for keycode in keycodes:                                                                  # Iterate over each requested keyboard binding.
+		var keycode_int := int(keycode)                                                          # Normalize the keycode value for comparison.
+		if _action_has_keycode(action_name, keycode_int):                                        # Skip bindings that are already present.
+			continue                                                                                 # Continue to the next requested keycode.
+		var event := InputEventKey.new()                                                         # Create a key event binding for this action.
+		event.keycode = keycode_int                                                              # Assign the logical keyboard key to the event.
+		InputMap.action_add_event(action_name, event)                                            # Add the key event to the named action.
+
+
+
+# _action_has_keycode: Returns true when an input action already contains a matching key binding.
+func _action_has_keycode(action_name: String, keycode: int) -> bool:                       # Declare this function.
+	for event in InputMap.action_get_events(action_name):                                    # Inspect every event currently bound to the action.
+		if event is InputEventKey and int(event.keycode) == keycode:                            # Match existing keyboard events by logical keycode.
+			return true                                                                            # Report that this key binding already exists.
+	return false                                                                               # Report that this key binding still needs to be added.
+
+
+
+# _is_key_down: Checks the controller key cache and raw polling for one keyboard key.
+func _is_key_down(keycode: int) -> bool:                                                    # Declare this function.
+	if bool(held_keycodes.get(keycode, false)):                                               # Check whether this controller received and retained a pressed event.
+		return true                                                                            # Report this key as down from the controller-owned cache.
+	return Input.is_key_pressed(keycode)                                                      # Fall back to Godot's raw key polling for direct keyboard focus.
+
+
+
 # _read_turn: Reads Q/E or arrow-key turning input and returns the requested turn direction.
 func _read_turn() -> int:                                                                   # Declare this function.
-	var left_pressed := Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_LEFT)          # Read the current raw left-turn key state.
-	var right_pressed := Input.is_key_pressed(KEY_E) or Input.is_key_pressed(KEY_RIGHT)        # Read the current raw right-turn key state.
+	var left_pressed := Input.is_action_pressed(ACTION_TURN_LEFT) or _is_key_down(KEY_Q) or _is_key_down(KEY_LEFT) # Read the current left-turn key state.
+	var right_pressed := Input.is_action_pressed(ACTION_TURN_RIGHT) or _is_key_down(KEY_E) or _is_key_down(KEY_RIGHT) # Read the current right-turn key state.
 	var left_just_pressed := left_pressed and not was_left_turn_pressed                        # Detect the first frame of a left-turn key press.
 	var right_just_pressed := right_pressed and not was_right_turn_pressed                     # Detect the first frame of a right-turn key press.
 	was_left_turn_pressed = left_pressed                                                      # Store current left-turn state for next frame.
@@ -1506,16 +1571,25 @@ func _read_turn() -> int:                                                       
 
 
 
+# _read_regenerate_map: Returns true once when the runtime random-map hotkey is pressed.
+func _read_regenerate_map() -> bool:                                                        # Declare this function.
+	var regenerate_pressed := Input.is_action_pressed(ACTION_REGENERATE_MAP) or _is_key_down(KEY_R) # Read the current map-regenerate key state.
+	var regenerate_just_pressed := regenerate_pressed and not was_regenerate_map_pressed       # Detect the first frame of the regenerate key press.
+	was_regenerate_map_pressed = regenerate_pressed                                           # Store current regenerate state for next frame.
+	return regenerate_just_pressed                                                            # Return whether the hotkey should fire this frame.
+
+
+
 # _read_movement: Reads WASD or arrow movement input and returns a normalized local movement vector.
 func _read_movement() -> Vector2:                                                           # Declare this function.
 	var movement := Vector2.ZERO                                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
-	if Input.is_key_pressed(KEY_A):                                                            # Run the following block only when this condition is true.
+	if Input.is_action_pressed(ACTION_MOVE_LEFT) or _is_key_down(KEY_A):                        # Read the local strafe-left action or A key state.
 		movement.x -= 1.0                                                                         # Continue the controller logic for this section.
-	if Input.is_key_pressed(KEY_D):                                                            # Run the following block only when this condition is true.
+	if Input.is_action_pressed(ACTION_MOVE_RIGHT) or _is_key_down(KEY_D):                       # Read the local strafe-right action or D key state.
 		movement.x += 1.0                                                                         # Continue the controller logic for this section.
-	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):                            # Run the following block only when this condition is true.
+	if Input.is_action_pressed(ACTION_MOVE_FORWARD) or _is_key_down(KEY_W) or _is_key_down(KEY_UP): # Read the local forward action or forward key states.
 		movement.y -= 1.0                                                                         # Continue the controller logic for this section.
-	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):                          # Run the following block only when this condition is true.
+	if Input.is_action_pressed(ACTION_MOVE_BACKWARD) or _is_key_down(KEY_S) or _is_key_down(KEY_DOWN): # Read the local backward action or backward key states.
 		movement.y += 1.0                                                                         # Continue the controller logic for this section.
 	return movement.normalized() if movement != Vector2.ZERO else Vector2.ZERO                 # Return this computed result to the caller.
 
@@ -1987,6 +2061,28 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 
 
 
+# _regenerate_runtime_map: Rerolls the 4x4 thin-wall maze during play and redraws every dependent view.
+func _regenerate_runtime_map() -> void:                                                     # Declare this function.
+	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
+	was_left_turn_pressed = false                                                              # Reset one-shot left-turn detection after the map reset.
+	was_right_turn_pressed = false                                                             # Reset one-shot right-turn detection after the map reset.
+	was_regenerate_map_pressed = true                                                          # Keep the regenerate key from firing again until released.
+	is_transitioning = false                                                                   # Cancel any active transition before replacing the map.
+	active_sequence.clear()                                                                    # Remove any stale captured transition frames from the active state.
+	active_sequence_name = "idle"                                                              # Return the transition label to idle.
+	phase_index = 0                                                                            # Reset captured phase frame indexing.
+	phase_timer = 0.0                                                                          # Reset captured phase timing.
+	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
+	_show_stable()                                                                             # Redraw the 2D wall-slot view from the new map.
+	_position_player()                                                                         # Place the player sprite at the reset local position.
+	if enable_3d_diagnostic:                                                                   # Only update deprecated 3D diagnostic nodes when that view exists.
+		_update_3d_diagnostic()                                                                   # Sync the diagnostic view to the new map and player state.
+	_play_best_animation(false)                                                                # Return the player to idle after regeneration.
+	_update_debug_map_overlay()                                                                # Redraw the right-side top-down source map with the fresh wall layout.
+	_update_status()                                                                           # Update the status text for the new map state.
+
+
+
 # _build_random_maze_wall_edges: Builds a generated 4x4 thin-wall maze with closed outside borders.
 func _build_random_maze_wall_edges() -> void:                                               # Declare this function.
 	wall_edges.clear()                                                                         # Clear any previous map wall data before generating the maze.
@@ -2160,7 +2256,7 @@ func _update_status() -> void:                                                  
 
 	status_label.text = (                                                                      # Update the on-screen debug status label.
 		"Xybots phase prototype | %s | Facing %s | Cell %d,%d | Local %.2f,%.2f | Anim %s | Walls %s%s\n" # Continue the controller logic for this section.
-		+ "Fixed 4x4 thin-wall maze. WASD moves inside tile; boundary crossing checks the edge wall. Q/E or arrows turn." # Continue the controller logic for this section.
+		+ "4x4 thin-wall maze. WASD moves inside tile; boundary crossing checks the edge wall. Q/E or arrows turn. R rerolls map." # Continue the controller logic for this section.
 	) % [                                                                                      # Close the current list, dictionary, call, or expression.
 		phase_text,                                                                               # Continue the controller logic for this section.
 		facing_name,                                                                              # Continue the controller logic for this section.
