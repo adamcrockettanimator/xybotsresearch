@@ -1940,28 +1940,28 @@ func _left_vector() -> Vector2i:                                                
 
 
 
-# _build_fixed_reference_maze_wall_edges: Restores the current hand-tested 4x4 thin-wall maze instead of rerolling on startup.
+# _build_fixed_reference_maze_wall_edges: Restores the current saved 4x4 thin-wall maze instead of rerolling on startup.
 func _build_fixed_reference_maze_wall_edges() -> void:                                     # Declare this function.
 	wall_edges.clear()                                                                         # Clear any previous map wall data before loading the fixed reference map.
+	var saved_rows := [                                                                       # Store the saved generated map as north/east/south/west wall bits per cell.
+		"1001 1000 1010 1100",                                                                  # Store row 0 of the saved generated map.
+		"0101 0001 1000 0100",                                                                  # Store row 1 of the saved generated map.
+		"0001 0100 0001 0100",                                                                  # Store row 2 of the saved generated map.
+		"0011 0110 0011 0110",                                                                  # Store row 3 of the saved generated map.
+	]                                                                                         # Close the saved map row list.
 	for y in range(MAP_HEIGHT):                                                                # Iterate through every row in the fixed 4x4 map.
+		var row_cells: PackedStringArray = String(saved_rows[y]).split(" ")                       # Split this saved row into one four-bit string per cell.
 		for x in range(MAP_WIDTH):                                                               # Iterate through every column in the fixed 4x4 map.
+			var bits := row_cells[x]                                                                # Read the north/east/south/west wall bits for this cell.
 			var cell := Vector2i(x, y)                                                              # Build the current map cell coordinate.
-			wall_edges[cell] = {                                                                    # Start with only the outside border walls closed.
-				WALL_EDGE_N: y == 0,                                                                 # Close the north map border.
-				WALL_EDGE_E: x == MAP_WIDTH - 1,                                                     # Close the east map border.
-				WALL_EDGE_S: y == MAP_HEIGHT - 1,                                                    # Close the south map border.
-				WALL_EDGE_W: x == 0,                                                                 # Close the west map border.
+			wall_edges[cell] = {                                                                    # Load the exact saved generated wall state for this cell.
+				WALL_EDGE_N: bits[0] == "1",                                                         # Load this cell's north wall bit.
+				WALL_EDGE_E: bits[1] == "1",                                                         # Load this cell's east wall bit.
+				WALL_EDGE_S: bits[2] == "1",                                                         # Load this cell's south wall bit.
+				WALL_EDGE_W: bits[3] == "1",                                                         # Load this cell's west wall bit.
 			}                                                                                       # Close the cell wall dictionary.
-	_set_wall_between(Vector2i(1, 0), Vector2i(0, 1), true)                                  # Restore the wall between cells 1,0 and 1,1.
-	_set_wall_between(Vector2i(2, 0), Vector2i(0, 1), true)                                  # Restore the wall between cells 2,0 and 2,1.
-	_set_wall_between(Vector2i(0, 1), Vector2i(0, 1), true)                                  # Restore the wall between cells 0,1 and 0,2.
-	_set_wall_between(Vector2i(0, 3), Vector2i(1, 0), true)                                  # Restore the wall between cells 0,3 and 1,3.
-	_set_wall_between(Vector2i(1, 2), Vector2i(1, 0), true)                                  # Restore the wall between cells 1,2 and 2,2.
-	_set_wall_between(Vector2i(2, 1), Vector2i(1, 0), true)                                  # Restore the wall between cells 2,1 and 3,1.
-	_set_wall_between(Vector2i(2, 2), Vector2i(1, 0), true)                                  # Restore the wall between cells 2,2 and 3,2.
-	_set_wall_between(Vector2i(2, 3), Vector2i(1, 0), true)                                  # Restore the wall between cells 2,3 and 3,3.
-	grid_position = Vector2i(1, 1)                                                            # Start on the screenshot's test cell so visibility fixes are easy to recheck.
-	facing = 1                                                                                 # Face east to recreate the previous missing-wall test view.
+	grid_position = Vector2i(0, MAP_HEIGHT - 1)                                               # Start at the southwest cell used by the random-map generator.
+	facing = 0                                                                                 # Face north into the saved generated map.
 	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Reset the player to the normal local tile position.
 	pending_grid_delta = Vector2i.ZERO                                                         # Clear any stale cell-crossing request.
 	last_blocked_direction = ""                                                                # Clear any stale blocked-movement status.
