@@ -647,30 +647,19 @@ func _add_debug_view_cone(origin: Vector2) -> void:                             
 # _add_debug_visible_wall_slots: Highlights the renderer-selected wall slots as green edge segments on the top-down map.
 func _add_debug_visible_wall_slots() -> void:                                               # Declare this function.
 	var highlight_color := Color(0.0, 1.0, 0.25, 0.95)                                       # Use green to mark wall slots that the renderer currently selected.
-	var physical_edges := _visible_physical_wall_edges()                                      # Rebuild the actual physical wall edges found by the ray fan.
-	physical_edges.sort_custom(func(a, b): return float(a["distance"]) > float(b["distance"])) # Match the renderer's far-to-near physical edge order.
-	var emitted_ids := {}                                                                      # Match the renderer by labeling each wall slot only once.
+	var visible_slots := _build_straight_render_list()                                       # Rebuild the same corridor-constrained visible-slot list used by the 2D renderer.
 	var labeled_segments := {}                                                                # Track label positions so repeated physical edges do not stack identical labels.
-	for edge in physical_edges:                                                               # Iterate through every physical wall edge the camera rays actually hit.
-		var wall_ids := _wall_slot_ids_for_physical_edge(edge)                                  # Convert this physical edge into the 2D wall-slot ids drawn in the player view.
-		var new_wall_ids: Array[int] = []                                                       # Track which ids from this physical edge really contribute to the render list.
-		for wall_id in wall_ids:                                                               # Iterate through this edge's possible wall-slot ids.
-			if emitted_ids.has(wall_id):                                                          # Skip duplicate sprite slots already claimed by a farther physical edge.
-				continue                                                                            # Continue to the next mapped id.
-			emitted_ids[wall_id] = true                                                           # Mark this wall id as claimed, matching the renderer's dedupe behavior.
-			new_wall_ids.append(wall_id)                                                          # Store the id for debug labeling on this exact physical edge.
-		if new_wall_ids.is_empty():                                                            # Skip physical edges that do not contribute any newly rendered wall slot.
-			continue                                                                               # Continue to the next visible wall slot.
-		var segment := _debug_physical_wall_edge_segment(edge)                                  # Convert the ray-hit physical edge into top-down overlay coordinates.
-		if segment.size() < 2:                                                                  # Skip invalid edge metadata defensively.
+	for slot in visible_slots:                                                                # Iterate through every wall slot currently selected for drawing.
+		var wall_id := int(slot["id"])                                                          # Read the numbered 2D wall-slot id.
+		var segment := _debug_wall_slot_segment(slot)                                           # Convert the selected wall slot into a top-down source-map edge.
+		if segment.size() < 2:                                                                  # Skip invalid slot metadata defensively.
 			continue                                                                               # Continue to the next visible physical edge.
 		_add_debug_line(segment[0], segment[1], highlight_color, 5.0)                            # Draw the selected physical wall segment in green.
 		var label_position := (segment[0] + segment[1]) * 0.5                                    # Place the label at the center of the highlighted edge.
 		var segment_key := "%d,%d" % [int(round(label_position.x)), int(round(label_position.y))] # Build a coarse key for stacking labels on the same edge.
-		for wall_id in new_wall_ids:                                                            # Add one label for each 2D wall slot this physical edge actually renders.
-			var label_offset := float(labeled_segments.get(segment_key, 0)) * 7.0                  # Offset repeated labels so companion slots remain readable.
-			labeled_segments[segment_key] = int(labeled_segments.get(segment_key, 0)) + 1          # Store that another label used this edge midpoint.
-			_add_debug_wall_slot_label(label_position + Vector2(0.0, label_offset), wall_id, highlight_color) # Add the wall-slot number beside the green segment.
+		var label_offset := float(labeled_segments.get(segment_key, 0)) * 7.0                    # Offset repeated labels so companion slots remain readable.
+		labeled_segments[segment_key] = int(labeled_segments.get(segment_key, 0)) + 1            # Store that another label used this edge midpoint.
+		_add_debug_wall_slot_label(label_position + Vector2(0.0, label_offset), wall_id, highlight_color) # Add the wall-slot number beside the green segment.
 
 
 
@@ -1055,15 +1044,29 @@ func _hide_slot_nodes() -> void:                                                
 
 
 
-# _build_straight_render_list: Casts a top-down ray fan, maps visible physical edges to Xybots wall slots, and returns those slots.
+# _build_straight_render_list: Walks the center corridor, emits side/front Xybots wall slots, and stops at the first front blocker.
 func _build_straight_render_list() -> Array:                                                # Declare this function.
-	var render_list := []                                                                      # Store the visible straight-wall slots selected by the visibility tree.
-	var emitted_ids := {}                                                                      # Track wall ids already added so shared branch entries draw only once.
-	var physical_edges := _visible_physical_wall_edges()                                       # Collect wall edges visible from the current cell-locked camera fan.
-	physical_edges.sort_custom(func(a, b): return float(a["distance"]) > float(b["distance"])) # Emit farther physical edges first so nearer art can paint over them.
-	for edge in physical_edges:                                                                # Map each physically visible wall edge to one or more numbered Xybots slots.
-		for wall_id in _wall_slot_ids_for_physical_edge(edge):                                   # Convert this physical edge into fixed 2D wall art slot ids.
-			_append_wall_slot_unchecked(render_list, emitted_ids, wall_id)                          # Add the mapped wall slot if it has not already been emitted.
+	var render_list := []                                                                      # Store the visible straight-wall slots selected from the map corridor.
+	var emitted_ids := {}                                                                      # Track wall ids already added so overlapping art pieces draw only once.
+	var forward := _facing_vector()                                                            # Read the current world-grid direction the camera faces.
+	var left := _left_vector()                                                                 # Read the current world-grid direction to the camera's left.
+	for depth_index in range(5):                                                               # Check near-to-far corridor cells supported by the straight-view wall art.
+		var cell := grid_position + forward * depth_index                                        # Compute the map cell on the center sightline at this depth.
+		if not _is_open_cell(cell):                                                               # Stop if the map footprint ended unexpectedly.
+			break                                                                                    # Leave the corridor walk.
+		if _has_wall_edge(cell, left):                                                           # Check whether this corridor cell has a wall on the viewer's left.
+			var left_id := _left_side_wall_id_for_depth_index(depth_index)                           # Convert this depth into the matching left side-wall sprite id.
+			if left_id > 0:                                                                         # Only append depths that have art mapped.
+				_append_wall_slot_unchecked(render_list, emitted_ids, left_id)                         # Add the left side-wall slot.
+		if _has_wall_edge(cell, -left):                                                          # Check whether this corridor cell has a wall on the viewer's right.
+			var right_id := _right_side_wall_id_for_depth_index(depth_index)                         # Convert this depth into the matching right side-wall sprite id.
+			if right_id > 0:                                                                        # Only append depths that have art mapped.
+				_append_wall_slot_unchecked(render_list, emitted_ids, right_id)                        # Add the right side-wall slot.
+		if _has_wall_edge(cell, forward):                                                       # Check whether the center corridor is blocked in front of this cell.
+			for wall_id in _front_wall_ids_for_depth_index(depth_index):                            # Add the front-wall family for the first blocking edge.
+				_append_wall_slot_unchecked(render_list, emitted_ids, wall_id)                        # Add this front wall sprite if it has not already been emitted.
+			break                                                                                    # Stop rendering deeper walls hidden by this front blocker.
+	render_list.sort_custom(func(a, b): return int(a["draw"]) < int(b["draw"]))                # Sort by existing art draw order so near pieces paint over far pieces.
 	return render_list                                                                         # Return the final wall-slot list to the renderer.
 
 
@@ -1227,6 +1230,58 @@ func _front_wall_slot_ids_for_depth(depth: float, side: float) -> Array[int]:   
 			return [3, 4, 5]                                                                       # Return the full depth-three front wall family.
 		_:                                                                                       # Ignore deeper front walls until more art mapping is verified.
 			return []                                                                               # Return no slots for unsupported depths.
+
+
+
+# _front_wall_ids_for_depth_index: Returns the full straight-view front-wall family for one corridor depth.
+func _front_wall_ids_for_depth_index(depth_index: int) -> Array[int]:                       # Declare this function.
+	match depth_index:                                                                        # Choose the front-wall family by center-corridor depth.
+		0:                                                                                       # Handle the wall immediately in front of the current cell.
+			return [24, 25, 26]                                                                    # Return the near full-front wall family.
+		1:                                                                                       # Handle the wall one cell ahead.
+			return [19, 20, 21]                                                                    # Return the next full-front wall family.
+		2:                                                                                       # Handle the wall two cells ahead.
+			return [11, 12, 13]                                                                    # Return the far full-front wall family.
+		3:                                                                                       # Handle the wall three cells ahead.
+			return [3, 4, 5]                                                                       # Return the deepest full-front wall family currently mapped.
+		_:                                                                                       # Ignore unsupported far-depth walls.
+			return []                                                                               # Return no wall ids.
+
+
+
+# _left_side_wall_id_for_depth_index: Returns the viewer-left side-wall slot id for one corridor depth.
+func _left_side_wall_id_for_depth_index(depth_index: int) -> int:                           # Declare this function.
+	match depth_index:                                                                        # Map corridor depth to the left-side wall art sequence.
+		0:                                                                                       # Handle the nearest left wall.
+			return 27                                                                               # Return the immediate left wall sprite id.
+		1:                                                                                       # Handle the next left wall.
+			return 22                                                                               # Return the depth-one left wall sprite id.
+		2:                                                                                       # Handle the middle left wall.
+			return 16                                                                               # Return the depth-two left wall sprite id.
+		3:                                                                                       # Handle the far left wall.
+			return 7                                                                                # Return the depth-three left wall sprite id.
+		4:                                                                                       # Handle the farthest left wall.
+			return 6                                                                                # Return the depth-four left wall sprite id.
+		_:                                                                                       # Ignore unsupported side-wall depths.
+			return -1                                                                               # Return no wall id.
+
+
+
+# _right_side_wall_id_for_depth_index: Returns the viewer-right side-wall slot id for one corridor depth.
+func _right_side_wall_id_for_depth_index(depth_index: int) -> int:                          # Declare this function.
+	match depth_index:                                                                        # Map corridor depth to the right-side wall art sequence.
+		0:                                                                                       # Handle the nearest right wall.
+			return 28                                                                               # Return the immediate right wall sprite id.
+		1:                                                                                       # Handle the next right wall.
+			return 23                                                                               # Return the depth-one right wall sprite id.
+		2:                                                                                       # Handle the middle right wall.
+			return 17                                                                               # Return the depth-two right wall sprite id.
+		3:                                                                                       # Handle the far right wall.
+			return 8                                                                                # Return the depth-three right wall sprite id.
+		4:                                                                                       # Handle the farthest right wall.
+			return 9                                                                                # Return the depth-four right wall sprite id.
+		_:                                                                                       # Ignore unsupported side-wall depths.
+			return -1                                                                               # Return no wall id.
 
 
 
