@@ -647,19 +647,38 @@ func _add_debug_view_cone(origin: Vector2) -> void:                             
 # _add_debug_visible_wall_slots: Highlights the renderer-selected wall slots as green edge segments on the top-down map.
 func _add_debug_visible_wall_slots() -> void:                                               # Declare this function.
 	var highlight_color := Color(0.0, 1.0, 0.25, 0.95)                                       # Use green to mark wall slots that the renderer currently selected.
-	var visible_slots := _build_straight_render_list()                                       # Rebuild the same visible-slot list used by the 2D wall renderer.
+	var physical_edges := _visible_physical_wall_edges()                                      # Rebuild the actual physical wall edges found by the ray fan.
+	physical_edges.sort_custom(func(a, b): return float(a["distance"]) > float(b["distance"])) # Match the renderer's far-to-near physical edge order.
+	var emitted_ids := {}                                                                      # Match the renderer by labeling each wall slot only once.
 	var labeled_segments := {}                                                                # Track label positions so repeated physical edges do not stack identical labels.
-	for slot in visible_slots:                                                                # Iterate through every wall slot currently selected for drawing.
-		var wall_id := int(slot["id"])                                                          # Read the numbered 2D wall-slot id.
-		var segment := _debug_wall_slot_segment(slot)                                           # Convert that wall slot into a top-down physical edge segment.
-		if segment.size() < 2:                                                                  # Skip invalid slot metadata that cannot map to a segment.
+	for edge in physical_edges:                                                               # Iterate through every physical wall edge the camera rays actually hit.
+		var wall_ids := _wall_slot_ids_for_physical_edge(edge)                                  # Convert this physical edge into the 2D wall-slot ids drawn in the player view.
+		var new_wall_ids: Array[int] = []                                                       # Track which ids from this physical edge really contribute to the render list.
+		for wall_id in wall_ids:                                                               # Iterate through this edge's possible wall-slot ids.
+			if emitted_ids.has(wall_id):                                                          # Skip duplicate sprite slots already claimed by a farther physical edge.
+				continue                                                                            # Continue to the next mapped id.
+			emitted_ids[wall_id] = true                                                           # Mark this wall id as claimed, matching the renderer's dedupe behavior.
+			new_wall_ids.append(wall_id)                                                          # Store the id for debug labeling on this exact physical edge.
+		if new_wall_ids.is_empty():                                                            # Skip physical edges that do not contribute any newly rendered wall slot.
 			continue                                                                               # Continue to the next visible wall slot.
+		var segment := _debug_physical_wall_edge_segment(edge)                                  # Convert the ray-hit physical edge into top-down overlay coordinates.
+		if segment.size() < 2:                                                                  # Skip invalid edge metadata defensively.
+			continue                                                                               # Continue to the next visible physical edge.
 		_add_debug_line(segment[0], segment[1], highlight_color, 5.0)                            # Draw the selected physical wall segment in green.
 		var label_position := (segment[0] + segment[1]) * 0.5                                    # Place the label at the center of the highlighted edge.
 		var segment_key := "%d,%d" % [int(round(label_position.x)), int(round(label_position.y))] # Build a coarse key for stacking labels on the same edge.
-		var label_offset := float(labeled_segments.get(segment_key, 0)) * 7.0                    # Offset repeated labels so companion slots remain readable.
-		labeled_segments[segment_key] = int(labeled_segments.get(segment_key, 0)) + 1            # Store that another label used this edge midpoint.
-		_add_debug_wall_slot_label(label_position + Vector2(0.0, label_offset), wall_id, highlight_color) # Add the wall-slot number beside the green segment.
+		for wall_id in new_wall_ids:                                                            # Add one label for each 2D wall slot this physical edge actually renders.
+			var label_offset := float(labeled_segments.get(segment_key, 0)) * 7.0                  # Offset repeated labels so companion slots remain readable.
+			labeled_segments[segment_key] = int(labeled_segments.get(segment_key, 0)) + 1          # Store that another label used this edge midpoint.
+			_add_debug_wall_slot_label(label_position + Vector2(0.0, label_offset), wall_id, highlight_color) # Add the wall-slot number beside the green segment.
+
+
+
+# _debug_physical_wall_edge_segment: Converts a ray-hit physical wall edge into top-down overlay points.
+func _debug_physical_wall_edge_segment(edge: Dictionary) -> Array[Vector2]:                 # Declare this function.
+	if not edge.has("a") or not edge.has("b"):                                                # Require both physical wall endpoints.
+		return []                                                                               # Return no segment when edge metadata is incomplete.
+	return [_debug_map_world_position(edge["a"]), _debug_map_world_position(edge["b"])]        # Convert physical grid endpoints into debug-map pixel coordinates.
 
 
 
