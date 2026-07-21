@@ -50,6 +50,9 @@ const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                        
 const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
 const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Draw the diagnostic view cone wide enough to cover the straight wall slot fan.
 const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
+const VISIBILITY_RAY_COUNT := 91                                                            # Cast enough rays across the view fan to discover side and front wall edges.
+const VISIBILITY_RAY_HALF_ANGLE_DEGREES := 55.0                                             # Use a wide top-down fan so near side walls can be discovered by the ray pass.
+const VISIBILITY_MAX_DISTANCE := 5.2                                                        # Limit ray tests to the straight-view art depth.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
 const DIAGNOSTIC_3D_CELL_WIDTH := 1.35                                                       # Widen the diagnostic cell volume so the 3D hallway better matches the 2D projection.
@@ -60,30 +63,30 @@ const DIAGNOSTIC_3D_SEPARATOR_THICKNESS := 0.025                                
 const STRAIGHT_WALL_SLOTS := [                                                              # Start the table that maps wall numbers to view-relative map tests and draw order.
 	{"id": 1, "lateral": -2, "depth": 4, "edge": VIEW_FRONT, "draw": 10},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 2, "lateral": -1, "depth": 4, "edge": VIEW_FRONT, "draw": 11},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 3, "lateral": -1, "depth": 3, "edge": VIEW_FRONT, "draw": 12},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 3, "lateral": 0, "depth": 3, "edge": VIEW_FRONT, "draw": 12},                       # Draw the left piece of the front wall three cells ahead.
 	{"id": 4, "lateral": 0, "depth": 3, "edge": VIEW_FRONT, "draw": 13},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 5, "lateral": 2, "depth": 4, "edge": VIEW_FRONT, "draw": 14},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 6, "lateral": -2, "depth": 3, "edge": VIEW_RIGHT, "draw": 20},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 5, "lateral": 0, "depth": 3, "edge": VIEW_FRONT, "draw": 14},                       # Draw the right piece of the front wall three cells ahead.
+	{"id": 6, "lateral": 0, "depth": 4, "edge": VIEW_LEFT, "draw": 20},                        # Draw the far left side-wall run.
 	{"id": 7, "lateral": 0, "depth": 3, "edge": VIEW_LEFT, "draw": 21},                        # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 8, "lateral": 0, "depth": 3, "edge": VIEW_RIGHT, "draw": 22},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 9, "lateral": 1, "depth": 3, "edge": VIEW_LEFT, "draw": 23},                        # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 9, "lateral": 0, "depth": 4, "edge": VIEW_RIGHT, "draw": 23},                       # Draw the far right side-wall run.
 	{"id": 10, "lateral": -1, "depth": 3, "edge": VIEW_FRONT, "draw": 30},                     # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 11, "lateral": 0, "depth": 3, "edge": VIEW_FRONT, "draw": 31},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 11, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 31},                      # Draw the left piece of the front wall two cells ahead.
 	{"id": 12, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 32},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 13, "lateral": -2, "depth": 2, "edge": VIEW_RIGHT, "draw": 40},                     # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 13, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 40},                      # Draw the right piece of the front wall two cells ahead.
 	{"id": 14, "lateral": -1, "depth": 2, "edge": VIEW_RIGHT, "draw": 41},                     # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 15, "lateral": 0, "depth": 2, "edge": VIEW_LEFT, "draw": 42},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 16, "lateral": 0, "depth": 2, "edge": VIEW_LEFT, "draw": 43},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 17, "lateral": 0, "depth": 2, "edge": VIEW_RIGHT, "draw": 50},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 18, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 51},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 19, "lateral": 1, "depth": 2, "edge": VIEW_FRONT, "draw": 52},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 20, "lateral": 0, "depth": 1, "edge": VIEW_FRONT, "draw": 60},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 21, "lateral": 0, "depth": 1, "edge": VIEW_LEFT, "draw": 61},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 19, "lateral": 0, "depth": 1, "edge": VIEW_FRONT, "draw": 58},                      # Draw the left piece of the front wall one cell ahead.
+	{"id": 20, "lateral": 0, "depth": 1, "edge": VIEW_FRONT, "draw": 60},                      # Draw the center piece of the front wall one cell ahead.
+	{"id": 21, "lateral": 0, "depth": 1, "edge": VIEW_FRONT, "draw": 62},                      # Draw the right piece of the front wall one cell ahead.
 	{"id": 22, "lateral": 0, "depth": 1, "edge": VIEW_LEFT, "draw": 62},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 23, "lateral": 0, "depth": 1, "edge": VIEW_RIGHT, "draw": 63},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 24, "lateral": 0, "depth": 0, "edge": VIEW_LEFT, "draw": 70},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 24, "lateral": 0, "depth": 0, "edge": VIEW_FRONT, "draw": 70},                      # Draw the left piece of an immediate front wall.
 	{"id": 25, "lateral": 0, "depth": 0, "edge": VIEW_FRONT, "draw": 80},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 26, "lateral": 0, "depth": 0, "edge": VIEW_FRONT, "draw": 90},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
+	{"id": 26, "lateral": 0, "depth": 0, "edge": VIEW_FRONT, "draw": 90},                      # Draw the right piece of an immediate front wall.
 	{"id": 27, "lateral": 0, "depth": 0, "edge": VIEW_LEFT, "draw": 91},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 28, "lateral": 0, "depth": 0, "edge": VIEW_RIGHT, "draw": 92},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
 ]                                                                                           # Close the current list, dictionary, call, or expression.
@@ -97,7 +100,6 @@ const STRAIGHT_VISIBILITY_BRANCHES := [                                         
 	],                                                                                         # Close the center sightline branch.
 	[                                                                                          # Start the left-center side branch.
 		{"id": 27, "occludes": false},                                                           # Draw the immediate left hallway edge without hiding farther left wall segments.
-		{"id": 21, "occludes": false},                                                           # Draw the near left wall shoulder when the current cell has a left wall.
 		{"id": 22, "occludes": false},                                                           # Draw the next left hallway wall segment.
 		{"id": 16, "occludes": false},                                                           # Draw the mid-distance left hallway wall segment.
 		{"id": 7, "occludes": true},                                                             # Check the far left wall edge.
@@ -1026,46 +1028,221 @@ func _hide_slot_nodes() -> void:                                                
 
 
 
-# _build_straight_render_list: Walks the straight-view visibility tree and returns only the wall slots visible from the current map state.
+# _build_straight_render_list: Casts a top-down ray fan, maps visible physical edges to Xybots wall slots, and returns those slots.
 func _build_straight_render_list() -> Array:                                                # Declare this function.
 	var render_list := []                                                                      # Store the visible straight-wall slots selected by the visibility tree.
 	var emitted_ids := {}                                                                      # Track wall ids already added so shared branch entries draw only once.
-	if _is_wall_id_visible(25):                                                                # Treat the nearest front wall as a full-view blocker before side branches draw.
-		var can_move_left := _can_cross_edge(grid_position, _left_vector())                       # Check whether the hallway continues to the viewer's left.
-		var can_move_right := _can_cross_edge(grid_position, -_left_vector())                     # Check whether the hallway continues to the viewer's right.
-		if can_move_left or can_move_right:                                                       # Side-wall views use near edge caps instead of the full front slab.
-			var near_wall_ids := []                                                                 # Store the front-wall pieces visible in this side-wall view.
-			if can_move_left:                                                                       # Check whether the hallway continues to the viewer's left.
-				near_wall_ids.append(24)                                                              # Add the left front-wall cap.
-			else:                                                                                  # Handle a blocked viewer-left side of the front wall.
-				near_wall_ids.append(27)                                                              # Add the left outside edge strip for the wall end.
-			near_wall_ids.append(25)                                                               # Add the center front-wall slab.
-			if can_move_right:                                                                      # Check whether the hallway continues to the viewer's right.
-				near_wall_ids.append(26)                                                              # Add the right front-wall cap.
-			else:                                                                                  # Handle a blocked viewer-right side of the front wall.
-				near_wall_ids.append(28)                                                              # Add the right outside edge strip for the wall end.
-			for wall_id in near_wall_ids:                                                          # Emit the front-wall pieces selected for this side-wall view.
-				var side_wall_slot := _straight_slot_by_id(wall_id)                                    # Look up the wall metadata for this side-wall piece.
-				if not side_wall_slot.is_empty():                                                       # Only emit wall metadata that exists.
-					render_list.append(side_wall_slot)                                                     # Add the side-wall piece to the render list.
-			return render_list                                                                        # Stop deeper visibility because the front wall edge blocks the view.
-		for wall_id in [27, 25, 28]:                                                              # Keep the immediate side strips visible around a near front wall.
-			if _is_wall_id_visible(wall_id):                                                         # Only include this strip when its controlling map edge exists.
-				var near_wall_slot := _straight_slot_by_id(wall_id)                                     # Look up the near wall metadata.
-				if not near_wall_slot.is_empty():                                                       # Only emit wall metadata that exists.
-					render_list.append(near_wall_slot)                                                     # Add the near dead-end wall piece to the render list.
-		return render_list                                                                        # Stop deeper visibility because the near wall occludes anything behind it.
-	for branch in STRAIGHT_VISIBILITY_BRANCHES:                                                # Iterate across each near-to-far top-view sightline branch.
-		_walk_visibility_branch(render_list, emitted_ids, branch)                                 # Add visible walls from this branch and stop when an occluding wall blocks it.
-	_add_empirical_companion_wall_slots(render_list, emitted_ids)                              # Add art-only companion pieces observed while testing larger maps.
+	var physical_edges := _visible_physical_wall_edges()                                       # Collect wall edges visible from the current cell-locked camera fan.
+	physical_edges.sort_custom(func(a, b): return float(a["distance"]) > float(b["distance"])) # Emit farther physical edges first so nearer art can paint over them.
+	for edge in physical_edges:                                                                # Map each physically visible wall edge to one or more numbered Xybots slots.
+		for wall_id in _wall_slot_ids_for_physical_edge(edge):                                   # Convert this physical edge into fixed 2D wall art slot ids.
+			_append_wall_slot_unchecked(render_list, emitted_ids, wall_id)                          # Add the mapped wall slot if it has not already been emitted.
 	return render_list                                                                         # Return the final wall-slot list to the renderer.
+
+
+
+# _visible_physical_wall_edges: Finds physical wall segments that are first-hit by rays in the current top-down view fan.
+func _visible_physical_wall_edges() -> Array:                                               # Declare this function.
+	var all_edges := _all_physical_wall_edges()                                                # Gather unique wall segments from the thin-wall map.
+	var visible_by_key := {}                                                                   # Store the nearest-hit wall segments by canonical edge key.
+	var origin := _camera_grid_origin()                                                        # Use the center of the current cell as the cell-locked camera origin.
+	var forward := Vector2(_facing_vector()).normalized()                                      # Convert the current facing direction into a world-space vector.
+	var right := Vector2(-_left_vector()).normalized()                                         # Convert camera-right into a world-space vector.
+	for ray_index in range(VISIBILITY_RAY_COUNT):                                             # Cast a fixed fan of rays across the view cone.
+		var ratio := 0.0 if VISIBILITY_RAY_COUNT == 1 else float(ray_index) / float(VISIBILITY_RAY_COUNT - 1) # Convert ray index to 0..1 across the fan.
+		var angle := deg_to_rad(lerpf(-VISIBILITY_RAY_HALF_ANGLE_DEGREES, VISIBILITY_RAY_HALF_ANGLE_DEGREES, ratio)) # Convert this ray's fan angle to radians.
+		var ray_direction := (forward * cos(angle) + right * sin(angle)).normalized()             # Rotate the ray around the forward vector inside the top-down plane.
+		var best_hit := {}                                                                        # Track the closest wall edge hit by this ray.
+		var best_distance := VISIBILITY_MAX_DISTANCE                                              # Start with the farthest allowable hit distance.
+		for edge in all_edges:                                                                    # Test this ray against every physical wall edge.
+			var distance := _ray_segment_hit_distance(origin, ray_direction, edge["a"], edge["b"])   # Compute the distance to this edge if the ray intersects it.
+			if distance >= 0.0 and distance < best_distance:                                         # Keep the closest positive hit along the ray.
+				best_distance = distance                                                               # Store the nearest hit distance.
+				best_hit = edge                                                                        # Store the nearest hit edge.
+		if not best_hit.is_empty():                                                               # Add the ray's nearest wall edge if it hit one.
+			best_hit["distance"] = best_distance                                                    # Store the hit distance for draw ordering and diagnostics.
+			visible_by_key[String(best_hit["key"])] = best_hit                                      # Mark this physical edge as visible from at least one ray.
+	var visible_edges := []                                                                    # Convert the keyed dictionary back into an ordered array.
+	for edge in visible_by_key.values():                                                       # Iterate through unique visible physical edges.
+		visible_edges.append(edge)                                                               # Add the visible edge to the result array.
+	return visible_edges                                                                       # Return all visible physical wall segments.
+
+
+
+# _all_physical_wall_edges: Returns every unique blocking wall edge in world-grid coordinates.
+func _all_physical_wall_edges() -> Array:                                                   # Declare this function.
+	var edges := []                                                                            # Store unique physical wall segments.
+	var emitted_keys := {}                                                                     # Track canonical endpoint keys so shared walls are emitted once.
+	for y in range(MAP_HEIGHT):                                                                # Iterate through each map row.
+		for x in range(MAP_WIDTH):                                                               # Iterate through each map column.
+			var cell := Vector2i(x, y)                                                              # Build the current map cell coordinate.
+			for delta in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:       # Check all four thin-wall edges.
+				if not _has_wall_edge(cell, delta):                                                   # Skip open edges.
+					continue                                                                              # Continue to the next edge.
+				var segment := _physical_cell_edge_segment(cell, delta)                               # Convert this map edge to world-space endpoints.
+				var key := _physical_edge_key(segment[0], segment[1])                                  # Build a stable key independent of which cell reported the edge.
+				if emitted_keys.has(key):                                                             # Skip duplicate shared walls.
+					continue                                                                              # Continue to the next edge.
+				emitted_keys[key] = true                                                              # Mark this physical edge as emitted.
+				edges.append({"a": segment[0], "b": segment[1], "delta": delta, "key": key})          # Store this unique wall edge and its source orientation.
+	return edges                                                                              # Return the full physical wall edge list.
+
+
+
+# _physical_cell_edge_segment: Converts a cell edge into two world-grid endpoint coordinates.
+func _physical_cell_edge_segment(cell: Vector2i, delta: Vector2i) -> Array[Vector2]:        # Declare this function.
+	var x := float(cell.x)                                                                     # Convert the cell x coordinate into world-grid units.
+	var y := float(cell.y)                                                                     # Convert the cell y coordinate into world-grid units.
+	if delta == Vector2i(0, -1):                                                              # Handle the north edge.
+		return [Vector2(x, y), Vector2(x + 1.0, y)]                                             # Return the north wall segment.
+	if delta == Vector2i(1, 0):                                                               # Handle the east edge.
+		return [Vector2(x + 1.0, y), Vector2(x + 1.0, y + 1.0)]                                 # Return the east wall segment.
+	if delta == Vector2i(0, 1):                                                               # Handle the south edge.
+		return [Vector2(x, y + 1.0), Vector2(x + 1.0, y + 1.0)]                                 # Return the south wall segment.
+	if delta == Vector2i(-1, 0):                                                              # Handle the west edge.
+		return [Vector2(x, y), Vector2(x, y + 1.0)]                                             # Return the west wall segment.
+	return []                                                                                 # Return no segment for invalid edge vectors.
+
+
+
+# _physical_edge_key: Builds a canonical string key for a wall segment regardless of endpoint order.
+func _physical_edge_key(a: Vector2, b: Vector2) -> String:                                  # Declare this function.
+	var first := a                                                                             # Store one endpoint for ordering.
+	var second := b                                                                            # Store the other endpoint for ordering.
+	if first.x > second.x or (is_equal_approx(first.x, second.x) and first.y > second.y):      # Ensure the key is stable when endpoints are reversed.
+		first = b                                                                                # Swap the first endpoint.
+		second = a                                                                               # Swap the second endpoint.
+	return "%.2f,%.2f:%.2f,%.2f" % [first.x, first.y, second.x, second.y]                      # Return a compact coordinate key.
+
+
+
+# _ray_segment_hit_distance: Returns the positive ray distance to a segment, or -1 when there is no hit.
+func _ray_segment_hit_distance(origin: Vector2, ray_direction: Vector2, a: Vector2, b: Vector2) -> float: # Declare this function.
+	var segment_vector := b - a                                                                # Compute the wall segment direction.
+	var denominator := _cross2(ray_direction, segment_vector)                                  # Compute the 2D line-intersection denominator.
+	if absf(denominator) < 0.0001:                                                            # Treat nearly parallel ray/segment pairs as no hit.
+		return -1.0                                                                              # Return no hit for parallel geometry.
+	var offset := a - origin                                                                   # Compute the vector from ray origin to segment start.
+	var ray_t := _cross2(offset, segment_vector) / denominator                                 # Compute distance along the ray.
+	var segment_t := _cross2(offset, ray_direction) / denominator                              # Compute normalized position along the segment.
+	if ray_t < 0.0 or ray_t > VISIBILITY_MAX_DISTANCE:                                        # Reject hits behind the camera or beyond the straight-view distance.
+		return -1.0                                                                              # Return no hit outside the usable ray range.
+	if segment_t < 0.0 or segment_t > 1.0:                                                     # Reject intersections outside the wall segment endpoints.
+		return -1.0                                                                              # Return no hit outside the segment.
+	return ray_t                                                                               # Return the valid ray hit distance.
+
+
+
+# _cross2: Computes the scalar 2D cross product.
+func _cross2(a: Vector2, b: Vector2) -> float:                                              # Declare this function.
+	return a.x * b.y - a.y * b.x                                                              # Return the 2D cross-product scalar.
+
+
+
+# _camera_grid_origin: Returns the fixed camera origin for visibility tests in world-grid coordinates.
+func _camera_grid_origin() -> Vector2:                                                      # Declare this function.
+	return Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)                # Return the center of the current grid cell.
+
+
+
+# _wall_slot_ids_for_physical_edge: Maps one physically visible wall segment to the numbered straight-view sprite slots.
+func _wall_slot_ids_for_physical_edge(edge: Dictionary) -> Array[int]:                      # Declare this function.
+	var a: Vector2 = edge["a"]                                                                 # Read the first physical wall endpoint.
+	var b: Vector2 = edge["b"]                                                                 # Read the second physical wall endpoint.
+	var center := (a + b) * 0.5                                                                # Compute the wall segment midpoint for camera-relative mapping.
+	var segment_direction := (b - a).normalized()                                             # Compute the wall segment orientation.
+	var origin := _camera_grid_origin()                                                       # Use the same cell-locked camera origin as ray casting.
+	var forward := Vector2(_facing_vector()).normalized()                                     # Convert camera-forward to world-grid space.
+	var right := Vector2(-_left_vector()).normalized()                                        # Convert camera-right to world-grid space.
+	var to_center := center - origin                                                          # Compute the wall midpoint relative to the camera.
+	var depth := to_center.dot(forward)                                                       # Measure how far forward this wall segment is.
+	var side := to_center.dot(right)                                                          # Measure how far camera-right this wall segment is.
+	if absf(segment_direction.dot(right)) > 0.9:                                              # Front walls run left/right across the camera view.
+		return _front_wall_slot_ids_for_depth(depth, side)                                      # Map a front-facing wall segment to its depth family.
+	if absf(segment_direction.dot(forward)) > 0.9:                                            # Side walls run along the camera depth axis.
+		return _side_wall_slot_ids_for_depth(depth, side)                                       # Map a side-wall segment to its depth family.
+	return []                                                                                 # Return no slots for invalid or diagonal wall data.
+
+
+
+# _front_wall_slot_ids_for_depth: Returns the front-wall sprite ids for a camera-relative front wall.
+func _front_wall_slot_ids_for_depth(depth: float, side: float) -> Array[int]:                # Declare this function.
+	var depth_index := int(round(depth - 0.5))                                                # Convert front-edge midpoint depth into the Xybots slot depth row.
+	var lateral_index := int(round(side))                                                     # Convert side offset into the nearest slot lane.
+	if abs(lateral_index) > 1:                                                                # Ignore front walls that are too far outside the straight-view art fan.
+		return []                                                                               # Return no slots for out-of-fan front walls.
+	match depth_index:                                                                        # Choose the front-wall slot family by depth.
+		0:                                                                                       # Handle an immediate front wall.
+			if lateral_index < 0:                                                                  # Handle a front wall offset to the viewer's left.
+				return [24]                                                                           # Return the left near front slice.
+			if lateral_index > 0:                                                                  # Handle a front wall offset to the viewer's right.
+				return [26]                                                                           # Return the right near front slice.
+			return [24, 25, 26]                                                                    # Return the full immediate front wall family.
+		1:                                                                                       # Handle a front wall one cell ahead.
+			if lateral_index < 0:                                                                  # Handle a depth-one wall offset left.
+				return [19]                                                                           # Return the left depth-one front slice.
+			if lateral_index > 0:                                                                  # Handle a depth-one wall offset right.
+				return [21]                                                                           # Return the right depth-one front slice.
+			return [19, 20, 21]                                                                    # Return the full depth-one front wall family.
+		2:                                                                                       # Handle a front wall two cells ahead.
+			if lateral_index < 0:                                                                  # Handle a depth-two wall offset left.
+				return [11]                                                                           # Return the left depth-two front slice.
+			if lateral_index > 0:                                                                  # Handle a depth-two wall offset right.
+				return [13]                                                                           # Return the right depth-two front slice.
+			return [11, 12, 13]                                                                    # Return the full depth-two front wall family.
+		3:                                                                                       # Handle a front wall three cells ahead.
+			if lateral_index < 0:                                                                  # Handle a depth-three wall offset left.
+				return [3]                                                                            # Return the left depth-three front slice.
+			if lateral_index > 0:                                                                  # Handle a depth-three wall offset right.
+				return [5]                                                                            # Return the right depth-three front slice.
+			return [3, 4, 5]                                                                       # Return the full depth-three front wall family.
+		_:                                                                                       # Ignore deeper front walls until more art mapping is verified.
+			return []                                                                               # Return no slots for unsupported depths.
+
+
+
+# _side_wall_slot_ids_for_depth: Returns the side-wall sprite id for a camera-relative side wall.
+func _side_wall_slot_ids_for_depth(depth: float, side: float) -> Array[int]:                 # Declare this function.
+	var depth_index := int(round(depth))                                                      # Convert side-wall midpoint depth into the Xybots side-wall row.
+	var viewer_left := side < 0.0                                                             # Negative camera-right offset means the wall is on the viewer's left.
+	if viewer_left:                                                                           # Choose from the viewer-left side-wall sequence.
+		match depth_index:                                                                       # Map left side-wall depth to a numbered sprite slot.
+			0:                                                                                      # Handle the immediate left wall.
+				return [27]                                                                          # Return the nearest left side-wall strip.
+			1:                                                                                      # Handle the next left wall.
+				return [22]                                                                          # Return the depth-one left side-wall strip.
+			2:                                                                                      # Handle the middle left wall.
+				return [16]                                                                          # Return the depth-two left side-wall strip.
+			3:                                                                                      # Handle the far left wall.
+				return [7]                                                                           # Return the depth-three left side-wall strip.
+			4:                                                                                      # Handle the farthest left wall.
+				return [6]                                                                           # Return the depth-four left side-wall strip.
+			_:                                                                                      # Ignore unsupported side-wall depths.
+				return []                                                                              # Return no slots.
+	match depth_index:                                                                        # Map right side-wall depth to a numbered sprite slot.
+		0:                                                                                       # Handle the immediate right wall.
+			return [28]                                                                             # Return the nearest right side-wall strip.
+		1:                                                                                       # Handle the next right wall.
+			return [23]                                                                             # Return the depth-one right side-wall strip.
+		2:                                                                                       # Handle the middle right wall.
+			return [17]                                                                             # Return the depth-two right side-wall strip.
+		3:                                                                                       # Handle the far right wall.
+			return [8]                                                                              # Return the depth-three right side-wall strip.
+		4:                                                                                       # Handle the farthest right wall.
+			return [9]                                                                              # Return the depth-four right side-wall strip.
+		_:                                                                                       # Ignore unsupported side-wall depths.
+			return []                                                                               # Return no slots.
 
 
 
 # _add_empirical_companion_wall_slots: Adds wall-art pieces that share another slot's map edge but need their own draw layer.
 func _add_empirical_companion_wall_slots(render_list: Array, emitted_ids: Dictionary) -> void: # Declare this function.
-	if emitted_ids.has(21) and emitted_ids.has(12) and not emitted_ids.has(20):                # Detect the far-right wall case where slot 13 sits behind slot 21.
-		_append_wall_slot_unchecked(render_list, emitted_ids, 13)                                 # Add the rear/right companion wall behind slot 21.
+	if emitted_ids.has(20):                                                                    # Detect the center slice of a front wall one cell ahead.
+		_append_wall_slot_unchecked(render_list, emitted_ids, 19)                                 # Add the matching left slice of that front wall.
+		_append_wall_slot_unchecked(render_list, emitted_ids, 21)                                 # Add the matching right slice of that front wall.
+	if emitted_ids.has(12):                                                                    # Detect the center slice of a front wall two cells ahead.
+		_append_wall_slot_unchecked(render_list, emitted_ids, 11)                                 # Add the matching left slice of that deeper front wall.
+		_append_wall_slot_unchecked(render_list, emitted_ids, 13)                                 # Add the matching right slice of that deeper front wall.
 
 
 
