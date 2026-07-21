@@ -48,11 +48,11 @@ const VIEW_RIGHT := "right"                                                     
 const DEBUG_MAP_CELL_SIZE := 24.0                                                           # Set the top-down debug map cell size inside the 160x120 diagnostic panel.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                                    # Center the 4x4 debug maze inside the source-map panel.
 const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
-const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Draw the diagnostic view cone wide enough to cover the straight wall slot fan.
+const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Match the top-down cone width from the Wall_Grid reference image.
 const CAMERA_REAR_OFFSET := 0.46                                                             # Place the cell-locked camera just in front of the rear wall for the current facing.
 const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
 const VISIBILITY_RAY_COUNT := 91                                                            # Cast enough rays across the view fan to discover side and front wall edges.
-const VISIBILITY_RAY_HALF_ANGLE_DEGREES := 55.0                                             # Use a wide top-down fan so near side walls can be discovered by the ray pass.
+const VISIBILITY_RAY_HALF_ANGLE_DEGREES := rad_to_deg(atan(DEBUG_VIEW_CONE_HALF_WIDTH / DEBUG_VIEW_CONE_DEPTH)) # Match ray casting to the Wall_Grid cone shape.
 const VISIBILITY_MAX_DISTANCE := 5.2                                                        # Limit ray tests to the straight-view art depth.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
@@ -64,30 +64,30 @@ const DIAGNOSTIC_3D_SEPARATOR_THICKNESS := 0.025                                
 const STRAIGHT_WALL_SLOTS := [                                                              # Start the table that maps wall numbers to view-relative map tests and draw order.
 	{"id": 1, "lateral": -2, "depth": 4, "edge": VIEW_FRONT, "draw": 10},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 2, "lateral": -1, "depth": 4, "edge": VIEW_FRONT, "draw": 11},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 3, "lateral": 0, "depth": 3, "edge": VIEW_FRONT, "draw": 12},                       # Draw the left piece of the front wall three cells ahead.
+	{"id": 3, "lateral": -1, "depth": 3, "edge": VIEW_FRONT, "draw": 12},                      # Draw the left piece of the front wall three cells ahead.
 	{"id": 4, "lateral": 0, "depth": 3, "edge": VIEW_FRONT, "draw": 13},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 5, "lateral": 0, "depth": 3, "edge": VIEW_FRONT, "draw": 14},                       # Draw the right piece of the front wall three cells ahead.
+	{"id": 5, "lateral": 1, "depth": 3, "edge": VIEW_FRONT, "draw": 14},                       # Draw the right piece of the front wall three cells ahead.
 	{"id": 6, "lateral": 0, "depth": 4, "edge": VIEW_LEFT, "draw": 20},                        # Draw the far left side-wall run.
 	{"id": 7, "lateral": 0, "depth": 3, "edge": VIEW_LEFT, "draw": 21},                        # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 8, "lateral": 0, "depth": 3, "edge": VIEW_RIGHT, "draw": 22},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 9, "lateral": 0, "depth": 4, "edge": VIEW_RIGHT, "draw": 23},                       # Draw the far right side-wall run.
 	{"id": 10, "lateral": -1, "depth": 3, "edge": VIEW_FRONT, "draw": 30},                     # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 11, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 31},                      # Draw the left piece of the front wall two cells ahead.
+	{"id": 11, "lateral": -1, "depth": 2, "edge": VIEW_FRONT, "draw": 31},                     # Draw the left piece of the front wall two cells ahead.
 	{"id": 12, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 32},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 13, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 40},                      # Draw the right piece of the front wall two cells ahead.
+	{"id": 13, "lateral": 1, "depth": 2, "edge": VIEW_FRONT, "draw": 40},                      # Draw the right piece of the front wall two cells ahead.
 	{"id": 14, "lateral": -1, "depth": 2, "edge": VIEW_RIGHT, "draw": 41},                     # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 15, "lateral": 0, "depth": 2, "edge": VIEW_LEFT, "draw": 42},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 16, "lateral": 0, "depth": 2, "edge": VIEW_LEFT, "draw": 43},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 17, "lateral": 0, "depth": 2, "edge": VIEW_RIGHT, "draw": 50},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 18, "lateral": 0, "depth": 2, "edge": VIEW_FRONT, "draw": 51},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 19, "lateral": 0, "depth": 1, "edge": VIEW_FRONT, "draw": 58},                      # Draw the left piece of the front wall one cell ahead.
+	{"id": 19, "lateral": -1, "depth": 1, "edge": VIEW_FRONT, "draw": 58},                     # Draw the left piece of the front wall one cell ahead.
 	{"id": 20, "lateral": 0, "depth": 1, "edge": VIEW_FRONT, "draw": 60},                      # Draw the center piece of the front wall one cell ahead.
-	{"id": 21, "lateral": 0, "depth": 1, "edge": VIEW_FRONT, "draw": 62},                      # Draw the right piece of the front wall one cell ahead.
+	{"id": 21, "lateral": 1, "depth": 1, "edge": VIEW_FRONT, "draw": 62},                      # Draw the right piece of the front wall one cell ahead.
 	{"id": 22, "lateral": 0, "depth": 1, "edge": VIEW_LEFT, "draw": 62},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 23, "lateral": 0, "depth": 1, "edge": VIEW_RIGHT, "draw": 63},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 24, "lateral": 0, "depth": 0, "edge": VIEW_FRONT, "draw": 70},                      # Draw the left piece of an immediate front wall.
+	{"id": 24, "lateral": -1, "depth": 0, "edge": VIEW_FRONT, "draw": 70},                     # Draw the left piece of an immediate front wall.
 	{"id": 25, "lateral": 0, "depth": 0, "edge": VIEW_FRONT, "draw": 80},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
-	{"id": 26, "lateral": 0, "depth": 0, "edge": VIEW_FRONT, "draw": 90},                      # Draw the right piece of an immediate front wall.
+	{"id": 26, "lateral": 1, "depth": 0, "edge": VIEW_FRONT, "draw": 90},                      # Draw the right piece of an immediate front wall.
 	{"id": 27, "lateral": 0, "depth": 0, "edge": VIEW_LEFT, "draw": 91},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 28, "lateral": 0, "depth": 0, "edge": VIEW_RIGHT, "draw": 92},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
 ]                                                                                           # Close the current list, dictionary, call, or expression.
@@ -647,13 +647,13 @@ func _add_debug_view_cone(origin: Vector2) -> void:                             
 # _add_debug_visible_wall_slots: Highlights the renderer-selected wall slots as green edge segments on the top-down map.
 func _add_debug_visible_wall_slots() -> void:                                               # Declare this function.
 	var highlight_color := Color(0.0, 1.0, 0.25, 0.95)                                       # Use green to mark wall slots that the renderer currently selected.
-	var visible_slots := _build_straight_render_list()                                       # Rebuild the same corridor-constrained visible-slot list used by the 2D renderer.
+	var visible_slots := _build_straight_render_list()                                       # Rebuild the same ray-constrained visible-slot list used by the 2D renderer.
 	var labeled_segments := {}                                                                # Track label positions so repeated physical edges do not stack identical labels.
 	for slot in visible_slots:                                                                # Iterate through every wall slot currently selected for drawing.
 		var wall_id := int(slot["id"])                                                          # Read the numbered 2D wall-slot id.
 		var segment := _debug_wall_slot_segment(slot)                                           # Convert the selected wall slot into a top-down source-map edge.
 		if segment.size() < 2:                                                                  # Skip invalid slot metadata defensively.
-			continue                                                                               # Continue to the next visible physical edge.
+			continue                                                                               # Continue to the next ray-hit wall edge.
 		_add_debug_line(segment[0], segment[1], highlight_color, 5.0)                            # Draw the selected physical wall segment in green.
 		var label_position := (segment[0] + segment[1]) * 0.5                                    # Place the label at the center of the highlighted edge.
 		var segment_key := "%d,%d" % [int(round(label_position.x)), int(round(label_position.y))] # Build a coarse key for stacking labels on the same edge.
@@ -1044,28 +1044,20 @@ func _hide_slot_nodes() -> void:                                                
 
 
 
-# _build_straight_render_list: Walks the center corridor, emits side/front Xybots wall slots, and stops at the first front blocker.
+# _build_straight_render_list: Casts the top-down view fan, maps ray-hit physical edges to Xybots wall slots, and returns those slots.
 func _build_straight_render_list() -> Array:                                                # Declare this function.
-	var render_list := []                                                                      # Store the visible straight-wall slots selected from the map corridor.
-	var emitted_ids := {}                                                                      # Track wall ids already added so overlapping art pieces draw only once.
-	var forward := _facing_vector()                                                            # Read the current world-grid direction the camera faces.
-	var left := _left_vector()                                                                 # Read the current world-grid direction to the camera's left.
-	for depth_index in range(5):                                                               # Check near-to-far corridor cells supported by the straight-view wall art.
-		var cell := grid_position + forward * depth_index                                        # Compute the map cell on the center sightline at this depth.
-		if not _is_open_cell(cell):                                                               # Stop if the map footprint ended unexpectedly.
-			break                                                                                    # Leave the corridor walk.
-		if _has_wall_edge(cell, left):                                                           # Check whether this corridor cell has a wall on the viewer's left.
-			var left_id := _left_side_wall_id_for_depth_index(depth_index)                           # Convert this depth into the matching left side-wall sprite id.
-			if left_id > 0:                                                                         # Only append depths that have art mapped.
-				_append_wall_slot_unchecked(render_list, emitted_ids, left_id)                         # Add the left side-wall slot.
-		if _has_wall_edge(cell, -left):                                                          # Check whether this corridor cell has a wall on the viewer's right.
-			var right_id := _right_side_wall_id_for_depth_index(depth_index)                         # Convert this depth into the matching right side-wall sprite id.
-			if right_id > 0:                                                                        # Only append depths that have art mapped.
-				_append_wall_slot_unchecked(render_list, emitted_ids, right_id)                        # Add the right side-wall slot.
-		if _has_wall_edge(cell, forward):                                                       # Check whether the center corridor is blocked in front of this cell.
-			for wall_id in _front_wall_ids_for_depth_index(depth_index):                            # Add the front-wall family for the first blocking edge.
-				_append_wall_slot_unchecked(render_list, emitted_ids, wall_id)                        # Add this front wall sprite if it has not already been emitted.
-			break                                                                                    # Stop rendering deeper walls hidden by this front blocker.
+	var render_list := []                                                                      # Store the visible straight-wall slots selected by ray hits.
+	var emitted_ids := {}                                                                      # Track wall ids already added so shared branch entries draw only once.
+	var physical_edges := _visible_physical_wall_edges()                                       # Collect wall edges visible from the current cell-locked camera fan.
+	var visible_keys := {}                                                                     # Store canonical keys for physical edges hit by the ray fan.
+	for edge in physical_edges:                                                                # Iterate through every physical wall edge the ray fan can see.
+		visible_keys[String(edge["key"])] = true                                                 # Mark this source-map edge as visible.
+	for slot in STRAIGHT_WALL_SLOTS:                                                          # Check every numbered slot footprint against the ray-hit edge set.
+		var wall_id := int(slot["id"])                                                           # Read this numbered wall slot id.
+		var key := _physical_edge_key_for_wall_slot(slot)                                         # Compute the physical edge key controlled by this numbered slot.
+		if key == "" or not visible_keys.has(key):                                                # Skip slot footprints whose physical edge was not ray-visible.
+			continue                                                                                 # Continue to the next slot.
+		_append_wall_slot_unchecked(render_list, emitted_ids, wall_id)                            # Add this specific visible slot.
 	render_list.sort_custom(func(a, b): return int(a["draw"]) < int(b["draw"]))                # Sort by existing art draw order so near pieces paint over far pieces.
 	return render_list                                                                         # Return the final wall-slot list to the renderer.
 
@@ -1143,6 +1135,33 @@ func _physical_edge_key(a: Vector2, b: Vector2) -> String:                      
 		first = b                                                                                # Swap the first endpoint.
 		second = a                                                                               # Swap the second endpoint.
 	return "%.2f,%.2f:%.2f,%.2f" % [first.x, first.y, second.x, second.y]                      # Return a compact coordinate key.
+
+
+
+# _physical_edge_key_for_wall_slot: Returns the physical map-edge key controlled by one numbered wall slot.
+func _physical_edge_key_for_wall_slot(slot: Dictionary) -> String:                          # Declare this function.
+	var segment := _physical_wall_slot_segment(slot)                                          # Convert this numbered slot into a physical grid edge.
+	if segment.size() < 2:                                                                    # Skip invalid slot metadata defensively.
+		return ""                                                                                # Return no key for invalid slots.
+	return _physical_edge_key(segment[0], segment[1])                                         # Return the canonical physical edge key for this slot footprint.
+
+
+
+# _physical_wall_slot_segment: Converts a numbered wall slot into its source physical map edge.
+func _physical_wall_slot_segment(slot: Dictionary) -> Array[Vector2]:                       # Declare this function.
+	var lateral := int(slot["lateral"])                                                       # Read the view-relative lateral slot coordinate.
+	var depth := int(slot["depth"])                                                           # Read the view-relative depth slot coordinate.
+	var edge := String(slot["edge"])                                                          # Read which face of the view-relative cell controls this slot.
+	var cell := _view_cell(lateral, depth)                                                    # Convert the view-relative slot coordinate into a world-grid cell.
+	match edge:                                                                               # Convert the slot's face type into a world-grid edge vector.
+		VIEW_FRONT:                                                                              # Handle front-facing wall slots.
+			return _physical_cell_edge_segment(cell, _facing_vector())                              # Return the front edge of this slot cell.
+		VIEW_LEFT:                                                                               # Handle camera-left wall slots.
+			return _physical_cell_edge_segment(cell, _left_vector())                                # Return the left edge of this slot cell.
+		VIEW_RIGHT:                                                                              # Handle camera-right wall slots.
+			return _physical_cell_edge_segment(cell, -_left_vector())                               # Return the right edge of this slot cell.
+		_:                                                                                       # Handle unknown slot metadata defensively.
+			return []                                                                               # Return no segment for invalid metadata.
 
 
 
