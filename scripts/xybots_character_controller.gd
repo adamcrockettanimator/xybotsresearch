@@ -49,6 +49,7 @@ const DEBUG_MAP_CELL_SIZE := 24.0                                               
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                                    # Center the 4x4 debug maze inside the source-map panel.
 const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
 const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Draw the diagnostic view cone wide enough to cover the straight wall slot fan.
+const CAMERA_REAR_OFFSET := 0.46                                                             # Place the cell-locked camera just in front of the rear wall for the current facing.
 const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
 const VISIBILITY_RAY_COUNT := 91                                                            # Cast enough rays across the view fan to discover side and front wall edges.
 const VISIBILITY_RAY_HALF_ANGLE_DEGREES := 55.0                                             # Use a wide top-down fan so near side walls can be discovered by the ray pass.
@@ -585,7 +586,8 @@ func _update_debug_map_overlay() -> void:                                       
 
 	var home_center := _debug_map_cell_center(grid_position)                                    # Convert the current cell center into an overlay reference position.
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
-	_add_debug_view_cone(home_center)                                                           # Draw the camera/view cone from the cell-locked camera anchor.
+	var camera_center := _debug_map_world_position(_camera_grid_origin())                        # Convert the actual visibility-camera origin into overlay coordinates.
+	_add_debug_view_cone(camera_center)                                                         # Draw the camera/view cone from the same backed-up origin used by ray casting.
 	_add_debug_visible_wall_slots()                                                            # Highlight the wall slots selected by the renderer on the source map.
 	_add_debug_player_bounds(home_center)                                                       # Draw the playable/contact footprint inside the current cell.
 	_add_debug_player_marker(home_center, Color(1.0, 1.0, 1.0, 0.35))                           # Draw a faint marker at the home center for offset comparison.
@@ -605,6 +607,12 @@ func _debug_map_cell_top_left(cell: Vector2i) -> Vector2:                       
 # _debug_map_cell_center: Converts a grid cell coordinate into a debug overlay center pixel position.
 func _debug_map_cell_center(cell: Vector2i) -> Vector2:                                      # Declare this function.
 	return _debug_map_cell_top_left(cell) + Vector2.ONE * (DEBUG_MAP_CELL_SIZE * 0.5)          # Return the center of this cell on the debug overlay.
+
+
+
+# _debug_map_world_position: Converts a world-grid coordinate into a debug overlay pixel position.
+func _debug_map_world_position(world_position: Vector2) -> Vector2:                          # Declare this function.
+	return DEBUG_MAP_PANEL_GRID_ORIGIN + world_position * DEBUG_MAP_CELL_SIZE                  # Scale grid units into the top-down panel coordinate system.
 
 
 
@@ -1141,7 +1149,9 @@ func _cross2(a: Vector2, b: Vector2) -> float:                                  
 
 # _camera_grid_origin: Returns the fixed camera origin for visibility tests in world-grid coordinates.
 func _camera_grid_origin() -> Vector2:                                                      # Declare this function.
-	return Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)                # Return the center of the current grid cell.
+	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Compute the rotation center of the current grid cell.
+	var forward := Vector2(_facing_vector()).normalized()                                     # Convert the current facing into a world-grid direction.
+	return cell_center - forward * CAMERA_REAR_OFFSET                                         # Return the rear-biased camera point just inside the wall behind the viewer.
 
 
 
