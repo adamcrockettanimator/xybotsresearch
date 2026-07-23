@@ -234,6 +234,7 @@ var world_run_dir := DIR_N                                                      
 var world_aim_dir := DIR_N                                                                  # Track this player's aim direction in shared world space for opponent rendering.
 var available_animations: Dictionary = {}                                                   # Store animation-name lookups for exact and fallback animation selection.
 var sprite_foot_anchor_cache: Dictionary = {}                                                # Cache per-texture foot/shadow anchor rows so sprite registration can ignore transparent padding.
+var sprite_body_height_cache: Dictionary = {}                                                # Cache per-texture visible body spans so sprite scale ignores transparent frame padding.
 var pending_grid_delta := Vector2i.ZERO                                                     # Store the cell movement that will be applied after a transition finishes.
 var last_blocked_direction := ""                                                            # Store the most recent blocked movement label for debug display.
 var wall_edges: Dictionary = {}                                                             # Store explicit thin-wall edge flags for each open cell.
@@ -2138,7 +2139,7 @@ func _position_player() -> void:                                                
 	var screen_ratio_x := _self_screen_side_ratio_for_projection(local_floor_position.x, projection) # Clamp only the rendered feet anchor inside the visible floor polygon.
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured character height for this depth.
-	var sprite_scale := actor_height / _sprite_texture_height(player_sprite)                    # Scale the current frame so its body height matches the measured study.
+	var sprite_scale := actor_height / _sprite_body_height_to_foot(player_sprite)               # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the measured feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
@@ -2160,7 +2161,7 @@ func _position_opponent_sprite() -> void:                                       
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
-	var sprite_scale := actor_height / _sprite_texture_height(opponent_sprite)                  # Scale the opponent from the same measured perspective table.
+	var sprite_scale := actor_height / _sprite_body_height_to_foot(opponent_sprite)             # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
@@ -2240,10 +2241,13 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 		screen_x = lerpf(corridor_edge_x, float(side_projection["outer_x"]), side_travel)          # Let the actor move continuously from corridor edge to side-frame edge.
 		feet_y = lerpf(float(corridor["feet_y"]), float(side_projection["feet_y"]), side_travel)   # Blend feet registration from corridor floor to side-entry floor without popping.
 	var actor_height := float(corridor["actor_height"])                                       # Read actor height from the same measured perspective sample as the floor.
+	var scale_view_depth := maxf(view_depth, SELF_MIN_ACTOR_SCALE_VIEW_DEPTH)                 # Keep near-camera opponents scaled like the local player body.
+	var scale_projection := _corridor_projection_at_view_depth(scale_view_depth)               # Sample only actor scale from the protected near-camera depth.
+	actor_height = float(scale_projection["actor_height"])                                    # Replace actor height while keeping true feet and screen-side position.
 	var screen_y := feet_y - actor_height * 0.5                                                 # Keep a legacy centered y value for debugging; final sprite registration uses feet_y.
 	var character_layer := _character_layer_for_view_depth(view_depth)                         # Use wall-depth buckets so same-depth side walls do not erase visible actors.
 	var corridor_width := maxf(float(corridor["right_x"]) - float(corridor["left_x"]), 1.0)    # Measure how many screen pixels represent one visible tile width at this depth.
-	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, and character layer.
+	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "scale_view_depth": scale_view_depth, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, and character layer.
 
 
 
@@ -2402,7 +2406,7 @@ func _side_limits_for_depth(_local_depth: float) -> Vector2:                    
 # _player_sprite_scale_for_depth: Returns the character scale used by both projection and movement bounds.
 func _player_sprite_scale_for_depth(depth: float) -> float:                                # Declare this function.
 	var projection := _self_actor_projection_at_local_depth(depth)                              # Sample the same self-body projection used by the renderer.
-	return float(projection["actor_height"]) / maxf(_current_player_texture_height(), 1.0)     # Return the scale needed to match the measured character height.
+	return float(projection["actor_height"]) / _sprite_body_height_to_foot(player_sprite)      # Return the scale needed to match the visible body height.
 
 
 
@@ -2426,6 +2430,17 @@ func _current_player_texture_width() -> float:                                  
 # _current_player_texture_height: Returns the current player frame height for perspective scaling.
 func _current_player_texture_height() -> float:                                             # Declare this function.
 	return _sprite_texture_height(player_sprite)                                               # Measure the currently bound local player sprite.
+
+
+
+# _sprite_body_height_to_foot: Returns the visible source-pixel height from the body top to the foot anchor.
+func _sprite_body_height_to_foot(sprite: AnimatedSprite2D) -> float:                       # Declare this function.
+	if sprite == null or sprite.sprite_frames == null:                                        # Handle missing sprite resources defensively.
+		return 41.0                                                                              # Return a conservative visible-body fallback for the known idle frame.
+	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)       # Read the current frame texture from this sprite.
+	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
+		return 41.0                                                                              # Return a conservative visible-body fallback for the known idle frame.
+	return _texture_body_height_to_foot(texture)                                               # Measure or fetch the visible body span for this texture.
 
 
 
@@ -2483,6 +2498,31 @@ func _texture_foot_anchor_y(texture: Texture2D) -> float:                       
 	var anchor_y := maxf(float(bottom_visible) - 1.0, 0.0) if found_visible else maxf(float(texture.get_height()) - 1.0, 0.0) # Put the logical feet point just above the visible bottom row.
 	sprite_foot_anchor_cache[cache_key] = anchor_y                                             # Cache the measured anchor for later frames.
 	return anchor_y                                                                            # Return the measured foot/shadow anchor row.
+
+
+
+# _texture_body_height_to_foot: Finds the visible body span used for perspective scaling.
+func _texture_body_height_to_foot(texture: Texture2D) -> float:                            # Declare this function.
+	var cache_key := texture.resource_path if texture.resource_path != "" else str(texture.get_rid()) # Build a stable key for imported and generated textures.
+	if sprite_body_height_cache.has(cache_key):                                               # Reuse measurements for frames already scanned.
+		return float(sprite_body_height_cache[cache_key])                                        # Return the cached visible body span.
+	var image := texture.get_image()                                                           # Read the source pixels for alpha-bound detection.
+	if image == null:                                                                          # Fall back when a texture cannot provide readable pixels.
+		return maxf(float(texture.get_height()) - 5.0, 1.0)                                      # Use a near-full-frame visible span as the safest fallback.
+	var top_visible := 0                                                                       # Default to the top row until a visible row is found.
+	var found_visible := false                                                                 # Track whether the alpha scan found any visible pixels.
+	for y in range(image.get_height()):                                                        # Search downward from the top of the source frame.
+		for x in range(image.get_width()):                                                        # Search every pixel in this row.
+			if image.get_pixel(x, y).a > 0.01:                                                       # Treat any nontransparent pixel as part of the visible body/shadow.
+				top_visible = y                                                                        # Store the top visible pixel row.
+				found_visible = true                                                                   # Mark the alpha scan as successful.
+				break                                                                                  # Stop scanning this row.
+		if found_visible:                                                                        # Stop once the highest visible row is known.
+			break                                                                                  # Exit the vertical scan.
+	var foot_anchor_y := _texture_foot_anchor_y(texture)                                      # Reuse the measured foot/shadow anchor row for the bottom of the body span.
+	var body_height := maxf(foot_anchor_y - float(top_visible), 1.0) if found_visible else maxf(float(texture.get_height()) - 5.0, 1.0) # Convert top and feet rows into a visible body span.
+	sprite_body_height_cache[cache_key] = body_height                                          # Cache the measured visible body span for later frames.
+	return body_height                                                                         # Return the measured visible body span.
 
 
 
