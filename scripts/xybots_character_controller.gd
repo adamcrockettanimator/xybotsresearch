@@ -14,7 +14,7 @@ const DIR_W := "W"                                                              
 const VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
 const PHASE_SECONDS := 0.10                                                                 # Set how long each captured transition frame is displayed.
-const MOVE_UNITS_PER_SECOND := 0.85                                                         # Set how quickly the character moves within the current tile.
+const MOVE_UNITS_PER_SECOND := 1.70                                                         # Set movement in normalized half-tile units so X and Y ground speed match.
 const HOME_LOCAL_FLOOR_POSITION := Vector2(0.5, 0.68)                                       # Set the resting local position inside a tile.
 const FORWARD_TRIGGER_Y := 0.56                                                             # Set the forward threshold where crossing into the next tile begins.
 const BACKWARD_TRIGGER_Y := 0.84                                                            # Set the backward threshold where crossing into the previous tile begins.
@@ -81,7 +81,6 @@ const LOCAL_TILE_WORLD_HALF_EXTENT := 0.5                                       
 const SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                                # Keep the self-view body scale sampled from visible S0 space, not the camera-plane crop edge.
 const LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                                  # Keep the local feet anchor inside the projected floor-zone polygon.
 const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                                  # Keep the local feet slightly inside the front edge of the projected floor-zone polygon.
-const SIDE_ENTRY_OCCLUSION_BAND := 0.25                                                       # Hide side-entry actors near the corridor edge while side-wall art should still cover them.
 const CHARACTER_NEAREST_LAYER := 96                                                          # Set the closest character draw layer; this is only z-order, not perspective math.
 const LOCAL_CHARACTER_LAYER := 96                                                            # Draw the local body above wall art; the camera clipper handles frame-edge cropping.
 const CHARACTER_LAYER_BY_DEPTH := [96, 74, 56, 32]                                           # Keep actors in front of same-depth side walls but behind nearer wall rows.
@@ -2066,42 +2065,55 @@ func _read_movement() -> Vector2:                                               
 
 # _move_inside_tile: Moves the player locally, crossing open edges at trigger thresholds and sliding to wall contact on blocked edges.
 func _move_inside_tile(movement: Vector2, delta: float) -> void:                            # Declare this function.
-	local_floor_position += movement * MOVE_UNITS_PER_SECOND * delta                           # Continue the controller logic for this section.
-	var side_limits := _side_limits_for_depth(local_floor_position.y)                          # Compute visible side limits so logic and sprite registration stay coupled.
+	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into right/forward physical tile-offset movement.
+	var tile_offset := _local_position_to_tile_offset(local_floor_position)                     # Convert current local art position into normalized physical tile offset.
+	tile_offset += physical_movement * MOVE_UNITS_PER_SECOND * delta                           # Move in physical tile space so every direction uses the same ground speed.
+	local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the physical offset back into local art-space registration.
 
-	if movement.y < 0.0 and local_floor_position.y <= FORWARD_TRIGGER_Y:                       # Run the following block only when this condition is true.
+	if physical_movement.y > 0.0 and tile_offset.y >= 1.0:                                     # Handle crossing or blocking at the camera-forward physical edge.
 		if _can_cross_edge(grid_position, _facing_vector()):                                      # Check whether the forward tile edge is open.
-			local_floor_position.y = FORWARD_TRIGGER_Y                                               # Hold the local position at the crossing threshold during the transition.
+			tile_offset.y = 1.0                                                                       # Hold the physical offset at the forward edge during the transition.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local forward edge.
 			_try_cross_tile("forward", _facing_vector(), "front")                                    # Start the forward tile-crossing transition.
+			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked front wall.
-			local_floor_position.y = maxf(local_floor_position.y, FORWARD_WALL_CONTACT_Y)            # Let the player reach the front wall contact instead of crossing.
+			tile_offset.y = 1.0                                                                       # Clamp the physical offset to the forward wall contact.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the forward wall contact.
 			last_blocked_direction = "front"                                                         # Report the blocked front edge in the debug status.
-	elif movement.y > 0.0 and local_floor_position.y >= BACKWARD_TRIGGER_Y:                    # Run this alternate branch when the previous conditions failed and this one is true.
+	elif physical_movement.y < 0.0 and tile_offset.y <= -1.0:                                  # Handle crossing or blocking at the camera-back physical edge.
 		if _can_cross_edge(grid_position, -_facing_vector()):                                     # Check whether the backward tile edge is open.
-			local_floor_position.y = BACKWARD_TRIGGER_Y                                              # Hold the local position at the crossing threshold during the transition.
+			tile_offset.y = -1.0                                                                      # Hold the physical offset at the back edge during the transition.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local back edge.
 			_try_cross_tile("backward", -_facing_vector(), "back")                                   # Start the backward tile-crossing transition.
+			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked back wall.
-			local_floor_position.y = minf(local_floor_position.y, BACKWARD_WALL_CONTACT_Y)           # Let the player reach the back wall contact instead of crossing.
+			tile_offset.y = -1.0                                                                      # Clamp the physical offset to the back wall contact.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the back wall contact.
 			last_blocked_direction = "back"                                                          # Report the blocked back edge in the debug status.
-	elif movement.x < 0.0 and local_floor_position.x <= side_limits.x:                         # Run this alternate branch when the player reaches the visible left-side limit.
+	elif physical_movement.x < 0.0 and tile_offset.x <= -1.0:                                  # Handle crossing or blocking at the camera-left physical edge.
 		if _can_cross_edge(grid_position, _left_vector()):                                        # Check whether the camera-left tile edge is open.
-			local_floor_position.x = side_limits.x                                                   # Hold the local position at the crossing threshold during the transition.
+			tile_offset.x = -1.0                                                                      # Hold the physical offset at the left edge during the transition.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local left edge.
 			_try_cross_tile("strafe_left", _left_vector(), "left")                                   # Start the left strafe tile-crossing transition.
+			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked left wall.
-			local_floor_position.x = maxf(local_floor_position.x, side_limits.x)                     # Let the player reach the left visible contact limit instead of crossing.
+			tile_offset.x = -1.0                                                                      # Clamp the physical offset to the left wall contact.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the left wall contact.
 			last_blocked_direction = "left"                                                          # Report the blocked left edge in the debug status.
-	elif movement.x > 0.0 and local_floor_position.x >= side_limits.y:                         # Run this alternate branch when the player reaches the visible right-side limit.
+	elif physical_movement.x > 0.0 and tile_offset.x >= 1.0:                                   # Handle crossing or blocking at the camera-right physical edge.
 		if _can_cross_edge(grid_position, -_left_vector()):                                       # Check whether the camera-right tile edge is open.
-			local_floor_position.x = side_limits.y                                                  # Hold the local position at the crossing threshold during the transition.
+			tile_offset.x = 1.0                                                                       # Hold the physical offset at the right edge during the transition.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local right edge.
 			_try_cross_tile("strafe_right", -_left_vector(), "right")                                # Start the right strafe tile-crossing transition.
+			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked right wall.
-			local_floor_position.x = minf(local_floor_position.x, side_limits.y)                    # Let the player reach the right visible contact limit instead of crossing.
+			tile_offset.x = 1.0                                                                       # Clamp the physical offset to the right wall contact.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the right wall contact.
 			last_blocked_direction = "right"                                                         # Report the blocked right edge in the debug status.
 
 	if not is_transitioning:                                                                   # Keep free local movement bounded when no tile-crossing transition started.
-		side_limits = _side_limits_for_depth(local_floor_position.y)                              # Recompute side limits after any depth clamp changed the projected floor width.
-		local_floor_position.x = clampf(local_floor_position.x, side_limits.x, side_limits.y)      # Clamp horizontal movement to the visible sprite-safe wall-contact span.
-		local_floor_position.y = clampf(local_floor_position.y, FORWARD_WALL_CONTACT_Y, BACKWARD_WALL_CONTACT_Y) # Clamp depth movement to the reachable front/back contact span.
+		tile_offset = Vector2(clampf(tile_offset.x, -1.0, 1.0), clampf(tile_offset.y, -1.0, 1.0)) # Keep the physical offset inside this tile after free movement.
+		local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the clamped physical offset back into local art-space registration.
 
 
 
@@ -2140,15 +2152,19 @@ func _position_opponent_sprite() -> void:                                       
 		opponent_sprite.visible = false                                                           # Hide the opponent sprite.
 		return                                                                                    # Return without projecting anything.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
-	if not _world_point_visible_from_current_camera(target_world):                              # Use the same camera fan and wall-ray test for every opponent.
-		opponent_sprite.visible = false                                                           # Hide the opponent when blocked or outside the current view fan.
-		return                                                                                    # Return without projecting anything.
-	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite height is current.
+	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
 	var projection := _opponent_projection_from_current_camera(target_world)                    # Project the opponent through the current player's camera model.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var screen_y := float(projection["screen_y"])                                               # Read the projected opponent y coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
 	var sprite_scale := actor_height / _sprite_texture_height(opponent_sprite)                  # Scale the opponent from the same measured perspective table.
+	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
+	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
+		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
+		return                                                                                    # Return without displaying this opponent.
+	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
+		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
+		return                                                                                    # Return without displaying this opponent.
 	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
@@ -2213,13 +2229,17 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 		screen_x = lerpf(float(corridor["left_x"]), float(corridor["right_x"]), screen_ratio_x)   # Place actor X between the projected corridor walls.
 	else:                                                                                      # Use the measured side-entry band when the actor is past a hallway side edge.
 		var side_projection := _side_entry_projection_at_view_depth(view_depth, signf(view_side)) # Sample the mirrored side-entry floor wedge.
-		var side_travel := clampf((absf(view_side) - LOCAL_TILE_WORLD_HALF_EXTENT) / 1.0, 0.0, 1.0) # Convert one adjacent side tile into 0..1 side travel.
-		screen_x = lerpf(float(side_projection["inner_x"]), float(side_projection["outer_x"]), side_travel) # Let the actor continue through the side wedge instead of pinning to the wall edge.
-		feet_y = float(side_projection["feet_y"])                                                 # Register side-entry actors to the side floor wedge.
+		var cone_edge_side := _camera_fan_half_width_at_depth(view_depth)                         # Use the visible camera cone edge, not the full side-cell width, as the side-travel end.
+		var side_visible_span := maxf(cone_edge_side - LOCAL_TILE_WORLD_HALF_EXTENT, 0.001)       # Measure the slice of the side square that can appear inside the view cone.
+		var side_travel := (absf(view_side) - LOCAL_TILE_WORLD_HALF_EXTENT) / side_visible_span   # Let side travel continue past 1.0 so actors can run fully offscreen.
+		var corridor_edge_x := float(corridor["right_x"]) if view_side > 0.0 else float(corridor["left_x"]) # Start side handoff exactly on the corridor boundary to avoid a branch pop.
+		screen_x = lerpf(corridor_edge_x, float(side_projection["outer_x"]), side_travel)          # Let the actor move continuously from corridor edge to side-frame edge.
+		feet_y = lerpf(float(corridor["feet_y"]), float(side_projection["feet_y"]), side_travel)   # Blend feet registration from corridor floor to side-entry floor without popping.
 	var actor_height := float(corridor["actor_height"])                                       # Read actor height from the same measured perspective sample as the floor.
 	var screen_y := feet_y - actor_height * 0.5                                                 # Register centered sprites from the selected feet line.
 	var character_layer := _character_layer_for_view_depth(view_depth)                         # Use wall-depth buckets so same-depth side walls do not erase visible actors.
-	return {"screen_x": screen_x, "screen_y": screen_y, "actor_height": actor_height, "z_index": character_layer} # Return the projected screen coordinates, scale input, and character layer.
+	var corridor_width := maxf(float(corridor["right_x"]) - float(corridor["left_x"]), 1.0)    # Measure how many screen pixels represent one visible tile width at this depth.
+	return {"screen_x": screen_x, "screen_y": screen_y, "actor_height": actor_height, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, and character layer.
 
 
 
@@ -2331,47 +2351,41 @@ func _character_layer_for_view_depth(view_depth: float) -> int:                 
 	return int(CHARACTER_LAYER_BY_DEPTH[depth_index])                                        # Return the actor layer for this shared wall/floor perspective depth.
 
 
-# _world_point_visible_from_current_camera: Checks fan bounds and wall occlusion from this player's camera to a target point.
-func _world_point_visible_from_current_camera(target_world: Vector2) -> bool:               # Declare this function.
+# _opponent_camera_side_margin_from_projection: Converts projected sprite width into camera-space fan overlap.
+func _opponent_camera_side_margin_from_projection(projection: Dictionary, sprite_scale: float) -> float: # Declare this function.
+	var projected_half_width := _sprite_texture_width(opponent_sprite) * sprite_scale * 0.5    # Measure half of the currently drawn opponent frame in screen pixels.
+	var corridor_width := maxf(float(projection.get("corridor_width", VIEWPORT_SIZE.x)), 1.0)  # Read the projected one-tile corridor width at the actor's depth.
+	return projected_half_width / corridor_width                                              # Convert the projected half-width into world-side units for cone overlap.
+
+
+
+# _projected_sprite_overlaps_viewport: Checks whether any part of a projected sprite rectangle remains inside the playfield.
+func _projected_sprite_overlaps_viewport(screen_x: float, screen_y: float, sprite: AnimatedSprite2D, sprite_scale: float) -> bool: # Declare this function.
+	var half_width := _sprite_texture_width(sprite) * sprite_scale * 0.5                       # Measure the scaled horizontal sprite half-extents.
+	var half_height := _sprite_texture_height(sprite) * sprite_scale * 0.5                     # Measure the scaled vertical sprite half-extents.
+	if screen_x + half_width < 0.0 or screen_x - half_width > VIEWPORT_SIZE.x:                 # Reject only when the whole sprite is horizontally offscreen.
+		return false                                                                              # Report no visible sprite pixels.
+	if screen_y + half_height < 0.0 or screen_y - half_height > VIEWPORT_SIZE.y:               # Reject only when the whole sprite is vertically offscreen.
+		return false                                                                              # Report no visible sprite pixels.
+	return true                                                                               # Report that at least part of the sprite overlaps the playfield.
+
+
+
+# _world_actor_overlaps_current_camera_fan: Checks whether an actor body overlaps this player's camera fan.
+func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin: float) -> bool: # Declare this function.
 	var origin := _camera_grid_origin()                                                        # Use the same rear-biased camera point as wall visibility.
 	var forward := Vector2(_facing_vector()).normalized()                                      # Use the current player's camera-forward vector.
-	var right := Vector2(-_left_vector()).normalized()                                         # Use the current player's camera-right vector.
 	var relative := target_world - origin                                                      # Measure the target relative to the camera.
 	var depth := relative.dot(forward)                                                         # Compute target depth along camera-forward.
-	var side := relative.dot(right)                                                            # Compute target lateral offset.
-	if depth <= -0.05 or depth > DEBUG_VIEW_CONE_DEPTH + 0.75:                                 # Reject targets behind or beyond the useful straight-view art.
+	if depth <= -0.05 - side_margin or depth > DEBUG_VIEW_CONE_DEPTH + 0.75 + side_margin:     # Reject actors only once their body is behind or beyond the useful straight-view art.
 		return false                                                                              # Report the opponent as not visible.
-	var allowed_side := maxf(0.48, depth * DEBUG_VIEW_CONE_HALF_WIDTH / DEBUG_VIEW_CONE_DEPTH + 0.10) # Compute the cone half-width at this depth.
-	if absf(side) > allowed_side:                                                              # Reject targets outside the current player's view fan.
-		return false                                                                              # Report the opponent as not visible.
-	if _side_wall_occludes_out_of_corridor_target(depth, side):                                # Hide actors during the side-entry handoff when side wall art should cover them.
-		return false                                                                              # Report the opponent as hidden by the side wall.
-	var target_distance := relative.length()                                                    # Store the opponent distance along that ray.
-	if target_distance < 0.001:                                                                 # Treat an actor exactly at the camera point as visible.
-		return true                                                                               # Avoid normalizing a zero-length ray.
-	var ray_direction := relative / target_distance                                             # Build a normalized ray from the camera to the opponent.
-	for edge in _all_physical_wall_edges():                                                    # Check each blocking wall segment for occlusion.
-		var hit_distance := _ray_segment_hit_distance(origin, ray_direction, edge["a"], edge["b"]) # Test whether this wall lies between camera and opponent.
-		if hit_distance >= 0.0 and hit_distance < target_distance - 0.06:                          # Treat nearer wall hits as occluding the opponent.
-			return false                                                                             # Report the opponent as hidden by a wall.
-	return true                                                                               # Report the opponent as visible.
+	return true                                                                               # Let projected sprite/viewport overlap decide lateral edge visibility.
 
 
 
-# _side_wall_occludes_out_of_corridor_target: Hides actors just outside the corridor until their feet cross the side-wall edge.
-func _side_wall_occludes_out_of_corridor_target(depth: float, side: float) -> bool:        # Declare this function.
-	var side_distance := absf(side)                                                           # Measure how far the target is from the camera-center corridor line.
-	if side_distance <= LOCAL_TILE_WORLD_HALF_EXTENT:                                         # Allow targets that have physically crossed into the main corridor.
-		return false                                                                              # Report no side-wall occlusion.
-	if side_distance > LOCAL_TILE_WORLD_HALF_EXTENT + SIDE_ENTRY_OCCLUSION_BAND:              # Allow targets that are clearly inside the side-entry wedge.
-		return false                                                                              # Report no side-wall occlusion.
-	var side_delta := -_left_vector() if side > 0.0 else _left_vector()                        # Pick the corridor edge between the camera lane and the side tile.
-	var max_depth_index := clampi(int(ceil(depth)), 0, int(DEBUG_VIEW_CONE_DEPTH))             # Check side walls from the viewer out through the target depth.
-	for depth_index in range(max_depth_index + 1):                                             # Search each corridor row that could visually cover the side-entry handoff.
-		var corridor_cell := _view_cell(0, depth_index)                                           # Convert this corridor row into a world-grid cell.
-		if _has_wall_edge(corridor_cell, side_delta):                                             # Detect a blocking side wall between the corridor and side tile.
-			return true                                                                              # Report the side-entry actor as occluded by wall art.
-	return false                                                                              # Report no side wall in the handoff path.
+# _camera_fan_half_width_at_depth: Returns the top-down camera cone half-width for one forward depth.
+func _camera_fan_half_width_at_depth(depth: float) -> float:                                # Declare this function.
+	return maxf(0.48, depth * DEBUG_VIEW_CONE_HALF_WIDTH / DEBUG_VIEW_CONE_DEPTH + 0.10)      # Match the existing debug cone half-width calculation.
 
 
 
@@ -2411,6 +2425,17 @@ func _sprite_texture_height(sprite: AnimatedSprite2D) -> float:                 
 	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
 		return 46.0                                                                              # Return the known idle frame height as a fallback.
 	return maxf(float(texture.get_height()), 1.0)                                              # Return the frame height while avoiding division by zero.
+
+
+
+# _sprite_texture_width: Returns one sprite's current frame width with a safe fallback.
+func _sprite_texture_width(sprite: AnimatedSprite2D) -> float:                              # Declare this function.
+	if sprite == null or sprite.sprite_frames == null:                                        # Handle missing sprite resources defensively.
+		return 34.0                                                                              # Return the known idle frame width as a fallback.
+	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)       # Read the current frame texture from this sprite.
+	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
+		return 34.0                                                                              # Return the known idle frame width as a fallback.
+	return maxf(float(texture.get_width()), 1.0)                                               # Return the frame width while avoiding division by zero.
 
 
 
