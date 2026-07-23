@@ -18,8 +18,8 @@ const MOVE_UNITS_PER_SECOND := 0.85                                             
 const HOME_LOCAL_FLOOR_POSITION := Vector2(0.5, 0.68)                                       # Set the resting local position inside a tile.
 const FORWARD_TRIGGER_Y := 0.56                                                             # Set the forward threshold where crossing into the next tile begins.
 const BACKWARD_TRIGGER_Y := 0.84                                                            # Set the backward threshold where crossing into the previous tile begins.
-const STRAFE_LEFT_WALL_CONTACT_X := -0.08                                                   # Set the closest blocked-wall contact position on the viewer's left.
-const STRAFE_RIGHT_WALL_CONTACT_X := 1.08                                                   # Set the closest blocked-wall contact position on the viewer's right.
+const STRAFE_LEFT_WALL_CONTACT_X := 0.0                                                     # Set the left tile-edge contact; camera clipping trims any body pixels beyond the frame.
+const STRAFE_RIGHT_WALL_CONTACT_X := 1.0                                                    # Set the right tile-edge contact; camera clipping trims any body pixels beyond the frame.
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
 const MAP_WIDTH := 4                                                                        # Set the generated test map width in thin-wall cells.
@@ -38,6 +38,20 @@ const FAR_FLOOR_Y := 0.30                                                       
 const NEAR_FLOOR_Y := 0.93                                                                  # Define a fixed value used by the movement, rendering, or asset-loading system.
 const FAR_FLOOR_HALF_WIDTH := 0.16                                                          # Define a fixed value used by the movement, rendering, or asset-loading system.
 const NEAR_FLOOR_HALF_WIDTH := 0.48                                                         # Define a fixed value used by the movement, rendering, or asset-loading system.
+const CORRIDOR_FAR_FLOOR_DEPTH := 0.0                                                         # Set the farthest local floor-depth sample used by the shared corridor trapezoid.
+const FRONT_WALL_HEIGHT_BY_DEPTH := [88.0, 56.0, 36.0, 24.0]                                  # Store measured front-wall pixel heights for depth rows 0..3 from the straight wall art.
+const PERSPECTIVE_CELL_EXTENTS := [                                                          # Store measured per-square trapezoids from the player/opponent square studies.
+	{"near_depth": 0.04, "far_depth": 0.96, "near_left_x": 0.0, "near_right_x": 159.0, "far_left_x": 16.0, "far_right_x": 143.0, "near_feet_y": 119.0, "far_feet_y": 96.0, "near_actor_height": 66.0, "far_actor_height": 43.0}, # Current camera square: measured from the red floor-zone guide in floor zones.png.
+	{"near_depth": 0.96, "far_depth": 1.96, "near_left_x": 18.0, "near_right_x": 141.0, "far_left_x": 40.0, "far_right_x": 119.0, "near_feet_y": 94.0, "far_feet_y": 72.0, "near_actor_height": 43.0, "far_actor_height": 30.0}, # One square away: measured from the yellow floor-zone guide in floor zones.png.
+	{"near_depth": 1.96, "far_depth": 2.96, "near_left_x": 42.0, "near_right_x": 117.0, "far_left_x": 56.0, "far_right_x": 103.0, "near_feet_y": 70.0, "far_feet_y": 56.0, "near_actor_height": 30.0, "far_actor_height": 21.0}, # Two squares away: measured from the green floor-zone guide in floor zones.png.
+	{"near_depth": 2.96, "far_depth": 3.96, "near_left_x": 58.0, "near_right_x": 101.0, "far_left_x": 64.0, "far_right_x": 95.0, "near_feet_y": 54.0, "far_feet_y": 48.0, "near_actor_height": 21.0, "far_actor_height": 14.0}, # Three squares away: measured from the blue floor-zone guide in floor zones.png.
+]                                                                                             # End the measured per-square perspective calibration table.
+const SIDE_PERSPECTIVE_CELL_EXTENTS := [                                                     # Store measured right-side opponent-entry bands from floor zones side.png; left side mirrors these values.
+	{"near_depth": 0.04, "far_depth": 0.96, "near_inner_x": 159.0, "far_inner_x": 145.0, "near_feet_y": 110.0, "far_feet_y": 96.0}, # Current side square: measured from the red right-side zone.
+	{"near_depth": 0.96, "far_depth": 1.96, "near_inner_x": 159.0, "far_inner_x": 121.0, "near_feet_y": 94.0, "far_feet_y": 72.0}, # One square away side entry: measured from the yellow right-side zone.
+	{"near_depth": 1.96, "far_depth": 2.96, "near_inner_x": 159.0, "far_inner_x": 105.0, "near_feet_y": 70.0, "far_feet_y": 56.0}, # Two squares away side entry: measured from the green right-side zone.
+	{"near_depth": 2.96, "far_depth": 3.96, "near_inner_x": 159.0, "far_inner_x": 95.0, "near_feet_y": 54.0, "far_feet_y": 46.0}, # Three squares away side entry: measured from the cyan right-side zone.
+]                                                                                             # End the side-entry perspective calibration table.
 const WALL_EDGE_N := 0                                                                      # Define a fixed value used by the movement, rendering, or asset-loading system.
 const WALL_EDGE_E := 1                                                                      # Define a fixed value used by the movement, rendering, or asset-loading system.
 const WALL_EDGE_S := 2                                                                      # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -52,11 +66,27 @@ const ACTION_MOVE_BACKWARD := "xybots_move_backward"                            
 const ACTION_TURN_LEFT := "xybots_turn_left"                                                # Name the explicit input action for rotating the view left.
 const ACTION_TURN_RIGHT := "xybots_turn_right"                                              # Name the explicit input action for rotating the view right.
 const ACTION_REGENERATE_MAP := "xybots_regenerate_map"                                      # Name the explicit input action for rerolling the debug maze at runtime.
+const ACTION_P2_MOVE_LEFT := "xybots_p2_move_left"                                          # Name the second-player input action for moving camera-left inside the current tile.
+const ACTION_P2_MOVE_RIGHT := "xybots_p2_move_right"                                        # Name the second-player input action for moving camera-right inside the current tile.
+const ACTION_P2_MOVE_FORWARD := "xybots_p2_move_forward"                                    # Name the second-player input action for moving toward the camera-facing edge.
+const ACTION_P2_MOVE_BACKWARD := "xybots_p2_move_backward"                                  # Name the second-player input action for moving away from the camera-facing edge.
+const ACTION_P2_TURN_LEFT := "xybots_p2_turn_left"                                          # Name the second-player input action for rotating the view left.
+const ACTION_P2_TURN_RIGHT := "xybots_p2_turn_right"                                        # Name the second-player input action for rotating the view right.
 const DEBUG_MAP_CELL_SIZE := 24.0                                                           # Set the top-down debug map cell size inside the 160x120 diagnostic panel.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                                    # Center the 4x4 debug maze inside the source-map panel.
 const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
 const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Match the top-down cone width from the Wall_Grid reference image.
 const CAMERA_REAR_OFFSET := 0.46                                                             # Place the cell-locked camera just in front of the rear wall for the current facing.
+const LOCAL_TILE_WORLD_HALF_EXTENT := 0.5                                                    # Convert one normalized in-tile offset into one full square half-width in world-grid units.
+const SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                                # Keep the self-view body scale sampled from visible S0 space, not the camera-plane crop edge.
+const LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                                  # Keep the local feet anchor inside the projected floor-zone polygon.
+const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                                  # Keep the local feet slightly inside the front edge of the projected floor-zone polygon.
+const SIDE_ENTRY_OCCLUSION_BAND := 0.25                                                       # Hide side-entry actors near the corridor edge while side-wall art should still cover them.
+const CHARACTER_NEAREST_LAYER := 96                                                          # Set the closest character draw layer; this is only z-order, not perspective math.
+const LOCAL_CHARACTER_LAYER := 96                                                            # Draw the local body above wall art; the camera clipper handles frame-edge cropping.
+const CHARACTER_LAYER_BY_DEPTH := [96, 74, 56, 32]                                           # Keep actors in front of same-depth side walls but behind nearer wall rows.
+const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
+const LOCAL_REAR_CAMERA_SCALE_BOOST := 0.20                                                   # Enlarge the local body near the camera after cropping hides the lower frame.
 const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
 const VISIBILITY_RAY_COUNT := 91                                                            # Cast enough rays across the view fan to discover side and front wall edges.
 const VISIBILITY_RAY_HALF_ANGLE_DEGREES := rad_to_deg(atan(DEBUG_VIEW_CONE_HALF_WIDTH / DEBUG_VIEW_CONE_DEPTH)) # Match ray casting to the Wall_Grid cone shape.
@@ -153,6 +183,7 @@ const STRAIGHT_VISIBILITY_BRANCHES := [                                         
 @export_group("Diagnostics")                                                                # Group inspector toggles for temporary visual debugging tools.
 @export var enable_3d_diagnostic := false                                                    # Keep the experimental 3D view disabled unless it is explicitly needed.
 @export var show_top_down_source_overlay := true                                             # Show the 2D source-of-truth map overlay during wall/collision debugging.
+@export var show_perspective_extents_overlay := true                                         # Show colored projected square extents over each 160x120 player view.
 
 @export_group("3D Diagnostic Camera")                                                       # Group the editable 3D diagnostic camera controls in the Godot inspector.
 @export_range(45.0, 110.0, 1.0) var diagnostic_3d_camera_fov := 78.0                         # Let the user tune the 3D diagnostic camera field of view.
@@ -167,6 +198,7 @@ const STRAIGHT_VISIBILITY_BRANCHES := [                                         
 @onready var status_label: Label = $CanvasLayer/StatusLabel                                 # Cache the debug text label.
 @onready var canvas_layer: CanvasLayer = $CanvasLayer                                       # Cache the overlay layer used for debug UI.
 
+var maze_content: Node2D                                                                     # Store the clipped 160x120 content root inside the currently bound player view.
 var phase_textures: Dictionary = {}                                                         # Store loaded full-frame transition texture sequences by sequence name.
 var stable_textures: Dictionary = {}                                                        # Store old stable full-frame fallback textures by view name.
 var slot_textures: Dictionary = {}                                                          # Store old coarse slot fallback textures by view name and slot name.
@@ -177,7 +209,9 @@ var straight_wall_label_nodes: Dictionary = {}                                  
 var floor_texture: Texture2D                                                                # Store the loaded floor texture strip.
 var floor_sprite: Sprite2D                                                                  # Store the base floor Sprite2D used by the straight renderer.
 var environment_layer: Node2D                                                               # Store the parent node for all composited environment sprites.
+var perspective_extents_overlay: Node2D                                                     # Store the projected-square debug overlay for the currently bound player view.
 var debug_map_overlay: Node2D                                                               # Store the top-down debug line map drawn over the game view.
+var opponent_sprite: AnimatedSprite2D                                                       # Store the currently bound sprite used to show the other local player.
 var diagnostic_3d_viewport: SubViewport                                                     # Store the low-resolution 3D diagnostic renderer.
 var diagnostic_3d_display: Sprite2D                                                         # Store the 2D sprite that displays the 3D diagnostic viewport texture.
 var diagnostic_3d_world_root: Node3D                                                        # Store the generated 3D hallway root.
@@ -196,6 +230,9 @@ var local_floor_position := HOME_LOCAL_FLOOR_POSITION                           
 var run_dir := DIR_N                                                                        # Track the body movement direction used for animation selection.
 var aim_dir := DIR_N                                                                        # Track the aiming direction used for animation selection.
 var last_animation: StringName = &""                                                        # Remember the last animation to avoid restarting it every frame.
+var character_is_moving := false                                                            # Track whether the bound player is actively moving this frame.
+var world_run_dir := DIR_N                                                                  # Track this player's movement direction in shared world space for opponent rendering.
+var world_aim_dir := DIR_N                                                                  # Track this player's aim direction in shared world space for opponent rendering.
 var available_animations: Dictionary = {}                                                   # Store animation-name lookups for exact and fallback animation selection.
 var pending_grid_delta := Vector2i.ZERO                                                     # Store the cell movement that will be applied after a transition finishes.
 var last_blocked_direction := ""                                                            # Store the most recent blocked movement label for debug display.
@@ -205,6 +242,9 @@ var was_left_turn_pressed := false                                              
 var was_right_turn_pressed := false                                                         # Track previous-frame right turn input so snapped turns only fire once per press.
 var was_regenerate_map_pressed := false                                                      # Track previous-frame map-regenerate input so it fires once per key press.
 var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
+var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
+var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
+var player_views: Array[Dictionary] = []                                                     # Store per-player playfield, map, wall, and sprite node references.
 
 
 
@@ -217,16 +257,12 @@ func _ready() -> void:                                                          
 	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
 	_load_straight_wall_textures()                                                             # Call a helper function as part of the current controller step.
 	_setup_viewport()                                                                          # Call a helper function as part of the current controller step.
-	_setup_environment_layer()                                                                 # Call a helper function as part of the current controller step.
+	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
+	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
+	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
 	if enable_3d_diagnostic:                                                                   # Only create the deprecated 3D diagnostic when explicitly requested.
 		_setup_3d_diagnostic()                                                                    # Create the side-by-side 3D map diagnostic view.
-	_setup_debug_map_overlay()                                                                 # Create the top-down debug map overlay above the game view.
-	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
-	_show_stable()                                                                             # Call a helper function as part of the current controller step.
-	_position_player()                                                                         # Call a helper function as part of the current controller step.
-	if enable_3d_diagnostic:                                                                   # Only sync the deprecated 3D diagnostic when it exists.
-		_update_3d_diagnostic()                                                                   # Sync the 3D diagnostic view to the starting player state.
-	_play_best_animation(false)                                                                # Call a helper function as part of the current controller step.
+	_render_all_player_views()                                                                 # Draw both starting screens and both debug maps.
 	_update_status()                                                                           # Call a helper function as part of the current controller step.
 
 
@@ -240,49 +276,266 @@ func _input(event: InputEvent) -> void:                                         
 
 
 
+# _setup_local_multiplayer: Creates player two's view nodes and initializes two independent local player states.
+func _setup_local_multiplayer() -> void:                                                    # Declare this function.
+	var player_one_opponent := _create_character_sprite("OpponentSprite")                       # Create player one's sprite used for seeing player two.
+	maze_content.add_child(player_one_opponent)                                                 # Put the opponent sprite into player one's clipped camera content.
+	var player_two_viewport := Node2D.new()                                                     # Create a second cropped playfield container for player two.
+	player_two_viewport.name = "MazeViewportP2"                                                 # Name the player-two view for scene-tree inspection.
+	add_child(player_two_viewport)                                                              # Attach player two's screen to the main scene.
+	var player_two_content := _ensure_viewport_clipper(player_two_viewport)                     # Give player two the same 160x120 camera clipper.
+	var player_two_playfield := Sprite2D.new()                                                   # Create player two's transition-frame sprite.
+	player_two_playfield.name = "Playfield"                                                     # Match player one's child naming convention.
+	player_two_playfield.centered = false                                                       # Anchor player two's playfield from its top-left corner.
+	player_two_playfield.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                     # Preserve the cropped pixel art.
+	player_two_content.add_child(player_two_playfield)                                          # Add the playfield to player two's clipped camera content.
+	var player_two_sprite := _create_character_sprite("PlayerSprite")                           # Create player two's own character sprite.
+	player_two_content.add_child(player_two_sprite)                                             # Add player two's self sprite to the clipped camera content.
+	var player_two_opponent := _create_character_sprite("OpponentSprite")                       # Create player two's sprite used for seeing player one.
+	player_two_content.add_child(player_two_opponent)                                           # Add player two's opponent sprite to the clipped camera content.
+	player_views = [                                                                            # Store view-node bundles for each local player.
+		{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": player_one_opponent}, # Store player one's existing view nodes.
+		{"maze_viewport": player_two_viewport, "maze_content": player_two_content, "playfield": player_two_playfield, "player_sprite": player_two_sprite, "opponent_sprite": player_two_opponent}, # Store player two's new view nodes.
+	]                                                                                           # Close the local-player view list.
+	player_states = [                                                                           # Create initial player-state records for both local players.
+		_make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0),                                    # Start player one in the southwest corner facing north.
+		_make_player_state(1, Vector2i(MAP_WIDTH - 1, 0), 2),                                     # Start player two in the northeast corner facing south.
+	]                                                                                           # Close the local-player state list.
+	_bind_player_context(0)                                                                     # Bind player one back into the legacy globals after setup.
+
+
+
+# _create_character_sprite: Builds a character AnimatedSprite2D with duplicated frames for a local player or opponent.
+func _create_character_sprite(sprite_name: String) -> AnimatedSprite2D:                    # Declare this function.
+	var sprite := AnimatedSprite2D.new()                                                       # Create a fresh animated character sprite.
+	sprite.name = sprite_name                                                                   # Name the sprite for scene-tree inspection.
+	sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                          # Give this sprite its own copy of the loaded player animations.
+	sprite.centered = true                                                                      # Register the sprite from its center like the original player node.
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                  # Preserve the source sprite pixels when scaled.
+	sprite.z_index = 10 if sprite_name == "PlayerSprite" else 9                                 # Give characters a default layer before runtime depth sorting.
+	sprite.visible = sprite_name == "PlayerSprite"                                             # Hide opponent sprites until another player is actually visible.
+	return sprite                                                                               # Return the configured character sprite.
+
+
+
+# _make_player_state: Builds one serializable local player state dictionary.
+func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: int) -> Dictionary: # Declare this function.
+	return {                                                                                    # Return a complete player-state record.
+		"player_index": player_index,                                                             # Store this player's local index.
+		"active_sequence": [],                                                                     # Store any currently playing captured transition frames.
+		"active_sequence_name": "idle",                                                            # Store the current transition or idle label.
+		"phase_index": 0,                                                                          # Store the current transition frame index.
+		"phase_timer": 0.0,                                                                        # Store elapsed time inside the current transition frame.
+		"is_transitioning": false,                                                                 # Store whether this player is in a captured transition.
+		"facing": start_facing,                                                                    # Store this player's camera direction.
+		"grid_position": start_cell,                                                               # Store this player's source-map cell.
+		"local_floor_position": HOME_LOCAL_FLOOR_POSITION,                                        # Store this player's position inside the current cell.
+		"run_dir": DIR_N,                                                                          # Store this player's current body movement animation direction.
+		"aim_dir": DIR_N,                                                                          # Store this player's current aim animation direction.
+		"last_animation": &"",                                                                     # Store this player's last animation name.
+		"character_is_moving": false,                                                              # Store whether this player is actively running this frame.
+		"world_run_dir": _direction_string_for_facing(start_facing),                                # Store this player's shared-world movement direction.
+		"world_aim_dir": _direction_string_for_facing(start_facing),                                # Store this player's shared-world aim direction.
+		"pending_grid_delta": Vector2i.ZERO,                                                       # Store any pending cell-crossing movement.
+		"last_blocked_direction": "",                                                             # Store this player's most recent blocked edge.
+		"last_visible_wall_ids": [],                                                               # Store this player's currently rendered wall ids.
+		"was_left_turn_pressed": false,                                                            # Store this player's left-turn one-shot latch.
+		"was_right_turn_pressed": false,                                                           # Store this player's right-turn one-shot latch.
+	}                                                                                           # Close the player-state dictionary.
+
+
+
+# _setup_all_player_renderers: Creates separate environment and map overlays for every local player view.
+func _setup_all_player_renderers() -> void:                                                # Declare this function.
+	for player_index in range(player_views.size()):                                           # Visit each local player's view bundle.
+		_bind_player_context(player_index)                                                       # Bind this player's view and state before creating renderer nodes.
+		slot_nodes = {}                                                                           # Give this player a separate legacy slot-node dictionary.
+		straight_wall_nodes = {}                                                                  # Give this player a separate straight-wall-node dictionary.
+		straight_wall_label_nodes = {}                                                            # Give this player a separate wall-label-node dictionary.
+		_setup_environment_layer()                                                                # Build this player's independent environment sprite stack.
+		_setup_perspective_extents_overlay()                                                      # Build this player's projected-square debug overlay.
+		_setup_debug_map_overlay()                                                                # Build this player's independent top-down source map.
+		_store_bound_view_nodes(player_index)                                                     # Save the renderer nodes back into the player's view bundle.
+		_save_player_context(player_index)                                                        # Save any state touched during renderer setup.
+	_bind_player_context(0)                                                                     # Leave player one bound after setup for editor inspection.
+
+
+
+# _store_bound_view_nodes: Saves the currently bound renderer and overlay nodes into one player's view bundle.
+func _store_bound_view_nodes(player_index: int) -> void:                                  # Declare this function.
+	var view := player_views[player_index]                                                     # Read this player's view bundle.
+	view["environment_layer"] = environment_layer                                              # Store this player's environment renderer node.
+	view["maze_content"] = maze_content                                                        # Store this player's clipped camera content root.
+	view["floor_sprite"] = floor_sprite                                                        # Store this player's floor sprite.
+	view["slot_nodes"] = slot_nodes                                                            # Store this player's legacy slot sprites.
+	view["straight_wall_nodes"] = straight_wall_nodes                                          # Store this player's numbered wall sprites.
+	view["straight_wall_label_nodes"] = straight_wall_label_nodes                              # Store this player's numbered wall debug labels.
+	view["perspective_extents_overlay"] = perspective_extents_overlay                          # Store this player's projected-square debug overlay.
+	view["debug_map_overlay"] = debug_map_overlay                                              # Store this player's top-down debug map overlay.
+	player_views[player_index] = view                                                          # Write the updated view bundle back into the array.
+
+
+
+# _bind_player_context: Loads one player's state and view nodes into the existing single-player globals.
+func _bind_player_context(player_index: int) -> void:                                     # Declare this function.
+	active_player_index = player_index                                                        # Remember which player the shared helpers are currently serving.
+	var view: Dictionary = player_views[player_index] if player_index < player_views.size() else {} # Read the player's view-node bundle.
+	maze_viewport = view.get("maze_viewport", maze_viewport)                                  # Bind the cropped playfield container.
+	maze_content = view.get("maze_content", maze_content)                                     # Bind the clipped 160x120 camera content root.
+	playfield = view.get("playfield", playfield)                                               # Bind the transition-frame sprite.
+	player_sprite = view.get("player_sprite", player_sprite)                                   # Bind this player's character sprite.
+	opponent_sprite = view.get("opponent_sprite", opponent_sprite)                             # Bind this player's opponent sprite.
+	environment_layer = view.get("environment_layer", environment_layer)                       # Bind this player's environment renderer.
+	floor_sprite = view.get("floor_sprite", floor_sprite)                                      # Bind this player's floor sprite.
+	slot_nodes = view.get("slot_nodes", slot_nodes)                                            # Bind this player's legacy slot nodes.
+	straight_wall_nodes = view.get("straight_wall_nodes", straight_wall_nodes)                 # Bind this player's numbered wall nodes.
+	straight_wall_label_nodes = view.get("straight_wall_label_nodes", straight_wall_label_nodes) # Bind this player's wall-label nodes.
+	perspective_extents_overlay = view.get("perspective_extents_overlay", perspective_extents_overlay) # Bind this player's projected-square debug overlay.
+	debug_map_overlay = view.get("debug_map_overlay", debug_map_overlay)                       # Bind this player's top-down source map.
+	if player_index >= player_states.size():                                                   # Skip state loading if setup has not created states yet.
+		return                                                                                    # Return with only view nodes bound.
+	var state: Dictionary = player_states[player_index]                                        # Read this player's movement-state bundle.
+	active_sequence = _texture_sequence_from_state(state.get("active_sequence", []))            # Restore this player's transition frame list.
+	active_sequence_name = String(state.get("active_sequence_name", "idle"))                    # Restore this player's transition label.
+	phase_index = int(state.get("phase_index", 0))                                             # Restore this player's transition frame index.
+	phase_timer = float(state.get("phase_timer", 0.0))                                         # Restore this player's transition timer.
+	is_transitioning = bool(state.get("is_transitioning", false))                              # Restore whether this player is in a captured transition.
+	facing = int(state.get("facing", 0))                                                        # Restore this player's facing.
+	grid_position = state.get("grid_position", Vector2i.ZERO)                                  # Restore this player's current map cell.
+	local_floor_position = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)        # Restore this player's local cell position.
+	run_dir = String(state.get("run_dir", DIR_N))                                              # Restore this player's run animation direction.
+	aim_dir = String(state.get("aim_dir", DIR_N))                                              # Restore this player's aim animation direction.
+	last_animation = state.get("last_animation", &"")                                          # Restore this player's last animation name.
+	character_is_moving = bool(state.get("character_is_moving", false))                        # Restore whether this player is actively running.
+	world_run_dir = String(state.get("world_run_dir", _direction_string_for_facing(facing)))    # Restore this player's world movement direction.
+	world_aim_dir = String(state.get("world_aim_dir", _direction_string_for_facing(facing)))    # Restore this player's world aim direction.
+	pending_grid_delta = state.get("pending_grid_delta", Vector2i.ZERO)                        # Restore this player's pending cell crossing.
+	last_blocked_direction = String(state.get("last_blocked_direction", ""))                    # Restore this player's blocked-edge label.
+	was_left_turn_pressed = bool(state.get("was_left_turn_pressed", false))                    # Restore this player's left-turn input latch.
+	was_right_turn_pressed = bool(state.get("was_right_turn_pressed", false))                  # Restore this player's right-turn input latch.
+	last_visible_wall_ids.clear()                                                              # Clear this player's visible-wall debug list before restoring it.
+	for wall_id in state.get("last_visible_wall_ids", []):                                     # Copy wall ids out of the saved state.
+		last_visible_wall_ids.append(int(wall_id))                                                # Restore one visible-wall id.
+
+
+
+# _save_player_context: Stores the currently bound legacy globals back into one local player state.
+func _save_player_context(player_index: int) -> void:                                     # Declare this function.
+	if player_index >= player_states.size():                                                   # Guard against saving before states exist.
+		return                                                                                    # Return without changing player state.
+	var state: Dictionary = player_states[player_index]                                        # Read this player's existing state dictionary.
+	state["active_sequence"] = active_sequence.duplicate()                                     # Save this player's transition sequence.
+	state["active_sequence_name"] = active_sequence_name                                       # Save this player's transition label.
+	state["phase_index"] = phase_index                                                         # Save this player's transition frame index.
+	state["phase_timer"] = phase_timer                                                         # Save this player's transition timer.
+	state["is_transitioning"] = is_transitioning                                               # Save this player's transition flag.
+	state["facing"] = facing                                                                    # Save this player's facing.
+	state["grid_position"] = grid_position                                                     # Save this player's map cell.
+	state["local_floor_position"] = local_floor_position                                       # Save this player's local cell position.
+	state["run_dir"] = run_dir                                                                  # Save this player's run animation direction.
+	state["aim_dir"] = aim_dir                                                                  # Save this player's aim animation direction.
+	state["last_animation"] = last_animation                                                   # Save this player's last animation name.
+	state["character_is_moving"] = character_is_moving                                         # Save whether this player is actively running.
+	state["world_run_dir"] = world_run_dir                                                     # Save this player's world movement direction for other views.
+	state["world_aim_dir"] = world_aim_dir                                                     # Save this player's world aim direction for other views.
+	state["pending_grid_delta"] = pending_grid_delta                                           # Save this player's pending cell crossing.
+	state["last_blocked_direction"] = last_blocked_direction                                   # Save this player's blocked-edge label.
+	state["last_visible_wall_ids"] = last_visible_wall_ids.duplicate()                         # Save this player's visible-wall debug ids.
+	state["was_left_turn_pressed"] = was_left_turn_pressed                                     # Save this player's left-turn input latch.
+	state["was_right_turn_pressed"] = was_right_turn_pressed                                   # Save this player's right-turn input latch.
+	player_states[player_index] = state                                                        # Write this player's state back into the array.
+
+
+
+# _texture_sequence_from_state: Converts a saved untyped array back into the typed transition frame list.
+func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:                    # Declare this function.
+	var sequence: Array[Texture2D] = []                                                        # Create a typed transition sequence result.
+	if value is Array:                                                                          # Only copy values from array-like state.
+		for item in value:                                                                         # Visit each saved sequence item.
+			if item is Texture2D:                                                                     # Keep only actual transition textures.
+				sequence.append(item)                                                                 # Add this transition texture to the typed result.
+	return sequence                                                                             # Return the typed transition sequence.
+
+
+
+# _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
+func _process_player_context(delta: float) -> void:                                      # Declare this function.
+	if is_transitioning:                                                                       # Advance captured transition playback for this player if enabled.
+		_advance_transition(delta)                                                                # Move this player's transition to the next frame when needed.
+		return                                                                                    # Return after transition processing.
+	var turn_direction := _read_turn()                                                         # Read this player's one-shot turn input.
+	if turn_direction < 0:                                                                     # Handle a left turn request.
+		_request_transition("turn_left")                                                           # Snap or animate this player's left turn.
+		return                                                                                    # Return after turn processing.
+	if turn_direction > 0:                                                                     # Handle a right turn request.
+		_request_transition("turn_right")                                                          # Snap or animate this player's right turn.
+		return                                                                                    # Return after turn processing.
+	var movement := _read_movement()                                                           # Read this player's local movement input.
+	if movement != Vector2.ZERO:                                                               # Choose moving animation and move through the current cell.
+		run_dir = _movement_to_first_player_run_dir(movement)                                     # Select the visible body-run direction for this local view.
+		aim_dir = DIR_N                                                                           # Keep this player's aim locked camera-forward in their own view.
+		character_is_moving = true                                                                # Mark this player as moving so opponents can play run animations.
+		world_run_dir = _world_movement_dir_for_local_movement(movement, facing)                  # Convert local movement into shared-world direction for other players.
+		world_aim_dir = _direction_string_for_facing(facing)                                      # Store the camera-facing aim direction in shared-world space.
+		_play_best_animation(true)                                                                # Start or maintain the moving animation.
+		_move_inside_tile(movement, delta)                                                        # Apply local movement and wall/crossing checks.
+	else:                                                                                      # Handle no movement input.
+		run_dir = DIR_N                                                                           # Reset the visible body direction to camera-forward idle.
+		aim_dir = DIR_N                                                                           # Keep aim camera-forward while idle.
+		character_is_moving = false                                                               # Mark this player as idle for opponent first-frame fallback.
+		world_run_dir = _direction_string_for_facing(facing)                                      # Use facing as the idle body direction until idle variants exist.
+		world_aim_dir = _direction_string_for_facing(facing)                                      # Store the camera-facing aim direction in shared-world space.
+		_play_best_animation(false)                                                               # Play the best idle animation.
+
+
+
+# _render_bound_player_context: Redraws the currently bound player's wall view, self sprite, opponent sprite, and map.
+func _render_bound_player_context() -> void:                                              # Declare this function.
+	if is_transitioning:                                                                       # Keep captured transition frames visible when a transition is playing.
+		_position_player()                                                                        # Keep the player sprite registered over the transition frame.
+	else:                                                                                      # Render a stable wall-sprite scene when no transition is playing.
+		_show_stable()                                                                            # Compose the floor and visible wall sprites for this player's view.
+		_position_player()                                                                        # Project this player's local cell position into the playfield.
+	_position_opponent_sprite()                                                               # Project the other local player into this player's screen when visible.
+	_update_perspective_extents_overlay()                                                     # Redraw the projected-square extents over this player's camera view.
+	_update_debug_map_overlay()                                                               # Redraw this player's top-down map with the shared maze and both players.
+	if enable_3d_diagnostic and active_player_index == 0:                                     # Keep deprecated 3D diagnostics tied to player one only.
+		_update_3d_diagnostic()                                                                  # Sync the deprecated 3D diagnostic to player one's state.
+
+
+
+# _render_all_player_views: Redraws every local player view after setup or a map reset.
+func _render_all_player_views() -> void:                                                   # Declare this function.
+	for player_index in range(player_states.size()):                                          # Visit each local player.
+		_bind_player_context(player_index)                                                       # Bind that player's view and state.
+		_play_best_animation(false)                                                               # Put the player in the idle animation after a full redraw.
+		_render_bound_player_context()                                                           # Redraw that player's view and map.
+		_save_player_context(player_index)                                                       # Store any renderer-updated debug ids.
+	_bind_player_context(0)                                                                    # Leave player one bound after the all-player redraw.
+
+
+
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
-	_update_debug_map_overlay()                                                                # Keep the top-down debug map aligned with the scaled playfield.
-
-	if is_transitioning:                                                                       # Run the following block only when this condition is true.
-		_advance_transition(delta)                                                                # Call a helper function as part of the current controller step.
-		_position_player()                                                                        # Call a helper function as part of the current controller step.
-		if enable_3d_diagnostic:                                                                  # Only sync the deprecated 3D diagnostic when it is enabled.
-			_update_3d_diagnostic()                                                                  # Keep the 3D diagnostic camera and cube aligned during transition playback.
-		return                                                                                    # Return to the caller without producing a value.
-
-	var turn_direction := _read_turn()                                                         # Store mutable runtime state for assets, rendering, movement, or debug output.
 	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
-	if turn_direction < 0:                                                                     # Run the following block only when this condition is true.
-		_request_transition("turn_left")                                                           # Turn left through a captured phase or immediate snap.
-		return                                                                                    # Return to the caller without producing a value.
-	if turn_direction > 0:                                                                     # Run the following block only when this condition is true.
-		_request_transition("turn_right")                                                          # Turn right through a captured phase or immediate snap.
-		return                                                                                    # Return to the caller without producing a value.
-
-	var movement := _read_movement()                                                           # Store mutable runtime state for assets, rendering, movement, or debug output.
-	if movement != Vector2.ZERO:                                                               # Run the following block only when this condition is true.
-		run_dir = _movement_to_first_player_run_dir(movement)                                     # Compute and store this value for the current step.
-		aim_dir = DIR_N                                                                           # Compute and store this value for the current step.
-		_play_best_animation(true)                                                                # Call a helper function as part of the current controller step.
-		_move_inside_tile(movement, delta)                                                        # Move after choosing the animation so sprite-width collision bounds match the visible frame.
-	else:                                                                                      # Run this fallback branch when previous conditions were not met.
-		run_dir = DIR_N                                                                           # Compute and store this value for the current step.
-		aim_dir = DIR_N                                                                           # Compute and store this value for the current step.
-		_play_best_animation(false)                                                               # Call a helper function as part of the current controller step.
-
-	_position_player()                                                                         # Call a helper function as part of the current controller step.
-	if enable_3d_diagnostic:                                                                   # Only sync the deprecated 3D diagnostic when it is enabled.
-		_update_3d_diagnostic()                                                                   # Keep the 3D diagnostic camera and cube aligned with the 2D playfield state.
+	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
+		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
+		_process_player_context(delta)                                                           # Run one player's input, movement, turn, and animation logic.
+		_save_player_context(player_index)                                                       # Store this player's updated state before binding the next player.
+	for player_index in range(player_states.size()):                                          # Then render every local view against the completed shared player state.
+		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
+		_render_bound_player_context()                                                           # Redraw that player's 2D view, opponent sprite, and source map.
+		_save_player_context(player_index)                                                       # Store renderer-updated debug values for this player.
 	_update_status()                                                                           # Call a helper function as part of the current controller step.
 
 
 
 # _setup_viewport: Configures nearest-neighbor rendering for the playfield and player, then lays out the cropped viewport.
 func _setup_viewport() -> void:                                                             # Declare this function.
+	maze_content = _ensure_viewport_clipper(maze_viewport)                                    # Give the first player view an actual 160x120 rectangular camera crop.
 	playfield.centered = false                                                                 # Update the captured playfield sprite display.
 	playfield.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                               # Update the captured playfield sprite display.
 	player_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                           # Update player sprite rendering or animation state.
@@ -290,12 +543,35 @@ func _setup_viewport() -> void:                                                 
 
 
 
+# _ensure_viewport_clipper: Creates a 160x120 clipping Control and moves playfield content under it.
+func _ensure_viewport_clipper(view_root: Node2D) -> Node2D:                                  # Declare this function.
+	var existing_content := view_root.get_node_or_null("Clipper/Content")                     # Reuse the clipped content root if this view was already configured.
+	if existing_content is Node2D:                                                            # Detect an existing content root.
+		return existing_content                                                                 # Return it without rebuilding the child tree.
+	var clipper := Control.new()                                                              # Create a rectangular CanvasItem that can clip its children.
+	clipper.name = "Clipper"                                                                  # Name the clipper for scene-tree inspection.
+	clipper.position = Vector2.ZERO                                                           # Align the crop with the playfield origin.
+	clipper.size = VIEWPORT_SIZE                                                              # Match the original 160x120 playfield crop.
+	clipper.clip_contents = true                                                              # Clip children to the camera rectangle instead of using walls as masks.
+	view_root.add_child(clipper)                                                              # Add the clipper to the view root.
+	var content := Node2D.new()                                                               # Create a Node2D content root for the playfield, walls, and characters.
+	content.name = "Content"                                                                  # Name the content root for scene-tree inspection.
+	clipper.add_child(content)                                                                # Place all camera-visible content under the clipper.
+	for child in view_root.get_children():                                                    # Move existing playfield children under the clipped content root.
+		if child == clipper:                                                                    # Do not move the clipper into itself.
+			continue                                                                               # Continue to the next child.
+		view_root.remove_child(child)                                                           # Detach this existing playfield child from the unbounded view root.
+		content.add_child(child)                                                                # Reattach it under the clipped camera content root.
+	return content                                                                             # Return the content node used for later runtime children.
+
+
+
 # _setup_environment_layer: Creates the runtime floor, straight-wall, and legacy slot sprites used to compose the environment.
 func _setup_environment_layer() -> void:                                                    # Declare this function.
 	environment_layer = Node2D.new()                                                           # Compute and store this value for the current step.
 	environment_layer.name = "EnvironmentRenderer"                                             # Update the environment renderer container.
-	environment_layer.z_index = -100                                                           # Keep wall-overlay child z layers behind the player sprite.
-	maze_viewport.add_child(environment_layer)                                                 # Update the cropped playfield container transform.
+	environment_layer.z_index = 0                                                              # Keep wall overlays on the same z scale as opponent sprites for depth sorting.
+	maze_content.add_child(environment_layer)                                                   # Add the environment under the clipped 160x120 camera content root.
 
 	floor_sprite = Sprite2D.new()                                                              # Compute and store this value for the current step.
 	floor_sprite.name = "Floor"                                                                # Update the reusable base floor sprite.
@@ -335,6 +611,127 @@ func _setup_environment_layer() -> void:                                        
 		slot_sprite.visible = false                                                               # Configure or update a legacy slot sprite.
 		environment_layer.add_child(slot_sprite)                                                  # Update the environment renderer container.
 		slot_nodes[slot_name] = slot_sprite                                                       # Compute and store this value for the current step.
+
+
+
+# _setup_perspective_extents_overlay: Creates the per-player 160x120 projected-square debug overlay.
+func _setup_perspective_extents_overlay() -> void:                                         # Declare this function.
+	perspective_extents_overlay = Node2D.new()                                                # Create the overlay root used for projected-square guide geometry.
+	perspective_extents_overlay.name = "DebugPerspectiveCellExtents"                           # Name the overlay so it is easy to find in the scene tree.
+	perspective_extents_overlay.z_index = 150                                                  # Draw this diagnostic above wall and actor art.
+	maze_content.add_child(perspective_extents_overlay)                                        # Attach the overlay inside the clipped camera content.
+	_update_perspective_extents_overlay()                                                      # Draw the initial projected square extents immediately.
+
+
+
+# _update_perspective_extents_overlay: Redraws colored trapezoids for every measured visible square.
+func _update_perspective_extents_overlay() -> void:                                        # Declare this function.
+	if perspective_extents_overlay == null:                                                    # Skip when this player view has no extent overlay.
+		return                                                                                    # Return without drawing anything.
+	perspective_extents_overlay.visible = show_perspective_extents_overlay                     # Apply the inspector toggle to this player's overlay.
+	for child in perspective_extents_overlay.get_children():                                   # Remove the previous frame's guide primitives.
+		child.free()                                                                              # Free this old debug primitive.
+	if not show_perspective_extents_overlay:                                                   # Avoid rebuilding hidden guide geometry.
+		return                                                                                    # Return after clearing stale children.
+	var colors: Array[Color] = [                                                               # Define one readable color per projected square.
+		Color(1.0, 0.15, 0.15, 0.34),                                                            # Use red for the current camera square.
+		Color(1.0, 0.75, 0.0, 0.30),                                                             # Use amber for the next square.
+		Color(0.0, 0.9, 0.35, 0.28),                                                             # Use green for the third square.
+		Color(0.1, 0.55, 1.0, 0.28),                                                             # Use blue for the farthest square.
+	]                                                                                           # Close the color list.
+	for cell_index in range(PERSPECTIVE_CELL_EXTENTS.size()):                                  # Draw each measured projection square.
+		var cell: Dictionary = PERSPECTIVE_CELL_EXTENTS[cell_index]                               # Read this square's near/far projection bounds.
+		var color := colors[cell_index % colors.size()]                                           # Pick this square's debug color.
+		var near_left := Vector2(float(cell["near_left_x"]), float(cell["near_feet_y"]))          # Compute the near-left projected floor corner.
+		var near_right := Vector2(float(cell["near_right_x"]), float(cell["near_feet_y"]))        # Compute the near-right projected floor corner.
+		var far_left := Vector2(float(cell["far_left_x"]), float(cell["far_feet_y"]))             # Compute the far-left projected floor corner.
+		var far_right := Vector2(float(cell["far_right_x"]), float(cell["far_feet_y"]))           # Compute the far-right projected floor corner.
+		_add_perspective_extent_polygon(cell_index, near_left, near_right, far_right, far_left, color) # Draw the translucent square volume footprint.
+		_add_perspective_extent_line(near_left, near_right, Color(color.r, color.g, color.b, 0.95), 1.5) # Draw the near edge.
+		_add_perspective_extent_line(far_left, far_right, Color(color.r, color.g, color.b, 0.95), 1.5) # Draw the far edge.
+		_add_perspective_extent_line(near_left, far_left, Color(color.r, color.g, color.b, 0.85), 1.0) # Draw the left edge.
+		_add_perspective_extent_line(near_right, far_right, Color(color.r, color.g, color.b, 0.85), 1.0) # Draw the right edge.
+		var near_center := (near_left + near_right) * 0.5                                         # Compute the near-edge center for the depth centerline.
+		var far_center := (far_left + far_right) * 0.5                                            # Compute the far-edge center for the depth centerline.
+		_add_perspective_extent_line(near_center, far_center, Color(color.r, color.g, color.b, 0.55), 1.0) # Draw the center depth guide.
+		_add_perspective_actor_height_tick(near_center, float(cell["near_actor_height"]), color)  # Draw the near actor-height measurement.
+		_add_perspective_actor_height_tick(far_center, float(cell["far_actor_height"]), color)    # Draw the far actor-height measurement.
+		_add_perspective_extent_label("S%d" % cell_index, (near_center + far_center) * 0.5, Color(color.r, color.g, color.b, 1.0)) # Label the square.
+	_add_perspective_sprite_bounds(player_sprite, Color(0.0, 0.95, 1.0, 0.95), "P")          # Draw the local player's actual projected sprite bounds and feet point.
+	if opponent_sprite != null and opponent_sprite.visible:                                  # Draw the opponent marker only when this view can currently see the opponent.
+		_add_perspective_sprite_bounds(opponent_sprite, Color(1.0, 0.0, 0.85, 0.95), "O")       # Draw the opponent's projected sprite bounds and feet point.
+
+
+
+# _add_perspective_extent_polygon: Adds a translucent projected-square fill to the camera overlay.
+func _add_perspective_extent_polygon(cell_index: int, near_left: Vector2, near_right: Vector2, far_right: Vector2, far_left: Vector2, color: Color) -> void: # Declare this function.
+	var polygon := Polygon2D.new()                                                            # Create a filled polygon for the square extent.
+	polygon.name = "PerspectiveSquare%dFill" % cell_index                                      # Name the fill by square index.
+	polygon.polygon = PackedVector2Array([near_left, near_right, far_right, far_left])         # Use the near/far edge corners as the trapezoid shape.
+	polygon.color = color                                                                      # Apply the translucent square color.
+	polygon.z_index = 0                                                                        # Draw fills below outline and label children within this overlay.
+	perspective_extents_overlay.add_child(polygon)                                             # Add the fill to the active overlay.
+
+
+
+# _add_perspective_extent_line: Adds one colored line segment to the projected-square overlay.
+func _add_perspective_extent_line(start: Vector2, end: Vector2, color: Color, width: float) -> void: # Declare this function.
+	var line := Line2D.new()                                                                    # Create a line primitive for the square guide.
+	line.points = PackedVector2Array([start, end])                                             # Set the segment endpoints.
+	line.width = width                                                                          # Set the line thickness.
+	line.default_color = color                                                                  # Set the guide color.
+	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                    # Keep the debug line crisp over pixel art.
+	line.z_index = 1                                                                            # Draw outlines above translucent fills.
+	perspective_extents_overlay.add_child(line)                                                 # Add the line to the active overlay.
+
+
+
+# _add_perspective_actor_height_tick: Draws the measured actor height at one square edge center.
+func _add_perspective_actor_height_tick(feet: Vector2, actor_height: float, color: Color) -> void: # Declare this function.
+	var top := feet + Vector2(0.0, -actor_height)                                               # Compute the measured actor top from the feet line.
+	var tick_color := Color(color.r, color.g, color.b, 1.0)                                     # Use an opaque version of the square color for height ticks.
+	_add_perspective_extent_line(top, feet, tick_color, 1.0)                                    # Draw the vertical actor-height sample.
+	_add_perspective_extent_line(top + Vector2(-3.0, 0.0), top + Vector2(3.0, 0.0), tick_color, 1.0) # Mark the measured top of the actor.
+	_add_perspective_extent_line(feet + Vector2(-3.0, 0.0), feet + Vector2(3.0, 0.0), tick_color, 1.0) # Mark the measured feet line.
+
+
+
+# _add_perspective_extent_label: Adds a small square-index label to the projected-square overlay.
+func _add_perspective_extent_label(text: String, position: Vector2, color: Color) -> void:  # Declare this function.
+	var label := Label.new()                                                                   # Create a compact text label for the guide square.
+	label.text = text                                                                           # Set the square label text.
+	label.add_theme_color_override("font_color", color)                                        # Tint the label to match the square color.
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 1.0))             # Add black shadow for readability over wall art.
+	label.add_theme_constant_override("shadow_offset_x", 1)                                    # Offset the shadow one pixel right.
+	label.add_theme_constant_override("shadow_offset_y", 1)                                    # Offset the shadow one pixel down.
+	label.scale = Vector2(0.35, 0.35)                                                          # Keep the label small inside the 160x120 playfield.
+	label.position = position + Vector2(-5.0, -5.0)                                            # Center the label around the guide position.
+	label.z_index = 2                                                                           # Draw labels above fills and outlines.
+	perspective_extents_overlay.add_child(label)                                                # Add the label to the active overlay.
+
+
+
+# _add_perspective_sprite_bounds: Draws the actual projected sprite rectangle and feet point for debugging.
+func _add_perspective_sprite_bounds(sprite: AnimatedSprite2D, color: Color, label_text: String) -> void: # Declare this function.
+	if sprite == null or sprite.sprite_frames == null:                                         # Skip missing or uninitialized sprites.
+		return                                                                                    # Return without drawing sprite diagnostics.
+	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)       # Read the current displayed frame texture.
+	if texture == null:                                                                        # Skip sprites without an active frame.
+		return                                                                                    # Return without drawing sprite diagnostics.
+	var size := Vector2(float(texture.get_width()), float(texture.get_height())) * sprite.scale # Compute the current scaled sprite size in playfield pixels.
+	var half := size * 0.5                                                                      # Compute half-size because AnimatedSprite2D is centered.
+	var top_left := sprite.position - half                                                     # Compute the sprite rectangle top-left.
+	var top_right := sprite.position + Vector2(half.x, -half.y)                                # Compute the sprite rectangle top-right.
+	var bottom_left := sprite.position + Vector2(-half.x, half.y)                              # Compute the sprite rectangle bottom-left.
+	var bottom_right := sprite.position + half                                                 # Compute the sprite rectangle bottom-right.
+	var feet := sprite.position + Vector2(0.0, half.y)                                         # Compute the projected feet point from the centered sprite.
+	_add_perspective_extent_line(top_left, top_right, color, 1.0)                              # Draw the sprite top edge.
+	_add_perspective_extent_line(top_right, bottom_right, color, 1.0)                          # Draw the sprite right edge.
+	_add_perspective_extent_line(bottom_left, bottom_right, color, 1.0)                        # Draw the sprite bottom edge.
+	_add_perspective_extent_line(top_left, bottom_left, color, 1.0)                            # Draw the sprite left edge.
+	_add_perspective_extent_line(feet + Vector2(-3.0, 0.0), feet + Vector2(3.0, 0.0), color, 1.0) # Draw the horizontal feet crossbar.
+	_add_perspective_extent_line(feet + Vector2(0.0, -3.0), feet + Vector2(0.0, 3.0), color, 1.0) # Draw the vertical feet crossbar.
+	_add_perspective_extent_label(label_text, feet + Vector2(4.0, -6.0), color)                # Label the sprite bounds marker.
 
 
 
@@ -533,28 +930,28 @@ func _make_3d_material(color: Color) -> StandardMaterial3D:                     
 # _layout_viewport: Scales and centers the 160x120 playfield crop inside the current Godot window.
 func _layout_viewport() -> void:                                                            # Declare this function.
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var panel_count := 1                                                                       # Start with the main 2D playfield panel.
-	if show_top_down_source_overlay and debug_map_overlay != null:                             # Reserve a side panel for the enlarged source-of-truth map.
-		panel_count += 1                                                                          # Count the top-down map panel in the side-by-side layout.
-	if enable_3d_diagnostic and diagnostic_3d_display != null:                                 # Reserve an extra panel only while the deprecated 3D diagnostic is active.
-		panel_count += 1                                                                          # Count the optional 3D diagnostic panel after the map.
-	var combined_size := Vector2(VIEWPORT_SIZE.x * float(panel_count) + SIDE_BY_SIDE_GUTTER * float(panel_count - 1), VIEWPORT_SIZE.y) # Compute the unscaled multi-panel layout size.
-	var view_scale := minf(viewport_size.x / combined_size.x, viewport_size.y / combined_size.y) # Store mutable runtime state for assets, rendering, movement, or debug output.
+	var status_margin := 84.0                                                                  # Reserve screen space for the three-line debug status text.
+	var combined_size := Vector2(VIEWPORT_SIZE.x * 2.0 + SIDE_BY_SIDE_GUTTER, VIEWPORT_SIZE.y * 2.0 + SIDE_BY_SIDE_GUTTER) # Build a two-column, two-row source-pixel layout.
+	var available_size := Vector2(viewport_size.x, maxf(viewport_size.y - status_margin, VIEWPORT_SIZE.y)) # Compute the window area available below the status label.
+	var view_scale := minf(available_size.x / combined_size.x, available_size.y / combined_size.y) # Scale the full four-panel layout uniformly.
 	var scaled_size := combined_size * view_scale                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var layout_origin := (viewport_size - scaled_size) * 0.5                                    # Compute the centered top-left of both playfield panels.
-	maze_viewport.scale = Vector2.ONE * view_scale                                             # Update the cropped playfield container transform.
-	maze_viewport.position = layout_origin                                                     # Update the cropped 2D playfield container transform.
-	var next_panel_x := layout_origin.x + (VIEWPORT_SIZE.x + SIDE_BY_SIDE_GUTTER) * view_scale # Compute the x coordinate for the next right-side diagnostic panel.
-	if debug_map_overlay != null:                                                              # Layout the enlarged top-down map when its node exists.
-		debug_map_overlay.visible = show_top_down_source_overlay                                  # Hide or show the source map based on the inspector toggle.
-		debug_map_overlay.scale = Vector2.ONE * view_scale                                        # Scale the map panel at the same pixel size as the 2D playfield.
-		debug_map_overlay.position = Vector2(next_panel_x, layout_origin.y)                       # Place the map in the first right-side diagnostic panel.
-		if show_top_down_source_overlay:                                                         # Advance the panel cursor only when the source map is visible.
-			next_panel_x += (VIEWPORT_SIZE.x + SIDE_BY_SIDE_GUTTER) * view_scale                     # Move the next optional panel to the right of the map.
+	var layout_origin := Vector2((viewport_size.x - scaled_size.x) * 0.5, status_margin + (available_size.y - scaled_size.y) * 0.5) # Center the four panels below status.
+	for player_index in range(player_views.size()):                                           # Layout each local player's top map and bottom playfield.
+		var view: Dictionary = player_views[player_index]                                        # Read this player's view bundle.
+		var column_x := layout_origin.x + float(player_index) * (VIEWPORT_SIZE.x + SIDE_BY_SIDE_GUTTER) * view_scale # Compute the panel column x coordinate.
+		var map_node: Node2D = view.get("debug_map_overlay", null)                               # Read this player's top-down map node.
+		var view_node: Node2D = view.get("maze_viewport", null)                                  # Read this player's playfield node.
+		if map_node != null:                                                                      # Layout this player's debug map if it exists.
+			map_node.visible = show_top_down_source_overlay                                         # Apply the map visibility toggle.
+			map_node.scale = Vector2.ONE * view_scale                                               # Match the source-pixel scale of the playfield.
+			map_node.position = Vector2(column_x, layout_origin.y)                                  # Place this player's map in the top row.
+		if view_node != null:                                                                     # Layout this player's playfield if it exists.
+			view_node.scale = Vector2.ONE * view_scale                                               # Match the source-pixel scale of the map.
+			view_node.position = Vector2(column_x, layout_origin.y + (VIEWPORT_SIZE.y + SIDE_BY_SIDE_GUTTER) * view_scale) # Place this player's view in the bottom row.
 	if enable_3d_diagnostic and diagnostic_3d_display != null:                                 # Only layout the 3D view after it has been created and enabled.
 		diagnostic_3d_display.scale = Vector2.ONE * view_scale                                    # Scale the 3D viewport texture at the same pixel size as the 2D view.
-		diagnostic_3d_display.position = Vector2(next_panel_x, layout_origin.y)                   # Place the optional 3D panel to the right of the map panel.
-		diagnostic_3d_display.visible = true                                                      # Show the deprecated 3D panel when it is enabled.
+		diagnostic_3d_display.position = layout_origin                                            # Keep the deprecated 3D panel parked on top of the first map when enabled.
+		diagnostic_3d_display.visible = false                                                     # Keep the deprecated 3D panel hidden in the local two-player layout.
 	elif diagnostic_3d_display != null:                                                        # Hide an existing 3D display if the toggle is turned off during a run.
 		diagnostic_3d_display.visible = false                                                     # Keep the deprecated 3D panel out of the default prototype view.
 
@@ -617,6 +1014,7 @@ func _update_debug_map_overlay() -> void:                                       
 	_add_debug_line(player_center, facing_end, player_color, 3.0)                               # Draw the player facing arrow shaft.
 	_add_debug_arrow_head(facing_end, Vector2(_facing_vector()), player_color)                  # Draw the player facing arrow head.
 	_add_debug_player_marker(player_center, player_color)                                      # Draw the player position marker.
+	_add_debug_other_player_markers()                                                          # Draw the other local player on this player's top-down map.
 
 
 
@@ -642,7 +1040,7 @@ func _debug_map_world_position(world_position: Vector2) -> Vector2:             
 func _debug_map_player_position() -> Vector2:                                               # Declare this function.
 	var local_offset := _local_position_to_tile_offset(local_floor_position)                   # Convert art-space position into right/forward tile offset.
 	var world_offset := Vector2(-_left_vector()) * local_offset.x + Vector2(_facing_vector()) * local_offset.y # Rotate the local offset into world grid axes.
-	return _debug_map_cell_center(grid_position) + world_offset * (DEBUG_MAP_CELL_SIZE * 0.42) # Return the overlay coordinate for the true intra-cell player position.
+	return _debug_map_cell_center(grid_position) + world_offset * (DEBUG_MAP_CELL_SIZE * LOCAL_TILE_WORLD_HALF_EXTENT) # Return the overlay coordinate for the true intra-cell player position.
 
 
 
@@ -746,7 +1144,7 @@ func _add_debug_wall_slot_label(position: Vector2, wall_id: int, color: Color) -
 # _add_debug_player_bounds: Draws the current cell's source-of-truth movement/contact footprint.
 func _add_debug_player_bounds(center: Vector2) -> void:                                     # Declare this function.
 	var bounds_color := Color(0.0, 0.95, 1.0, 0.35)                                           # Use translucent cyan for the reachable local-position area.
-	var half_extent := DEBUG_MAP_CELL_SIZE * 0.42                                             # Match the debug player's normalized -1..1 movement span.
+	var half_extent := DEBUG_MAP_CELL_SIZE * LOCAL_TILE_WORLD_HALF_EXTENT                                             # Match the debug player's normalized -1..1 movement span.
 	var top_left := center + Vector2(-half_extent, -half_extent)                              # Compute the top-left of the contact footprint.
 	var top_right := center + Vector2(half_extent, -half_extent)                              # Compute the top-right of the contact footprint.
 	var bottom_left := center + Vector2(-half_extent, half_extent)                            # Compute the bottom-left of the contact footprint.
@@ -796,6 +1194,23 @@ func _add_debug_player_marker(center: Vector2, color: Color) -> void:           
 	])                                                                                          # Close the marker polygon point list.
 	marker.color = color                                                                        # Color the player marker.
 	debug_map_overlay.add_child(marker)                                                         # Add the player marker to the overlay.
+
+
+
+# _add_debug_other_player_markers: Draws the non-bound local player on the currently bound player's source map.
+func _add_debug_other_player_markers() -> void:                                             # Declare this function.
+	var other_color := Color(1.0, 0.0, 0.85, 0.9)                                             # Use magenta so the opponent marker differs from the cyan self marker.
+	for player_index in range(player_states.size()):                                          # Check every known local player.
+		if player_index == active_player_index:                                                  # Skip the player whose map is currently being drawn.
+			continue                                                                                 # Continue to the next player state.
+		var other_state := _effective_player_state(player_index)                                  # Read the newest available state for this other player.
+		if other_state.is_empty():                                                                # Skip missing player state defensively.
+			continue                                                                                 # Continue to the next player state.
+		var other_center := _debug_map_world_position(_player_state_world_position(other_state))    # Convert the other player's physical position to map pixels.
+		var facing_end := other_center + Vector2(_facing_vector_for_index(int(other_state.get("facing", 0)))) * (DEBUG_MAP_CELL_SIZE * 0.26) # Compute the other player's facing arrow tip.
+		_add_debug_line(other_center, facing_end, other_color, 2.0)                                # Draw the other player's facing arrow shaft.
+		_add_debug_arrow_head(facing_end, Vector2(_facing_vector_for_index(int(other_state.get("facing", 0)))), other_color) # Draw the other player's facing arrow head.
+		_add_debug_player_marker(other_center, other_color)                                        # Draw the other player's marker body.
 
 
 
@@ -1516,11 +1931,17 @@ func _slot_z_index(slot_name: String) -> int:                                   
 func _ensure_input_actions() -> void:                                                       # Declare this function.
 	_ensure_key_action(ACTION_MOVE_LEFT, [KEY_A])                                             # Bind A to local strafe-left movement.
 	_ensure_key_action(ACTION_MOVE_RIGHT, [KEY_D])                                            # Bind D to local strafe-right movement.
-	_ensure_key_action(ACTION_MOVE_FORWARD, [KEY_W, KEY_UP])                                  # Bind W and up-arrow to local forward movement.
-	_ensure_key_action(ACTION_MOVE_BACKWARD, [KEY_S, KEY_DOWN])                               # Bind S and down-arrow to local backward movement.
-	_ensure_key_action(ACTION_TURN_LEFT, [KEY_Q, KEY_LEFT])                                   # Bind Q and left-arrow to snapped left turns.
-	_ensure_key_action(ACTION_TURN_RIGHT, [KEY_E, KEY_RIGHT])                                 # Bind E and right-arrow to snapped right turns.
+	_ensure_key_action(ACTION_MOVE_FORWARD, [KEY_W])                                          # Bind W to player-one local forward movement.
+	_ensure_key_action(ACTION_MOVE_BACKWARD, [KEY_S])                                         # Bind S to player-one local backward movement.
+	_ensure_key_action(ACTION_TURN_LEFT, [KEY_Q])                                             # Bind Q to player-one snapped left turns.
+	_ensure_key_action(ACTION_TURN_RIGHT, [KEY_E])                                            # Bind E to player-one snapped right turns.
 	_ensure_key_action(ACTION_REGENERATE_MAP, [KEY_R])                                        # Bind R to runtime maze regeneration.
+	_ensure_key_action(ACTION_P2_MOVE_LEFT, [KEY_KP_4])                                       # Bind numpad 4 to player-two local strafe-left movement.
+	_ensure_key_action(ACTION_P2_MOVE_RIGHT, [KEY_KP_6])                                      # Bind numpad 6 to player-two local strafe-right movement.
+	_ensure_key_action(ACTION_P2_MOVE_FORWARD, [KEY_KP_8])                                    # Bind numpad 8 to player-two local forward movement.
+	_ensure_key_action(ACTION_P2_MOVE_BACKWARD, [KEY_KP_5])                                   # Bind numpad 5 to player-two local backward movement.
+	_ensure_key_action(ACTION_P2_TURN_LEFT, [KEY_KP_7])                                       # Bind numpad 7 to player-two snapped left turns.
+	_ensure_key_action(ACTION_P2_TURN_RIGHT, [KEY_KP_9])                                      # Bind numpad 9 to player-two snapped right turns.
 
 
 
@@ -1555,10 +1976,58 @@ func _is_key_down(keycode: int) -> bool:                                        
 
 
 
+# _is_player_move_left_pressed: Returns whether the currently bound player is holding local-left movement.
+func _is_player_move_left_pressed() -> bool:                                                # Declare this function.
+	if active_player_index == 1:                                                              # Use number keys for player two.
+		return Input.is_action_pressed(ACTION_P2_MOVE_LEFT) or _is_key_down(KEY_KP_4)          # Read player two's local-left input.
+	return Input.is_action_pressed(ACTION_MOVE_LEFT) or _is_key_down(KEY_A)                   # Read player one's local-left input.
+
+
+
+# _is_player_move_right_pressed: Returns whether the currently bound player is holding local-right movement.
+func _is_player_move_right_pressed() -> bool:                                               # Declare this function.
+	if active_player_index == 1:                                                              # Use number keys for player two.
+		return Input.is_action_pressed(ACTION_P2_MOVE_RIGHT) or _is_key_down(KEY_KP_6)         # Read player two's local-right input.
+	return Input.is_action_pressed(ACTION_MOVE_RIGHT) or _is_key_down(KEY_D)                  # Read player one's local-right input.
+
+
+
+# _is_player_move_forward_pressed: Returns whether the currently bound player is holding local-forward movement.
+func _is_player_move_forward_pressed() -> bool:                                             # Declare this function.
+	if active_player_index == 1:                                                              # Use number keys for player two.
+		return Input.is_action_pressed(ACTION_P2_MOVE_FORWARD) or _is_key_down(KEY_KP_8)       # Read player two's local-forward input.
+	return Input.is_action_pressed(ACTION_MOVE_FORWARD) or _is_key_down(KEY_W)                 # Read player one's local-forward input.
+
+
+
+# _is_player_move_backward_pressed: Returns whether the currently bound player is holding local-backward movement.
+func _is_player_move_backward_pressed() -> bool:                                            # Declare this function.
+	if active_player_index == 1:                                                              # Use number keys for player two.
+		return Input.is_action_pressed(ACTION_P2_MOVE_BACKWARD) or _is_key_down(KEY_KP_5)      # Read player two's local-backward input.
+	return Input.is_action_pressed(ACTION_MOVE_BACKWARD) or _is_key_down(KEY_S)                # Read player one's local-backward input.
+
+
+
+# _is_player_turn_left_pressed: Returns whether the currently bound player is pressing a left-turn key.
+func _is_player_turn_left_pressed() -> bool:                                                # Declare this function.
+	if active_player_index == 1:                                                              # Use number keys for player two.
+		return Input.is_action_pressed(ACTION_P2_TURN_LEFT) or _is_key_down(KEY_KP_7)          # Read player two's left-turn input.
+	return Input.is_action_pressed(ACTION_TURN_LEFT) or _is_key_down(KEY_Q)                   # Read player one's left-turn input.
+
+
+
+# _is_player_turn_right_pressed: Returns whether the currently bound player is pressing a right-turn key.
+func _is_player_turn_right_pressed() -> bool:                                               # Declare this function.
+	if active_player_index == 1:                                                              # Use number keys for player two.
+		return Input.is_action_pressed(ACTION_P2_TURN_RIGHT) or _is_key_down(KEY_KP_9)         # Read player two's right-turn input.
+	return Input.is_action_pressed(ACTION_TURN_RIGHT) or _is_key_down(KEY_E)                  # Read player one's right-turn input.
+
+
+
 # _read_turn: Reads Q/E or arrow-key turning input and returns the requested turn direction.
 func _read_turn() -> int:                                                                   # Declare this function.
-	var left_pressed := Input.is_action_pressed(ACTION_TURN_LEFT) or _is_key_down(KEY_Q) or _is_key_down(KEY_LEFT) # Read the current left-turn key state.
-	var right_pressed := Input.is_action_pressed(ACTION_TURN_RIGHT) or _is_key_down(KEY_E) or _is_key_down(KEY_RIGHT) # Read the current right-turn key state.
+	var left_pressed := _is_player_turn_left_pressed()                                        # Read the current left-turn key state for the bound player.
+	var right_pressed := _is_player_turn_right_pressed()                                      # Read the current right-turn key state for the bound player.
 	var left_just_pressed := left_pressed and not was_left_turn_pressed                        # Detect the first frame of a left-turn key press.
 	var right_just_pressed := right_pressed and not was_right_turn_pressed                     # Detect the first frame of a right-turn key press.
 	was_left_turn_pressed = left_pressed                                                      # Store current left-turn state for next frame.
@@ -1583,13 +2052,13 @@ func _read_regenerate_map() -> bool:                                            
 # _read_movement: Reads WASD or arrow movement input and returns a normalized local movement vector.
 func _read_movement() -> Vector2:                                                           # Declare this function.
 	var movement := Vector2.ZERO                                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
-	if Input.is_action_pressed(ACTION_MOVE_LEFT) or _is_key_down(KEY_A):                        # Read the local strafe-left action or A key state.
+	if _is_player_move_left_pressed():                                                         # Read the bound player's local strafe-left input.
 		movement.x -= 1.0                                                                         # Continue the controller logic for this section.
-	if Input.is_action_pressed(ACTION_MOVE_RIGHT) or _is_key_down(KEY_D):                       # Read the local strafe-right action or D key state.
+	if _is_player_move_right_pressed():                                                        # Read the bound player's local strafe-right input.
 		movement.x += 1.0                                                                         # Continue the controller logic for this section.
-	if Input.is_action_pressed(ACTION_MOVE_FORWARD) or _is_key_down(KEY_W) or _is_key_down(KEY_UP): # Read the local forward action or forward key states.
+	if _is_player_move_forward_pressed():                                                      # Read the bound player's local forward input.
 		movement.y -= 1.0                                                                         # Continue the controller logic for this section.
-	if Input.is_action_pressed(ACTION_MOVE_BACKWARD) or _is_key_down(KEY_S) or _is_key_down(KEY_DOWN): # Read the local backward action or backward key states.
+	if _is_player_move_backward_pressed():                                                     # Read the bound player's local backward input.
 		movement.y += 1.0                                                                         # Continue the controller logic for this section.
 	return movement.normalized() if movement != Vector2.ZERO else Vector2.ZERO                 # Return this computed result to the caller.
 
@@ -1650,41 +2119,272 @@ func _try_cross_tile(sequence_name: String, grid_delta: Vector2i, blocked_label:
 # _position_player: Projects the player local tile position into the 160x120 perspective floor trapezoid.
 func _position_player() -> void:                                                            # Declare this function.
 	var depth := clampf(local_floor_position.y, 0.0, 1.0)                                      # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var half_width := lerpf(FAR_FLOOR_HALF_WIDTH, NEAR_FLOOR_HALF_WIDTH, depth)                # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var x_min := 0.5 - half_width                                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var x_max := 0.5 + half_width                                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var screen_x := lerpf(x_min, x_max, local_floor_position.x) * VIEWPORT_SIZE.x              # Project unclamped side movement so wall contact can reach the visible side lines.
-	var screen_y := lerpf(FAR_FLOOR_Y, NEAR_FLOOR_Y, depth) * VIEWPORT_SIZE.y                  # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var sprite_scale := _player_sprite_scale_for_depth(depth)                                  # Compute player scale from depth using the shared registration helper.
-	var half_sprite_height := _current_player_texture_height() * sprite_scale * 0.5            # Store mutable runtime state for assets, rendering, movement, or debug output.
-	screen_y = minf(screen_y, VIEWPORT_SIZE.y - half_sprite_height)                            # Compute and store this value for the current step.
+	var projection := _self_actor_projection_at_local_depth(depth)                              # Sample self-view feet from the true local position and scale from visible S0 space.
+	var screen_ratio_x := _self_screen_side_ratio_for_projection(local_floor_position.x, projection) # Clamp only the rendered feet anchor inside the visible floor polygon.
+	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
+	var actor_height := float(projection["actor_height"])                                      # Read the measured character height for this depth.
+	var sprite_scale := actor_height / _sprite_texture_height(player_sprite)                    # Scale the current frame so its body height matches the measured study.
+	var screen_y := float(projection["feet_y"]) - actor_height * 0.5                            # Register centered sprites from the measured feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
+	player_sprite.z_index = LOCAL_CHARACTER_LAYER                                              # Keep the local body above wall art; the clipped viewport trims anything outside the camera frame.
+
+
+
+# _position_opponent_sprite: Projects the other local player into the currently bound player's 2D screen.
+func _position_opponent_sprite() -> void:                                                   # Declare this function.
+	if opponent_sprite == null:                                                                # Skip when this view has no opponent sprite.
+		return                                                                                    # Return without changing an opponent sprite.
+	var other_state := _first_other_player_state()                                             # Read the other local player's latest state.
+	if other_state.is_empty():                                                                 # Hide the sprite if there is no other player.
+		opponent_sprite.visible = false                                                           # Hide the opponent sprite.
+		return                                                                                    # Return without projecting anything.
+	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
+	if not _world_point_visible_from_current_camera(target_world):                              # Use the same camera fan and wall-ray test for every opponent.
+		opponent_sprite.visible = false                                                           # Hide the opponent when blocked or outside the current view fan.
+		return                                                                                    # Return without projecting anything.
+	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite height is current.
+	var projection := _opponent_projection_from_current_camera(target_world)                    # Project the opponent through the current player's camera model.
+	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
+	var screen_y := float(projection["screen_y"])                                               # Read the projected opponent y coordinate.
+	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
+	var sprite_scale := actor_height / _sprite_texture_height(opponent_sprite)                  # Scale the opponent from the same measured perspective table.
+	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
+	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
+	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
+	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
+	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
+
+
+
+# _first_other_player_state: Returns the first player state that does not belong to the current view.
+func _first_other_player_state() -> Dictionary:                                             # Declare this function.
+	for player_index in range(player_states.size()):                                          # Check all known local player states.
+		if player_index != active_player_index:                                                  # Find the first non-bound player.
+			return _effective_player_state(player_index)                                           # Return the latest state for that other player.
+	return {}                                                                                  # Return no opponent when only one player exists.
+
+
+
+# _effective_player_state: Returns the current globals for the bound player or saved state for other players.
+func _effective_player_state(player_index: int) -> Dictionary:                              # Declare this function.
+	if player_index == active_player_index:                                                   # Build a live state record for the player currently being processed.
+		return {                                                                                  # Return the freshest state from current globals.
+			"player_index": active_player_index,                                                     # Include the current player index.
+			"facing": facing,                                                                        # Include the current facing.
+			"grid_position": grid_position,                                                         # Include the current grid cell.
+			"local_floor_position": local_floor_position,                                           # Include the current local position.
+			"character_is_moving": character_is_moving,                                             # Include whether the current player is running.
+			"world_run_dir": world_run_dir,                                                         # Include the current player's world movement direction.
+			"world_aim_dir": world_aim_dir,                                                         # Include the current player's world aim direction.
+		}                                                                                           # Close the live state dictionary.
+	if player_index >= 0 and player_index < player_states.size():                              # Check that the requested saved player index exists.
+		return player_states[player_index]                                                         # Return the saved player state.
+	return {}                                                                                  # Return an empty state for invalid player indexes.
+
+
+
+# _player_state_world_position: Converts a player's cell and local offset into shared world-grid coordinates.
+func _player_state_world_position(state: Dictionary) -> Vector2:                            # Declare this function.
+	var state_facing := int(state.get("facing", 0))                                            # Read the player's facing for local-offset rotation.
+	var state_cell: Vector2i = state.get("grid_position", Vector2i.ZERO)                       # Read the player's current cell.
+	var state_local: Vector2 = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)    # Read the player's local position inside that cell.
+	var local_offset := _local_position_to_tile_offset(state_local)                            # Convert art-space local position into right/forward tile offsets.
+	var right := Vector2(-_left_vector_for_index(state_facing)).normalized()                   # Compute that player's world-right direction.
+	var forward := Vector2(_facing_vector_for_index(state_facing)).normalized()                # Compute that player's world-forward direction.
+	return Vector2(float(state_cell.x) + 0.5, float(state_cell.y) + 0.5) + right * local_offset.x * LOCAL_TILE_WORLD_HALF_EXTENT + forward * local_offset.y * LOCAL_TILE_WORLD_HALF_EXTENT # Return the world-grid point inside the cell.
+
+
+
+# _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
+func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:         # Declare this function.
+	var origin := _camera_grid_origin()                                                        # Read this player's fixed camera origin.
+	var forward := Vector2(_facing_vector()).normalized()                                      # Read this player's camera-forward vector.
+	var right := Vector2(-_left_vector()).normalized()                                         # Read this player's camera-right vector.
+	var relative := target_world - origin                                                      # Measure the opponent relative to this player's camera.
+	var view_depth := maxf(relative.dot(forward), 0.0)                                         # Compute the actor depth in the same top-down camera space as walls.
+	var view_side := relative.dot(right)                                                       # Compute the actor side offset in the same top-down camera space as walls.
+	var corridor := _corridor_projection_at_view_depth(view_depth)                             # Ask the shared corridor perspective for wall X bounds and floor Y at this depth.
+	var screen_x := 0.0                                                                        # Store the projected opponent x coordinate.
+	var feet_y := float(corridor["feet_y"])                                                    # Start with the main corridor feet line.
+	if absf(view_side) <= LOCAL_TILE_WORLD_HALF_EXTENT:                                       # Use the main corridor projection while the actor is inside the visible hallway span.
+		var side_unit := view_side / LOCAL_TILE_WORLD_HALF_EXTENT                                 # Normalize side position across the physical tile width.
+		var screen_ratio_x := (side_unit + 1.0) * 0.5                                             # Convert normalized side from -1..1 into left-to-right interpolation space.
+		screen_x = lerpf(float(corridor["left_x"]), float(corridor["right_x"]), screen_ratio_x)   # Place actor X between the projected corridor walls.
+	else:                                                                                      # Use the measured side-entry band when the actor is past a hallway side edge.
+		var side_projection := _side_entry_projection_at_view_depth(view_depth, signf(view_side)) # Sample the mirrored side-entry floor wedge.
+		var side_travel := clampf((absf(view_side) - LOCAL_TILE_WORLD_HALF_EXTENT) / 1.0, 0.0, 1.0) # Convert one adjacent side tile into 0..1 side travel.
+		screen_x = lerpf(float(side_projection["inner_x"]), float(side_projection["outer_x"]), side_travel) # Let the actor continue through the side wedge instead of pinning to the wall edge.
+		feet_y = float(side_projection["feet_y"])                                                 # Register side-entry actors to the side floor wedge.
+	var actor_height := float(corridor["actor_height"])                                       # Read actor height from the same measured perspective sample as the floor.
+	var screen_y := feet_y - actor_height * 0.5                                                 # Register centered sprites from the selected feet line.
+	var character_layer := _character_layer_for_view_depth(view_depth)                         # Use wall-depth buckets so same-depth side walls do not erase visible actors.
+	return {"screen_x": screen_x, "screen_y": screen_y, "actor_height": actor_height, "z_index": character_layer} # Return the projected screen coordinates, scale input, and character layer.
+
+
+
+# _side_entry_projection_at_view_depth: Samples a side-entry floor wedge for actors outside the main corridor span.
+func _side_entry_projection_at_view_depth(view_depth: float, side_sign: float) -> Dictionary: # Declare this function.
+	var first_cell: Dictionary = SIDE_PERSPECTIVE_CELL_EXTENTS[0]                              # Read the nearest measured side square.
+	var last_cell: Dictionary = SIDE_PERSPECTIVE_CELL_EXTENTS[SIDE_PERSPECTIVE_CELL_EXTENTS.size() - 1] # Read the farthest measured side square.
+	var clamped_depth := clampf(view_depth, float(first_cell["near_depth"]), float(last_cell["far_depth"])) # Keep side samples inside measured depths.
+	var cell: Dictionary = last_cell                                                           # Default to the farthest side square for edge cases.
+	for cell_index in range(SIDE_PERSPECTIVE_CELL_EXTENTS.size()):                             # Search each measured side square.
+		var candidate: Dictionary = SIDE_PERSPECTIVE_CELL_EXTENTS[cell_index]                     # Read this side square's projection bounds.
+		if clamped_depth >= float(candidate["near_depth"]) and clamped_depth <= float(candidate["far_depth"]): # Find the square containing this depth.
+			cell = candidate                                                                        # Store the active side square.
+			break                                                                                   # Stop once the side square is known.
+	var span := maxf(float(cell["far_depth"]) - float(cell["near_depth"]), 0.001)             # Avoid division by zero on malformed side samples.
+	var blend := clampf((clamped_depth - float(cell["near_depth"])) / span, 0.0, 1.0)         # Compute the actor's forward/back position inside this side square.
+	var right_inner_x := lerpf(float(cell["near_inner_x"]), float(cell["far_inner_x"]), blend) # Interpolate the corridor-side edge of the right-side wedge.
+	var right_outer_x := VIEWPORT_SIZE.x - 1.0                                                 # Use the right frame edge as the outside of the side wedge.
+	var feet_y := lerpf(float(cell["near_feet_y"]), float(cell["far_feet_y"]), blend)          # Interpolate the side wedge feet line.
+	if side_sign < 0.0:                                                                        # Mirror right-side measurements for actors entering from the left.
+		return {"inner_x": VIEWPORT_SIZE.x - 1.0 - right_inner_x, "outer_x": 0.0, "feet_y": feet_y} # Return a left-side wedge sample.
+	return {"inner_x": right_inner_x, "outer_x": right_outer_x, "feet_y": feet_y}              # Return a right-side wedge sample.
+
+
+
+# _corridor_projection_at_view_depth: Returns measured square bounds, feet line, and actor height for one camera-space depth.
+func _corridor_projection_at_view_depth(view_depth: float) -> Dictionary:                  # Declare this function.
+	return _perspective_square_sample_at_view_depth(view_depth)                               # Sample the shared measured square-trapezoid table.
+
+
+
+# _self_actor_projection_at_local_depth: Projects the first-person body while avoiding camera-plane scale blowups.
+func _self_actor_projection_at_local_depth(local_depth: float) -> Dictionary:              # Declare this function.
+	var feet_view_depth := _clamped_self_feet_view_depth(_view_depth_for_local_floor_depth(local_depth)) # Convert the real local position into camera-space depth while keeping rendered feet inside S0.
+	var feet_projection := _corridor_projection_at_view_depth(feet_view_depth)                # Sample the true projected floor location where the player's feet stand.
+	var scale_view_depth := maxf(feet_view_depth, SELF_MIN_ACTOR_SCALE_VIEW_DEPTH)            # Keep self body scale from collapsing to the near-camera edge sample.
+	var scale_projection := _corridor_projection_at_view_depth(scale_view_depth)              # Sample the visible S0 scale row used for the local body height.
+	var projection := feet_projection.duplicate()                                             # Start from the true feet projection so X and feet Y stay in the real square.
+	projection["actor_height"] = float(scale_projection["actor_height"])                      # Replace only actor height with the visible-body scale sample.
+	projection["scale_view_depth"] = scale_view_depth                                         # Expose the self scale depth for debugging if needed.
+	return projection                                                                         # Return the combined self-view projection.
+
+
+
+# _self_screen_side_ratio_for_projection: Keeps local feet visually inside the projected floor while preserving physical tile movement.
+func _self_screen_side_ratio_for_projection(local_x: float, projection: Dictionary) -> float: # Declare this function.
+	var floor_width := maxf(float(projection["right_x"]) - float(projection["left_x"]), 1.0)    # Measure the visible floor span for the feet line.
+	var side_margin := clampf(LOCAL_FEET_FLOOR_MARGIN_PIXELS / floor_width, 0.0, 0.25)          # Convert the pixel foot margin into normalized side padding.
+	return clampf(local_x, side_margin, 1.0 - side_margin)                                      # Clamp the rendered feet anchor while leaving local_floor_position unchanged.
+
+
+
+# _clamped_self_feet_view_depth: Keeps the first-person body feet inside the visible current-square floor zone.
+func _clamped_self_feet_view_depth(view_depth: float) -> float:                            # Declare this function.
+	var first_cell: Dictionary = PERSPECTIVE_CELL_EXTENTS[0]                                  # Read the current camera square calibration.
+	var depth_span := maxf(float(first_cell["far_depth"]) - float(first_cell["near_depth"]), 0.001) # Measure the current square depth span.
+	var feet_span := maxf(absf(float(first_cell["near_feet_y"]) - float(first_cell["far_feet_y"])), 1.0) # Measure the current square feet-line pixel span.
+	var front_margin_depth := depth_span * LOCAL_FEET_DEPTH_MARGIN_PIXELS / feet_span          # Convert the desired front-edge pixel margin into camera-space depth.
+	var max_self_depth := float(first_cell["far_depth"]) - front_margin_depth                  # Stop the rendered self feet just inside the S0 front edge.
+	return minf(view_depth, max_self_depth)                                                    # Return the clamped self-view feet depth.
+
+
+
+# _perspective_square_sample_at_view_depth: Interpolates inside the visible square trapezoid that contains this depth.
+func _perspective_square_sample_at_view_depth(view_depth: float) -> Dictionary:            # Declare this function.
+	var first_cell: Dictionary = PERSPECTIVE_CELL_EXTENTS[0]                                  # Read the nearest measured square.
+	var last_cell: Dictionary = PERSPECTIVE_CELL_EXTENTS[PERSPECTIVE_CELL_EXTENTS.size() - 1] # Read the farthest measured square.
+	var clamped_depth := clampf(view_depth, float(first_cell["near_depth"]), float(last_cell["far_depth"])) # Keep samples inside measured square depths.
+	var cell: Dictionary = last_cell                                                          # Default to the farthest square for edge cases.
+	for cell_index in range(PERSPECTIVE_CELL_EXTENTS.size()):                                 # Search each measured visible square.
+		var candidate: Dictionary = PERSPECTIVE_CELL_EXTENTS[cell_index]                         # Read this square's projection bounds.
+		if clamped_depth >= float(candidate["near_depth"]) and clamped_depth <= float(candidate["far_depth"]): # Find the square containing this depth.
+			cell = candidate                                                                        # Store the active square.
+			break                                                                                   # Stop once the active square is known.
+	var span := maxf(float(cell["far_depth"]) - float(cell["near_depth"]), 0.001)            # Avoid division by zero on malformed square samples.
+	var blend := clampf((clamped_depth - float(cell["near_depth"])) / span, 0.0, 1.0)        # Compute the actor's forward/back position inside this square.
+	return {                                                                                 # Return one interpolated projection sample.
+		"left_x": lerpf(float(cell["near_left_x"]), float(cell["far_left_x"]), blend),           # Interpolate the left boundary of this square from near edge to far edge.
+		"right_x": lerpf(float(cell["near_right_x"]), float(cell["far_right_x"]), blend),        # Interpolate the right boundary of this square from near edge to far edge.
+		"feet_y": lerpf(float(cell["near_feet_y"]), float(cell["far_feet_y"]), blend),           # Interpolate the projected floor/feet line inside this square.
+		"actor_height": lerpf(float(cell["near_actor_height"]), float(cell["far_actor_height"]), blend), # Interpolate actor scale inside this exact square.
+		"depth_t": clampf(clamped_depth / DEBUG_VIEW_CONE_DEPTH, 0.0, 1.0),                      # Return normalized depth for existing callers/debugging.
+		"floor_depth": clamped_depth,                                                            # Preserve the physical camera depth for debug and future tuning.
+		"cell_t": blend,                                                                          # Expose the actor's forward/back interpolation within this square.
+	}                                                                                         # Close the projection sample dictionary.
+
+
+
+# _view_depth_for_local_floor_depth: Converts local art-space y into physical camera-space depth.
+func _view_depth_for_local_floor_depth(local_depth: float) -> float:                       # Declare this function.
+	var forward_offset := _forward_axis_to_signed_unit(local_depth)                           # Convert local y into forward-positive physical tile offset.
+	return CAMERA_REAR_OFFSET + forward_offset * LOCAL_TILE_WORLD_HALF_EXTENT                 # Return the same camera-space depth used by world-space opponent projection.
+
+
+
+# _front_wall_height_at_view_depth: Interpolates measured straight-front wall heights across camera depth.
+func _front_wall_height_at_view_depth(view_depth: float) -> float:                          # Declare this function.
+	var clamped_depth := clampf(view_depth, 0.0, float(FRONT_WALL_HEIGHT_BY_DEPTH.size() - 1)) # Keep depth samples inside the currently measured straight-wall art rows.
+	var lower_index := int(floor(clamped_depth))                                               # Pick the shallower measured wall row.
+	var upper_index := mini(lower_index + 1, FRONT_WALL_HEIGHT_BY_DEPTH.size() - 1)            # Pick the next deeper measured wall row.
+	var blend := clamped_depth - float(lower_index)                                            # Compute interpolation between the two measured rows.
+	return lerpf(float(FRONT_WALL_HEIGHT_BY_DEPTH[lower_index]), float(FRONT_WALL_HEIGHT_BY_DEPTH[upper_index]), blend) # Return the interpolated wall height.
+
+
+
+# _character_layer_for_view_depth: Places actors between wall draw rows using the renderer's depth buckets.
+func _character_layer_for_view_depth(view_depth: float) -> int:                             # Declare this function.
+	var depth_index := clampi(int(floor(maxf(view_depth, 0.0))), 0, CHARACTER_LAYER_BY_DEPTH.size() - 1) # Convert camera depth into the matching wall-art row.
+	return int(CHARACTER_LAYER_BY_DEPTH[depth_index])                                        # Return the actor layer for this shared wall/floor perspective depth.
+
+
+# _world_point_visible_from_current_camera: Checks fan bounds and wall occlusion from this player's camera to a target point.
+func _world_point_visible_from_current_camera(target_world: Vector2) -> bool:               # Declare this function.
+	var origin := _camera_grid_origin()                                                        # Use the same rear-biased camera point as wall visibility.
+	var forward := Vector2(_facing_vector()).normalized()                                      # Use the current player's camera-forward vector.
+	var right := Vector2(-_left_vector()).normalized()                                         # Use the current player's camera-right vector.
+	var relative := target_world - origin                                                      # Measure the target relative to the camera.
+	var depth := relative.dot(forward)                                                         # Compute target depth along camera-forward.
+	var side := relative.dot(right)                                                            # Compute target lateral offset.
+	if depth <= -0.05 or depth > DEBUG_VIEW_CONE_DEPTH + 0.75:                                 # Reject targets behind or beyond the useful straight-view art.
+		return false                                                                              # Report the opponent as not visible.
+	var allowed_side := maxf(0.48, depth * DEBUG_VIEW_CONE_HALF_WIDTH / DEBUG_VIEW_CONE_DEPTH + 0.10) # Compute the cone half-width at this depth.
+	if absf(side) > allowed_side:                                                              # Reject targets outside the current player's view fan.
+		return false                                                                              # Report the opponent as not visible.
+	if _side_wall_occludes_out_of_corridor_target(depth, side):                                # Hide actors during the side-entry handoff when side wall art should cover them.
+		return false                                                                              # Report the opponent as hidden by the side wall.
+	var target_distance := relative.length()                                                    # Store the opponent distance along that ray.
+	if target_distance < 0.001:                                                                 # Treat an actor exactly at the camera point as visible.
+		return true                                                                               # Avoid normalizing a zero-length ray.
+	var ray_direction := relative / target_distance                                             # Build a normalized ray from the camera to the opponent.
+	for edge in _all_physical_wall_edges():                                                    # Check each blocking wall segment for occlusion.
+		var hit_distance := _ray_segment_hit_distance(origin, ray_direction, edge["a"], edge["b"]) # Test whether this wall lies between camera and opponent.
+		if hit_distance >= 0.0 and hit_distance < target_distance - 0.06:                          # Treat nearer wall hits as occluding the opponent.
+			return false                                                                             # Report the opponent as hidden by a wall.
+	return true                                                                               # Report the opponent as visible.
+
+
+
+# _side_wall_occludes_out_of_corridor_target: Hides actors just outside the corridor until their feet cross the side-wall edge.
+func _side_wall_occludes_out_of_corridor_target(depth: float, side: float) -> bool:        # Declare this function.
+	var side_distance := absf(side)                                                           # Measure how far the target is from the camera-center corridor line.
+	if side_distance <= LOCAL_TILE_WORLD_HALF_EXTENT:                                         # Allow targets that have physically crossed into the main corridor.
+		return false                                                                              # Report no side-wall occlusion.
+	if side_distance > LOCAL_TILE_WORLD_HALF_EXTENT + SIDE_ENTRY_OCCLUSION_BAND:              # Allow targets that are clearly inside the side-entry wedge.
+		return false                                                                              # Report no side-wall occlusion.
+	var side_delta := -_left_vector() if side > 0.0 else _left_vector()                        # Pick the corridor edge between the camera lane and the side tile.
+	var max_depth_index := clampi(int(ceil(depth)), 0, int(DEBUG_VIEW_CONE_DEPTH))             # Check side walls from the viewer out through the target depth.
+	for depth_index in range(max_depth_index + 1):                                             # Search each corridor row that could visually cover the side-entry handoff.
+		var corridor_cell := _view_cell(0, depth_index)                                           # Convert this corridor row into a world-grid cell.
+		if _has_wall_edge(corridor_cell, side_delta):                                             # Detect a blocking side wall between the corridor and side tile.
+			return true                                                                              # Report the side-entry actor as occluded by wall art.
+	return false                                                                              # Report no side wall in the handoff path.
 
 
 
 # _side_limits_for_depth: Returns local x limits that keep the player registered inside the visible floor trapezoid at this depth.
-func _side_limits_for_depth(local_depth: float) -> Vector2:                                 # Declare this function.
-	var depth := clampf(local_depth, 0.0, 1.0)                                                 # Clamp depth before using it for projection math.
-	var half_width := lerpf(FAR_FLOOR_HALF_WIDTH, NEAR_FLOOR_HALF_WIDTH, depth)                # Compute the floor trapezoid half-width at this depth.
-	var x_min := 0.5 - half_width                                                              # Compute the left projection boundary at this depth.
-	var x_max := 0.5 + half_width                                                              # Compute the right projection boundary at this depth.
-	var projected_width := maxf(x_max - x_min, 0.001)                                         # Avoid division by zero while converting screen bounds back to local x.
-	var half_sprite_width := _current_player_texture_width() * _player_sprite_scale_for_depth(depth) * 0.5 # Measure half the current frame width after scaling.
-	var sprite_screen_margin := half_sprite_width / VIEWPORT_SIZE.x                            # Convert the sprite half-width into normalized playfield space.
-	var side_line_margin := sprite_screen_margin * 0.25                                        # Use a smaller foot/contact margin for the sloped wall line than for the full sprite crop.
-	var min_screen_ratio := maxf(sprite_screen_margin, x_min + side_line_margin)                # Use the stricter left bound from the screen edge or the corridor wall line.
-	var max_screen_ratio := minf(1.0 - sprite_screen_margin, x_max - side_line_margin)          # Use the stricter right bound from the screen edge or the corridor wall line.
-	return Vector2(                                                                            # Return the local x span that keeps the sprite inside the cropped view.
-		(min_screen_ratio - x_min) / projected_width,                                             # Convert the left screen-safe x back into local tile space.
-		(max_screen_ratio - x_min) / projected_width                                              # Convert the right screen-safe x back into local tile space.
-	)                                                                                         # Close the local side-limit vector.
+func _side_limits_for_depth(_local_depth: float) -> Vector2:                                # Declare this function.
+	return Vector2(STRAFE_LEFT_WALL_CONTACT_X, STRAFE_RIGHT_WALL_CONTACT_X)                    # Keep movement and tile crossing on the real physical tile edges.
 
 
 
 # _player_sprite_scale_for_depth: Returns the character scale used by both projection and movement bounds.
 func _player_sprite_scale_for_depth(depth: float) -> float:                                # Declare this function.
-	return lerpf(0.72, 1.18, clampf(depth, 0.0, 1.0))                                         # Return the depth-scaled player size.
+	var projection := _self_actor_projection_at_local_depth(depth)                              # Sample the same self-body projection used by the renderer.
+	return float(projection["actor_height"]) / maxf(_current_player_texture_height(), 1.0)     # Return the scale needed to match the measured character height.
 
 
 
@@ -1697,12 +2397,20 @@ func _current_player_texture_width() -> float:                                  
 
 
 
-# _current_player_texture_height: Returns the current player frame height so the sprite can be clamped inside the playfield.
+# _current_player_texture_height: Returns the current player frame height for perspective scaling.
 func _current_player_texture_height() -> float:                                             # Declare this function.
-	var texture := player_sprite.sprite_frames.get_frame_texture(player_sprite.animation, player_sprite.frame) # Store mutable runtime state for assets, rendering, movement, or debug output.
-	if texture == null:                                                                        # Run the following block only when this condition is true.
-		return 46.0                                                                               # Return this computed result to the caller.
-	return float(texture.get_height())                                                         # Return this computed result to the caller.
+	return _sprite_texture_height(player_sprite)                                               # Measure the currently bound local player sprite.
+
+
+
+# _sprite_texture_height: Returns one sprite's current frame height with a safe fallback.
+func _sprite_texture_height(sprite: AnimatedSprite2D) -> float:                             # Declare this function.
+	if sprite == null or sprite.sprite_frames == null:                                        # Handle missing sprite resources defensively.
+		return 46.0                                                                              # Return the known idle frame height as a fallback.
+	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)       # Read the current frame texture from this sprite.
+	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
+		return 46.0                                                                              # Return the known idle frame height as a fallback.
+	return maxf(float(texture.get_height()), 1.0)                                              # Return the frame height while avoiding division by zero.
 
 
 
@@ -1721,6 +2429,102 @@ func _movement_to_first_player_run_dir(movement: Vector2) -> String:            
 	if movement.y > 0.0:                                                                       # Run the following block only when this condition is true.
 		return DIR_S                                                                              # Return this computed result to the caller.
 	return DIR_N                                                                               # Return this computed result to the caller.
+
+
+
+# _world_movement_dir_for_local_movement: Converts camera-local movement input into a shared cardinal world direction.
+func _world_movement_dir_for_local_movement(movement: Vector2, facing_index: int) -> String: # Declare this function.
+	var forward := Vector2(_facing_vector_for_index(facing_index))                              # Convert the player's camera-forward direction into a Vector2.
+	var right := Vector2(-_left_vector_for_index(facing_index))                                 # Convert the player's camera-right direction into a Vector2.
+	var world_vector := right * movement.x + forward * -movement.y                              # Rotate local side/forward input into world grid space.
+	return _direction_string_for_world_vector(world_vector)                                     # Return the cardinal direction that best describes the movement.
+
+
+
+# _direction_string_for_world_vector: Converts a world-space vector into one N/E/S/W animation direction.
+func _direction_string_for_world_vector(world_vector: Vector2) -> String:                  # Declare this function.
+	if world_vector.length_squared() <= 0.0001:                                                # Treat tiny vectors as no meaningful direction.
+		return DIR_N                                                                              # Return north as the stable fallback direction.
+	if absf(world_vector.x) >= absf(world_vector.y):                                           # Prefer side motion when diagonal values are tied.
+		return DIR_E if world_vector.x > 0.0 else DIR_W                                          # Return east or west from the dominant x component.
+	return DIR_S if world_vector.y > 0.0 else DIR_N                                            # Return south or north from the dominant y component.
+
+
+
+# _direction_string_for_facing: Converts a facing index into the matching world direction string.
+func _direction_string_for_facing(facing_index: int) -> String:                            # Declare this function.
+	return _direction_string_for_world_vector(Vector2(_facing_vector_for_index(facing_index))) # Return the cardinal label for this facing vector.
+
+
+
+# _world_vector_for_direction_string: Converts an N/E/S/W animation direction back into a world vector.
+func _world_vector_for_direction_string(direction: String) -> Vector2:                    # Declare this function.
+	match direction:                                                                          # Branch by the direction label stored in player state.
+		DIR_E:                                                                                   # Handle east.
+			return Vector2(1.0, 0.0)                                                               # Return the east vector.
+		DIR_S:                                                                                   # Handle south.
+			return Vector2(0.0, 1.0)                                                               # Return the south vector.
+		DIR_W:                                                                                   # Handle west.
+			return Vector2(-1.0, 0.0)                                                              # Return the west vector.
+		_:                                                                                       # Handle north and any malformed fallback.
+			return Vector2(0.0, -1.0)                                                              # Return the north vector.
+
+
+
+# _view_relative_dir: Converts a world direction into the viewer's screen-relative animation direction.
+func _view_relative_dir(world_direction: String, viewer_facing: int) -> String:           # Declare this function.
+	var world_vector := _world_vector_for_direction_string(world_direction)                    # Convert the saved world direction into a vector.
+	var forward := Vector2(_facing_vector_for_index(viewer_facing))                            # Read the viewer's camera-forward vector.
+	var right := Vector2(-_left_vector_for_index(viewer_facing))                               # Read the viewer's camera-right vector.
+	var depth_amount := world_vector.dot(forward)                                              # Measure how much this direction points into or out of the viewer's screen.
+	var side_amount := world_vector.dot(right)                                                 # Measure how much this direction points left or right on the viewer's screen.
+	if absf(side_amount) >= absf(depth_amount):                                                # Prefer side views when a tie is possible.
+		return DIR_E if side_amount > 0.0 else DIR_W                                             # Return the screen-side direction.
+	return DIR_N if depth_amount > 0.0 else DIR_S                                              # Return forward-away or backward-toward direction.
+
+
+
+# _apply_opponent_animation: Plays the other player's full view-relative run/aim set when visible in this screen.
+func _apply_opponent_animation(other_state: Dictionary) -> void:                           # Declare this function.
+	if opponent_sprite.sprite_frames == null:                                                  # Skip animation if the opponent sprite has no SpriteFrames resource.
+		return                                                                                    # Return without changing animation.
+	var moving := bool(other_state.get("character_is_moving", false))                          # Read whether the opponent is actively running.
+	var other_facing := int(other_state.get("facing", 0))                                      # Read the opponent's camera/aim facing for fallbacks.
+	var other_world_run := String(other_state.get("world_run_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world run direction.
+	var other_world_aim := String(other_state.get("world_aim_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world aim direction.
+	var relative_run := _view_relative_dir(other_world_run, facing)                            # Convert run direction into this viewer's animation space.
+	var relative_aim := _view_relative_dir(other_world_aim, facing)                            # Convert aim direction into this viewer's animation space.
+	if not moving:                                                                             # Use a first run frame as the idle placeholder until idle variants exist.
+		relative_run = relative_aim                                                               # Face the idle fallback body in the same direction as the opponent's aim.
+	var animation := _best_opponent_animation_for(relative_run, relative_aim)                  # Pick the exact or nearest available opponent animation.
+	if animation == &"":                                                                       # Skip if no usable animation exists.
+		return                                                                                    # Return without changing the opponent sprite.
+	if opponent_sprite.animation != animation:                                                 # Avoid restarting the same opponent animation every frame.
+		opponent_sprite.play(animation)                                                           # Start the selected opponent animation.
+	if moving:                                                                                 # Keep active opponents animated.
+		if not opponent_sprite.is_playing():                                                       # Resume if the sprite was paused or stopped while idle.
+			opponent_sprite.play(animation)                                                            # Play the selected opponent animation.
+	else:                                                                                      # Freeze idle opponents on the first frame of the chosen directional run.
+		opponent_sprite.frame = 0                                                                  # Display the first frame as the temporary idle pose.
+		opponent_sprite.stop()                                                                     # Stop playback so the first-frame idle fallback holds still.
+
+
+
+# _best_opponent_animation_for: Finds the best available run/aim animation for another player.
+func _best_opponent_animation_for(run: String, aim: String) -> StringName:                # Declare this function.
+	var exact := "Run%s_Aim%s" % [run, aim]                                                   # Build the preferred exact run/aim animation name.
+	if available_animations.has(exact):                                                        # Use the exact opponent angle when the art exists.
+		return StringName(exact)                                                                  # Return the exact animation name.
+	var same_aim_suffix := "_Aim%s" % aim                                                      # Build a suffix for animations that at least aim the correct way.
+	for animation in available_animations.keys():                                              # Search all loaded animations.
+		if String(animation).ends_with(same_aim_suffix):                                          # Prefer correct aiming direction over body direction when exact art is missing.
+			return StringName(animation)                                                             # Return this aim-compatible fallback.
+	var same_run := _first_animation_with_prefix("Run%s_Aim" % run)                            # Search for a fallback with the requested body/run direction.
+	if same_run != &"":                                                                        # Use same-run fallback if available.
+		return same_run                                                                           # Return that fallback.
+	if available_animations.has("IdleN_AimN"):                                                 # Keep the old north idle as a final readable fallback.
+		return &"IdleN_AimN"                                                                      # Return the generic idle fallback.
+	return &""                                                                                 # Return no animation when the resource is unexpectedly empty.
 
 
 
@@ -2007,7 +2811,13 @@ func _facing_to_3d_yaw() -> float:                                              
 
 # _facing_vector: Returns the world grid direction vector for the current facing index.
 func _facing_vector() -> Vector2i:                                                          # Declare this function.
-	match facing:                                                                              # Branch behavior based on this value.
+	return _facing_vector_for_index(facing)                                                    # Return the world direction for the currently bound player.
+
+
+
+# _facing_vector_for_index: Returns the world grid direction vector for a supplied cardinal facing index.
+func _facing_vector_for_index(facing_index: int) -> Vector2i:                               # Declare this function.
+	match facing_index:                                                                        # Branch behavior based on this value.
 		0:                                                                                        # Start this block.
 			return Vector2i(0, -1)                                                                   # Return this computed result to the caller.
 		1:                                                                                        # Start this block.
@@ -2021,7 +2831,13 @@ func _facing_vector() -> Vector2i:                                              
 
 # _left_vector: Returns the world grid direction vector that is camera-left for the current facing index.
 func _left_vector() -> Vector2i:                                                            # Declare this function.
-	match facing:                                                                              # Branch behavior based on this value.
+	return _left_vector_for_index(facing)                                                      # Return the camera-left vector for the currently bound player.
+
+
+
+# _left_vector_for_index: Returns the world grid direction that is camera-left for a supplied cardinal facing index.
+func _left_vector_for_index(facing_index: int) -> Vector2i:                                # Declare this function.
+	match facing_index:                                                                        # Branch behavior based on this value.
 		0:                                                                                        # Start this block.
 			return Vector2i(-1, 0)                                                                   # Return this computed result to the caller.
 		1:                                                                                        # Start this block.
@@ -2064,22 +2880,25 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 # _regenerate_runtime_map: Rerolls the 4x4 thin-wall maze during play and redraws every dependent view.
 func _regenerate_runtime_map() -> void:                                                     # Declare this function.
 	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
-	was_left_turn_pressed = false                                                              # Reset one-shot left-turn detection after the map reset.
-	was_right_turn_pressed = false                                                             # Reset one-shot right-turn detection after the map reset.
 	was_regenerate_map_pressed = true                                                          # Keep the regenerate key from firing again until released.
-	is_transitioning = false                                                                   # Cancel any active transition before replacing the map.
-	active_sequence.clear()                                                                    # Remove any stale captured transition frames from the active state.
-	active_sequence_name = "idle"                                                              # Return the transition label to idle.
-	phase_index = 0                                                                            # Reset captured phase frame indexing.
-	phase_timer = 0.0                                                                          # Reset captured phase timing.
 	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
-	_show_stable()                                                                             # Redraw the 2D wall-slot view from the new map.
-	_position_player()                                                                         # Place the player sprite at the reset local position.
-	if enable_3d_diagnostic:                                                                   # Only update deprecated 3D diagnostic nodes when that view exists.
-		_update_3d_diagnostic()                                                                   # Sync the diagnostic view to the new map and player state.
-	_play_best_animation(false)                                                                # Return the player to idle after regeneration.
-	_update_debug_map_overlay()                                                                # Redraw the right-side top-down source map with the fresh wall layout.
+	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset both local players into opposite corners of the new shared map.
+	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.
 	_update_status()                                                                           # Update the status text for the new map state.
+
+
+
+# _reset_player_states_after_map: Reinitializes both local players after the shared thin-wall map changes.
+func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:                    # Declare this function.
+	player_states = [                                                                          # Replace both state records with clean starts.
+		_make_player_state(0, player_one_cell, 0),                                                # Put player one at the requested start facing north.
+		_make_player_state(1, Vector2i(MAP_WIDTH - 1, 0), 2),                                     # Put player two at the opposite corner facing south.
+	]                                                                                           # Close the regenerated player-state list.
+	for player_index in range(player_views.size()):                                           # Reset the visible animation latch for every player view.
+		_bind_player_context(player_index)                                                       # Bind this player's state and sprite.
+		_play_best_animation(false)                                                               # Return this player to idle.
+		_save_player_context(player_index)                                                        # Store the reset animation state.
+	_bind_player_context(0)                                                                    # Leave player one bound after the reset.
 
 
 
@@ -2248,26 +3067,20 @@ func _is_open_cell(cell: Vector2i) -> bool:                                     
 # _update_status: Writes debug state text showing phase, facing, cell, local offset, animation, and blocked direction.
 func _update_status() -> void:                                                              # Declare this function.
 	var facing_names: Array[String] = ["N", "E", "S", "W"]                                     # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
-	var facing_name: String = facing_names[facing]                                             # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
-	var phase_text := "stable"                                                                 # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var wall_text := _visible_wall_ids_text()                                                  # Format the currently selected wall ids for debug display.
-	if is_transitioning:                                                                       # Run the following block only when this condition is true.
-		phase_text = "%s phase %d/%d" % [active_sequence_name, phase_index + 1, active_sequence.size()] # Compute and store this value for the current step.
-
-	status_label.text = (                                                                      # Update the on-screen debug status label.
-		"Xybots phase prototype | %s | Facing %s | Cell %d,%d | Local %.2f,%.2f | Anim %s | Walls %s%s\n" # Continue the controller logic for this section.
-		+ "4x4 thin-wall maze. WASD moves inside tile; boundary crossing checks the edge wall. Q/E or arrows turn. R rerolls map." # Continue the controller logic for this section.
-	) % [                                                                                      # Close the current list, dictionary, call, or expression.
-		phase_text,                                                                               # Continue the controller logic for this section.
-		facing_name,                                                                              # Continue the controller logic for this section.
-		grid_position.x,                                                                          # Continue the controller logic for this section.
-		grid_position.y,                                                                          # Continue the controller logic for this section.
-		local_floor_position.x,                                                                   # Continue the controller logic for this section.
-		local_floor_position.y,                                                                   # Continue the controller logic for this section.
-		String(player_sprite.animation),                                                          # Continue the controller logic for this section.
-		wall_text,                                                                                # Continue the controller logic for this section.
-		(" | Blocked " + last_blocked_direction) if not last_blocked_direction.is_empty() else "" # Continue the controller logic for this section.
-	]                                                                                          # Close the current list, dictionary, call, or expression.
+	var lines: Array[String] = []                                                              # Build one compact status line per local player.
+	for player_index in range(player_states.size()):                                          # Format every local player's saved state.
+		var state: Dictionary = player_states[player_index]                                      # Read this player's state.
+		var state_facing := int(state.get("facing", 0))                                          # Read this player's facing index.
+		var state_cell: Vector2i = state.get("grid_position", Vector2i.ZERO)                     # Read this player's current cell.
+		var state_local: Vector2 = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)  # Read this player's local tile position.
+		var state_view: Dictionary = player_views[player_index] if player_index < player_views.size() else {} # Read this player's view bundle.
+		var state_sprite: AnimatedSprite2D = state_view.get("player_sprite", null)               # Read this player's sprite for animation reporting.
+		var state_animation := String(state_sprite.animation) if state_sprite != null else "-"    # Format this player's current animation name.
+		var phase_text := "stable"                                                               # Default this player to stable mode.
+		if bool(state.get("is_transitioning", false)):                                           # Show captured phase progress when this player is transitioning.
+			phase_text = "%s phase %d" % [String(state.get("active_sequence_name", "idle")), int(state.get("phase_index", 0)) + 1] # Format the transition status.
+		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s" % [player_index + 1, phase_text, facing_names[state_facing], state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else ""]) # Add this player status line.
+	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing"] # Update the on-screen debug status label.
 
 
 
@@ -2278,4 +3091,16 @@ func _visible_wall_ids_text() -> String:                                        
 	var parts: Array[String] = []                                                              # Store formatted wall ids before joining them.
 	for wall_id in last_visible_wall_ids:                                                      # Iterate through the selected wall id list.
 		parts.append("%02d" % wall_id)                                                            # Add this wall id as a two-digit label.
+	return ",".join(parts)                                                                     # Return the comma-separated wall id list.
+
+
+
+# _visible_wall_ids_text_for_state: Formats visible wall ids from a saved player state.
+func _visible_wall_ids_text_for_state(state: Dictionary) -> String:                         # Declare this function.
+	var ids: Array = state.get("last_visible_wall_ids", [])                                    # Read this player's saved visible wall ids.
+	if ids.is_empty():                                                                         # Show a placeholder when no stable wall overlays are selected.
+		return "-"                                                                               # Return a no-walls marker for the status text.
+	var parts: Array[String] = []                                                              # Store formatted wall ids before joining them.
+	for wall_id in ids:                                                                        # Iterate through the selected wall id list.
+		parts.append("%02d" % int(wall_id))                                                       # Add this wall id as a two-digit label.
 	return ",".join(parts)                                                                     # Return the comma-separated wall id list.
