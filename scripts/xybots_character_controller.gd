@@ -233,6 +233,7 @@ var character_is_moving := false                                                
 var world_run_dir := DIR_N                                                                  # Track this player's movement direction in shared world space for opponent rendering.
 var world_aim_dir := DIR_N                                                                  # Track this player's aim direction in shared world space for opponent rendering.
 var available_animations: Dictionary = {}                                                   # Store animation-name lookups for exact and fallback animation selection.
+var sprite_foot_anchor_cache: Dictionary = {}                                                # Cache per-texture foot/shadow anchor rows so sprite registration can ignore transparent padding.
 var pending_grid_delta := Vector2i.ZERO                                                     # Store the cell movement that will be applied after a transition finishes.
 var last_blocked_direction := ""                                                            # Store the most recent blocked movement label for debug display.
 var wall_edges: Dictionary = {}                                                             # Store explicit thin-wall edge flags for each open cell.
@@ -723,7 +724,9 @@ func _add_perspective_sprite_bounds(sprite: AnimatedSprite2D, color: Color, labe
 	var top_right := sprite.position + Vector2(half.x, -half.y)                                # Compute the sprite rectangle top-right.
 	var bottom_left := sprite.position + Vector2(-half.x, half.y)                              # Compute the sprite rectangle bottom-left.
 	var bottom_right := sprite.position + half                                                 # Compute the sprite rectangle bottom-right.
-	var feet := sprite.position + Vector2(0.0, half.y)                                         # Compute the projected feet point from the centered sprite.
+	var feet_anchor_y := _sprite_foot_anchor_y(sprite)                                         # Read the per-frame foot/shadow anchor inside the actual character pixels.
+	var center_to_feet := (feet_anchor_y - float(texture.get_height()) * 0.5) * sprite.scale.y # Convert the texture-space anchor into centered-sprite local pixels.
+	var feet := sprite.position + Vector2(0.0, center_to_feet)                                 # Compute the projected feet point from the actual art anchor.
 	_add_perspective_extent_line(top_left, top_right, color, 1.0)                              # Draw the sprite top edge.
 	_add_perspective_extent_line(top_right, bottom_right, color, 1.0)                          # Draw the sprite right edge.
 	_add_perspective_extent_line(bottom_left, bottom_right, color, 1.0)                        # Draw the sprite bottom edge.
@@ -2136,7 +2139,7 @@ func _position_player() -> void:                                                
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured character height for this depth.
 	var sprite_scale := actor_height / _sprite_texture_height(player_sprite)                    # Scale the current frame so its body height matches the measured study.
-	var screen_y := float(projection["feet_y"]) - actor_height * 0.5                            # Register centered sprites from the measured feet line.
+	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the measured feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
 	player_sprite.z_index = LOCAL_CHARACTER_LAYER                                              # Keep the local body above wall art; the clipped viewport trims anything outside the camera frame.
@@ -2155,9 +2158,10 @@ func _position_opponent_sprite() -> void:                                       
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
 	var projection := _opponent_projection_from_current_camera(target_world)                    # Project the opponent through the current player's camera model.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
-	var screen_y := float(projection["screen_y"])                                               # Read the projected opponent y coordinate.
+	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
 	var sprite_scale := actor_height / _sprite_texture_height(opponent_sprite)                  # Scale the opponent from the same measured perspective table.
+	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
@@ -2236,10 +2240,10 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 		screen_x = lerpf(corridor_edge_x, float(side_projection["outer_x"]), side_travel)          # Let the actor move continuously from corridor edge to side-frame edge.
 		feet_y = lerpf(float(corridor["feet_y"]), float(side_projection["feet_y"]), side_travel)   # Blend feet registration from corridor floor to side-entry floor without popping.
 	var actor_height := float(corridor["actor_height"])                                       # Read actor height from the same measured perspective sample as the floor.
-	var screen_y := feet_y - actor_height * 0.5                                                 # Register centered sprites from the selected feet line.
+	var screen_y := feet_y - actor_height * 0.5                                                 # Keep a legacy centered y value for debugging; final sprite registration uses feet_y.
 	var character_layer := _character_layer_for_view_depth(view_depth)                         # Use wall-depth buckets so same-depth side walls do not erase visible actors.
 	var corridor_width := maxf(float(corridor["right_x"]) - float(corridor["left_x"]), 1.0)    # Measure how many screen pixels represent one visible tile width at this depth.
-	return {"screen_x": screen_x, "screen_y": screen_y, "actor_height": actor_height, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, and character layer.
+	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, and character layer.
 
 
 
@@ -2402,6 +2406,14 @@ func _player_sprite_scale_for_depth(depth: float) -> float:                     
 
 
 
+# _sprite_center_y_for_feet: Converts a desired projected feet line into a centered AnimatedSprite2D y coordinate.
+func _sprite_center_y_for_feet(sprite: AnimatedSprite2D, feet_y: float, sprite_scale: float) -> float: # Declare this function.
+	var texture_height := _sprite_texture_height(sprite)                                        # Read the current frame height including transparent padding.
+	var foot_anchor_y := _sprite_foot_anchor_y(sprite)                                         # Read the real foot/shadow anchor row inside the current frame pixels.
+	return feet_y - (foot_anchor_y - texture_height * 0.5) * sprite_scale                       # Move the centered sprite so its foot anchor lands on the projected floor point.
+
+
+
 # _current_player_texture_width: Returns the current player frame width so the sprite can be clamped inside the playfield.
 func _current_player_texture_width() -> float:                                              # Declare this function.
 	var texture := player_sprite.sprite_frames.get_frame_texture(player_sprite.animation, player_sprite.frame) # Store mutable runtime state for assets, rendering, movement, or debug output.
@@ -2436,6 +2448,41 @@ func _sprite_texture_width(sprite: AnimatedSprite2D) -> float:                  
 	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
 		return 34.0                                                                              # Return the known idle frame width as a fallback.
 	return maxf(float(texture.get_width()), 1.0)                                               # Return the frame width while avoiding division by zero.
+
+
+
+# _sprite_foot_anchor_y: Returns the source-pixel y row that should sit on the projected floor/feet point.
+func _sprite_foot_anchor_y(sprite: AnimatedSprite2D) -> float:                              # Declare this function.
+	if sprite == null or sprite.sprite_frames == null:                                        # Handle missing sprite resources defensively.
+		return 45.0                                                                              # Return a near-bottom fallback for the known idle frame.
+	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)       # Read the current frame texture from this sprite.
+	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
+		return 45.0                                                                              # Return a near-bottom fallback for the known idle frame.
+	return _texture_foot_anchor_y(texture)                                                    # Measure or fetch the real foot/shadow anchor for this texture.
+
+
+
+# _texture_foot_anchor_y: Finds the bottom visible character/shadow row and anchors one pixel above it.
+func _texture_foot_anchor_y(texture: Texture2D) -> float:                                  # Declare this function.
+	var cache_key := texture.resource_path if texture.resource_path != "" else str(texture.get_rid()) # Build a stable key for imported and generated textures.
+	if sprite_foot_anchor_cache.has(cache_key):                                                # Reuse measurements for frames already scanned.
+		return float(sprite_foot_anchor_cache[cache_key])                                         # Return the cached anchor row.
+	var image := texture.get_image()                                                           # Read the source pixels for alpha-bound detection.
+	if image == null:                                                                          # Fall back when a texture cannot provide readable pixels.
+		return maxf(float(texture.get_height()) - 1.0, 0.0)                                      # Use the texture bottom as the safest available anchor.
+	var bottom_visible := image.get_height() - 1                                               # Default to the final row until a visible row is found.
+	var found_visible := false                                                                 # Track whether the alpha scan found any visible pixels.
+	for y in range(image.get_height() - 1, -1, -1):                                            # Search upward from the bottom of the source frame.
+		for x in range(image.get_width()):                                                        # Search every pixel in this row.
+			if image.get_pixel(x, y).a > 0.01:                                                       # Treat any nontransparent pixel as part of the visible body/shadow.
+				bottom_visible = y                                                                     # Store the bottom visible pixel row.
+				found_visible = true                                                                   # Mark the alpha scan as successful.
+				break                                                                                  # Stop scanning this row.
+		if found_visible:                                                                        # Stop once the lowest visible row is known.
+			break                                                                                  # Exit the vertical scan.
+	var anchor_y := maxf(float(bottom_visible) - 1.0, 0.0) if found_visible else maxf(float(texture.get_height()) - 1.0, 0.0) # Put the logical feet point just above the visible bottom row.
+	sprite_foot_anchor_cache[cache_key] = anchor_y                                             # Cache the measured anchor for later frames.
+	return anchor_y                                                                            # Return the measured foot/shadow anchor row.
 
 
 
