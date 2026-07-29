@@ -107,24 +107,24 @@ const TURN_45_DIAGNOSTIC_ROW_IDS := [                                           
 	[11, 8, 9, 14],                                                                             # Label the near-mid row from local left to local right.
 	[15, 12, 13, 16],                                                                           # Label the closest row from local left to local right.
 ]                                                                                           # Close the halfway-turn diagnostic id table.
-const TURN_45_DIAGNOSTIC_SLOT_SAMPLES := [                                                  # Store hand-authored source-map slot samples for the 45-degree audit.
-	{"id": 3, "center": Vector2(-1.06, 3.64), "tangent": Vector2(0.45, -0.45)},                # Mark the far local-left 45-degree source edge.
-	{"id": 1, "center": Vector2(-0.35, 4.35), "tangent": Vector2(0.45, -0.45)},                # Mark the far inner-left 45-degree source edge.
-	{"id": 2, "center": Vector2(0.35, 4.35), "tangent": Vector2(0.45, 0.45)},                  # Mark the far inner-right 45-degree source edge.
-	{"id": 6, "center": Vector2(1.06, 5.06), "tangent": Vector2(0.45, 0.45)},                  # Mark the far local-right 45-degree source edge.
-	{"id": 7, "center": Vector2(-1.06, 2.23), "tangent": Vector2(0.45, -0.45)},                # Mark the second-row local-left 45-degree source edge.
-	{"id": 4, "center": Vector2(-0.35, 2.93), "tangent": Vector2(0.45, -0.45)},                # Mark the second-row inner-left 45-degree source edge.
-	{"id": 5, "center": Vector2(0.35, 2.93), "tangent": Vector2(0.45, 0.45)},                  # Mark the second-row inner-right 45-degree source edge.
-	{"id": 10, "center": Vector2(1.06, 3.64), "tangent": Vector2(0.45, 0.45)},                 # Mark the second-row local-right 45-degree source edge.
-	{"id": 11, "center": Vector2(-1.06, 0.81), "tangent": Vector2(0.45, -0.45)},               # Mark the third-row local-left 45-degree source edge.
-	{"id": 8, "center": Vector2(-0.35, 1.52), "tangent": Vector2(0.45, -0.45)},                # Mark the third-row inner-left 45-degree source edge.
-	{"id": 9, "center": Vector2(0.35, 1.52), "tangent": Vector2(0.45, 0.45)},                  # Mark the third-row inner-right 45-degree source edge.
-	{"id": 14, "center": Vector2(1.06, 2.23), "tangent": Vector2(0.45, 0.45)},                 # Mark the third-row local-right 45-degree source edge.
-	{"id": 15, "center": Vector2(-0.35, 0.11), "tangent": Vector2(0.45, -0.45)},               # Mark the closest local-left 45-degree source edge.
-	{"id": 12, "center": Vector2(0.35, 0.81), "tangent": Vector2(0.45, -0.45)},                # Mark the closest inner-left 45-degree source edge.
-	{"id": 13, "center": Vector2(-0.35, 0.81), "tangent": Vector2(0.45, 0.45)},                # Mark the closest inner-right 45-degree source edge.
-	{"id": 16, "center": Vector2(1.06, 0.81), "tangent": Vector2(0.45, 0.45)},                 # Mark the closest local-right 45-degree source edge.
-]                                                                                           # Close the hand-authored 45-degree source-map audit samples.
+const TURN_45_DIAGNOSTIC_SLOT_EDGES := [                                                    # Store each 45-degree slot as a unique grid-edge in local turn-space u/v coordinates.
+	{"id": 3, "a": Vector2(1.0, 2.0), "b": Vector2(2.0, 2.0)},                                 # Map the far local-left horizontal slot from the corrected guide.
+	{"id": 1, "a": Vector2(2.0, 2.0), "b": Vector2(3.0, 2.0)},                                 # Map the far inner-left horizontal slot from the corrected guide.
+	{"id": 2, "a": Vector2(3.0, 2.0), "b": Vector2(3.0, 1.0)},                                 # Map the far inner-right vertical slot from the corrected guide.
+	{"id": 6, "a": Vector2(3.0, 1.0), "b": Vector2(3.0, 0.0)},                                 # Map the far local-right vertical slot from the corrected guide.
+	{"id": 7, "a": Vector2(1.0, 2.0), "b": Vector2(1.0, 1.0)},                                 # Map the second-row local-left vertical slot from the corrected guide.
+	{"id": 4, "a": Vector2(2.0, 2.0), "b": Vector2(2.0, 1.0)},                                 # Map the second-row inner-left vertical slot from the corrected guide.
+	{"id": 5, "a": Vector2(2.0, 1.0), "b": Vector2(3.0, 1.0)},                                 # Map the second-row inner-right horizontal slot from the corrected guide.
+	{"id": 10, "a": Vector2(2.0, 0.0), "b": Vector2(3.0, 0.0)},                                # Map the second-row local-right horizontal slot from the corrected guide.
+	{"id": 11, "a": Vector2(0.0, 1.0), "b": Vector2(1.0, 1.0)},                                # Map the third-row local-left horizontal slot from the corrected guide.
+	{"id": 8, "a": Vector2(1.0, 1.0), "b": Vector2(2.0, 1.0)},                                 # Map the third-row inner-left horizontal slot from the corrected guide.
+	{"id": 9, "a": Vector2(2.0, 1.0), "b": Vector2(2.0, 0.0)},                                 # Map the third-row inner-right vertical slot from the corrected guide.
+	{"id": 14, "a": Vector2(2.0, 0.0), "b": Vector2(2.0, -1.0)},                               # Map the third-row local-right vertical slot from the corrected guide.
+	{"id": 15, "a": Vector2(0.0, 0.0), "b": Vector2(1.0, 0.0)},                                # Map the closest local-left horizontal slot from the corrected guide.
+	{"id": 12, "a": Vector2(1.0, 1.0), "b": Vector2(1.0, 0.0)},                                # Map the closest inner-left vertical slot from the corrected guide.
+	{"id": 13, "a": Vector2(1.0, 0.0), "b": Vector2(2.0, 0.0)},                                # Map the closest inner-right horizontal slot from the corrected guide.
+	{"id": 16, "a": Vector2(1.0, 0.0), "b": Vector2(1.0, -1.0)},                               # Map the closest local-right vertical slot from the corrected guide.
+]                                                                                           # Close the corrected 45-degree source-map audit edge table.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
 const DIAGNOSTIC_3D_CELL_WIDTH := 1.35                                                       # Widen the diagnostic cell volume so the 3D hallway better matches the 2D projection.
@@ -265,6 +265,16 @@ const TURN_45_OCCLUSION_BRANCHES := [                                           
 	[16, 14, 10, 6],                                                                           # Describe the outer-right branch from closest to farthest.
 ]                                                                                           # Close the 45-degree occlusion branch table.
 
+const AUDIT_START_ENABLED := true                                                           # Force the current startup into the slot-grid correction frame while this diagnostic pass is active.
+const AUDIT_P1_CELL := Vector2i(0, MAP_HEIGHT - 1)                                          # Match the left guide panel's player-one source-map cell.
+const AUDIT_P1_FACING := 0                                                                   # Point player one north before applying the temporary 45-degree turn.
+const AUDIT_P1_TURN_45_DIRECTION := 1                                                       # Stop player one on the NE halfway-turn audit view.
+const AUDIT_P1_LOCAL_POSITION := Vector2(0.63, 0.84)                                        # Match the player-one local position shown in gridCorrector.png.
+const AUDIT_P2_CELL := Vector2i(0, MAP_HEIGHT - 1)                                          # Match the right guide panel's player-two source-map cell.
+const AUDIT_P2_FACING := 0                                                                   # Keep player two on the cardinal north audit view.
+const AUDIT_P2_TURN_45_DIRECTION := 0                                                       # Keep player two out of the halfway-turn view for the right guide panel.
+const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                                        # Match the player-two local position shown in gridCorrector.png.
+
 @export_group("Movement Phases")                                                            # Group inspector controls for captured movement and turn phase playback.
 @export var use_captured_transitions := false                                                # Snap movement/turns by default until the matching transition art is rebuilt.
 
@@ -395,11 +405,33 @@ func _setup_local_multiplayer() -> void:                                        
 		{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": player_one_opponent}, # Store player one's existing view nodes.
 		{"maze_viewport": player_two_viewport, "maze_content": player_two_content, "playfield": player_two_playfield, "player_sprite": player_two_sprite, "opponent_sprite": player_two_opponent}, # Store player two's new view nodes.
 	]                                                                                           # Close the local-player view list.
-	player_states = [                                                                           # Create initial player-state records for both local players.
+	player_states = _make_start_player_states()                                                 # Create initial player-state records for both local players.
+	_bind_player_context(0)                                                                     # Bind player one back into the legacy globals after setup.
+
+
+
+# _make_start_player_states: Returns the normal gameplay start or the pinned slot-audit start.
+func _make_start_player_states() -> Array[Dictionary]:                                    # Declare this function.
+	if AUDIT_START_ENABLED:                                                                    # Use the deterministic correction frame while auditing the slot grid.
+		return [                                                                                  # Return the two-player audit state list.
+			_make_audit_player_state(0, AUDIT_P1_CELL, AUDIT_P1_FACING, AUDIT_P1_TURN_45_DIRECTION, AUDIT_P1_LOCAL_POSITION), # Start player one on the NE guide panel state.
+			_make_audit_player_state(1, AUDIT_P2_CELL, AUDIT_P2_FACING, AUDIT_P2_TURN_45_DIRECTION, AUDIT_P2_LOCAL_POSITION), # Start player two on the north guide panel state.
+		]                                                                                         # Close the audit state list.
+	return [                                                                                    # Return the normal two-player gameplay state list.
 		_make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0),                                    # Start player one in the southwest corner facing north.
 		_make_player_state(1, Vector2i(MAP_WIDTH - 1, 0), 2),                                     # Start player two in the northeast corner facing south.
-	]                                                                                           # Close the local-player state list.
-	_bind_player_context(0)                                                                     # Bind player one back into the legacy globals after setup.
+	]                                                                                           # Close the normal state list.
+
+
+
+# _make_audit_player_state: Builds a player state and applies fixed local/facing values for the grid-correction screenshot.
+func _make_audit_player_state(player_index: int, start_cell: Vector2i, start_facing: int, start_turn_45: int, start_local_position: Vector2) -> Dictionary: # Declare this function.
+	var state := _make_player_state(player_index, start_cell, start_facing)                    # Build the normal state record first.
+	state["turn_45_direction"] = start_turn_45                                                  # Apply the requested cardinal or halfway-turn view.
+	state["local_floor_position"] = start_local_position                                       # Apply the requested in-cell actor position.
+	state["world_run_dir"] = _direction_string_for_facing(start_facing)                        # Keep the world run direction coherent with the audit facing.
+	state["world_aim_dir"] = _direction_string_for_facing(start_facing)                        # Keep the world aim direction coherent with the audit facing.
+	return state                                                                               # Return the corrected audit state.
 
 
 
@@ -757,7 +789,9 @@ func _update_perspective_extents_overlay() -> void:                             
 		return                                                                                    # Return without drawing anything.
 	perspective_extents_overlay.visible = show_perspective_extents_overlay                     # Apply the inspector toggle to this player's overlay.
 	for child in perspective_extents_overlay.get_children():                                   # Remove the previous frame's guide primitives.
-		child.free()                                                                              # Free this old debug primitive.
+		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip nodes already queued by an earlier redraw.
+			perspective_extents_overlay.remove_child(child)                                          # Detach it now so same-frame redraws cannot double up visually.
+			child.queue_free()                                                                       # Queue this old debug primitive for safe end-of-frame cleanup.
 	if not show_perspective_extents_overlay:                                                   # Avoid rebuilding hidden guide geometry.
 		return                                                                                    # Return after clearing stale children.
 	var colors: Array[Color] = [                                                               # Define one readable color per projected square.
@@ -870,7 +904,9 @@ func _update_view_slot_debug_overlay() -> void:                                 
 		return                                                                                    # Return without drawing slot labels.
 	view_slot_overlay.visible = show_slot_grid_debug                                           # Apply the inspector/debug toggle to the player-view audit overlay.
 	for child in view_slot_overlay.get_children():                                            # Remove previous frame's blue slot guide primitives.
-		child.free()                                                                              # Free the old slot audit primitive immediately.
+		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip nodes already queued by an earlier redraw.
+			view_slot_overlay.remove_child(child)                                                  # Detach it now so the rebuilt audit labels do not visually stack.
+			child.queue_free()                                                                       # Queue the old slot audit primitive for safe end-of-frame cleanup.
 	if not show_slot_grid_debug:                                                              # Avoid rebuilding hidden guide geometry.
 		return                                                                                    # Return after clearing stale children.
 	var source_presence := _debug_slot_has_wall_by_id()                                        # Read which numbered source-map slots are currently blocked.
@@ -915,22 +951,22 @@ func _view_slot_screen_segments() -> Array:                                     
 # _turn_45_view_slot_screen_segments: Returns the hand-authored 16-slot guide from Wall_Grid_45.png.
 func _turn_45_view_slot_screen_segments() -> Array:                                        # Declare this function.
 	return [                                                                                  # Return fixed player-view guide lines in 160x120 playfield pixels.
-		_view_slot_screen_record(3, Vector2(0.0, 46.0), Vector2(28.0, 46.0), Vector2(9.0, 46.0)), # Place slot 3 on the far local-left guide.
-		_view_slot_screen_record(1, Vector2(28.0, 46.0), Vector2(76.0, 46.0), Vector2(52.0, 43.0)), # Place slot 1 on the far inner-left guide.
-		_view_slot_screen_record(2, Vector2(84.0, 46.0), Vector2(132.0, 46.0), Vector2(108.0, 43.0)), # Place slot 2 on the far inner-right guide.
-		_view_slot_screen_record(6, Vector2(132.0, 46.0), Vector2(160.0, 46.0), Vector2(148.0, 46.0)), # Place slot 6 on the far local-right guide.
-		_view_slot_screen_record(7, Vector2(0.0, 58.0), Vector2(32.0, 58.0), Vector2(10.0, 57.0)), # Place slot 7 on the second local-left guide.
-		_view_slot_screen_record(4, Vector2(32.0, 58.0), Vector2(74.0, 64.0), Vector2(52.0, 58.0)), # Place slot 4 on the second inner-left guide.
-		_view_slot_screen_record(5, Vector2(86.0, 64.0), Vector2(128.0, 58.0), Vector2(106.0, 58.0)), # Place slot 5 on the second inner-right guide.
-		_view_slot_screen_record(10, Vector2(128.0, 58.0), Vector2(160.0, 58.0), Vector2(148.0, 57.0)), # Place slot 10 on the second local-right guide.
-		_view_slot_screen_record(11, Vector2(0.0, 73.0), Vector2(34.0, 73.0), Vector2(8.0, 70.0)), # Place slot 11 on the third local-left guide.
-		_view_slot_screen_record(8, Vector2(34.0, 73.0), Vector2(78.0, 82.0), Vector2(55.0, 72.0)), # Place slot 8 on the third inner-left guide.
-		_view_slot_screen_record(9, Vector2(82.0, 82.0), Vector2(126.0, 73.0), Vector2(105.0, 72.0)), # Place slot 9 on the third inner-right guide.
-		_view_slot_screen_record(14, Vector2(126.0, 73.0), Vector2(160.0, 73.0), Vector2(146.0, 70.0)), # Place slot 14 on the third local-right guide.
-		_view_slot_screen_record(15, Vector2(0.0, 108.0), Vector2(80.0, 82.0), Vector2(50.0, 95.0)), # Place slot 15 on the nearest left diagonal guide.
-		_view_slot_screen_record(12, Vector2(45.0, 96.0), Vector2(80.0, 82.0), Vector2(53.0, 84.0)), # Place slot 12 on the nearest inner-left guide.
-		_view_slot_screen_record(13, Vector2(80.0, 82.0), Vector2(115.0, 96.0), Vector2(105.0, 84.0)), # Place slot 13 on the nearest inner-right guide.
-		_view_slot_screen_record(16, Vector2(80.0, 82.0), Vector2(160.0, 108.0), Vector2(110.0, 95.0)), # Place slot 16 on the nearest right diagonal guide.
+		_view_slot_screen_record(3, Vector2(0.0, 56.0), Vector2(26.0, 56.0), Vector2(11.0, 56.0)), # Place slot 3 on the source diagram's far local-left seam.
+		_view_slot_screen_record(1, Vector2(26.0, 51.0), Vector2(80.0, 51.0), Vector2(52.0, 51.0)), # Place slot 1 on the source diagram's far inner-left seam.
+		_view_slot_screen_record(2, Vector2(80.0, 51.0), Vector2(134.0, 51.0), Vector2(107.0, 51.0)), # Place slot 2 on the source diagram's far inner-right seam.
+		_view_slot_screen_record(6, Vector2(134.0, 54.0), Vector2(160.0, 54.0), Vector2(147.0, 54.0)), # Place slot 6 on the source diagram's far local-right seam.
+		_view_slot_screen_record(7, Vector2(0.0, 66.0), Vector2(31.0, 66.0), Vector2(11.0, 66.0)), # Place slot 7 on the source diagram's second local-left seam.
+		_view_slot_screen_record(4, Vector2(31.0, 58.0), Vector2(80.0, 67.0), Vector2(52.0, 58.0)), # Place slot 4 on the source diagram's second inner-left seam.
+		_view_slot_screen_record(5, Vector2(80.0, 67.0), Vector2(129.0, 58.0), Vector2(107.0, 58.0)), # Place slot 5 on the source diagram's second inner-right seam.
+		_view_slot_screen_record(10, Vector2(129.0, 67.0), Vector2(160.0, 67.0), Vector2(148.0, 67.0)), # Place slot 10 on the source diagram's second local-right seam.
+		_view_slot_screen_record(11, Vector2(0.0, 76.0), Vector2(34.0, 76.0), Vector2(12.0, 76.0)), # Place slot 11 on the source diagram's third local-left seam.
+		_view_slot_screen_record(8, Vector2(34.0, 67.0), Vector2(80.0, 82.0), Vector2(51.0, 67.0)), # Place slot 8 on the source diagram's third inner-left seam.
+		_view_slot_screen_record(9, Vector2(80.0, 82.0), Vector2(126.0, 66.0), Vector2(107.0, 66.0)), # Place slot 9 on the source diagram's third inner-right seam.
+		_view_slot_screen_record(14, Vector2(126.0, 75.0), Vector2(160.0, 75.0), Vector2(148.0, 75.0)), # Place slot 14 on the source diagram's third local-right seam.
+		_view_slot_screen_record(15, Vector2(0.0, 112.0), Vector2(80.0, 82.0), Vector2(51.0, 97.0)), # Place slot 15 on the source diagram's nearest left diagonal.
+		_view_slot_screen_record(12, Vector2(43.0, 79.0), Vector2(80.0, 82.0), Vector2(51.0, 79.0)), # Place slot 12 on the source diagram's nearest inner-left diagonal.
+		_view_slot_screen_record(13, Vector2(80.0, 82.0), Vector2(117.0, 80.0), Vector2(108.0, 80.0)), # Place slot 13 on the source diagram's nearest inner-right diagonal.
+		_view_slot_screen_record(16, Vector2(80.0, 82.0), Vector2(160.0, 112.0), Vector2(108.0, 97.0)), # Place slot 16 on the source diagram's nearest right diagonal.
 	]                                                                                          # Close the halfway-turn screen guide list.
 
 
@@ -1235,7 +1271,9 @@ func _update_debug_map_overlay() -> void:                                       
 		return                                                                                    # Return without drawing the map.
 
 	for child in debug_map_overlay.get_children():                                             # Remove previous line and marker nodes before redrawing.
-		child.free()                                                                              # Free the previous debug primitive immediately.
+		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip nodes already queued by an earlier redraw.
+			debug_map_overlay.remove_child(child)                                                  # Detach it now so same-frame player-map redraws cannot overlap labels.
+			child.queue_free()                                                                       # Queue the previous debug primitive for safe end-of-frame cleanup.
 	_add_debug_panel_background()                                                             # Draw the dark 160x120 panel behind the source-of-truth map.
 
 	var open_color := Color(0.2, 0.45, 0.55, 0.55)                                             # Define the color for non-blocking cell guide lines.
@@ -1478,14 +1516,12 @@ func _straight_debug_wall_slot_segments() -> Array:                             
 
 
 
-# _turn_45_debug_wall_slot_segments: Converts the 16 hand-authored halfway-turn local slots into source-map edge segments.
+# _turn_45_debug_wall_slot_segments: Converts the corrected 16 halfway-turn local slots into source-map edge segments.
 func _turn_45_debug_wall_slot_segments() -> Array:                                        # Declare this function.
 	var segments := []                                                                         # Store diagnostic halfway-turn slot records.
-	for sample in TURN_45_DIAGNOSTIC_SLOT_SAMPLES:                                           # Visit each calibrated 45-degree local slot sample.
-		var wall_id := int(sample["id"])                                                        # Read the local halfway-turn wall-slot id.
-		var local_center: Vector2 = sample["center"]                                            # Read the camera-local center of the intended source-map edge.
-		var local_tangent: Vector2 = sample["tangent"]                                          # Read the camera-local tangent family for this source-map edge.
-		var physical_segment := _snapped_debug_segment_from_camera_local(local_center, local_tangent) # Snap the calibrated local edge onto the world-grid source map.
+	for slot_edge in TURN_45_DIAGNOSTIC_SLOT_EDGES:                                          # Visit each unique corrected 45-degree local grid edge.
+		var wall_id := int(slot_edge["id"])                                                     # Read the local halfway-turn wall-slot id.
+		var physical_segment := _turn_45_slot_edge_world_segment(slot_edge)                      # Rotate this local u/v edge into the current world-grid orientation.
 		if physical_segment.size() < 2:                                                         # Skip malformed snapped geometry defensively.
 			continue                                                                                # Continue to the next halfway-turn slot.
 		segments.append({                                                                        # Store the independent diagnostic segment record.
@@ -1495,6 +1531,20 @@ func _turn_45_debug_wall_slot_segments() -> Array:                              
 			"has_wall": _segment_has_wall_for_debug(physical_segment[0], physical_segment[1]),     # Record whether this source-map edge is actually blocked.
 		})                                                                                       # Close this halfway-turn diagnostic slot record.
 	return segments                                                                            # Return all 16 halfway-turn diagnostic slots.
+
+
+
+# _turn_45_slot_edge_world_segment: Converts one corrected 45-degree u/v slot edge into a world-grid segment.
+func _turn_45_slot_edge_world_segment(slot_edge: Dictionary) -> Array[Vector2]:             # Declare this function.
+	var cardinal_forward := Vector2(_facing_vector())                                         # Use the committed cardinal direction as the local v axis.
+	var turn_side := Vector2(-_left_vector()) * float(turn_45_direction)                      # Use the twist direction as the local u axis.
+	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)    # Compute the current cell center in world-grid units.
+	var local_origin_corner := cell_center + (cardinal_forward - turn_side) * 0.5             # Anchor u/v coordinates on the front corner opposite the turn direction.
+	var local_a: Vector2 = slot_edge["a"]                                                     # Read endpoint A in corrected u/v coordinates.
+	var local_b: Vector2 = slot_edge["b"]                                                     # Read endpoint B in corrected u/v coordinates.
+	var world_a := local_origin_corner + turn_side * local_a.x + cardinal_forward * local_a.y # Rotate endpoint A into world-grid coordinates.
+	var world_b := local_origin_corner + turn_side * local_b.x + cardinal_forward * local_b.y # Rotate endpoint B into world-grid coordinates.
+	return [world_a, world_b]                                                                 # Return the corrected physical grid-edge segment.
 
 
 
@@ -2028,13 +2078,21 @@ func _build_turn_45_render_list() -> Array:                                     
 	var right := _turn_45_view_right_vector()                                                 # Read the current diagonal camera-right vector.
 	var origin := _camera_grid_origin_for_forward(forward)                                    # Use the same rear-biased origin concept as straight view, rotated halfway.
 	var physical_edges := _visible_physical_wall_edges_for_basis(origin, forward, right)       # Collect only first-visible map edges from this diagonal cone so hidden walls do not become render candidates.
-	for edge in physical_edges:                                                                # Convert every ray-visible physical edge into one 45-degree wall slot.
-		var slot := _turn_45_slot_for_physical_edge(edge, origin, forward, right)                 # Quantize this physical edge into the temporary 16-slot 45-degree diagram.
-		if slot.is_empty():                                                                        # Skip edges outside the temporary 45-degree art footprint.
-			continue                                                                                 # Continue to the next visible edge.
-		var wall_id := int(slot["id"])                                                            # Read this 45-degree slot id.
+	var visible_edge_keys := {}                                                                # Store the physical source edges first-hit by the diagonal ray fan.
+	for edge in physical_edges:                                                                # Index every ray-visible physical edge by its canonical grid-edge key.
+		visible_edge_keys[String(edge["key"])] = edge                                             # Preserve the ray-hit edge for quick slot lookup.
+	for diagnostic_slot in _turn_45_debug_wall_slot_segments():                                # Walk the same corrected 16-slot source-map table used by the audit overlay.
+		if not bool(diagnostic_slot["has_wall"]):                                                 # Skip candidate slots whose underlying map edge is open.
+			continue                                                                                 # Continue to the next corrected 45-degree slot.
+		var key := _physical_edge_key(diagnostic_slot["a"], diagnostic_slot["b"])                  # Build the canonical physical edge key controlled by this slot.
+		if not visible_edge_keys.has(key):                                                        # Skip slots that are blocked but not first-visible from this diagonal camera.
+			continue                                                                                 # Continue to the next corrected 45-degree slot.
+		var wall_id := int(diagnostic_slot["id"])                                                  # Read this 45-degree slot id.
 		if emitted_ids.has(wall_id):                                                              # Avoid drawing duplicate overlays for repeated ray-hit edges.
 			continue                                                                                 # Continue to the next visible edge.
+		var slot := _turn_45_slot_by_id(wall_id).duplicate()                                      # Copy the 45-degree art metadata for this corrected slot id.
+		slot["segment_a"] = diagnostic_slot["a"]                                                  # Preserve the controlled physical source edge for top-down selected-slot debug.
+		slot["segment_b"] = diagnostic_slot["b"]                                                  # Preserve the controlled physical source edge for top-down selected-slot debug.
 		render_list.append(slot)                                                                  # Add this visible 45-degree slot to the render list.
 		emitted_ids[wall_id] = true                                                               # Mark the slot id as emitted.
 	render_list = _prune_turn_45_occluded_slots(render_list)                                   # Remove far diagonal slots hidden by nearer 45-degree wall pieces.
