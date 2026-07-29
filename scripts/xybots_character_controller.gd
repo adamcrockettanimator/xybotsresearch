@@ -1534,16 +1534,25 @@ func _turn_45_debug_wall_slot_segments() -> Array:                              
 
 
 
+# _turn_45_canonical_base_facing: Returns the clockwise cardinal base for the active diagonal view.
+func _turn_45_canonical_base_facing() -> int:                                             # Declare this function.
+	if turn_45_direction < 0:                                                               # A left turn enters the same diagonal from the clockwise base's next cardinal.
+		return wrapi(facing - 1, 0, 4)                                                         # Convert S-left to E-right, E-left to N-right, and so on.
+	return facing                                                                            # A right turn is already using the clockwise base cardinal.
+
+
+
 # _turn_45_slot_edge_world_segment: Converts one corrected 45-degree u/v slot edge into a world-grid segment.
 func _turn_45_slot_edge_world_segment(slot_edge: Dictionary) -> Array[Vector2]:             # Declare this function.
-	var cardinal_forward := Vector2(_facing_vector())                                         # Use the committed cardinal direction as the local v axis.
-	var turn_side := Vector2(-_left_vector()) * float(turn_45_direction)                      # Use the twist direction as the local u axis.
+	var canonical_facing := _turn_45_canonical_base_facing()                                  # Normalize left/right entry routes into one diagonal-local basis.
+	var canonical_forward := Vector2(_facing_vector_for_index(canonical_facing))              # Use the clockwise base cardinal as the local v axis.
+	var canonical_right := Vector2(-_left_vector_for_index(canonical_facing))                 # Use the clockwise base cardinal's camera-right as the local u axis.
 	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)    # Compute the current cell center in world-grid units.
-	var local_origin_corner := cell_center + (cardinal_forward - turn_side) * 0.5             # Anchor u/v coordinates on the front corner opposite the turn direction.
+	var local_origin_corner := cell_center + (canonical_forward - canonical_right) * 0.5      # Anchor u/v coordinates on the canonical diagonal source corner.
 	var local_a: Vector2 = slot_edge["a"]                                                     # Read endpoint A in corrected u/v coordinates.
 	var local_b: Vector2 = slot_edge["b"]                                                     # Read endpoint B in corrected u/v coordinates.
-	var world_a := local_origin_corner + turn_side * local_a.x + cardinal_forward * local_a.y # Rotate endpoint A into world-grid coordinates.
-	var world_b := local_origin_corner + turn_side * local_b.x + cardinal_forward * local_b.y # Rotate endpoint B into world-grid coordinates.
+	var world_a := local_origin_corner + canonical_right * local_a.x + canonical_forward * local_a.y # Rotate endpoint A into world-grid coordinates.
+	var world_b := local_origin_corner + canonical_right * local_b.x + canonical_forward * local_b.y # Rotate endpoint B into world-grid coordinates.
 	return [world_a, world_b]                                                                 # Return the corrected physical grid-edge segment.
 
 
