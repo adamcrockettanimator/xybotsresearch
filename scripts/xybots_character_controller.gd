@@ -67,6 +67,7 @@ const ACTION_MOVE_BACKWARD := "xybots_move_backward"                            
 const ACTION_TURN_LEFT := "xybots_turn_left"                                                # Name the explicit input action for rotating the view left.
 const ACTION_TURN_RIGHT := "xybots_turn_right"                                              # Name the explicit input action for rotating the view right.
 const ACTION_REGENERATE_MAP := "xybots_regenerate_map"                                      # Name the explicit input action for rerolling the debug maze at runtime.
+const ACTION_TOGGLE_SLOT_GRID_DEBUG := "xybots_toggle_slot_grid_debug"                       # Name the explicit input action for toggling the blue slot-grid audit overlay.
 const ACTION_P2_MOVE_LEFT := "xybots_p2_move_left"                                          # Name the second-player input action for moving camera-left inside the current tile.
 const ACTION_P2_MOVE_RIGHT := "xybots_p2_move_right"                                        # Name the second-player input action for moving camera-right inside the current tile.
 const ACTION_P2_MOVE_FORWARD := "xybots_p2_move_forward"                                    # Name the second-player input action for moving toward the camera-facing edge.
@@ -284,7 +285,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_raycast_debug := false                                                      # Show individual visibility rays and their first-hit points on the top-down map.
 @export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
-@export var show_slot_grid_debug := true                                                     # Show blue diagnostic slot numbers in the top-down and player-view grids.
+@export var show_slot_grid_debug := false                                                    # Show blue diagnostic slot numbers in the top-down and player-view grids.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 
 @export_group("3D Diagnostic Camera")                                                       # Group the editable 3D diagnostic camera controls in the Godot inspector.
@@ -348,6 +349,7 @@ var last_visible_wall_ids: Array[int] = []                                      
 var was_left_turn_pressed := false                                                          # Track previous-frame left turn input so snapped turns only fire once per press.
 var was_right_turn_pressed := false                                                         # Track previous-frame right turn input so snapped turns only fire once per press.
 var was_regenerate_map_pressed := false                                                      # Track previous-frame map-regenerate input so it fires once per key press.
+var was_slot_grid_debug_pressed := false                                                     # Track previous-frame slot-grid toggle input so it fires once per key press.
 var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
 var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
 var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
@@ -667,6 +669,11 @@ func _render_all_player_views() -> void:                                        
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
+	if _read_toggle_slot_grid_debug():                                                         # Check for a one-shot request to toggle the blue slot-grid audit overlay.
+		show_slot_grid_debug = not show_slot_grid_debug                                           # Flip the diagnostic overlay visibility for every local viewport.
+		_render_all_player_views()                                                                # Redraw immediately so the overlay appears or disappears without waiting for movement.
+		_update_status()                                                                          # Refresh the status text after the debug toggle.
+		return                                                                                    # Skip movement this frame because this key press was only a debug toggle.
 	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
@@ -2755,6 +2762,7 @@ func _ensure_input_actions() -> void:                                           
 	_ensure_key_action(ACTION_TURN_LEFT, [KEY_Q])                                             # Bind Q to player-one snapped left turns.
 	_ensure_key_action(ACTION_TURN_RIGHT, [KEY_E])                                            # Bind E to player-one snapped right turns.
 	_ensure_key_action(ACTION_REGENERATE_MAP, [KEY_R])                                        # Bind R to runtime maze regeneration.
+	_ensure_key_action(ACTION_TOGGLE_SLOT_GRID_DEBUG, [KEY_F2])                               # Bind F2 to the blue slot-grid audit overlay toggle.
 	_ensure_key_action(ACTION_P2_MOVE_LEFT, [KEY_KP_4])                                       # Bind numpad 4 to player-two local strafe-left movement.
 	_ensure_key_action(ACTION_P2_MOVE_RIGHT, [KEY_KP_6])                                      # Bind numpad 6 to player-two local strafe-right movement.
 	_ensure_key_action(ACTION_P2_MOVE_FORWARD, [KEY_KP_8])                                    # Bind numpad 8 to player-two local forward movement.
@@ -2865,6 +2873,15 @@ func _read_regenerate_map() -> bool:                                            
 	var regenerate_just_pressed := regenerate_pressed and not was_regenerate_map_pressed       # Detect the first frame of the regenerate key press.
 	was_regenerate_map_pressed = regenerate_pressed                                           # Store current regenerate state for next frame.
 	return regenerate_just_pressed                                                            # Return whether the hotkey should fire this frame.
+
+
+
+# _read_toggle_slot_grid_debug: Returns true once when the blue slot-grid audit hotkey is pressed.
+func _read_toggle_slot_grid_debug() -> bool:                                                # Declare this function.
+	var slot_grid_pressed := Input.is_action_pressed(ACTION_TOGGLE_SLOT_GRID_DEBUG) or _is_key_down(KEY_F2) # Read the current slot-grid toggle key state.
+	var slot_grid_just_pressed := slot_grid_pressed and not was_slot_grid_debug_pressed        # Detect the first frame of the slot-grid toggle key press.
+	was_slot_grid_debug_pressed = slot_grid_pressed                                           # Store current toggle state for next frame.
+	return slot_grid_just_pressed                                                             # Return whether the diagnostic overlay should toggle this frame.
 
 
 
@@ -4110,7 +4127,7 @@ func _update_status() -> void:                                                  
 		if bool(state.get("is_transitioning", false)):                                           # Show captured phase progress when this player is transitioning.
 			phase_text = "%s phase %d" % [String(state.get("active_sequence_name", "idle")), int(state.get("phase_index", 0)) + 1] # Format the transition status.
 		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s" % [player_index + 1, phase_text, state_facing_name, state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else ""]) # Add this player status line.
-	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing"] # Update the on-screen debug status label.
+	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map. F2 toggles slot grid." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing"] # Update the on-screen debug status label.
 
 
 
