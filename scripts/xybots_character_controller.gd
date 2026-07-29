@@ -87,10 +87,44 @@ const LOCAL_CHARACTER_LAYER := 96                                               
 const CHARACTER_LAYER_BY_DEPTH := [96, 74, 56, 32]                                           # Keep actors in front of same-depth side walls but behind nearer wall rows.
 const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
 const LOCAL_REAR_CAMERA_SCALE_BOOST := 0.20                                                   # Enlarge the local body near the camera after cropping hides the lower frame.
-const DEBUG_WALL_LABELS_ENABLED := true                                                     # Enable numeric debug labels on visible wall overlay sprites.
+const DEBUG_WALL_LABELS_ENABLED := false                                                    # Hide renderer-selected wall labels while the blue slot-grid audit is being checked.
 const VISIBILITY_RAY_COUNT := 91                                                            # Cast enough rays across the view fan to discover side and front wall edges.
 const VISIBILITY_RAY_HALF_ANGLE_DEGREES := rad_to_deg(atan(DEBUG_VIEW_CONE_HALF_WIDTH / DEBUG_VIEW_CONE_DEPTH)) # Match ray casting to the Wall_Grid cone shape.
 const VISIBILITY_MAX_DISTANCE := 5.2                                                        # Limit ray tests to the straight-view art depth.
+const SLOT_GRID_DEBUG_LABEL_COLOR := Color(0.05, 0.45, 1.0, 1.0)                            # Use blue for the independent slot-number audit labels.
+const SLOT_GRID_DEBUG_WALL_COLOR := Color(0.05, 0.55, 1.0, 0.95)                             # Use bright blue for slot guide lines whose source-map edge is currently blocked.
+const SLOT_GRID_DEBUG_OPEN_COLOR := Color(0.05, 0.45, 1.0, 0.32)                             # Use faint blue for slot guide lines whose source-map edge is currently open.
+const TURN_45_DIAGNOSTIC_ROW_DEPTHS := [3.45, 2.55, 1.65, 0.78]                              # Store far-to-near camera-local depth rows for the 16 halfway-turn slot audit.
+const TURN_45_DIAGNOSTIC_ROW_SIDES := [                                                     # Store far-to-near camera-local side columns for the 16 halfway-turn slot audit.
+	[-1.50, -0.50, 0.50, 1.50],                                                                 # Spread the far row across the full diagonal view fan.
+	[-1.30, -0.43, 0.43, 1.30],                                                                 # Pull the next row slightly inward with the cone.
+	[-1.05, -0.35, 0.35, 1.05],                                                                 # Pull the near-mid row farther inward.
+	[-0.78, -0.26, 0.26, 0.78],                                                                 # Keep the closest row inside the near camera footprint.
+]                                                                                           # Close the halfway-turn diagnostic side table.
+const TURN_45_DIAGNOSTIC_ROW_IDS := [                                                       # Store local player-view slot ids from Wall_Grid_45.png, always left-to-right.
+	[3, 1, 2, 6],                                                                               # Label the far row from local left to local right.
+	[7, 4, 5, 10],                                                                              # Label the next row from local left to local right.
+	[11, 8, 9, 14],                                                                             # Label the near-mid row from local left to local right.
+	[15, 12, 13, 16],                                                                           # Label the closest row from local left to local right.
+]                                                                                           # Close the halfway-turn diagnostic id table.
+const TURN_45_DIAGNOSTIC_SLOT_SAMPLES := [                                                  # Store hand-authored source-map slot samples for the 45-degree audit.
+	{"id": 3, "center": Vector2(-1.06, 3.64), "tangent": Vector2(0.45, -0.45)},                # Mark the far local-left 45-degree source edge.
+	{"id": 1, "center": Vector2(-0.35, 4.35), "tangent": Vector2(0.45, -0.45)},                # Mark the far inner-left 45-degree source edge.
+	{"id": 2, "center": Vector2(0.35, 4.35), "tangent": Vector2(0.45, 0.45)},                  # Mark the far inner-right 45-degree source edge.
+	{"id": 6, "center": Vector2(1.06, 5.06), "tangent": Vector2(0.45, 0.45)},                  # Mark the far local-right 45-degree source edge.
+	{"id": 7, "center": Vector2(-1.06, 2.23), "tangent": Vector2(0.45, -0.45)},                # Mark the second-row local-left 45-degree source edge.
+	{"id": 4, "center": Vector2(-0.35, 2.93), "tangent": Vector2(0.45, -0.45)},                # Mark the second-row inner-left 45-degree source edge.
+	{"id": 5, "center": Vector2(0.35, 2.93), "tangent": Vector2(0.45, 0.45)},                  # Mark the second-row inner-right 45-degree source edge.
+	{"id": 10, "center": Vector2(1.06, 3.64), "tangent": Vector2(0.45, 0.45)},                 # Mark the second-row local-right 45-degree source edge.
+	{"id": 11, "center": Vector2(-1.06, 0.81), "tangent": Vector2(0.45, -0.45)},               # Mark the third-row local-left 45-degree source edge.
+	{"id": 8, "center": Vector2(-0.35, 1.52), "tangent": Vector2(0.45, -0.45)},                # Mark the third-row inner-left 45-degree source edge.
+	{"id": 9, "center": Vector2(0.35, 1.52), "tangent": Vector2(0.45, 0.45)},                  # Mark the third-row inner-right 45-degree source edge.
+	{"id": 14, "center": Vector2(1.06, 2.23), "tangent": Vector2(0.45, 0.45)},                 # Mark the third-row local-right 45-degree source edge.
+	{"id": 15, "center": Vector2(-0.35, 0.11), "tangent": Vector2(0.45, -0.45)},               # Mark the closest local-left 45-degree source edge.
+	{"id": 12, "center": Vector2(0.35, 0.81), "tangent": Vector2(0.45, -0.45)},                # Mark the closest inner-left 45-degree source edge.
+	{"id": 13, "center": Vector2(-0.35, 0.81), "tangent": Vector2(0.45, 0.45)},                # Mark the closest inner-right 45-degree source edge.
+	{"id": 16, "center": Vector2(1.06, 0.81), "tangent": Vector2(0.45, 0.45)},                 # Mark the closest local-right 45-degree source edge.
+]                                                                                           # Close the hand-authored 45-degree source-map audit samples.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
 const DIAGNOSTIC_3D_CELL_WIDTH := 1.35                                                       # Widen the diagnostic cell volume so the 3D hallway better matches the 2D projection.
@@ -196,13 +230,52 @@ const TURN_45_WALL_SLOTS := [                                                   
 	{"id": 16, "row": 4, "lane": 1, "draw": 51},                                               # Draw the closest right 45-degree wall overlay.
 ]                                                                                           # Close the 45-degree wall slot table.
 
+const TURN_45_EDGE_ANY := "any"                                                             # Allow a 45-degree footprint to accept either physical map edge orientation.
+const TURN_45_EDGE_VERTICAL := "vertical"                                                    # Mark a footprint that expects a north/south source-map wall edge.
+const TURN_45_EDGE_HORIZONTAL := "horizontal"                                                # Mark a footprint that expects an east/west source-map wall edge.
+const TURN_45_CLOSE_ROW_DEPTH_MAX := 1.05                                                     # Reserve the nearest halfway-turn depth band for slots 15 and 16 from Wall_Grid_45.png.
+const TURN_45_AXIS_MISMATCH_SCORE_PENALTY := 0.35                                            # Legacy score value kept for reference; the 45-degree mapper now rejects mismatched wall families.
+const TURN_45_SLOT_FOOTPRINTS := [                                                          # Calibrate 45-degree wall ids as camera-local side/depth footprints.
+	{"id": 1, "axis": TURN_45_EDGE_ANY, "center": Vector2(-0.35, 3.95), "radius": Vector2(0.55, 0.60)}, # Match the far upper-left 45-degree wall sample.
+	{"id": 2, "axis": TURN_45_EDGE_ANY, "center": Vector2(0.35, 3.95), "radius": Vector2(0.55, 0.60)}, # Match the far upper-right 45-degree wall sample.
+	{"id": 3, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-1.75, 1.88), "radius": Vector2(0.45, 0.60)}, # Match the far outer-left vertical branch.
+	{"id": 4, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-0.35, 3.30), "radius": Vector2(0.55, 0.70)}, # Match the far inner-left vertical branch.
+	{"id": 5, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(0.35, 2.60), "radius": Vector2(0.55, 0.70)}, # Match the far inner-right vertical branch.
+	{"id": 6, "axis": TURN_45_EDGE_ANY, "center": Vector2(1.75, 3.30), "radius": Vector2(0.55, 0.75)}, # Match the far outer-right branch near the horizon.
+	{"id": 7, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-1.05, 1.88), "radius": Vector2(0.50, 0.60)}, # Match the middle outer-left vertical branch.
+	{"id": 7, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-1.75, 2.60), "radius": Vector2(0.50, 0.70)}, # Match the same left branch one grid segment farther out.
+	{"id": 8, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-0.35, 1.88), "radius": Vector2(0.55, 0.65)}, # Match the middle inner-left vertical branch.
+	{"id": 9, "axis": TURN_45_EDGE_HORIZONTAL, "center": Vector2(1.05, 2.60), "radius": Vector2(0.65, 0.70)}, # Match the middle right horizontal branch.
+	{"id": 9, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(0.35, 2.23), "radius": Vector2(0.45, 0.35)}, # Match the visible right-side branch that should step from slot 5 to slot 9.
+	{"id": 10, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(1.05, 1.88), "radius": Vector2(0.55, 0.65)}, # Match the middle outer-right vertical branch.
+	{"id": 10, "axis": TURN_45_EDGE_HORIZONTAL, "center": Vector2(1.75, 3.30), "radius": Vector2(0.55, 0.75)}, # Match the far outer-right horizontal continuation.
+	{"id": 11, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-1.05, 1.17), "radius": Vector2(0.55, 0.55)}, # Match the near outer-left vertical branch.
+	{"id": 12, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-0.35, 1.17), "radius": Vector2(0.55, 0.55)}, # Match the near inner-left vertical branch.
+	{"id": 12, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(-0.34, 1.51), "radius": Vector2(0.35, 0.30)}, # Match the left-center floor-grid branch that should step from slot 8 to slot 12.
+	{"id": 13, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(0.35, 1.70), "radius": Vector2(0.55, 0.45)}, # Match the near inner-right vertical branch when it sits beyond wall 16.
+	{"id": 14, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(1.05, 1.17), "radius": Vector2(0.55, 0.55)}, # Match the near outer-right vertical branch.
+	{"id": 14, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(0.82, 1.76), "radius": Vector2(0.35, 0.35)}, # Match the visible right-side branch that should step from slot 10 to slot 14.
+	{"id": 15, "axis": TURN_45_EDGE_ANY, "center": Vector2(-0.35, 0.46), "radius": Vector2(0.55, 0.55)}, # Match the closest left 45-degree wall sample.
+	{"id": 16, "axis": TURN_45_EDGE_VERTICAL, "center": Vector2(0.35, 0.80), "radius": Vector2(0.55, 0.85)}, # Match the closest right 45-degree wall sample.
+]                                                                                           # Close the calibrated 45-degree footprint table.
+const TURN_45_OCCLUSION_BRANCHES := [                                                       # Keep 45-degree occlusion as data ordered from near to far.
+	[15, 11, 7, 3],                                                                            # Describe the outer-left branch from closest to farthest.
+	[12, 8, 4, 1],                                                                             # Describe the inner-left branch from closest to farthest.
+	[13, 9, 5, 2],                                                                             # Describe the inner-right branch from closest to farthest.
+	[16, 14, 10, 6],                                                                           # Describe the outer-right branch from closest to farthest.
+]                                                                                           # Close the 45-degree occlusion branch table.
+
 @export_group("Movement Phases")                                                            # Group inspector controls for captured movement and turn phase playback.
 @export var use_captured_transitions := false                                                # Snap movement/turns by default until the matching transition art is rebuilt.
 
 @export_group("Diagnostics")                                                                # Group inspector toggles for temporary visual debugging tools.
 @export var enable_3d_diagnostic := false                                                    # Keep the experimental 3D view disabled unless it is explicitly needed.
 @export var show_top_down_source_overlay := true                                             # Show the 2D source-of-truth map overlay during wall/collision debugging.
-@export var show_perspective_extents_overlay := true                                         # Show colored projected square extents over each 160x120 player view.
+@export var show_raycast_debug := false                                                      # Show individual visibility rays and their first-hit points on the top-down map.
+@export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
+@export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
+@export var show_slot_grid_debug := true                                                     # Show blue diagnostic slot numbers in the top-down and player-view grids.
+@export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 
 @export_group("3D Diagnostic Camera")                                                       # Group the editable 3D diagnostic camera controls in the Godot inspector.
 @export_range(45.0, 110.0, 1.0) var diagnostic_3d_camera_fov := 78.0                         # Let the user tune the 3D diagnostic camera field of view.
@@ -230,6 +303,7 @@ var floor_texture: Texture2D                                                    
 var floor_sprite: Sprite2D                                                                  # Store the base floor Sprite2D used by the straight renderer.
 var environment_layer: Node2D                                                               # Store the parent node for all composited environment sprites.
 var perspective_extents_overlay: Node2D                                                     # Store the projected-square debug overlay for the currently bound player view.
+var view_slot_overlay: Node2D                                                               # Store the blue player-view slot-number diagnostic overlay for the currently bound view.
 var debug_map_overlay: Node2D                                                               # Store the top-down debug line map drawn over the game view.
 var opponent_sprite: AnimatedSprite2D                                                       # Store the currently bound sprite used to show the other local player.
 var diagnostic_3d_viewport: SubViewport                                                     # Store the low-resolution 3D diagnostic renderer.
@@ -379,6 +453,7 @@ func _setup_all_player_renderers() -> void:                                     
 		straight_wall_label_nodes = {}                                                            # Give this player a separate wall-label-node dictionary.
 		_setup_environment_layer()                                                                # Build this player's independent environment sprite stack.
 		_setup_perspective_extents_overlay()                                                      # Build this player's projected-square debug overlay.
+		_setup_view_slot_overlay()                                                                # Build this player's blue slot-number audit overlay.
 		_setup_debug_map_overlay()                                                                # Build this player's independent top-down source map.
 		_store_bound_view_nodes(player_index)                                                     # Save the renderer nodes back into the player's view bundle.
 		_save_player_context(player_index)                                                        # Save any state touched during renderer setup.
@@ -396,6 +471,7 @@ func _store_bound_view_nodes(player_index: int) -> void:                        
 	view["straight_wall_nodes"] = straight_wall_nodes                                          # Store this player's numbered wall sprites.
 	view["straight_wall_label_nodes"] = straight_wall_label_nodes                              # Store this player's numbered wall debug labels.
 	view["perspective_extents_overlay"] = perspective_extents_overlay                          # Store this player's projected-square debug overlay.
+	view["view_slot_overlay"] = view_slot_overlay                                              # Store this player's blue slot-number audit overlay.
 	view["debug_map_overlay"] = debug_map_overlay                                              # Store this player's top-down debug map overlay.
 	player_views[player_index] = view                                                          # Write the updated view bundle back into the array.
 
@@ -416,6 +492,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	straight_wall_nodes = view.get("straight_wall_nodes", straight_wall_nodes)                 # Bind this player's numbered wall nodes.
 	straight_wall_label_nodes = view.get("straight_wall_label_nodes", straight_wall_label_nodes) # Bind this player's wall-label nodes.
 	perspective_extents_overlay = view.get("perspective_extents_overlay", perspective_extents_overlay) # Bind this player's projected-square debug overlay.
+	view_slot_overlay = view.get("view_slot_overlay", view_slot_overlay)                       # Bind this player's blue slot-number audit overlay.
 	debug_map_overlay = view.get("debug_map_overlay", debug_map_overlay)                       # Bind this player's top-down source map.
 	if player_index >= player_states.size():                                                   # Skip state loading if setup has not created states yet.
 		return                                                                                    # Return with only view nodes bound.
@@ -537,6 +614,7 @@ func _render_bound_player_context() -> void:                                    
 			perspective_extents_overlay.visible = false                                               # Keep colored actor extents from covering the 45-degree wall art.
 	else:                                                                                      # Keep normal actor-position diagnostics in cardinal views.
 		_update_perspective_extents_overlay()                                                     # Redraw the projected-square extents over this player's camera view.
+	_update_view_slot_debug_overlay()                                                         # Redraw the blue player-view slot audit labels for this camera orientation.
 	_update_debug_map_overlay()                                                               # Redraw this player's top-down map with the shared maze and both players.
 	if enable_3d_diagnostic and active_player_index == 0:                                     # Keep deprecated 3D diagnostics tied to player one only.
 		_update_3d_diagnostic()                                                                  # Sync the deprecated 3D diagnostic to player one's state.
@@ -663,6 +741,16 @@ func _setup_perspective_extents_overlay() -> void:                              
 
 
 
+# _setup_view_slot_overlay: Creates the per-player blue slot-number audit overlay inside the cropped playfield.
+func _setup_view_slot_overlay() -> void:                                                   # Declare this function.
+	view_slot_overlay = Node2D.new()                                                          # Create the overlay root used for player-view slot labels.
+	view_slot_overlay.name = "DebugViewSlotGrid"                                              # Name the overlay so it is easy to inspect in the scene tree.
+	view_slot_overlay.z_index = 220                                                           # Draw the slot audit above wall art and character sprites.
+	maze_content.add_child(view_slot_overlay)                                                  # Attach the overlay inside the clipped camera content.
+	_update_view_slot_debug_overlay()                                                         # Draw the initial slot audit labels immediately.
+
+
+
 # _update_perspective_extents_overlay: Redraws colored trapezoids for every measured visible square.
 func _update_perspective_extents_overlay() -> void:                                        # Declare this function.
 	if perspective_extents_overlay == null:                                                    # Skip when this player view has no extent overlay.
@@ -773,6 +861,136 @@ func _add_perspective_sprite_bounds(sprite: AnimatedSprite2D, color: Color, labe
 	_add_perspective_extent_line(feet + Vector2(-3.0, 0.0), feet + Vector2(3.0, 0.0), color, 1.0) # Draw the horizontal feet crossbar.
 	_add_perspective_extent_line(feet + Vector2(0.0, -3.0), feet + Vector2(0.0, 3.0), color, 1.0) # Draw the vertical feet crossbar.
 	_add_perspective_extent_label(label_text, feet + Vector2(4.0, -6.0), color)                # Label the sprite bounds marker.
+
+
+
+# _update_view_slot_debug_overlay: Redraws blue player-view slot labels from the local reference slot guide.
+func _update_view_slot_debug_overlay() -> void:                                             # Declare this function.
+	if view_slot_overlay == null:                                                            # Skip when this player view has no slot audit overlay.
+		return                                                                                    # Return without drawing slot labels.
+	view_slot_overlay.visible = show_slot_grid_debug                                           # Apply the inspector/debug toggle to the player-view audit overlay.
+	for child in view_slot_overlay.get_children():                                            # Remove previous frame's blue slot guide primitives.
+		child.free()                                                                              # Free the old slot audit primitive immediately.
+	if not show_slot_grid_debug:                                                              # Avoid rebuilding hidden guide geometry.
+		return                                                                                    # Return after clearing stale children.
+	var source_presence := _debug_slot_has_wall_by_id()                                        # Read which numbered source-map slots are currently blocked.
+	var screen_slots := _view_slot_screen_segments()                                           # Read the local screen-space guide lines for this camera angle.
+	for slot in screen_slots:                                                                  # Draw every local slot guide for the current cardinal or halfway-turn view.
+		var segment: Array[Vector2] = [slot["a"], slot["b"]]                                     # Read the screen-space endpoints from the guide table.
+		if segment.size() < 2:                                                                    # Skip invalid slot geometry defensively.
+			continue                                                                                 # Continue to the next diagnostic slot.
+		var wall_id := int(slot["id"])                                                            # Read the player/local wall-slot id.
+		var line_color := SLOT_GRID_DEBUG_WALL_COLOR if bool(source_presence.get(wall_id, false)) else SLOT_GRID_DEBUG_OPEN_COLOR # Brighten blocked source edges and fade open candidates.
+		_add_view_slot_debug_line(segment[0], segment[1], line_color, 1.0)                        # Draw the projected slot line on the player-view grid.
+		var label_position: Vector2 = slot.get("label", (segment[0] + segment[1]) * 0.5)           # Use the tuned label position when the guide table supplies one.
+		_add_view_slot_debug_label(label_position, wall_id, SLOT_GRID_DEBUG_LABEL_COLOR)           # Label the projected slot line with its local id.
+
+
+
+# _debug_slot_has_wall_by_id: Collapses source-map diagnostic slots into a quick wall-present lookup by local id.
+func _debug_slot_has_wall_by_id() -> Dictionary:                                            # Declare this function.
+	var source_presence := {}                                                                  # Store whether each local slot id currently maps to a real wall.
+	for slot in _all_debug_wall_slot_segments():                                               # Visit every source-map slot candidate for this view.
+		var wall_id := int(slot["id"])                                                            # Read this local wall-slot id.
+		var already_present := bool(source_presence.get(wall_id, false))                          # Preserve any earlier true value for repeated ids.
+		source_presence[wall_id] = already_present or bool(slot["has_wall"])                      # Mark the id as blocked when any source edge for it is blocked.
+	return source_presence                                                                     # Return the wall-present lookup for player-view coloring.
+
+
+
+# _view_slot_screen_segments: Returns the player-view guide segments for cardinal or halfway-turn slot audits.
+func _view_slot_screen_segments() -> Array:                                                 # Declare this function.
+	if _is_turn_45_view():                                                                    # Use the explicit halfway-turn guide because physical map projection is not the screen diagram.
+		return _turn_45_view_slot_screen_segments()                                               # Return the 16-slot halfway-turn player-view guide.
+	var segments := []                                                                         # Store the straight-view guide records.
+	for slot in _all_debug_wall_slot_segments():                                               # Keep the existing straight-view projection while the diagonal audit is being corrected.
+		var segment := _debug_slot_screen_segment(slot)                                          # Project the source-map slot segment into the 160x120 player view.
+		if segment.size() < 2:                                                                    # Skip invalid slot geometry defensively.
+			continue                                                                                 # Continue to the next straight slot.
+		segments.append(_view_slot_screen_record(int(slot["id"]), segment[0], segment[1], (segment[0] + segment[1]) * 0.5)) # Store the projected straight-view guide record.
+	return segments                                                                            # Return all straight-view guide records.
+
+
+
+# _turn_45_view_slot_screen_segments: Returns the hand-authored 16-slot guide from Wall_Grid_45.png.
+func _turn_45_view_slot_screen_segments() -> Array:                                        # Declare this function.
+	return [                                                                                  # Return fixed player-view guide lines in 160x120 playfield pixels.
+		_view_slot_screen_record(3, Vector2(0.0, 46.0), Vector2(28.0, 46.0), Vector2(9.0, 46.0)), # Place slot 3 on the far local-left guide.
+		_view_slot_screen_record(1, Vector2(28.0, 46.0), Vector2(76.0, 46.0), Vector2(52.0, 43.0)), # Place slot 1 on the far inner-left guide.
+		_view_slot_screen_record(2, Vector2(84.0, 46.0), Vector2(132.0, 46.0), Vector2(108.0, 43.0)), # Place slot 2 on the far inner-right guide.
+		_view_slot_screen_record(6, Vector2(132.0, 46.0), Vector2(160.0, 46.0), Vector2(148.0, 46.0)), # Place slot 6 on the far local-right guide.
+		_view_slot_screen_record(7, Vector2(0.0, 58.0), Vector2(32.0, 58.0), Vector2(10.0, 57.0)), # Place slot 7 on the second local-left guide.
+		_view_slot_screen_record(4, Vector2(32.0, 58.0), Vector2(74.0, 64.0), Vector2(52.0, 58.0)), # Place slot 4 on the second inner-left guide.
+		_view_slot_screen_record(5, Vector2(86.0, 64.0), Vector2(128.0, 58.0), Vector2(106.0, 58.0)), # Place slot 5 on the second inner-right guide.
+		_view_slot_screen_record(10, Vector2(128.0, 58.0), Vector2(160.0, 58.0), Vector2(148.0, 57.0)), # Place slot 10 on the second local-right guide.
+		_view_slot_screen_record(11, Vector2(0.0, 73.0), Vector2(34.0, 73.0), Vector2(8.0, 70.0)), # Place slot 11 on the third local-left guide.
+		_view_slot_screen_record(8, Vector2(34.0, 73.0), Vector2(78.0, 82.0), Vector2(55.0, 72.0)), # Place slot 8 on the third inner-left guide.
+		_view_slot_screen_record(9, Vector2(82.0, 82.0), Vector2(126.0, 73.0), Vector2(105.0, 72.0)), # Place slot 9 on the third inner-right guide.
+		_view_slot_screen_record(14, Vector2(126.0, 73.0), Vector2(160.0, 73.0), Vector2(146.0, 70.0)), # Place slot 14 on the third local-right guide.
+		_view_slot_screen_record(15, Vector2(0.0, 108.0), Vector2(80.0, 82.0), Vector2(50.0, 95.0)), # Place slot 15 on the nearest left diagonal guide.
+		_view_slot_screen_record(12, Vector2(45.0, 96.0), Vector2(80.0, 82.0), Vector2(53.0, 84.0)), # Place slot 12 on the nearest inner-left guide.
+		_view_slot_screen_record(13, Vector2(80.0, 82.0), Vector2(115.0, 96.0), Vector2(105.0, 84.0)), # Place slot 13 on the nearest inner-right guide.
+		_view_slot_screen_record(16, Vector2(80.0, 82.0), Vector2(160.0, 108.0), Vector2(110.0, 95.0)), # Place slot 16 on the nearest right diagonal guide.
+	]                                                                                          # Close the halfway-turn screen guide list.
+
+
+
+# _view_slot_screen_record: Builds one player-view slot guide record.
+func _view_slot_screen_record(wall_id: int, start: Vector2, end: Vector2, label_position: Vector2) -> Dictionary: # Declare this function.
+	return {"id": wall_id, "a": start, "b": end, "label": label_position}                    # Return the compact guide record.
+
+
+
+# _debug_slot_screen_segment: Projects one source-map diagnostic slot segment onto the player-view floor grid.
+func _debug_slot_screen_segment(slot: Dictionary) -> Array[Vector2]:                       # Declare this function.
+	if not slot.has("a") or not slot.has("b"):                                                # Require physical source-map endpoints.
+		return []                                                                               # Return no player-view segment when geometry is incomplete.
+	var local_a := _camera_local_point_from_world(slot["a"])                                   # Convert endpoint A into camera-local side/depth coordinates.
+	var local_b := _camera_local_point_from_world(slot["b"])                                   # Convert endpoint B into camera-local side/depth coordinates.
+	return [_screen_floor_point_for_camera_local_position(local_a), _screen_floor_point_for_camera_local_position(local_b)] # Project both endpoints through the measured floor perspective.
+
+
+
+# _screen_floor_point_for_camera_local_position: Projects a camera-local floor point into 160x120 screen coordinates.
+func _screen_floor_point_for_camera_local_position(local_position: Vector2) -> Vector2:     # Declare this function.
+	var side := clampf(local_position.x, -DEBUG_VIEW_CONE_HALF_WIDTH, DEBUG_VIEW_CONE_HALF_WIDTH) # Keep debug labels inside the useful view fan.
+	var depth := clampf(local_position.y, 0.04, 3.96)                                          # Keep debug labels within the measured floor depth table.
+	var corridor := _corridor_projection_at_view_depth(depth)                                  # Sample the same measured floor corridor used by actor projection.
+	if side >= -LOCAL_TILE_WORLD_HALF_EXTENT and side <= LOCAL_TILE_WORLD_HALF_EXTENT:         # Use the central corridor trapezoid for points inside the main cell span.
+		var ratio := side + LOCAL_TILE_WORLD_HALF_EXTENT                                         # Convert side -0.5..0.5 into screen interpolation ratio 0..1.
+		return Vector2(lerpf(float(corridor["left_x"]), float(corridor["right_x"]), ratio), float(corridor["feet_y"])) # Return the central corridor projection.
+	var side_sign := signf(side)                                                              # Determine whether this point lies off the left or right side of the corridor.
+	var side_projection := _side_entry_projection_at_view_depth(depth, side_sign)              # Sample the mirrored side-entry projection at this same depth.
+	var side_travel := clampf((absf(side) - LOCAL_TILE_WORLD_HALF_EXTENT) / maxf(DEBUG_VIEW_CONE_HALF_WIDTH - LOCAL_TILE_WORLD_HALF_EXTENT, 0.001), 0.0, 1.0) # Convert side overrun into a side-wedge blend.
+	var corridor_edge_x := float(corridor["right_x"]) if side_sign > 0.0 else float(corridor["left_x"]) # Pick the nearest corridor edge for the side blend.
+	var screen_x := lerpf(corridor_edge_x, float(side_projection["outer_x"]), side_travel)     # Blend from the corridor edge toward the side-frame edge.
+	var feet_y := lerpf(float(corridor["feet_y"]), float(side_projection["feet_y"]), side_travel) # Blend feet depth into the side-entry floor band.
+	return Vector2(screen_x, feet_y)                                                          # Return the projected side-entry floor point.
+
+
+
+# _add_view_slot_debug_line: Adds one blue line segment to the player-view slot audit overlay.
+func _add_view_slot_debug_line(start: Vector2, end: Vector2, color: Color, width: float) -> void: # Declare this function.
+	var line := Line2D.new()                                                                    # Create a line primitive for the player-view audit overlay.
+	line.points = PackedVector2Array([start, end])                                             # Set the line endpoints in playfield pixels.
+	line.width = width                                                                          # Set the debug line width.
+	line.default_color = color                                                                  # Apply the requested blue line color.
+	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                    # Keep the debug line crisp over pixel art.
+	view_slot_overlay.add_child(line)                                                          # Add the line to the active player-view slot overlay.
+
+
+
+# _add_view_slot_debug_label: Adds one blue two-digit slot label to the player-view slot audit overlay.
+func _add_view_slot_debug_label(position: Vector2, wall_id: int, color: Color) -> void:      # Declare this function.
+	var label := Label.new()                                                                   # Create a compact label for the player-view slot id.
+	label.text = "%02d" % wall_id                                                              # Display the local wall-slot id as two digits.
+	label.add_theme_color_override("font_color", color)                                       # Use blue so these labels differ from renderer-selected yellow wall labels.
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 1.0))            # Add black shadow for readability over the wall art.
+	label.add_theme_constant_override("shadow_offset_x", 1)                                   # Offset the label shadow one pixel right.
+	label.add_theme_constant_override("shadow_offset_y", 1)                                   # Offset the label shadow one pixel down.
+	label.scale = Vector2(0.30, 0.30)                                                         # Keep all-slot labels small enough to coexist in the playfield.
+	label.position = position + Vector2(-4.0, -4.0)                                           # Center the label around the projected slot line.
+	view_slot_overlay.add_child(label)                                                        # Add the label to the active player-view slot overlay.
 
 
 
@@ -1048,6 +1266,8 @@ func _update_debug_map_overlay() -> void:                                       
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
 	var camera_center := _debug_map_world_position(_camera_grid_origin())                        # Convert the actual visibility-camera origin into overlay coordinates.
 	_add_debug_view_cone(camera_center)                                                         # Draw the camera/view cone from the same backed-up origin used by ray casting.
+	_add_debug_all_wall_slot_numbers()                                                         # Draw the independent blue slot-number audit on every local slot candidate.
+	_add_debug_raycast_rays()                                                                   # Draw sampled raycast lines and first-hit points so visibility can be inspected.
 	_add_debug_visible_wall_slots()                                                            # Highlight the wall slots selected by the renderer on the source map.
 	_add_debug_player_bounds(home_center)                                                       # Draw the playable/contact footprint inside the current cell.
 	_add_debug_player_marker(home_center, Color(1.0, 1.0, 1.0, 0.35))                           # Draw a faint marker at the home center for offset comparison.
@@ -1074,6 +1294,16 @@ func _debug_map_cell_center(cell: Vector2i) -> Vector2:                         
 # _debug_map_world_position: Converts a world-grid coordinate into a debug overlay pixel position.
 func _debug_map_world_position(world_position: Vector2) -> Vector2:                          # Declare this function.
 	return DEBUG_MAP_PANEL_GRID_ORIGIN + world_position * DEBUG_MAP_CELL_SIZE                  # Scale grid units into the top-down panel coordinate system.
+
+
+
+# _debug_map_camera_local_position: Converts a camera-local side/depth point into a debug overlay pixel position.
+func _debug_map_camera_local_position(local_position: Vector2) -> Vector2:                   # Declare this function.
+	var forward := _view_forward_vector().normalized()                                         # Use the active cardinal or 45-degree camera-forward vector.
+	var right := _view_right_vector().normalized()                                             # Use the active cardinal or 45-degree camera-right vector.
+	var origin := _camera_grid_origin_for_forward(forward)                                     # Rebuild the camera origin for the same basis used by visibility.
+	var world_position := origin + right * local_position.x + forward * local_position.y       # Rotate the local side/depth sample into world-grid coordinates.
+	return _debug_map_world_position(world_position)                                           # Convert the world-grid point into debug-map pixels.
 
 
 
@@ -1105,9 +1335,82 @@ func _add_debug_view_cone(origin: Vector2) -> void:                             
 
 
 
+# _add_debug_raycast_rays: Draws the actual sampled visibility rays and where each ray first hits a wall.
+func _add_debug_raycast_rays() -> void:                                                     # Declare this function.
+	if not show_raycast_debug:                                                                 # Respect the inspector toggle for dense ray debugging.
+		return                                                                                    # Return without drawing ray debug primitives.
+	var origin_world := _camera_grid_origin()                                                  # Use the same camera origin that the renderer uses for visibility.
+	var forward := _view_forward_vector().normalized()                                        # Use the active cardinal or 45-degree camera forward vector.
+	var right := _view_right_vector().normalized()                                            # Use the active cardinal or 45-degree camera-right vector.
+	var samples := _raycast_visibility_samples_for_basis(origin_world, forward, right)         # Build the same ray samples used by wall visibility.
+	var origin := _debug_map_world_position(origin_world)                                      # Convert the camera origin to top-down overlay pixels.
+	var hit_ray_color := Color(1.0, 0.85, 0.0, 0.55)                                          # Use amber for rays that hit a wall.
+	var miss_ray_color := Color(0.0, 0.7, 1.0, 0.22)                                          # Use faint cyan for rays that reach max distance without a hit.
+	var hit_dot_color := Color(1.0, 0.35, 0.0, 0.95)                                          # Use orange dots for exact first-hit points.
+	var extra_hit_dot_color := Color(1.0, 0.05, 0.25, 0.85)                                   # Use red dots for farther 45-degree ray intersections behind the first hit.
+	var stride := maxi(1, debug_raycast_stride)                                                # Clamp the stride so modulo math is always valid.
+	var center_ray := int(VISIBILITY_RAY_COUNT / 2)                                           # Always draw the center ray, even if it falls between stride samples.
+	var first_hit_keys := {}                                                                   # Track first-hit ray/distance pairs so all-hit debug does not duplicate them.
+	for sample in samples:                                                                     # Draw each selected ray sample.
+		var ray_index := int(sample["ray_index"])                                                 # Read the original ray index across the fan.
+		if ray_index != 0 and ray_index != center_ray and ray_index != VISIBILITY_RAY_COUNT - 1 and ray_index % stride != 0: # Keep edges, center, and stride samples.
+			continue                                                                                 # Skip this ray to reduce visual clutter.
+		var hit_world: Vector2 = sample["hit_position"]                                           # Read the ray endpoint, either first hit or max distance.
+		var hit_position := _debug_map_world_position(hit_world)                                  # Convert the endpoint into top-down overlay pixels.
+		var ray_color := hit_ray_color if bool(sample["hit"]) else miss_ray_color                 # Color hit and miss rays differently.
+		_add_debug_line(origin, hit_position, ray_color, 1.0)                                     # Draw the ray segment from camera origin to endpoint.
+		if bool(sample["hit"]):                                                                   # Mark the exact wall-contact point when this ray hit something.
+			first_hit_keys["%d:%.4f" % [ray_index, float(sample["distance"])]] = true                 # Remember this first-hit point before drawing farther 45-degree hit markers.
+			_add_debug_raycast_hit_marker(hit_position, hit_dot_color)                               # Draw a compact first-hit marker at the endpoint.
+	if _is_turn_45_view():                                                                     # The halfway-turn renderer can inspect farther wall hits beyond the first one.
+		var all_hit_samples := _raycast_wall_hit_samples_for_basis(origin_world, forward, right)    # Build farther ray samples for debug markers without letting them render wall art.
+		for sample in all_hit_samples:                                                            # Draw selected farther intersections for 45-degree slot debugging.
+			var ray_index := int(sample["ray_index"])                                                 # Read this all-hit sample's ray index.
+			if ray_index != 0 and ray_index != center_ray and ray_index != VISIBILITY_RAY_COUNT - 1 and ray_index % stride != 0: # Match the visible ray stride used above.
+				continue                                                                                 # Skip this dense all-hit marker to keep the overlay readable.
+			var hit_key := "%d:%.4f" % [ray_index, float(sample["distance"])]                         # Build the same key used for first-hit duplicate suppression.
+			if first_hit_keys.has(hit_key):                                                           # Skip the nearest hit because it already has an orange marker.
+				continue                                                                                 # Continue to the next all-hit sample.
+			var hit_position := _debug_map_world_position(sample["hit_position"])                      # Convert this farther wall hit into top-down overlay pixels.
+			_add_debug_raycast_hit_marker(hit_position, extra_hit_dot_color, 1.15)                     # Draw the farther hit as a smaller red marker.
+
+
+
+# _add_debug_raycast_hit_marker: Adds a small diamond marker at one ray wall hit.
+func _add_debug_raycast_hit_marker(position: Vector2, color: Color, radius := 1.8) -> void: # Declare this function.
+	var marker := Polygon2D.new()                                                              # Create a filled marker for the ray hit point.
+	marker.polygon = PackedVector2Array([                                                      # Define a diamond centered on the hit point.
+		position + Vector2(0.0, -radius),                                                         # Add the top point.
+		position + Vector2(radius, 0.0),                                                          # Add the right point.
+		position + Vector2(0.0, radius),                                                          # Add the bottom point.
+		position + Vector2(-radius, 0.0),                                                         # Add the left point.
+	])                                                                                         # Close the marker polygon point list.
+	marker.color = color                                                                       # Apply the requested marker color.
+	debug_map_overlay.add_child(marker)                                                        # Add the marker to the debug map overlay.
+
+
+
+# _add_debug_turn_45_sample_marker: Adds a square marker for the camera-local sample that chose one 45-degree wall id.
+func _add_debug_turn_45_sample_marker(position: Vector2, color: Color) -> void:             # Declare this function.
+	var marker := Polygon2D.new()                                                              # Create a filled marker for the footprint sample point.
+	var radius := 2.6                                                                          # Make the sample marker slightly larger than a ray-hit marker.
+	marker.polygon = PackedVector2Array([                                                      # Define a square centered on the footprint sample point.
+		position + Vector2(-radius, -radius),                                                     # Add the top-left sample marker corner.
+		position + Vector2(radius, -radius),                                                      # Add the top-right sample marker corner.
+		position + Vector2(radius, radius),                                                       # Add the bottom-right sample marker corner.
+		position + Vector2(-radius, radius),                                                      # Add the bottom-left sample marker corner.
+	])                                                                                         # Close the sample marker polygon point list.
+	marker.color = color                                                                       # Apply the requested sample marker color.
+	debug_map_overlay.add_child(marker)                                                        # Add the marker to the debug map overlay.
+
+
+
 # _add_debug_visible_wall_slots: Highlights the renderer-selected wall slots as green edge segments on the top-down map.
 func _add_debug_visible_wall_slots() -> void:                                               # Declare this function.
+	if not show_selected_wall_slot_debug:                                                     # Keep the selected-slot overlay hidden during the blue all-slot audit.
+		return                                                                                    # Return without drawing green selected-wall lines or labels.
 	var highlight_color := Color(0.0, 1.0, 0.25, 0.95)                                       # Use green to mark wall slots that the renderer currently selected.
+	var sample_color := Color(1.0, 0.0, 0.85, 0.95)                                          # Use magenta for the sample point that selected the 45-degree art slot.
 	var visible_slots := _build_turn_45_render_list() if _is_turn_45_view() else _build_straight_render_list() # Rebuild the same visible-slot list used by the active 2D renderer.
 	var labeled_segments := {}                                                                # Track label positions so repeated physical edges do not stack identical labels.
 	for slot in visible_slots:                                                                # Iterate through every wall slot currently selected for drawing.
@@ -1121,6 +1424,128 @@ func _add_debug_visible_wall_slots() -> void:                                   
 		var label_offset := float(labeled_segments.get(segment_key, 0)) * 7.0                    # Offset repeated labels so companion slots remain readable.
 		labeled_segments[segment_key] = int(labeled_segments.get(segment_key, 0)) + 1            # Store that another label used this edge midpoint.
 		_add_debug_wall_slot_label(label_position + Vector2(0.0, label_offset), wall_id, highlight_color) # Add the wall-slot number beside the green segment.
+		if slot.has("sample_position"):                                                          # 45-degree slots preserve the exact camera-local point used by the mapper.
+			var sample_position: Vector2 = slot["sample_position"]                                  # Read the sample side/depth coordinate chosen from the visible ray span.
+			var sample_map_position := _debug_map_camera_local_position(sample_position)             # Convert the camera-local sample back to the top-down panel.
+			_add_debug_turn_45_sample_marker(sample_map_position, sample_color)                      # Draw the mapper sample so incorrect id choices can be diagnosed.
+			_add_debug_wall_slot_label(sample_map_position + Vector2(4.0, -8.0), wall_id, sample_color) # Label the sample with the selected 45-degree wall id.
+
+
+
+# _add_debug_all_wall_slot_numbers: Draws every local slot definition in blue on the top-down source map.
+func _add_debug_all_wall_slot_numbers() -> void:                                           # Declare this function.
+	if not show_slot_grid_debug:                                                              # Respect the shared slot-grid diagnostic toggle.
+		return                                                                                    # Return without adding any blue slot labels.
+	var stacked_labels := {}                                                                   # Track repeated map positions so labels do not completely overlap.
+	for slot in _all_debug_wall_slot_segments():                                               # Visit every cardinal or halfway-turn local slot candidate.
+		if not slot.has("a") or not slot.has("b"):                                                # Require physical source-map endpoints.
+			continue                                                                                 # Continue to the next slot when geometry is incomplete.
+		var wall_id := int(slot["id"])                                                            # Read the local player-view slot number.
+		var start := _debug_map_world_position(slot["a"])                                         # Convert endpoint A into top-down overlay pixels.
+		var end := _debug_map_world_position(slot["b"])                                           # Convert endpoint B into top-down overlay pixels.
+		var color := SLOT_GRID_DEBUG_WALL_COLOR if bool(slot["has_wall"]) else SLOT_GRID_DEBUG_OPEN_COLOR # Brighten blocked edges and fade open slot locations.
+		_add_debug_line(start, end, color, 1.35)                                                   # Draw the blue slot audit segment on the source map.
+		var midpoint := (start + end) * 0.5                                                        # Center the label on this source-map edge.
+		var stack_key := "%d,%d" % [int(round(midpoint.x)), int(round(midpoint.y))]                # Quantize the label point so repeated slots can be offset.
+		var stack_index := int(stacked_labels.get(stack_key, 0))                                   # Read how many labels have already used this point.
+		stacked_labels[stack_key] = stack_index + 1                                                # Record that this point now has another label.
+		_add_debug_wall_slot_label(midpoint + Vector2(0.0, float(stack_index) * 5.0), wall_id, SLOT_GRID_DEBUG_LABEL_COLOR) # Label the slot with a blue two-digit id.
+
+
+
+# _all_debug_wall_slot_segments: Returns the diagnostic local slot segments for the current cardinal or halfway-turn view.
+func _all_debug_wall_slot_segments() -> Array:                                             # Declare this function.
+	if _is_turn_45_view():                                                                    # Use the 16-slot halfway-turn audit table for diagonal views.
+		return _turn_45_debug_wall_slot_segments()                                                # Return diagonal slot candidates.
+	return _straight_debug_wall_slot_segments()                                                # Return the 28 straight slot candidates.
+
+
+
+# _straight_debug_wall_slot_segments: Converts all 28 straight local slots into source-map edge segments.
+func _straight_debug_wall_slot_segments() -> Array:                                        # Declare this function.
+	var segments := []                                                                         # Store diagnostic straight-view slot records.
+	for slot in STRAIGHT_WALL_SLOTS:                                                          # Visit every numbered straight-view slot definition.
+		var physical_segment := _physical_wall_slot_segment(slot)                                 # Convert this local slot to its physical source-map edge.
+		if physical_segment.size() < 2:                                                          # Skip malformed slot metadata defensively.
+			continue                                                                                 # Continue to the next straight slot.
+		segments.append({                                                                         # Store the independent diagnostic segment record.
+			"id": int(slot["id"]),                                                                   # Preserve the local wall-slot id.
+			"a": physical_segment[0],                                                               # Store physical endpoint A in world-grid coordinates.
+			"b": physical_segment[1],                                                               # Store physical endpoint B in world-grid coordinates.
+			"has_wall": _segment_has_wall_for_debug(physical_segment[0], physical_segment[1]),      # Record whether this source-map edge is actually blocked.
+		})                                                                                        # Close this straight diagnostic slot record.
+	return segments                                                                            # Return all 28 straight diagnostic slots.
+
+
+
+# _turn_45_debug_wall_slot_segments: Converts the 16 hand-authored halfway-turn local slots into source-map edge segments.
+func _turn_45_debug_wall_slot_segments() -> Array:                                        # Declare this function.
+	var segments := []                                                                         # Store diagnostic halfway-turn slot records.
+	for sample in TURN_45_DIAGNOSTIC_SLOT_SAMPLES:                                           # Visit each calibrated 45-degree local slot sample.
+		var wall_id := int(sample["id"])                                                        # Read the local halfway-turn wall-slot id.
+		var local_center: Vector2 = sample["center"]                                            # Read the camera-local center of the intended source-map edge.
+		var local_tangent: Vector2 = sample["tangent"]                                          # Read the camera-local tangent family for this source-map edge.
+		var physical_segment := _snapped_debug_segment_from_camera_local(local_center, local_tangent) # Snap the calibrated local edge onto the world-grid source map.
+		if physical_segment.size() < 2:                                                         # Skip malformed snapped geometry defensively.
+			continue                                                                                # Continue to the next halfway-turn slot.
+		segments.append({                                                                        # Store the independent diagnostic segment record.
+			"id": wall_id,                                                                          # Preserve the local halfway-turn wall-slot id.
+			"a": physical_segment[0],                                                              # Store physical endpoint A in world-grid coordinates.
+			"b": physical_segment[1],                                                              # Store physical endpoint B in world-grid coordinates.
+			"has_wall": _segment_has_wall_for_debug(physical_segment[0], physical_segment[1]),     # Record whether this source-map edge is actually blocked.
+		})                                                                                       # Close this halfway-turn diagnostic slot record.
+	return segments                                                                            # Return all 16 halfway-turn diagnostic slots.
+
+
+
+# _turn_45_debug_local_tangent_for_column: Returns a camera-local tangent for one halfway-turn slot column.
+func _turn_45_debug_local_tangent_for_column(column_index: int) -> Vector2:                 # Declare this function.
+	if column_index < 2:                                                                       # Treat the two local-left columns as one diagonal wall family.
+		return Vector2(0.45, -0.45)                                                              # Return a slash-like local tangent for that family.
+	return Vector2(0.45, 0.45)                                                                 # Return a backslash-like local tangent for the two local-right columns.
+
+
+
+# _snapped_debug_segment_from_camera_local: Converts a local diagnostic wall candidate into the nearest real grid edge.
+func _snapped_debug_segment_from_camera_local(local_center: Vector2, local_tangent: Vector2) -> Array[Vector2]: # Declare this function.
+	var world_center := _camera_local_to_world(local_center)                                   # Convert the local candidate center into world-grid coordinates.
+	var world_tangent := _camera_local_to_world(local_center + local_tangent) - world_center   # Convert the local tangent into world-grid orientation.
+	if absf(world_tangent.y) >= absf(world_tangent.x):                                        # Snap mostly vertical candidates to a north/south grid line.
+		var x: float = round(world_center.x)                                                     # Snap the wall x coordinate to the nearest vertical grid line.
+		var y0: float = floor(world_center.y)                                                    # Start the segment at the containing grid row.
+		return [Vector2(x, y0), Vector2(x, y0 + 1.0)]                                            # Return the snapped vertical grid edge.
+	var y: float = round(world_center.y)                                                      # Snap the wall y coordinate to the nearest horizontal grid line.
+	var x0: float = floor(world_center.x)                                                     # Start the segment at the containing grid column.
+	return [Vector2(x0, y), Vector2(x0 + 1.0, y)]                                             # Return the snapped horizontal grid edge.
+
+
+
+# _camera_local_to_world: Converts a camera-local side/depth point into world-grid coordinates.
+func _camera_local_to_world(local_position: Vector2) -> Vector2:                            # Declare this function.
+	var forward := _view_forward_vector().normalized()                                        # Use the active cardinal or halfway-turn camera-forward vector.
+	var right := _view_right_vector().normalized()                                            # Use the active cardinal or halfway-turn camera-right vector.
+	var origin := _camera_grid_origin_for_forward(forward)                                    # Rebuild the camera origin for this basis.
+	return origin + right * local_position.x + forward * local_position.y                     # Return the rotated world-grid point.
+
+
+
+# _camera_local_point_from_world: Converts a world-grid coordinate into active camera-local side/depth coordinates.
+func _camera_local_point_from_world(world_position: Vector2) -> Vector2:                    # Declare this function.
+	var forward := _view_forward_vector().normalized()                                        # Use the active cardinal or halfway-turn camera-forward vector.
+	var right := _view_right_vector().normalized()                                            # Use the active cardinal or halfway-turn camera-right vector.
+	var origin := _camera_grid_origin_for_forward(forward)                                    # Rebuild the camera origin for this basis.
+	var relative := world_position - origin                                                   # Measure this point relative to the camera origin.
+	return Vector2(relative.dot(right), relative.dot(forward))                                # Return side/depth in camera-local coordinates.
+
+
+
+# _segment_has_wall_for_debug: Reports whether a diagnostic source-map segment exactly matches a blocking wall edge.
+func _segment_has_wall_for_debug(a: Vector2, b: Vector2) -> bool:                           # Declare this function.
+	var key := _physical_edge_key(a, b)                                                        # Build the canonical key for this source-map segment.
+	for edge in _all_physical_wall_edges():                                                    # Scan the current thin-wall map's blocking edges.
+		if String(edge["key"]) == key:                                                            # Match this diagnostic segment to a real wall.
+			return true                                                                              # Report that the source edge is blocked.
+	return false                                                                               # Report that this local slot location is open.
 
 
 
@@ -1602,7 +2027,7 @@ func _build_turn_45_render_list() -> Array:                                     
 	var forward := _turn_45_view_forward_vector()                                             # Read the current diagonal camera-forward vector.
 	var right := _turn_45_view_right_vector()                                                 # Read the current diagonal camera-right vector.
 	var origin := _camera_grid_origin_for_forward(forward)                                    # Use the same rear-biased origin concept as straight view, rotated halfway.
-	var physical_edges := _visible_physical_wall_edges_for_basis(origin, forward, right)       # Collect the first-hit map edges from this diagonal view cone.
+	var physical_edges := _visible_physical_wall_edges_for_basis(origin, forward, right)       # Collect only first-visible map edges from this diagonal cone so hidden walls do not become render candidates.
 	for edge in physical_edges:                                                                # Convert every ray-visible physical edge into one 45-degree wall slot.
 		var slot := _turn_45_slot_for_physical_edge(edge, origin, forward, right)                 # Quantize this physical edge into the temporary 16-slot 45-degree diagram.
 		if slot.is_empty():                                                                        # Skip edges outside the temporary 45-degree art footprint.
@@ -1628,9 +2053,55 @@ func _visible_physical_wall_edges() -> Array:                                   
 
 
 # _visible_physical_wall_edges_for_basis: Finds ray-visible physical wall segments for an arbitrary 2D camera basis.
-func _visible_physical_wall_edges_for_basis(origin: Vector2, forward: Vector2, right: Vector2) -> Array: # Declare this function.
-	var all_edges := _all_physical_wall_edges()                                                # Gather unique wall segments from the thin-wall map.
+func _visible_physical_wall_edges_for_basis(origin: Vector2, forward: Vector2, right: Vector2, include_all_hits := false) -> Array: # Declare this function.
 	var visible_by_key := {}                                                                   # Store the nearest-hit wall segments by canonical edge key.
+	var samples := _raycast_wall_hit_samples_for_basis(origin, forward, right) if include_all_hits else _raycast_visibility_samples_for_basis(origin, forward, right) # Use all ray intersections for diagonal validation, but first hits for straight visibility.
+	for sample in samples:                                                                     # Scan each sampled ray.
+		if not bool(sample["hit"]):                                                               # Ignore rays that did not touch a wall edge.
+			continue                                                                                 # Continue to the next ray sample.
+		var edge: Dictionary = sample["edge"]                                                     # Read the closest physical wall edge hit by this ray.
+		var edge_key := String(edge["key"])                                                       # Read the canonical wall-edge key for grouping ray hits.
+		if not visible_by_key.has(edge_key):                                                      # Initialize aggregation the first time this physical edge is hit.
+			edge["distance"] = float(sample["distance"])                                             # Seed the nearest ray distance for diagnostics and downstream sorting.
+			edge["hit_count"] = 0                                                                    # Count how many rays chose this physical edge.
+			edge["hit_position_sum"] = Vector2.ZERO                                                  # Accumulate exact hit positions so the mapper can use the visible wall span.
+			edge["min_hit_distance"] = float(sample["distance"])                                     # Seed the closest distance hit on this edge.
+			edge["max_hit_distance"] = float(sample["distance"])                                     # Seed the farthest distance hit on this edge.
+			edge["min_hit_side"] = 999999.0                                                          # Seed the leftmost camera-local hit sample.
+			edge["max_hit_side"] = -999999.0                                                         # Seed the rightmost camera-local hit sample.
+			edge["min_hit_depth"] = 999999.0                                                         # Seed the nearest camera-local hit depth.
+			edge["max_hit_depth"] = -999999.0                                                        # Seed the farthest camera-local hit depth.
+			visible_by_key[edge_key] = edge                                                         # Store this aggregate edge record.
+		var aggregate: Dictionary = visible_by_key[edge_key]                                      # Read the mutable aggregate for this physical edge.
+		var hit_position: Vector2 = sample["hit_position"]                                        # Read the exact world-grid point where this ray hit the edge.
+		var hit_relative := hit_position - origin                                                 # Convert the hit point into camera-local coordinates.
+		var hit_side := hit_relative.dot(right)                                                   # Compute camera-right offset for this exact ray hit.
+		var hit_depth := hit_relative.dot(forward)                                                # Compute camera-forward depth for this exact ray hit.
+		aggregate["hit_count"] = int(aggregate["hit_count"]) + 1                                  # Increment the number of rays that selected this edge.
+		aggregate["hit_position_sum"] = Vector2(aggregate["hit_position_sum"]) + hit_position     # Add this exact hit point to the aggregate center.
+		aggregate["distance"] = minf(float(aggregate["distance"]), float(sample["distance"]))     # Keep the nearest ray distance for this edge.
+		aggregate["min_hit_distance"] = minf(float(aggregate["min_hit_distance"]), float(sample["distance"])) # Track the closest ray hit distance.
+		aggregate["max_hit_distance"] = maxf(float(aggregate["max_hit_distance"]), float(sample["distance"])) # Track the farthest ray hit distance.
+		aggregate["min_hit_side"] = minf(float(aggregate["min_hit_side"]), hit_side)              # Track the leftmost visible hit point in camera-local space.
+		aggregate["max_hit_side"] = maxf(float(aggregate["max_hit_side"]), hit_side)              # Track the rightmost visible hit point in camera-local space.
+		aggregate["min_hit_depth"] = minf(float(aggregate["min_hit_depth"]), hit_depth)           # Track the nearest visible hit point in camera-local space.
+		aggregate["max_hit_depth"] = maxf(float(aggregate["max_hit_depth"]), hit_depth)           # Track the farthest visible hit point in camera-local space.
+		visible_by_key[edge_key] = aggregate                                                     # Store the updated aggregate back into the dictionary.
+	var visible_edges := []                                                                    # Convert the keyed dictionary back into an ordered array.
+	for edge in visible_by_key.values():                                                       # Iterate through unique visible physical edges.
+		var hit_count := maxi(1, int(edge["hit_count"]))                                           # Avoid division by zero if a malformed aggregate slips through.
+		edge["hit_center"] = Vector2(edge["hit_position_sum"]) / float(hit_count)                  # Store the center of the actually visible ray-hit span.
+		edge["hit_mid_side"] = (float(edge["min_hit_side"]) + float(edge["max_hit_side"])) * 0.5   # Store the visible hit span's center side offset.
+		edge["hit_mid_depth"] = (float(edge["min_hit_depth"]) + float(edge["max_hit_depth"])) * 0.5 # Store the visible hit span's center depth.
+		visible_edges.append(edge)                                                               # Add the visible edge to the result array.
+	return visible_edges                                                                       # Return all visible physical wall segments.
+
+
+
+# _raycast_visibility_samples_for_basis: Casts the full view fan and records each ray's first hit or max-distance endpoint.
+func _raycast_visibility_samples_for_basis(origin: Vector2, forward: Vector2, right: Vector2) -> Array: # Declare this function.
+	var samples := []                                                                          # Store every ray sample for renderer visibility and debug drawing.
+	var all_edges := _all_physical_wall_edges()                                                # Gather unique wall segments from the thin-wall map.
 	for ray_index in range(VISIBILITY_RAY_COUNT):                                             # Cast a fixed fan of rays across the view cone.
 		var ratio := 0.0 if VISIBILITY_RAY_COUNT == 1 else float(ray_index) / float(VISIBILITY_RAY_COUNT - 1) # Convert ray index to 0..1 across the fan.
 		var angle := deg_to_rad(lerpf(-VISIBILITY_RAY_HALF_ANGLE_DEGREES, VISIBILITY_RAY_HALF_ANGLE_DEGREES, ratio)) # Convert this ray's fan angle to radians.
@@ -1641,14 +2112,46 @@ func _visible_physical_wall_edges_for_basis(origin: Vector2, forward: Vector2, r
 			var distance := _ray_segment_hit_distance(origin, ray_direction, edge["a"], edge["b"])   # Compute the distance to this edge if the ray intersects it.
 			if distance >= 0.0 and distance < best_distance:                                         # Keep the closest positive hit along the ray.
 				best_distance = distance                                                               # Store the nearest hit distance.
-				best_hit = edge                                                                        # Store the nearest hit edge.
-		if not best_hit.is_empty():                                                               # Add the ray's nearest wall edge if it hit one.
-			best_hit["distance"] = best_distance                                                    # Store the hit distance for draw ordering and diagnostics.
-			visible_by_key[String(best_hit["key"])] = best_hit                                      # Mark this physical edge as visible from at least one ray.
-	var visible_edges := []                                                                    # Convert the keyed dictionary back into an ordered array.
-	for edge in visible_by_key.values():                                                       # Iterate through unique visible physical edges.
-		visible_edges.append(edge)                                                               # Add the visible edge to the result array.
-	return visible_edges                                                                       # Return all visible physical wall segments.
+				best_hit = edge.duplicate()                                                            # Store a copy of the nearest hit edge so samples are independent.
+		var hit_found := not best_hit.is_empty()                                                  # Record whether this ray found a blocking wall.
+		var endpoint_distance := best_distance if hit_found else VISIBILITY_MAX_DISTANCE           # Use the hit distance or the cone's far limit for drawing.
+		samples.append({                                                                          # Store all information needed by rendering and debug overlays.
+			"ray_index": ray_index,                                                                  # Preserve the ray's index across the fan.
+			"direction": ray_direction,                                                              # Preserve the normalized world-space ray direction.
+			"distance": endpoint_distance,                                                           # Preserve the first-hit or max endpoint distance.
+			"hit": hit_found,                                                                        # Preserve whether this ray actually hit a wall.
+			"edge": best_hit,                                                                        # Preserve the closest physical edge hit by this ray.
+			"hit_position": origin + ray_direction * endpoint_distance,                              # Preserve the world-grid endpoint for top-down drawing.
+		})                                                                                        # Close this ray sample dictionary.
+	return samples                                                                             # Return every ray sample across the fan.
+
+
+
+# _raycast_wall_hit_samples_for_basis: Casts the full view fan and records every wall intersection along each ray.
+func _raycast_wall_hit_samples_for_basis(origin: Vector2, forward: Vector2, right: Vector2) -> Array: # Declare this function.
+	var samples := []                                                                          # Store every wall hit sample across the ray fan.
+	var all_edges := _all_physical_wall_edges()                                                # Gather unique wall segments from the thin-wall map.
+	for ray_index in range(VISIBILITY_RAY_COUNT):                                             # Cast a fixed fan of rays across the view cone.
+		var ratio := 0.0 if VISIBILITY_RAY_COUNT == 1 else float(ray_index) / float(VISIBILITY_RAY_COUNT - 1) # Convert ray index to 0..1 across the fan.
+		var angle := deg_to_rad(lerpf(-VISIBILITY_RAY_HALF_ANGLE_DEGREES, VISIBILITY_RAY_HALF_ANGLE_DEGREES, ratio)) # Convert this ray's fan angle to radians.
+		var ray_direction := (forward * cos(angle) + right * sin(angle)).normalized()             # Rotate the ray around the forward vector inside the top-down plane.
+		var ray_hits := []                                                                        # Store every segment hit by this single ray before sorting by distance.
+		for edge in all_edges:                                                                    # Test this ray against every physical wall edge.
+			var distance := _ray_segment_hit_distance(origin, ray_direction, edge["a"], edge["b"])   # Compute the distance to this edge if the ray intersects it.
+			if distance < 0.0:                                                                       # Skip edges this ray does not touch.
+				continue                                                                                 # Continue to the next edge.
+			ray_hits.append({                                                                         # Store this valid wall hit for distance sorting.
+				"ray_index": ray_index,                                                                  # Preserve the ray's index across the fan.
+				"direction": ray_direction,                                                              # Preserve the normalized world-space ray direction.
+				"distance": distance,                                                                    # Preserve this intersection distance along the ray.
+				"hit": true,                                                                             # Mark this record as a real wall hit.
+				"edge": edge.duplicate(),                                                                # Store a copy of the hit edge so samples are independent.
+				"hit_position": origin + ray_direction * distance,                                       # Preserve the exact world-grid wall-contact point.
+			})                                                                                        # Close this ray-hit dictionary.
+		ray_hits.sort_custom(func(a, b): return float(a["distance"]) < float(b["distance"]))       # Sort this ray's hits from nearest to farthest.
+		for hit_sample in ray_hits:                                                                 # Add every sorted intersection to the shared sample list.
+			samples.append(hit_sample)                                                                 # Preserve this hit for edge-span grouping.
+	return samples                                                                             # Return every wall-hit sample across the full fan.
 
 
 
@@ -1687,18 +2190,17 @@ func _turn_45_slot_for_physical_edge(edge: Dictionary, origin: Vector2, forward:
 	var mid_side := (a_side + b_side) * 0.5                                                     # Use the midpoint side offset to choose the 45-degree art lane.
 	if far_depth < -0.05 or far_depth > VISIBILITY_MAX_DISTANCE:                              # Ignore edges behind the camera or beyond the temporary art depth.
 		return {}                                                                                 # Return no 45-degree slot.
-	if not _turn_45_edge_is_vertical(a, b) and absf(mid_side) > 1.5 and near_depth < 2.05:     # Reject shallow outer horizontal hits that belong outside the 45-degree art footprint.
-		return {}                                                                                 # Return no 45-degree slot for this false continuation.
-	var row := _turn_45_row_for_edge(a, b, near_depth, far_depth, mid_side)                    # Convert the oriented wall edge into the correct near-to-far 45-degree row.
-	var lane := _turn_45_lane_for_edge(a, b, row, mid_side)                                    # Convert the oriented wall edge into the correct left-to-right 45-degree lane.
-	var slot_template := _turn_45_slot_by_row_lane(row, lane)                                  # Look up the numbered overlay metadata for this row/lane pair.
+	var edge_axis := _turn_45_edge_axis(a, b)                                                  # Classify the physical source edge as vertical or horizontal in world-grid space.
+	var sample := _turn_45_edge_sample_position(edge, edge_axis, near_depth, far_depth, mid_side) # Convert the visible edge into one calibrated camera-local footprint sample.
+	var slot_template := _turn_45_slot_for_sample(sample, edge_axis)                           # Look up the 45-degree slot whose footprint contains this sample.
 	if slot_template.is_empty():                                                               # Skip side/depth samples outside the known 45-degree slots.
 		return {}                                                                                 # Return no 45-degree slot.
 	var slot := slot_template.duplicate()                                                      # Copy the slot so this visible instance can carry its source-map segment.
 	slot["segment_a"] = a                                                                      # Preserve the physical source edge for top-down debug highlighting.
 	slot["segment_b"] = b                                                                      # Preserve the physical source edge for top-down debug highlighting.
-	slot["diagonal_depth"] = far_depth                                                         # Preserve the diagonal depth row source for future debug and occlusion checks.
-	slot["diagonal_side"] = mid_side                                                           # Preserve the diagonal side lane source for future debug and occlusion checks.
+	slot["diagonal_depth"] = sample.y                                                          # Preserve the sampled diagonal depth for future debug and occlusion checks.
+	slot["diagonal_side"] = sample.x                                                           # Preserve the exact sampled diagonal side used for debug and occlusion checks.
+	slot["sample_position"] = sample                                                           # Preserve the exact footprint sample used to choose this wall art slot.
 	return slot                                                                                # Return the visible 45-degree wall slot.
 
 
@@ -1709,16 +2211,8 @@ func _prune_turn_45_occluded_slots(render_list: Array) -> Array:                
 	for slot in render_list:                                                                   # Scan the selected halfway-turn slots.
 		present_ids[int(slot["id"])] = true                                                       # Mark this wall id as selected.
 	var occluded_ids := {}                                                                     # Store farther 45-degree ids hidden by nearer ids in the same art branch.
-	if present_ids.has(9):                                                                    # Wall 09 covers the false inner-left panel seen when a side wall crosses the center seam.
-		occluded_ids[4] = true                                                                    # Hide wall 04 before branch pruning so it cannot incorrectly hide wall 01.
-	if present_ids.has(10):                                                                   # Wall 10 is the nearer outer-right panel for this diagonal branch.
-		occluded_ids[2] = true                                                                    # Hide the false far-right wall 02 behind wall 10.
-	if present_ids.has(3):                                                                    # Wall 03 is the expected far outer-left branch when the map line straddles that turn slot.
-		occluded_ids[7] = true                                                                    # Hide the false 07 continuation so the branch resolves to the farther 45-degree panel.
-	_mark_turn_45_occluded_branch(present_ids, occluded_ids, [15, 11, 7, 3])                  # Prune the outer-left branch from near to far.
-	_mark_turn_45_occluded_branch(present_ids, occluded_ids, [12, 8, 4, 1])                   # Prune the inner-left branch from near to far.
-	_mark_turn_45_occluded_branch(present_ids, occluded_ids, [13, 9, 5, 2])                   # Prune the inner-right branch from near to far.
-	_mark_turn_45_occluded_branch(present_ids, occluded_ids, [16, 14, 10, 6])                 # Prune the outer-right branch from near to far.
+	for branch in TURN_45_OCCLUSION_BRANCHES:                                                  # Walk each data-defined art branch from near to far.
+		_mark_turn_45_occluded_branch(present_ids, occluded_ids, branch)                         # Prune farther ids after the nearest visible id on that branch.
 	var pruned := []                                                                          # Store the slots that survive the 45-degree occlusion pass.
 	for slot in render_list:                                                                   # Scan the selected halfway-turn slots again.
 		var wall_id := int(slot["id"])                                                            # Read the numbered 45-degree wall id.
@@ -1743,57 +2237,61 @@ func _mark_turn_45_occluded_branch(present_ids: Dictionary, occluded_ids: Dictio
 
 
 
-# _turn_45_row_for_edge: Converts an oriented diagonal wall edge depth and branch side into the 45-degree art row.
-func _turn_45_row_for_edge(a: Vector2, b: Vector2, near_depth: float, far_depth: float, side: float) -> int: # Declare this function.
-	if not _turn_45_edge_is_vertical(a, b) and near_depth < 0.55:                            # Horizontal wall edges that touch the camera-side diagonal corner use the nearest row.
-		return 4                                                                                 # Select wall 15 or 16 instead of the inner row-3 wall.
-	if _turn_45_edge_is_vertical(a, b):                                                       # Vertical source-map edges behave like side walls in the 45-degree view.
-		var row := clampi(4 - int(floor(near_depth + 0.35)), 0, 4)                              # Use the nearer endpoint plus an art-calibrated threshold for side-wall rows.
-		if side > 0.0 and side < 0.75 and near_depth < 1.45:                                     # Positive inner branches arrive one art row closer near the camera-side diagonal.
-			row = 4                                                                                  # Promote this branch to wall 16 instead of wall 13.
-		elif side > 0.0 and side < 0.75 and far_depth > 3.0:                                     # Positive inner branches farther out sit one art row closer to the horizon.
-			row = 1                                                                                  # Promote this branch to wall 05 instead of wall 09.
-		elif absf(side) > 1.5 and near_depth < 2.2:                                              # Outer side branches cross the horizon sooner than their nearest endpoint suggests.
-			row = maxi(row - 1, 0)                                                                    # Shift the outer branch one row farther away.
-		return row                                                                                 # Return the calibrated side-wall row.
-	return clampi(4 - int(floor(far_depth)), 0, 4)                                           # Use the far endpoint floor for horizontal/front wall pieces.
-
-
-
-# _turn_45_lane_for_edge: Converts an oriented diagonal wall edge side offset into the 45-degree art lane.
-func _turn_45_lane_for_edge(a: Vector2, b: Vector2, row: int, side: float) -> int:          # Declare this function.
-	if row == 0 or row == 4:                                                                  # The farthest and closest rows only have left/right halves.
-		return -1 if side < 0.0 else 1                                                          # Split these rows around the view centerline.
-	if _turn_45_edge_is_vertical(a, b):                                                       # Vertical source-map edges use side-wall lanes.
-		if side < -0.75:                                                                         # Large negative offsets are the outer-left side lane.
-			return -2                                                                                # Return the outer-left lane.
-		if side < 0.0:                                                                           # Negative center offsets use the inner-left 45-degree side-wall lane.
-			return -1                                                                                # Return the inner-left lane.
-		if side < 0.75:                                                                          # Positive center offsets use the inner-right 45-degree side-wall lane.
-			return 1                                                                                 # Return the inner-right lane.
-		return 2                                                                                 # Clamp larger positive side-wall offsets to the outer-right lane.
-	if side < -0.75:                                                                          # Horizontal/front pieces use the normal four-lane screen split.
-		return -2                                                                                # Return the outer-left lane.
-	if side < 0.0:                                                                            # Negative inner offsets use the inner-left lane.
-		return -1                                                                                # Return the inner-left lane.
-	if side < 0.75:                                                                           # Small positive offsets use the inner-right lane.
-		return 1                                                                                 # Return the inner-right lane.
-	return 2                                                                                  # Return the outer-right lane.
-
-
-
 # _turn_45_edge_is_vertical: Returns whether a physical wall segment lies on a north-south grid line.
 func _turn_45_edge_is_vertical(a: Vector2, b: Vector2) -> bool:                             # Declare this function.
 	return absf(a.x - b.x) < absf(a.y - b.y)                                                  # Compare endpoint deltas to distinguish vertical wall edges.
 
 
 
-# _turn_45_slot_by_row_lane: Returns the 45-degree slot metadata for one row/lane pair.
-func _turn_45_slot_by_row_lane(row: int, lane: int) -> Dictionary:                         # Declare this function.
+# _turn_45_edge_axis: Returns the coarse physical orientation string used by the footprint lookup.
+func _turn_45_edge_axis(a: Vector2, b: Vector2) -> String:                                  # Declare this function.
+	return TURN_45_EDGE_VERTICAL if _turn_45_edge_is_vertical(a, b) else TURN_45_EDGE_HORIZONTAL # Return a stable orientation token for footprint filtering.
+
+
+
+# _turn_45_edge_sample_position: Chooses one camera-local side/depth point that represents a visible physical edge.
+func _turn_45_edge_sample_position(edge: Dictionary, edge_axis: String, near_depth: float, far_depth: float, mid_side: float) -> Vector2: # Declare this function.
+	if edge.has("hit_mid_side") and edge.has("hit_mid_depth"):                                  # Prefer the actual visible ray-hit span when the edge was selected by raycasting.
+		return Vector2(float(edge["hit_mid_side"]), float(edge["hit_mid_depth"]))                  # Return the center of the rays that actually hit this wall.
+	var depth_sample := near_depth if edge_axis == TURN_45_EDGE_VERTICAL else far_depth        # Use side-wall leading depth, but front/back wall far depth as a fallback.
+	return Vector2(mid_side, depth_sample)                                                     # Return the fallback calibrated footprint coordinate in camera-local units.
+
+
+
+# _turn_45_slot_for_sample: Finds the 45-degree wall id whose calibrated footprint contains a sample point.
+func _turn_45_slot_for_sample(sample: Vector2, edge_axis: String) -> Dictionary:             # Declare this function.
+	if sample.y <= TURN_45_CLOSE_ROW_DEPTH_MAX:                                                # Keep the nearest diagram row from being stolen by the looser row-3 footprints.
+		return _turn_45_slot_by_id(15 if sample.x < 0.0 else 16)                                  # Split the closest row by camera side into the 15/16 wall-art pair.
+	var best_footprint := {}                                                                   # Track the closest matching footprint inside its calibrated radius.
+	var best_score := 999999.0                                                                 # Start with a large score so any valid footprint can win.
+	for footprint in TURN_45_SLOT_FOOTPRINTS:                                                  # Check every hand-calibrated 45-degree footprint.
+		var footprint_axis := String(footprint["axis"])                                           # Read whether this footprint expects vertical, horizontal, or either edge orientation.
+		var axis_mismatch := footprint_axis != TURN_45_EDGE_ANY and footprint_axis != edge_axis    # Track whether this source edge belongs to the wrong local 45-degree wall family.
+		if axis_mismatch:                                                                         # Reject impossible mappings such as a horizontal map edge claiming a vertical local wall id.
+			continue                                                                                 # Continue to the next footprint instead of drawing a perpendicular wall sprite.
+		var center: Vector2 = footprint["center"]                                                 # Read the footprint center in camera-local side/depth coordinates.
+		var radius: Vector2 = footprint["radius"]                                                 # Read the allowed half-size around that center.
+		var side_delta := absf(sample.x - center.x)                                               # Measure camera-side distance from this footprint center.
+		var depth_delta := absf(sample.y - center.y)                                              # Measure camera-depth distance from this footprint center.
+		if side_delta > radius.x or depth_delta > radius.y:                                       # Reject samples outside this footprint's calibrated rectangle.
+			continue                                                                                 # Continue to the next footprint.
+		var score := pow(side_delta / maxf(radius.x, 0.001), 2.0) + pow(depth_delta / maxf(radius.y, 0.001), 2.0) # Score closer footprint centers higher without adding branch-specific rules.
+		if score >= best_score:                                                                   # Keep the first or nearest footprint for this sample.
+			continue                                                                                 # Continue to the next footprint.
+		best_score = score                                                                        # Store this better footprint score.
+		best_footprint = footprint                                                                # Store this better matching footprint.
+	if best_footprint.is_empty():                                                              # If no calibrated footprint accepted the sample, this edge has no 45-degree overlay.
+		return {}                                                                                 # Return no slot.
+	return _turn_45_slot_by_id(int(best_footprint["id"]))                                      # Return the numbered wall slot controlled by the best footprint.
+
+
+
+# _turn_45_slot_by_id: Returns the 45-degree slot metadata for one numbered wall-art id.
+func _turn_45_slot_by_id(wall_id: int) -> Dictionary:                                      # Declare this function.
 	for slot in TURN_45_WALL_SLOTS:                                                          # Scan the 16 temporary halfway-turn slot definitions.
-		if int(slot["row"]) == row and int(slot["lane"]) == lane:                                # Match the requested diagram row and lane.
+		if int(slot["id"]) == wall_id:                                                            # Match the requested numbered wall-art id.
 			return slot                                                                             # Return the matching 45-degree slot metadata.
-	return {}                                                                                  # Return no slot when this 45-degree row/lane pair is not defined.
+	return {}                                                                                  # Return no slot when this 45-degree id is not defined.
 
 
 
