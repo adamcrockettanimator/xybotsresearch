@@ -1,0 +1,1553 @@
+diff --git a/docs/xybots_motion_object_capture.md b/docs/xybots_motion_object_capture.md
+new file mode 100644
+index 00000000..fdcd3c46
+--- /dev/null
++++ b/docs/xybots_motion_object_capture.md
+@@ -0,0 +1,255 @@
++# Xybots Motion Object Capture
++
++This is a developer-only inspection path for Xybots motion objects and the
++playfield wall layer. It observes the renderer and writes capture files for one
++frame at a time. It does not modify ROM data, gameplay, emulation timing,
++sprite coordinates, priority rules, or the normal MAME render path.
++
++## Rendering Notes
++
++The Xybots frame path is:
++
++1. `xybots_state::screen_update()`
++2. `m_mob->draw_async(cliprect)`
++3. `atari_motion_objects_device::draw()`
++4. `build_active_list()`
++5. `render_object()`
++6. Xybots merges `m_mob->bitmap()` into the playfield
++7. Xybots draws the alpha layer
++
++`draw_async()` is synchronous in the current sprite device implementation. It
++clears dirty regions, wraps the backing motion-object bitmap, and immediately
++calls the device `draw()` implementation.
++
++The safest point to capture the full sprite-only layer is immediately after
++`m_mob->draw_async(cliprect)` returns in `xybots_state::screen_update()`, before
++the playfield merge.
++
++The safest point to capture the wall/floor playfield layer is also in
++`xybots_state::screen_update()`, by drawing `m_playfield_tilemap` into a
++temporary bitmap before the normal playfield draw mutates the real frame bitmap.
++
++The safest first-version point for decoded Xybots fields is the driver, using
++the 64 raw entries in motion-object RAM. `build_active_list()` copies the four
++entry words into the active list and does not preserve the source slot number,
++so slot identity does not survive into `render_object()`.
++
++For Xybots, the motion-object RAM range is `0x802e00-0x802fff`, or 64 entries of
++four 16-bit words. Xybots uses unlinked, unsplit, sequential motion objects.
++Width is fixed at one 8-pixel tile. Height is `(word2 & 7) + 1`.
++
++## Captured Files
++
++Captures are written under the configured snapshot directory. With default MAME
++options this is usually:
++
++```text
++snap/xybots_capture/capture_0001/
++```
++
++Each capture contains:
++
++```text
++metadata.json
++playfield_tiles.json
++playfield_layer.png
++playfield_debug.png
++sprite_layer.png
++sprite_layer_debug.png
++objects/
++    slot_00.png
++    slot_01.png
++    ...
++```
++
++`sprite_layer.png` is the complete motion-object bitmap for the visible frame,
++converted to RGBA with transparent pixels where the motion-object bitmap stores
++`0xffff`. Priority bits are ignored for color conversion and preserved in JSON.
++
++`objects/slot_NN.png` files are local reconstructed motion-object strips using
++the same decoded graphics element, palette base, priority bits, transparency,
++height, and horizontal flip rules used by the renderer.
++
++`sprite_layer_debug.png` starts from `sprite_layer.png` and overlays object
++bounding boxes, slot numbers, and graphics codes.
++
++`playfield_layer.png` is the visible playfield tilemap only: corridor walls,
++floor, doors, and background panels, without motion objects or alpha/HUD.
++
++`playfield_tiles.json` records every one of the 64x32 playfield entries, including
++raw 16-bit word, tile code, palette/color, flag bit, map coordinate, and screen
++coordinate.
++
++`playfield_debug.png` starts from `playfield_layer.png` and overlays an 8x8 tile
++grid plus tile-code labels for visible tiles.
++
++## Metadata Schema
++
++Example:
++
++```json
++{
++  "game": "xybots",
++  "capture_index": 1,
++  "emulated_frame": 12345,
++  "capture_dir": "xybots_capture/capture_0001",
++  "trigger": "MAME_XYBOTS_CAPTURE=1 and KEYCODE_F11",
++  "screen": {
++    "width": 336,
++    "height": 240
++  },
++  "motion_object_space": {
++    "width": 512,
++    "height": 512
++  },
++  "objects": [
++    {
++      "slot": 17,
++      "raw_words": ["0x04B0", "0x0005", "0x6405", "0x3203"],
++      "code": 1200,
++      "code_hex": "0x04B0",
++      "source_tiles": [1200, 1201, 1202, 1203, 1204, 1205],
++      "color": 3,
++      "priority": 5,
++      "raw_position": {
++        "x": 100,
++        "y": 200
++      },
++      "rendered_position": {
++        "x": 100,
++        "y": 264
++      },
++      "size_tiles": {
++        "width": 1,
++        "height": 6
++      },
++      "size_pixels": {
++        "width": 8,
++        "height": 48
++      },
++      "flip": {
++        "x": false,
++        "y": false
++      },
++      "visible": true,
++      "image": "objects/slot_17.png"
++    }
++  ]
++}
++```
++
++## Build
++
++From the MAME source root:
++
++```powershell
++C:\msys64\usr\bin\bash.exe -lc 'export MSYSTEM=UCRT64; source /etc/profile; export MINGW64=1; cd /d/Godot/xybotsResearch/mame-src && make SUBTARGET=xybots SOURCES=src/mame/atari/xybots.cpp PTR64=1 -j4'
++```
++
++This produces:
++
++```text
++D:\Godot\xybotsResearch\mame-src\xybots.exe
++```
++
++## Run
++
++Enable capture with an environment variable. Capture is disabled by default.
++
++```powershell
++$env:MAME_XYBOTS_CAPTURE = "1"
++D:\Godot\xybotsResearch\mame-src\xybots.exe xybots -rompath D:\MAME\roms
++```
++
++Press `F11` to write one full frame capture, including:
++
++```text
++playfield_layer.png
++playfield_debug.png
++playfield_tiles.json
++sprite_layer.png
++sprite_layer_debug.png
++metadata.json
++objects/
++```
++
++Press `F12` to toggle automatic unique sprite capture.
++
++While auto capture is on, each frame is scanned but files are only written when
++the rendered sprite content has not been seen before in the current run. Press
++`F12` again to stop auto capture.
++
++Automatic capture writes:
++
++```text
++snap/xybots_capture/auto/
++    strips/
++        strip_00001_slot_37_code_04B0_h6_c3_p5.png
++        ...
++    stitched/
++        stitched_00001_frame_12345_parts_3.png
++        ...
++    characters/
++        character_00001_frame_12345_parts_6.png
++        ...
++```
++
++`strips` are the individual Xybots motion objects. `stitched` images are
++candidate assembled sprites made by grouping adjacent visible strips with the
++same color and priority. `characters` are a second, more relaxed grouping pass
++that merges nearby same-frame strips with matching color and priority into
++larger logical sprite candidates. They are intentionally heuristic review output,
++not a claim that the game has a formal "character object" at that level.
++
++## Changed Source Files
++
++`src/mame/atari/xybots.cpp`
++
++- Adds Xybots-only capture state and helpers.
++- Checks `MAME_XYBOTS_CAPTURE` in `machine_start()`.
++- Uses `F11` to write a one-frame capture after `m_mob->draw_async(cliprect)`.
++- Adds playfield-only PNG, debug PNG, and 64x32 tile metadata JSON to one-frame
++  captures for wall/floor investigation.
++- Uses `F12` to toggle automatic unique capture after `m_mob->draw_async(cliprect)`
++  and before the playfield merge.
++- Exports new unique strip PNGs, conservative stitched candidate PNGs, and
++  relaxed character candidate PNGs while auto capture is running.
++- Writes `sprite_layer.png`, per-slot object PNGs, `metadata.json`, and
++  `sprite_layer_debug.png` for one-frame captures.
++
++`docs/xybots_motion_object_capture.md`
++
++- Documents the call chain, capture points, workflow, schema, and limitations.
++
++## Verification Checklist
++
++1. Run Xybots without `MAME_XYBOTS_CAPTURE`; confirm no files are written and
++   gameplay/rendering are unchanged.
++2. Run with `MAME_XYBOTS_CAPTURE=1`; confirm startup logs the capture feature.
++3. Press `F11` during gameplay; confirm one numbered capture directory is
++   written.
++4. Open `playfield_layer.png`; confirm walls/floor are present and sprites/HUD
++   are absent.
++5. Open `playfield_tiles.json`; confirm it has 2048 tile entries.
++6. Press `F12`; confirm auto capture turns on in the console.
++7. Move through the game; confirm new files appear in `snap/xybots_capture/auto`.
++8. Press `F12` again; confirm auto capture turns off.
++9. Open `sprite_layer.png`; confirm sprites are present, playfield/HUD are
++   absent, colors look correct, and transparency is present.
++10. Pick a visible slot in `metadata.json`; confirm `height_tiles * 8` matches
++   the PNG height.
++11. Confirm the source tile list increments in the order used by the renderer.
++12. Compare `sprite_layer_debug.png` with `sprite_layer.png` to verify slot
++   labels and bounding boxes are plausible.
++
++## Known Limitations
++
++- This is Xybots-specific. It does not attempt to generalize to other Atari
++  motion-object games.
++- Slot decoding is mirrored in the driver from the Xybots motion-object config.
++  It is intentionally not a generic callback from `render_object()` yet.
++- Stitched and character images are heuristic. They group visible strips with
++  matching color and priority, which is useful for reviewing player/enemy
++  captures but can also group unrelated nearby objects.
++- Object PNGs are rendered in local strip space. Wrapped screen-space placement
++  is represented in metadata and the sprite-layer/debug images.
+diff --git a/src/mame/atari/atarijsa.cpp b/src/mame/atari/atarijsa.cpp
+index 2581c728..be81ae79 100644
+--- a/src/mame/atari/atarijsa.cpp
++++ b/src/mame/atari/atarijsa.cpp
+@@ -76,6 +76,8 @@ ALL: the LPF (low pass filter) bit which selectively places a lowpass filter in
+ #include "emu.h"
+ #include "atarijsa.h"
+ 
++#include <cstdlib>
++
+ 
+ #define JSA_MASTER_CLOCK            XTAL(3'579'545)
+ 
+@@ -673,6 +675,8 @@ uint8_t atari_jsa_i_device::rdio_r()
+ 	//
+ 
+ 	uint8_t result = m_jsai->read();
++	if ((std::getenv("MAME_XYBOTS_AUTO_SCRIPT") != nullptr) && (std::getenv("MAME_XYBOTS_AUTO_SCRIPT_WAIT_TRIGGER") == nullptr) && (machine().time().as_double() >= 2.5) && (machine().time().as_double() <= 4.0))
++		result |= 0x03;
+ 	if (!m_test_read_cb())
+ 		result ^= 0x80;
+ 	if (m_tms5220 != nullptr && m_tms5220->readyq_r() == 0)
+diff --git a/src/mame/atari/xybots.cpp b/src/mame/atari/xybots.cpp
+index cef61caa..28311485 100644
+--- a/src/mame/atari/xybots.cpp
++++ b/src/mame/atari/xybots.cpp
+@@ -27,17 +27,55 @@
+ #include "slapstic.h"
+ 
+ #include "cpu/m68000/m68000.h"
++#include "emuopts.h"
++#include "input.h"
+ #include "machine/eeprompar.h"
+ #include "machine/watchdog.h"
+ 
+ #include "emupal.h"
++#include "fileio.h"
++#include "inputdev.h"
++#include "png.h"
+ #include "screen.h"
+ #include "speaker.h"
+ #include "tilemap.h"
+ 
++#include <rapidjson/prettywriter.h>
++#include <rapidjson/stringbuffer.h>
++
++#include <algorithm>
++#include <array>
++#include <cstdlib>
++#include <fstream>
++#include <filesystem>
++#include <string>
++#include <system_error>
++#include <unordered_set>
++#include <vector>
++
+ 
+ namespace {
+ 
++struct xybots_mo_capture_record
++{
++	int slot = 0;
++	std::array<u16, 4> raw = { };
++	u32 code = 0;
++	u32 color = 0;
++	int raw_x = 0;
++	int raw_y = 0;
++	int rendered_x = 0;
++	int rendered_y = 0;
++	int width_tiles = 1;
++	int height_tiles = 1;
++	bool hflip = false;
++	bool vflip = false;
++	int priority = 0;
++	bool visible = false;
++	std::string image;
++	std::vector<u32> source_tiles;
++};
++
+ class xybots_state : public driver_device
+ {
+ public:
+@@ -52,6 +90,7 @@ public:
+ 		m_playfield_tilemap(*this, "playfield"),
+ 		m_alpha_tilemap(*this, "alpha"),
+ 		m_mob(*this, "mob"),
++		m_ffe100(*this, "FFE100"),
+ 		m_ffe200(*this, "FFE200")
+ 	{ }
+ 
+@@ -70,16 +109,65 @@ private:
+ 	required_device<tilemap_device> m_playfield_tilemap;
+ 	required_device<tilemap_device> m_alpha_tilemap;
+ 	required_device<atari_motion_objects_device> m_mob;
++	required_ioport m_ffe100;
+ 	required_ioport m_ffe200;
+ 
+ 	uint16_t m_h256 = 0;
++	bool m_xybots_capture_enabled = false;
++	bool m_xybots_auto_capture = false;
++	bool m_xybots_wall_recording = false;
++	bool m_xybots_auto_script = false;
++	bool m_xybots_auto_script_wait_trigger = false;
++	int m_xybots_capture_index = 0;
++	int m_xybots_wall_recording_index = 0;
++	int m_xybots_wall_recording_frame = 0;
++	int m_xybots_auto_script_frame = 0;
++	int m_xybots_unique_strip_index = 0;
++	int m_xybots_unique_stitched_index = 0;
++	int m_xybots_unique_character_index = 0;
++	u64 m_xybots_last_wall_recording_frame = 0;
++	std::unordered_set<u64> m_xybots_seen_strips;
++	std::unordered_set<u64> m_xybots_seen_stitched;
++	std::unordered_set<u64> m_xybots_seen_characters;
+ 
+ 	void video_int_ack_w(uint16_t data = 0);
++	uint16_t special_port0_r();
+ 	uint16_t special_port1_r();
+ 	TILE_GET_INFO_MEMBER(get_alpha_tile_info);
+ 	TILE_GET_INFO_MEMBER(get_playfield_tile_info);
+ 	uint32_t screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
+ 	void main_map(address_map &map) ATTR_COLD;
++	bool xybots_wall_record_requested();
++	bool xybots_capture_requested();
++	bool xybots_auto_capture_requested();
++	void xybots_update_auto_script();
++	u16 xybots_auto_script_input_mask();
++	void xybots_auto_script_start_recording(const char *label);
++	void xybots_auto_script_stop_recording();
++	void xybots_wall_record_frame(screen_device &screen);
++	void xybots_capture_frame(screen_device &screen, const rectangle &cliprect);
++	void xybots_auto_capture_frame(screen_device &screen, const rectangle &cliprect);
++	void xybots_collect_motion_objects(std::vector<xybots_mo_capture_record> &objects);
++	void xybots_render_object_bitmap(const xybots_mo_capture_record &object, bitmap_ind16 &bitmap);
++	void xybots_convert_mobitmap(bitmap_argb32 &dest, const bitmap_ind16 &src, const rectangle &cliprect);
++	void xybots_convert_indexed_bitmap(bitmap_argb32 &dest, const bitmap_ind16 &src, const rectangle &cliprect);
++	void xybots_create_capture_dirs(const std::string &capture_dir, bool objects_dir);
++	std::string xybots_snapshot_root();
++	int xybots_latest_wall_recording_index();
++	bool xybots_bitmap_has_pixels(const bitmap_ind16 &bitmap);
++	u64 xybots_hash_bitmap(const bitmap_ind16 &bitmap);
++	u64 xybots_hash_bitmap(const bitmap_argb32 &bitmap);
++	bool xybots_screen_rect(const xybots_mo_capture_record &object, const rectangle &cliprect, rectangle &rect);
++	bool xybots_group_rects_touch(const rectangle &left, const rectangle &right);
++	bool xybots_group_rects_character_related(const rectangle &left, const rectangle &right);
++	void xybots_blit_argb(bitmap_argb32 &dest, const bitmap_argb32 &src, int dest_x, int dest_y);
++	void xybots_write_png(const char *path, const bitmap_argb32 &bitmap);
++	void xybots_write_metadata(const char *path, const std::vector<xybots_mo_capture_record> &objects, screen_device &screen, const rectangle &cliprect, const char *capture_dir);
++	void xybots_write_playfield_metadata(const char *path, screen_device &screen, const rectangle &cliprect);
++	void xybots_write_playfield_debug_layer(const char *path, const bitmap_argb32 &playfield_layer);
++	void xybots_write_debug_layer(const char *path, const bitmap_argb32 &sprite_layer, const std::vector<xybots_mo_capture_record> &objects);
++	void xybots_draw_debug_rect(bitmap_argb32 &bitmap, int x, int y, int width, int height, rgb_t color);
++	void xybots_draw_debug_text(bitmap_argb32 &bitmap, int x, int y, const std::string &text, rgb_t color);
+ 
+ 	static const atari_motion_objects_config s_mob_config;
+ };
+@@ -163,6 +251,45 @@ uint32_t xybots_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
+ 	// start drawing
+ 	m_mob->draw_async(cliprect);
+ 
++	if (m_xybots_capture_enabled)
++	{
++		xybots_update_auto_script();
++
++		if (xybots_wall_record_requested())
++		{
++			m_xybots_wall_recording = !m_xybots_wall_recording;
++			if (m_xybots_wall_recording)
++			{
++				m_xybots_wall_recording_index++;
++				m_xybots_wall_recording_frame = 0;
++				m_xybots_last_wall_recording_frame = ~u64(0);
++				std::string const session_dir = util::string_format("xybots_capture/wall_turn_recordings/session_%04d", m_xybots_wall_recording_index);
++				xybots_create_capture_dirs(session_dir + "/playfield", false);
++				xybots_create_capture_dirs(session_dir + "/tiles", false);
++				osd_printf_info("[xybots-capture] Wall turn recording on: %s\n", session_dir.c_str());
++			}
++			else
++			{
++				osd_printf_info("[xybots-capture] Wall turn recording off after %d frames\n", m_xybots_wall_recording_frame);
++			}
++		}
++
++		if (m_xybots_wall_recording)
++			xybots_wall_record_frame(screen);
++
++		if (xybots_capture_requested())
++			xybots_capture_frame(screen, cliprect);
++
++		if (xybots_auto_capture_requested())
++		{
++			m_xybots_auto_capture = !m_xybots_auto_capture;
++			osd_printf_info("[xybots-capture] Auto capture %s\n", m_xybots_auto_capture ? "on" : "off");
++		}
++
++		if (m_xybots_auto_capture)
++			xybots_auto_capture_frame(screen, cliprect);
++	}
++
+ 	// draw the playfield
+ 	m_playfield_tilemap->draw(screen, bitmap, cliprect, 0, 0);
+ 
+@@ -226,6 +353,1037 @@ uint32_t xybots_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
+ }
+ 
+ 
++bool xybots_state::xybots_wall_record_requested()
++{
++	return m_xybots_capture_enabled && machine().input().code_pressed_once(KEYCODE_F10);
++}
++
++
++bool xybots_state::xybots_capture_requested()
++{
++	return m_xybots_capture_enabled && machine().input().code_pressed_once(KEYCODE_F11);
++}
++
++
++bool xybots_state::xybots_auto_capture_requested()
++{
++	return m_xybots_capture_enabled && machine().input().code_pressed_once(KEYCODE_F12);
++}
++
++
++void xybots_state::xybots_auto_script_start_recording(const char *label)
++{
++	if (m_xybots_wall_recording)
++		xybots_auto_script_stop_recording();
++
++	m_xybots_wall_recording_index++;
++	m_xybots_wall_recording_frame = 0;
++	m_xybots_last_wall_recording_frame = ~u64(0);
++
++	std::string const session_dir = util::string_format("xybots_capture/wall_turn_recordings/session_%04d", m_xybots_wall_recording_index);
++	xybots_create_capture_dirs(session_dir + "/playfield", false);
++	xybots_create_capture_dirs(session_dir + "/tiles", false);
++
++	std::filesystem::path const label_path = std::filesystem::path(xybots_snapshot_root()) / session_dir / "label.txt";
++	std::ofstream label_file(label_path);
++	label_file << label << "\n";
++
++	m_xybots_wall_recording = true;
++	osd_printf_info("[xybots-auto-script] recording %s: %s\n", session_dir.c_str(), label);
++}
++
++
++void xybots_state::xybots_auto_script_stop_recording()
++{
++	if (!m_xybots_wall_recording)
++		return;
++
++	osd_printf_info("[xybots-auto-script] recording off after %d frames\n", m_xybots_wall_recording_frame);
++	m_xybots_wall_recording = false;
++}
++
++
++void xybots_state::xybots_update_auto_script()
++{
++	if (!m_xybots_auto_script)
++		return;
++
++	if (m_xybots_auto_script_wait_trigger && (m_xybots_auto_script_frame == 0))
++	{
++		std::filesystem::path const trigger_path = std::filesystem::path(xybots_snapshot_root()) / "xybots_capture" / "start_controlled_capture.txt";
++		std::error_code err;
++		if (!std::filesystem::exists(trigger_path, err))
++			return;
++
++		std::filesystem::remove(trigger_path, err);
++		m_xybots_auto_script_frame = 699;
++		osd_printf_info("[xybots-auto-script] Trigger received; recording controlled movement sessions\n");
++	}
++
++	m_xybots_auto_script_frame++;
++
++	switch (m_xybots_auto_script_frame)
++	{
++	case 720: xybots_auto_script_start_recording("forward_one_tile_up"); break;
++	case 860: xybots_auto_script_stop_recording(); break;
++	case 900: xybots_auto_script_start_recording("backward_one_tile_down"); break;
++	case 1040: xybots_auto_script_stop_recording(); break;
++	case 1080: xybots_auto_script_start_recording("turn_left_button2"); break;
++	case 1200: xybots_auto_script_stop_recording(); break;
++	case 1240: xybots_auto_script_start_recording("turn_right_button3"); break;
++	case 1360: xybots_auto_script_stop_recording(); break;
++	case 1400: xybots_auto_script_start_recording("strafe_left"); break;
++	case 1540: xybots_auto_script_stop_recording(); break;
++	case 1580: xybots_auto_script_start_recording("strafe_right"); break;
++	case 1720: xybots_auto_script_stop_recording(); break;
++	default: break;
++	}
++}
++
++
++u16 xybots_state::xybots_auto_script_input_mask()
++{
++	if (!m_xybots_auto_script)
++		return 0;
++
++	switch (m_xybots_auto_script_frame)
++	{
++	case 60 ... 90: return 0x0100; // any key / P1 start
++	case 300 ... 360: return 0x0100; // P1 start
++	case 750 ... 762: return 0x8000; // P1 joystick up
++	case 930 ... 942: return 0x4000; // P1 joystick down
++	case 1110 ... 1122: return 0x0800; // P1 twist left
++	case 1270 ... 1282: return 0x0400; // P1 twist right
++	case 1430 ... 1442: return 0x2000; // P1 joystick left
++	case 1610 ... 1622: return 0x1000; // P1 joystick right
++	default: return 0;
++	}
++}
++
++
++void xybots_state::xybots_wall_record_frame(screen_device &screen)
++{
++	u64 const frame_number = screen.frame_number();
++	if (m_xybots_last_wall_recording_frame == frame_number)
++		return;
++
++	m_xybots_last_wall_recording_frame = frame_number;
++	m_xybots_wall_recording_frame++;
++
++	rectangle const capture_rect = screen.visible_area();
++	bitmap_ind16 playfield_ind(capture_rect.width(), capture_rect.height());
++	playfield_ind.fill(0xffff);
++	m_playfield_tilemap->draw(screen, playfield_ind, capture_rect, 0, 0);
++
++	bitmap_argb32 playfield_layer(capture_rect.width(), capture_rect.height());
++	xybots_convert_indexed_bitmap(playfield_layer, playfield_ind, playfield_ind.cliprect());
++
++	std::string const session_dir = util::string_format("xybots_capture/wall_turn_recordings/session_%04d", m_xybots_wall_recording_index);
++	std::string const basename = util::string_format("frame_%05d", m_xybots_wall_recording_frame);
++	xybots_write_png((session_dir + "/playfield/" + basename + ".png").c_str(), playfield_layer);
++	xybots_write_playfield_metadata((session_dir + "/tiles/" + basename + ".json").c_str(), screen, capture_rect);
++
++	if ((m_xybots_wall_recording_frame % 30) == 0)
++		osd_printf_info("[xybots-capture] Wall turn recording %d frames\n", m_xybots_wall_recording_frame);
++}
++
++
++void xybots_state::xybots_capture_frame(screen_device &screen, const rectangle &cliprect)
++{
++	(void)cliprect;
++
++	rectangle const capture_rect = screen.visible_area();
++	m_mob->draw_async(capture_rect);
++
++	std::vector<xybots_mo_capture_record> objects;
++	xybots_collect_motion_objects(objects);
++
++	m_xybots_capture_index++;
++	std::string const capture_dir = util::string_format("xybots_capture/capture_%04d", m_xybots_capture_index);
++	xybots_create_capture_dirs(capture_dir, true);
++
++	bitmap_argb32 sprite_layer(capture_rect.width(), capture_rect.height());
++	xybots_convert_mobitmap(sprite_layer, m_mob->bitmap(), capture_rect);
++	xybots_write_png((capture_dir + "/sprite_layer.png").c_str(), sprite_layer);
++
++	bitmap_ind16 playfield_ind(capture_rect.width(), capture_rect.height());
++	playfield_ind.fill(0xffff);
++	m_playfield_tilemap->draw(screen, playfield_ind, capture_rect, 0, 0);
++
++	bitmap_argb32 playfield_layer(capture_rect.width(), capture_rect.height());
++	xybots_convert_indexed_bitmap(playfield_layer, playfield_ind, playfield_ind.cliprect());
++	xybots_write_png((capture_dir + "/playfield_layer.png").c_str(), playfield_layer);
++	xybots_write_playfield_debug_layer((capture_dir + "/playfield_debug.png").c_str(), playfield_layer);
++	xybots_write_playfield_metadata((capture_dir + "/playfield_tiles.json").c_str(), screen, capture_rect);
++
++	int visible_objects = 0;
++	for (xybots_mo_capture_record &object : objects)
++	{
++		bitmap_ind16 object_ind(object.width_tiles * 8, object.height_tiles * 8);
++		xybots_render_object_bitmap(object, object_ind);
++		object.visible = xybots_bitmap_has_pixels(object_ind);
++
++		if (object.visible)
++		{
++			visible_objects++;
++			object.image = util::string_format("objects/slot_%02d.png", object.slot);
++
++			bitmap_argb32 object_argb(object_ind.width(), object_ind.height());
++			xybots_convert_mobitmap(object_argb, object_ind, object_ind.cliprect());
++			xybots_write_png((capture_dir + "/" + object.image).c_str(), object_argb);
++		}
++	}
++
++	xybots_write_debug_layer((capture_dir + "/sprite_layer_debug.png").c_str(), sprite_layer, objects);
++	xybots_write_metadata((capture_dir + "/metadata.json").c_str(), objects, screen, capture_rect, capture_dir.c_str());
++
++	osd_printf_info("[xybots-capture] Capturing frame %llu\n", (unsigned long long)screen.frame_number());
++	osd_printf_info("[xybots-capture] 64 slots, %d visible objects\n", visible_objects);
++	osd_printf_info("[xybots-capture] Wrote %s\n", capture_dir.c_str());
++}
++
++
++void xybots_state::xybots_auto_capture_frame(screen_device &screen, const rectangle &cliprect)
++{
++	std::vector<xybots_mo_capture_record> objects;
++	xybots_collect_motion_objects(objects);
++
++	std::string const capture_dir = "xybots_capture/auto";
++	xybots_create_capture_dirs(capture_dir + "/strips", false);
++	xybots_create_capture_dirs(capture_dir + "/stitched", false);
++	xybots_create_capture_dirs(capture_dir + "/characters", false);
++
++	int new_strips = 0;
++	int new_stitched = 0;
++	int new_characters = 0;
++	std::vector<int> stitch_candidates;
++	std::vector<rectangle> candidate_rects;
++
++	for (int index = 0; index < objects.size(); index++)
++	{
++		xybots_mo_capture_record &object = objects[index];
++		bitmap_ind16 object_ind(object.width_tiles * 8, object.height_tiles * 8);
++		xybots_render_object_bitmap(object, object_ind);
++		object.visible = xybots_bitmap_has_pixels(object_ind);
++		if (!object.visible)
++			continue;
++
++		u64 const strip_hash = xybots_hash_bitmap(object_ind);
++		if (m_xybots_seen_strips.insert(strip_hash).second)
++		{
++			m_xybots_unique_strip_index++;
++			std::string const image = util::string_format(
++					"%s/strips/strip_%05d_slot_%02d_code_%04X_h%d_c%d_p%d.png",
++					capture_dir,
++					m_xybots_unique_strip_index,
++					object.slot,
++					object.code,
++					object.height_tiles,
++					object.color,
++					object.priority);
++
++			bitmap_argb32 object_argb(object_ind.width(), object_ind.height());
++			xybots_convert_mobitmap(object_argb, object_ind, object_ind.cliprect());
++			xybots_write_png(image.c_str(), object_argb);
++			new_strips++;
++		}
++
++		rectangle screen_rect;
++		if (xybots_screen_rect(object, cliprect, screen_rect))
++		{
++			stitch_candidates.push_back(index);
++			candidate_rects.push_back(screen_rect);
++		}
++	}
++
++	std::vector<bool> consumed(stitch_candidates.size(), false);
++	for (int start = 0; start < stitch_candidates.size(); start++)
++	{
++		if (consumed[start])
++			continue;
++
++		std::vector<int> group;
++		std::vector<int> queue;
++		consumed[start] = true;
++		queue.push_back(start);
++
++		while (!queue.empty())
++		{
++			int const current = queue.back();
++			queue.pop_back();
++			group.push_back(current);
++
++			xybots_mo_capture_record const &current_object = objects[stitch_candidates[current]];
++			for (int other = 0; other < stitch_candidates.size(); other++)
++			{
++				if (consumed[other])
++					continue;
++
++				xybots_mo_capture_record const &other_object = objects[stitch_candidates[other]];
++				if (current_object.color != other_object.color || current_object.priority != other_object.priority)
++					continue;
++				if (!xybots_group_rects_touch(candidate_rects[current], candidate_rects[other]))
++					continue;
++
++				consumed[other] = true;
++				queue.push_back(other);
++			}
++		}
++
++		if (group.size() < 2)
++			continue;
++
++		rectangle bounds = candidate_rects[group[0]];
++		for (int member : group)
++			bounds |= candidate_rects[member];
++
++		if (bounds.width() > 96 || bounds.height() > 96)
++			continue;
++
++		bitmap_argb32 stitched(bounds.width(), bounds.height());
++		stitched.fill(rgb_t::transparent());
++		for (int member : group)
++		{
++			xybots_mo_capture_record const &object = objects[stitch_candidates[member]];
++			bitmap_ind16 object_ind(object.width_tiles * 8, object.height_tiles * 8);
++			xybots_render_object_bitmap(object, object_ind);
++
++			bitmap_argb32 object_argb(object_ind.width(), object_ind.height());
++			xybots_convert_mobitmap(object_argb, object_ind, object_ind.cliprect());
++			xybots_blit_argb(stitched, object_argb, object.rendered_x - bounds.left(), object.rendered_y - bounds.top());
++		}
++
++		u64 const stitched_hash = xybots_hash_bitmap(stitched);
++		if (m_xybots_seen_stitched.insert(stitched_hash).second)
++		{
++			m_xybots_unique_stitched_index++;
++			std::string const image = util::string_format(
++					"%s/stitched/stitched_%05d_frame_%llu_parts_%d.png",
++					capture_dir,
++					m_xybots_unique_stitched_index,
++					(unsigned long long)screen.frame_number(),
++					int(group.size()));
++			xybots_write_png(image.c_str(), stitched);
++			new_stitched++;
++		}
++	}
++
++	std::vector<bool> character_consumed(stitch_candidates.size(), false);
++	for (int start = 0; start < stitch_candidates.size(); start++)
++	{
++		if (character_consumed[start])
++			continue;
++
++		std::vector<int> group;
++		std::vector<int> queue;
++		character_consumed[start] = true;
++		queue.push_back(start);
++
++		while (!queue.empty())
++		{
++			int const current = queue.back();
++			queue.pop_back();
++			group.push_back(current);
++
++			xybots_mo_capture_record const &current_object = objects[stitch_candidates[current]];
++			for (int other = 0; other < stitch_candidates.size(); other++)
++			{
++				if (character_consumed[other])
++					continue;
++
++				xybots_mo_capture_record const &other_object = objects[stitch_candidates[other]];
++				if (current_object.color != other_object.color || current_object.priority != other_object.priority)
++					continue;
++				if (!xybots_group_rects_character_related(candidate_rects[current], candidate_rects[other]))
++					continue;
++
++				rectangle trial_bounds = candidate_rects[current];
++				trial_bounds |= candidate_rects[other];
++				if (trial_bounds.width() > 96 || trial_bounds.height() > 112)
++					continue;
++
++				character_consumed[other] = true;
++				queue.push_back(other);
++			}
++		}
++
++		if (group.size() < 2)
++			continue;
++
++		rectangle bounds = candidate_rects[group[0]];
++		for (int member : group)
++			bounds |= candidate_rects[member];
++
++		if (bounds.width() > 96 || bounds.height() > 112)
++			continue;
++
++		bitmap_argb32 character(bounds.width(), bounds.height());
++		character.fill(rgb_t::transparent());
++		for (int member : group)
++		{
++			xybots_mo_capture_record const &object = objects[stitch_candidates[member]];
++			bitmap_ind16 object_ind(object.width_tiles * 8, object.height_tiles * 8);
++			xybots_render_object_bitmap(object, object_ind);
++
++			bitmap_argb32 object_argb(object_ind.width(), object_ind.height());
++			xybots_convert_mobitmap(object_argb, object_ind, object_ind.cliprect());
++			xybots_blit_argb(character, object_argb, object.rendered_x - bounds.left(), object.rendered_y - bounds.top());
++		}
++
++		u64 const character_hash = xybots_hash_bitmap(character);
++		if (m_xybots_seen_characters.insert(character_hash).second)
++		{
++			m_xybots_unique_character_index++;
++			std::string const image = util::string_format(
++					"%s/characters/character_%05d_frame_%llu_parts_%d.png",
++					capture_dir,
++					m_xybots_unique_character_index,
++					(unsigned long long)screen.frame_number(),
++					int(group.size()));
++			xybots_write_png(image.c_str(), character);
++			new_characters++;
++		}
++	}
++
++	if (new_strips || new_stitched || new_characters)
++		osd_printf_info("[xybots-capture] frame %llu: %d new strips, %d new stitched, %d new characters\n", (unsigned long long)screen.frame_number(), new_strips, new_stitched, new_characters);
++}
++
++
++std::string xybots_state::xybots_snapshot_root()
++{
++	std::string snapshot_root = machine().options().snapshot_directory();
++	auto const path_separator = snapshot_root.find(';');
++	if (path_separator != std::string::npos)
++		snapshot_root.erase(path_separator);
++	if (snapshot_root.empty())
++		snapshot_root = ".";
++	return snapshot_root;
++}
++
++
++void xybots_state::xybots_create_capture_dirs(const std::string &capture_dir, bool objects_dir)
++{
++	std::filesystem::path path = std::filesystem::path(xybots_snapshot_root()) / capture_dir;
++	if (objects_dir)
++		path /= "objects";
++	std::error_code direrr;
++	std::filesystem::create_directories(path, direrr);
++	if (direrr)
++		osd_printf_error("[xybots-capture] Error creating %s (%s)\n", capture_dir.c_str(), direrr.message().c_str());
++}
++
++
++int xybots_state::xybots_latest_wall_recording_index()
++{
++	std::filesystem::path const recordings_dir = std::filesystem::path(xybots_snapshot_root()) / "xybots_capture" / "wall_turn_recordings";
++	std::error_code direrr;
++	if (!std::filesystem::is_directory(recordings_dir, direrr))
++		return 0;
++
++	int latest = 0;
++	for (std::filesystem::directory_iterator it(recordings_dir, direrr), end; !direrr && (it != end); it.increment(direrr))
++	{
++		if (!it->is_directory(direrr))
++			continue;
++
++		std::string const name = it->path().filename().string();
++		if ((name.length() != 12) || (name.compare(0, 8, "session_") != 0))
++			continue;
++
++		char const *const digits = name.c_str() + 8;
++		bool numeric = true;
++		for (int i = 0; i < 4; i++)
++			if ((digits[i] < '0') || (digits[i] > '9'))
++				numeric = false;
++
++		if (numeric)
++			latest = std::max(latest, std::atoi(digits));
++	}
++
++	if (direrr)
++		osd_printf_error("[xybots-capture] Error scanning %s (%s)\n", recordings_dir.string().c_str(), direrr.message().c_str());
++
++	return latest;
++}
++
++
++bool xybots_state::xybots_bitmap_has_pixels(const bitmap_ind16 &bitmap)
++{
++	for (int y = 0; y < bitmap.height(); y++)
++		for (int x = 0; x < bitmap.width(); x++)
++			if (bitmap.pix(y, x) != 0xffff)
++				return true;
++	return false;
++}
++
++
++u64 xybots_state::xybots_hash_bitmap(const bitmap_ind16 &bitmap)
++{
++	u64 hash = 1469598103934665603ULL;
++	auto mix = [&hash] (u64 value)
++	{
++		hash ^= value;
++		hash *= 1099511628211ULL;
++	};
++
++	mix(bitmap.width());
++	mix(bitmap.height());
++	for (int y = 0; y < bitmap.height(); y++)
++		for (int x = 0; x < bitmap.width(); x++)
++			mix(bitmap.pix(y, x));
++	return hash;
++}
++
++
++u64 xybots_state::xybots_hash_bitmap(const bitmap_argb32 &bitmap)
++{
++	u64 hash = 1469598103934665603ULL;
++	auto mix = [&hash] (u64 value)
++	{
++		hash ^= value;
++		hash *= 1099511628211ULL;
++	};
++
++	mix(bitmap.width());
++	mix(bitmap.height());
++	for (int y = 0; y < bitmap.height(); y++)
++		for (int x = 0; x < bitmap.width(); x++)
++			mix(bitmap.pix(y, x));
++	return hash;
++}
++
++
++bool xybots_state::xybots_screen_rect(const xybots_mo_capture_record &object, const rectangle &cliprect, rectangle &rect)
++{
++	rect = rectangle(object.rendered_x, object.rendered_x + object.width_tiles * 8 - 1, object.rendered_y, object.rendered_y + object.height_tiles * 8 - 1);
++	rect &= cliprect;
++	return !rect.empty();
++}
++
++
++bool xybots_state::xybots_group_rects_touch(const rectangle &left, const rectangle &right)
++{
++	rectangle expanded(left.left() - 2, left.right() + 2, left.top() - 2, left.bottom() + 2);
++	expanded &= right;
++	return !expanded.empty();
++}
++
++
++bool xybots_state::xybots_group_rects_character_related(const rectangle &left, const rectangle &right)
++{
++	rectangle expanded(left.left() - 16, left.right() + 16, left.top() - 16, left.bottom() + 16);
++	expanded &= right;
++	if (expanded.empty())
++		return false;
++
++	rectangle bounds = left;
++	bounds |= right;
++	if (bounds.width() > 96 || bounds.height() > 112)
++		return false;
++
++	bool const horizontal_overlap = !(left.right() < right.left() || right.right() < left.left());
++	bool const vertical_overlap = !(left.bottom() < right.top() || right.bottom() < left.top());
++	if (horizontal_overlap || vertical_overlap)
++		return true;
++
++	int const left_cx = (left.left() + left.right()) / 2;
++	int const left_cy = (left.top() + left.bottom()) / 2;
++	int const right_cx = (right.left() + right.right()) / 2;
++	int const right_cy = (right.top() + right.bottom()) / 2;
++	return std::abs(left_cx - right_cx) <= 48 && std::abs(left_cy - right_cy) <= 64;
++}
++
++
++void xybots_state::xybots_blit_argb(bitmap_argb32 &dest, const bitmap_argb32 &src, int dest_x, int dest_y)
++{
++	for (int y = 0; y < src.height(); y++)
++	{
++		int const target_y = dest_y + y;
++		if (target_y < 0 || target_y >= dest.height())
++			continue;
++
++		for (int x = 0; x < src.width(); x++)
++		{
++			int const target_x = dest_x + x;
++			if (target_x < 0 || target_x >= dest.width())
++				continue;
++
++			u32 const pixel = src.pix(y, x);
++			if (rgb_t(pixel).a())
++				dest.pix(target_y, target_x) = pixel;
++		}
++	}
++}
++
++
++void xybots_state::xybots_collect_motion_objects(std::vector<xybots_mo_capture_record> &objects)
++{
++	u16 const *const spriteram = m_mob->spriteram();
++	objects.clear();
++	objects.reserve(64);
++
++	for (int slot = 0; slot < 64; slot++)
++	{
++		u16 const *const entry = &spriteram[slot * 4];
++		xybots_mo_capture_record object;
++		object.slot = slot;
++		object.raw = { entry[0], entry[1], entry[2], entry[3] };
++		object.code = entry[0] & 0x3fff;
++		object.color = entry[3] & 0x000f;
++		object.raw_x = (entry[3] & 0xff80) >> 7;
++		object.raw_y = (entry[2] & 0xff80) >> 7;
++		object.rendered_x = object.raw_x;
++		object.rendered_y = -object.raw_y;
++		object.width_tiles = 1;
++		object.height_tiles = (entry[2] & 0x0007) + 1;
++		object.hflip = bool(entry[0] & 0x8000);
++		object.vflip = false;
++		object.priority = entry[1] & 0x000f;
++
++		object.rendered_y -= object.height_tiles * 8;
++		object.rendered_x &= 0x1ff;
++		object.rendered_y &= 0x1ff;
++		if (object.rendered_x >= m_mob->bitmap().width())
++			object.rendered_x -= 0x200;
++		if (object.rendered_y >= m_mob->bitmap().height())
++			object.rendered_y -= 0x200;
++
++		for (int tile = 0; tile < object.height_tiles; tile++)
++			object.source_tiles.push_back(object.code + tile);
++
++		objects.push_back(std::move(object));
++	}
++}
++
++
++void xybots_state::xybots_render_object_bitmap(const xybots_mo_capture_record &object, bitmap_ind16 &bitmap)
++{
++	bitmap.fill(0xffff);
++
++	gfx_element *const gfx = m_gfxdecode->gfx(1);
++	u32 const color = 0x100 + (object.color * gfx->granularity()) + (object.priority << atari_motion_objects_device::PRIORITY_SHIFT);
++	rectangle const cliprect = bitmap.cliprect();
++
++	for (int tile = 0; tile < object.height_tiles; tile++)
++	{
++		int const local_y = object.vflip ? ((object.height_tiles - 1 - tile) * 8) : (tile * 8);
++		gfx->transpen_raw(bitmap, cliprect, object.code + tile, color, object.hflip, object.vflip, 0, local_y, 0);
++	}
++}
++
++
++void xybots_state::xybots_convert_mobitmap(bitmap_argb32 &dest, const bitmap_ind16 &src, const rectangle &cliprect)
++{
++	rgb_t const *const palette = m_screen->palette().palette()->entry_list_adjusted();
++
++	for (int y = 0; y < dest.height(); y++)
++	{
++		u32 *const dst = &dest.pix(y);
++		u16 const *const source = &src.pix(cliprect.top() + y, cliprect.left());
++		for (int x = 0; x < dest.width(); x++)
++		{
++			u16 const pixel = source[x];
++			dst[x] = (pixel == 0xffff) ? rgb_t::transparent() : palette[pixel & atari_motion_objects_device::DATA_MASK];
++		}
++	}
++}
++
++
++void xybots_state::xybots_convert_indexed_bitmap(bitmap_argb32 &dest, const bitmap_ind16 &src, const rectangle &cliprect)
++{
++	rgb_t const *const palette = m_screen->palette().palette()->entry_list_adjusted();
++
++	for (int y = 0; y < dest.height(); y++)
++	{
++		u32 *const dst = &dest.pix(y);
++		u16 const *const source = &src.pix(cliprect.top() + y, cliprect.left());
++		for (int x = 0; x < dest.width(); x++)
++		{
++			u16 const pixel = source[x];
++			dst[x] = (pixel == 0xffff) ? rgb_t::transparent() : palette[pixel];
++		}
++	}
++}
++
++
++void xybots_state::xybots_write_png(const char *path, const bitmap_argb32 &bitmap)
++{
++	emu_file file(machine().options().snapshot_directory(), OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS);
++	std::error_condition const filerr = file.open(path);
++	if (filerr)
++	{
++		osd_printf_error("[xybots-capture] Error opening %s (%s)\n", path, filerr.message().c_str());
++		return;
++	}
++
++	util::png_info pnginfo;
++	std::error_condition const pngerr = util::png_write_bitmap(file, &pnginfo, bitmap, 0, nullptr);
++	if (pngerr)
++		osd_printf_error("[xybots-capture] Error writing %s (%s)\n", path, pngerr.message().c_str());
++}
++
++
++void xybots_state::xybots_write_metadata(const char *path, const std::vector<xybots_mo_capture_record> &objects, screen_device &screen, const rectangle &cliprect, const char *capture_dir)
++{
++	rapidjson::StringBuffer buffer;
++	rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
++
++	writer.StartObject();
++	writer.Key("game");
++	writer.String("xybots");
++	writer.Key("capture_index");
++	writer.Int(m_xybots_capture_index);
++	writer.Key("emulated_frame");
++	writer.Uint64(screen.frame_number());
++	writer.Key("capture_dir");
++	writer.String(capture_dir);
++	writer.Key("trigger");
++	writer.String("MAME_XYBOTS_CAPTURE=1 and KEYCODE_F11");
++
++	writer.Key("screen");
++	writer.StartObject();
++	writer.Key("width");
++	writer.Int(cliprect.width());
++	writer.Key("height");
++	writer.Int(cliprect.height());
++	writer.EndObject();
++
++	writer.Key("motion_object_space");
++	writer.StartObject();
++	writer.Key("width");
++	writer.Int(512);
++	writer.Key("height");
++	writer.Int(512);
++	writer.EndObject();
++
++	writer.Key("objects");
++	writer.StartArray();
++	for (xybots_mo_capture_record const &object : objects)
++	{
++		writer.StartObject();
++		writer.Key("slot");
++		writer.Int(object.slot);
++
++		writer.Key("raw_words");
++		writer.StartArray();
++		for (u16 word : object.raw)
++		{
++			std::string const hex = util::string_format("0x%04X", word);
++			writer.String(hex.c_str());
++		}
++		writer.EndArray();
++
++		writer.Key("code");
++		writer.Uint(object.code);
++		writer.Key("code_hex");
++		std::string const code_hex = util::string_format("0x%04X", object.code);
++		writer.String(code_hex.c_str());
++
++		writer.Key("source_tiles");
++		writer.StartArray();
++		for (u32 tile : object.source_tiles)
++			writer.Uint(tile);
++		writer.EndArray();
++
++		writer.Key("color");
++		writer.Uint(object.color);
++		writer.Key("priority");
++		writer.Int(object.priority);
++
++		writer.Key("raw_position");
++		writer.StartObject();
++		writer.Key("x");
++		writer.Int(object.raw_x);
++		writer.Key("y");
++		writer.Int(object.raw_y);
++		writer.EndObject();
++
++		writer.Key("rendered_position");
++		writer.StartObject();
++		writer.Key("x");
++		writer.Int(object.rendered_x);
++		writer.Key("y");
++		writer.Int(object.rendered_y);
++		writer.EndObject();
++
++		writer.Key("size_tiles");
++		writer.StartObject();
++		writer.Key("width");
++		writer.Int(object.width_tiles);
++		writer.Key("height");
++		writer.Int(object.height_tiles);
++		writer.EndObject();
++
++		writer.Key("size_pixels");
++		writer.StartObject();
++		writer.Key("width");
++		writer.Int(object.width_tiles * 8);
++		writer.Key("height");
++		writer.Int(object.height_tiles * 8);
++		writer.EndObject();
++
++		writer.Key("flip");
++		writer.StartObject();
++		writer.Key("x");
++		writer.Bool(object.hflip);
++		writer.Key("y");
++		writer.Bool(object.vflip);
++		writer.EndObject();
++
++		writer.Key("visible");
++		writer.Bool(object.visible);
++		if (object.visible)
++		{
++			writer.Key("image");
++			writer.String(object.image.c_str());
++		}
++
++		writer.EndObject();
++	}
++	writer.EndArray();
++	writer.EndObject();
++
++	emu_file file(machine().options().snapshot_directory(), OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS);
++	std::error_condition const filerr = file.open(path);
++	if (filerr)
++	{
++		osd_printf_error("[xybots-capture] Error opening %s (%s)\n", path, filerr.message().c_str());
++		return;
++	}
++	auto const [writeerr, actual] = util::write(file, buffer.GetString(), buffer.GetSize());
++	if (writeerr || (actual != buffer.GetSize()))
++		osd_printf_error("[xybots-capture] Error writing %s (%s)\n", path, writeerr.message().c_str());
++}
++
++
++void xybots_state::xybots_write_playfield_metadata(const char *path, screen_device &screen, const rectangle &cliprect)
++{
++	rapidjson::StringBuffer buffer;
++	rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
++
++	writer.StartObject();
++	writer.Key("game");
++	writer.String("xybots");
++	writer.Key("emulated_frame");
++	writer.Uint64(screen.frame_number());
++
++	writer.Key("screen");
++	writer.StartObject();
++	writer.Key("width");
++	writer.Int(cliprect.width());
++	writer.Key("height");
++	writer.Int(cliprect.height());
++	writer.EndObject();
++
++	writer.Key("playfield");
++	writer.StartObject();
++	writer.Key("columns");
++	writer.Int(64);
++	writer.Key("rows");
++	writer.Int(32);
++	writer.Key("tile_width");
++	writer.Int(8);
++	writer.Key("tile_height");
++	writer.Int(8);
++	writer.Key("width_pixels");
++	writer.Int(512);
++	writer.Key("height_pixels");
++	writer.Int(256);
++	writer.EndObject();
++
++	writer.Key("tiles");
++	writer.StartArray();
++	for (int tile_index = 0; tile_index < 64 * 32; tile_index++)
++	{
++		u16 const data = m_playfield_tilemap->basemem_read(tile_index);
++		int const map_x = tile_index % 64;
++		int const map_y = tile_index / 64;
++		int const code = data & 0x1fff;
++		int const color = (data >> 11) & 0x0f;
++		int const flag = (data >> 15) & 1;
++
++		writer.StartObject();
++		writer.Key("tile_index");
++		writer.Int(tile_index);
++		writer.Key("map_x");
++		writer.Int(map_x);
++		writer.Key("map_y");
++		writer.Int(map_y);
++		writer.Key("screen_x");
++		writer.Int(map_x * 8);
++		writer.Key("screen_y");
++		writer.Int(map_y * 8);
++		writer.Key("raw");
++		std::string const raw = util::string_format("0x%04X", data);
++		writer.String(raw.c_str());
++		writer.Key("code");
++		writer.Int(code);
++		writer.Key("code_hex");
++		std::string const code_hex = util::string_format("0x%04X", code);
++		writer.String(code_hex.c_str());
++		writer.Key("color");
++		writer.Int(color);
++		writer.Key("flag");
++		writer.Int(flag);
++		writer.EndObject();
++	}
++	writer.EndArray();
++	writer.EndObject();
++
++	emu_file file(machine().options().snapshot_directory(), OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS);
++	std::error_condition const filerr = file.open(path);
++	if (filerr)
++	{
++		osd_printf_error("[xybots-capture] Error opening %s (%s)\n", path, filerr.message().c_str());
++		return;
++	}
++	auto const [writeerr, actual] = util::write(file, buffer.GetString(), buffer.GetSize());
++	if (writeerr || (actual != buffer.GetSize()))
++		osd_printf_error("[xybots-capture] Error writing %s (%s)\n", path, writeerr.message().c_str());
++}
++
++
++void xybots_state::xybots_write_playfield_debug_layer(const char *path, const bitmap_argb32 &playfield_layer)
++{
++	bitmap_argb32 debug(playfield_layer.width(), playfield_layer.height());
++	for (int y = 0; y < playfield_layer.height(); y++)
++	{
++		u32 *const dst = &debug.pix(y);
++		u32 const *const src = &playfield_layer.pix(y);
++		for (int x = 0; x < playfield_layer.width(); x++)
++			dst[x] = src[x];
++	}
++
++	for (int y = 0; y < debug.height(); y += 8)
++		for (int x = 0; x < debug.width(); x++)
++			debug.pix(y, x) = rgb_t(64, 64, 64);
++
++	for (int x = 0; x < debug.width(); x += 8)
++		for (int y = 0; y < debug.height(); y++)
++			debug.pix(y, x) = rgb_t(64, 64, 64);
++
++	for (int tile_index = 0; tile_index < 64 * 32; tile_index++)
++	{
++		int const map_x = tile_index % 64;
++		int const map_y = tile_index / 64;
++		int const screen_x = map_x * 8;
++		int const screen_y = map_y * 8;
++		if (screen_x < 0 || screen_x >= debug.width() || screen_y < 0 || screen_y >= debug.height())
++			continue;
++
++		u16 const data = m_playfield_tilemap->basemem_read(tile_index);
++		int const code = data & 0x1fff;
++		xybots_draw_debug_text(debug, screen_x + 1, screen_y + 1, util::string_format("%03X", code & 0xfff), rgb_t(255, 255, 0));
++	}
++
++	xybots_write_png(path, debug);
++}
++
++
++void xybots_state::xybots_write_debug_layer(const char *path, const bitmap_argb32 &sprite_layer, const std::vector<xybots_mo_capture_record> &objects)
++{
++	bitmap_argb32 debug(sprite_layer.width(), sprite_layer.height());
++	for (int y = 0; y < sprite_layer.height(); y++)
++	{
++		u32 *const dst = &debug.pix(y);
++		u32 const *const src = &sprite_layer.pix(y);
++		for (int x = 0; x < sprite_layer.width(); x++)
++			dst[x] = src[x];
++	}
++
++	for (xybots_mo_capture_record const &object : objects)
++	{
++		if (!object.visible)
++			continue;
++
++		xybots_draw_debug_rect(debug, object.rendered_x, object.rendered_y, object.width_tiles * 8, object.height_tiles * 8, rgb_t(255, 255, 0));
++		xybots_draw_debug_text(debug, object.rendered_x, object.rendered_y, util::string_format("%02d", object.slot), rgb_t(255, 255, 255));
++		xybots_draw_debug_text(debug, object.rendered_x, object.rendered_y + 6, util::string_format("C:%04X", object.code), rgb_t(255, 255, 0));
++	}
++
++	xybots_write_png(path, debug);
++}
++
++
++void xybots_state::xybots_draw_debug_rect(bitmap_argb32 &bitmap, int x, int y, int width, int height, rgb_t color)
++{
++	auto plot = [&bitmap, color] (int px, int py)
++	{
++		if (px >= 0 && px < bitmap.width() && py >= 0 && py < bitmap.height())
++			bitmap.pix(py, px) = color;
++	};
++
++	for (int px = x; px < x + width; px++)
++	{
++		plot(px, y);
++		plot(px, y + height - 1);
++	}
++	for (int py = y; py < y + height; py++)
++	{
++		plot(x, py);
++		plot(x + width - 1, py);
++	}
++}
++
++
++void xybots_state::xybots_draw_debug_text(bitmap_argb32 &bitmap, int x, int y, const std::string &text, rgb_t color)
++{
++	static const u8 font[17][5] =
++	{
++		{ 0x7, 0x5, 0x5, 0x5, 0x7 }, // 0
++		{ 0x2, 0x6, 0x2, 0x2, 0x7 }, // 1
++		{ 0x7, 0x1, 0x7, 0x4, 0x7 }, // 2
++		{ 0x7, 0x1, 0x7, 0x1, 0x7 }, // 3
++		{ 0x5, 0x5, 0x7, 0x1, 0x1 }, // 4
++		{ 0x7, 0x4, 0x7, 0x1, 0x7 }, // 5
++		{ 0x7, 0x4, 0x7, 0x5, 0x7 }, // 6
++		{ 0x7, 0x1, 0x1, 0x1, 0x1 }, // 7
++		{ 0x7, 0x5, 0x7, 0x5, 0x7 }, // 8
++		{ 0x7, 0x5, 0x7, 0x1, 0x7 }, // 9
++		{ 0x7, 0x5, 0x7, 0x5, 0x5 }, // A
++		{ 0x6, 0x5, 0x6, 0x5, 0x6 }, // B
++		{ 0x7, 0x4, 0x4, 0x4, 0x7 }, // C
++		{ 0x6, 0x5, 0x5, 0x5, 0x6 }, // D
++		{ 0x7, 0x4, 0x6, 0x4, 0x7 }, // E
++		{ 0x7, 0x4, 0x6, 0x4, 0x4 }, // F
++		{ 0x0, 0x2, 0x0, 0x2, 0x0 }  // :
++	};
++
++	auto char_index = [] (char ch) -> int
++	{
++		if (ch >= '0' && ch <= '9')
++			return ch - '0';
++		if (ch >= 'A' && ch <= 'F')
++			return 10 + ch - 'A';
++		if (ch >= 'a' && ch <= 'f')
++			return 10 + ch - 'a';
++		if (ch == ':')
++			return 16;
++		return -1;
++	};
++
++	int cursor = x;
++	for (char ch : text)
++	{
++		int const index = char_index(ch);
++		if (index >= 0)
++		{
++			for (int row = 0; row < 5; row++)
++				for (int col = 0; col < 3; col++)
++					if (font[index][row] & (1 << (2 - col)))
++					{
++						int const px = cursor + col;
++						int const py = y + row;
++						if (px >= 0 && px < bitmap.width() && py >= 0 && py < bitmap.height())
++							bitmap.pix(py, px) = color;
++					}
++		}
++		cursor += 4;
++	}
++}
++
++
+ /*************************************
+  *
+  *  Initialization & interrupts
+@@ -245,6 +1403,12 @@ void xybots_state::video_int_ack_w(uint16_t data)
+  *
+  *************************************/
+ 
++uint16_t xybots_state::special_port0_r()
++{
++	return m_ffe100->read() & ~xybots_auto_script_input_mask();
++}
++
++
+ uint16_t xybots_state::special_port1_r()
+ {
+ 	int result = m_ffe200->read();
+@@ -276,7 +1440,7 @@ void xybots_state::main_map(address_map &map)
+ 	map(0x804000, 0x8047ff).mirror(0x7f8800).ram().w("palette", FUNC(palette_device::write16)).share("palette");
+ 	map(0x805000, 0x8053ff).mirror(0x7f8c00).rw("eeprom", FUNC(eeprom_parallel_28xx_device::read), FUNC(eeprom_parallel_28xx_device::write)).umask16(0x00ff);
+ 	map(0x806000, 0x8060ff).mirror(0x7f8000).r(m_jsa, FUNC(atari_jsa_i_device::main_response_r)).umask16(0x00ff);
+-	map(0x806100, 0x8061ff).mirror(0x7f8000).portr("FFE100");
++	map(0x806100, 0x8061ff).mirror(0x7f8000).r(FUNC(xybots_state::special_port0_r));
+ 	map(0x806200, 0x8062ff).mirror(0x7f8000).r(FUNC(xybots_state::special_port1_r));
+ 	map(0x806800, 0x8068ff).mirror(0x7f8000).w("eeprom", FUNC(eeprom_parallel_28xx_device::unlock_write16));
+ 	map(0x806900, 0x8069ff).mirror(0x7f8000).w(m_jsa, FUNC(atari_jsa_i_device::main_command_w)).umask16(0x00ff);
+@@ -570,6 +1734,29 @@ void xybots_state::machine_start()
+ {
+ 	m_slapstic_bank->configure_entries(0, 4, memregion("maincpu")->base() + 0x8000, 0x2000);
+ 	m_h256 = 0x0400;
++	m_xybots_capture_enabled = std::getenv("MAME_XYBOTS_CAPTURE") != nullptr;
++	m_xybots_auto_capture = false;
++	m_xybots_wall_recording = false;
++	m_xybots_auto_script = std::getenv("MAME_XYBOTS_AUTO_SCRIPT") != nullptr;
++	m_xybots_auto_script_wait_trigger = std::getenv("MAME_XYBOTS_AUTO_SCRIPT_WAIT_TRIGGER") != nullptr;
++	m_xybots_capture_index = 0;
++	m_xybots_wall_recording_index = m_xybots_capture_enabled ? xybots_latest_wall_recording_index() : 0;
++	m_xybots_wall_recording_frame = 0;
++	m_xybots_auto_script_frame = 0;
++	m_xybots_unique_strip_index = 0;
++	m_xybots_unique_stitched_index = 0;
++	m_xybots_unique_character_index = 0;
++	m_xybots_last_wall_recording_frame = ~u64(0);
++	m_xybots_seen_strips.clear();
++	m_xybots_seen_stitched.clear();
++	m_xybots_seen_characters.clear();
++
++	if (m_xybots_capture_enabled)
++		osd_printf_info("[xybots-capture] Enabled; F10 toggles wall turn recording, F11 full capture, F12 automatic unique sprite capture\n");
++	if (m_xybots_auto_script)
++		osd_printf_info("[xybots-auto-script] Enabled; will record labeled movement sessions automatically\n");
++	if (m_xybots_auto_script_wait_trigger)
++		osd_printf_info("[xybots-auto-script] Waiting for xybots_capture/start_controlled_capture.txt\n");
+ 
+ 	save_item(NAME(m_h256));
+ }
