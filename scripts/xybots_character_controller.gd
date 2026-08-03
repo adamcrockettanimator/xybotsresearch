@@ -22,8 +22,11 @@ const STRAFE_LEFT_WALL_CONTACT_X := 0.0                                         
 const STRAFE_RIGHT_WALL_CONTACT_X := 1.0                                                    # Set the right tile-edge contact; camera clipping trims any body pixels beyond the frame.
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
-const MAP_WIDTH := 4                                                                        # Set the generated test map width in thin-wall cells.
-const MAP_HEIGHT := 4                                                                       # Set the generated test map height in thin-wall cells.
+const MAP_WIDTH := 9                                                                        # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
+const MAP_HEIGHT := 9                                                                       # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
+const TEMP_EMPTY_GRID_AUDIT := false                                                        # Keep the wall-free 9x9 surface available for future slot-diagram checks.
+const TEMP_RANDOM_GRID_AUDIT := true                                                        # Test the corrected debug system against a connected random 9x9 maze with closed exterior walls.
+const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
 const MAP_EXTRA_OPENING_CHANCE := 0.18                                                      # Add a few loops after maze carving so the interior is not a strict tree.
 
 const PHASE_ROOT := "res://assets/reference_xybots_local/playfield_phases"                  # Point to captured full-frame movement and turn phase assets.
@@ -68,14 +71,17 @@ const ACTION_TURN_LEFT := "xybots_turn_left"                                    
 const ACTION_TURN_RIGHT := "xybots_turn_right"                                              # Name the explicit input action for rotating the view right.
 const ACTION_REGENERATE_MAP := "xybots_regenerate_map"                                      # Name the explicit input action for rerolling the debug maze at runtime.
 const ACTION_TOGGLE_SLOT_GRID_DEBUG := "xybots_toggle_slot_grid_debug"                       # Name the explicit input action for toggling the blue slot-grid audit overlay.
+const ACTION_TOGGLE_DEBUG_MENU := "xybots_toggle_debug_menu"                                 # Name the explicit input action for opening the grouped debug-overlay menu.
 const ACTION_P2_MOVE_LEFT := "xybots_p2_move_left"                                          # Name the second-player input action for moving camera-left inside the current tile.
 const ACTION_P2_MOVE_RIGHT := "xybots_p2_move_right"                                        # Name the second-player input action for moving camera-right inside the current tile.
 const ACTION_P2_MOVE_FORWARD := "xybots_p2_move_forward"                                    # Name the second-player input action for moving toward the camera-facing edge.
 const ACTION_P2_MOVE_BACKWARD := "xybots_p2_move_backward"                                  # Name the second-player input action for moving away from the camera-facing edge.
 const ACTION_P2_TURN_LEFT := "xybots_p2_turn_left"                                          # Name the second-player input action for rotating the view left.
 const ACTION_P2_TURN_RIGHT := "xybots_p2_turn_right"                                        # Name the second-player input action for rotating the view right.
-const DEBUG_MAP_CELL_SIZE := 24.0                                                           # Set the top-down debug map cell size inside the 160x120 diagnostic panel.
-const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(32.0, 12.0)                                    # Center the 4x4 debug maze inside the source-map panel.
+const DEBUG_MAP_CELL_SIZE := 16.0                                                           # Fit the temporary 9x9 diagnostic grid inside its own side panel.
+const DEBUG_MAP_PANEL_SIZE := Vector2(160.0, 160.0)                                        # Give the 9x9 source grid a square panel beside the player view.
+const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(8.0, 8.0)                                      # Center the temporary 9x9 grid inside its 160x160 side panel.
+const CARDINAL_SLOT_GUIDE_MAP_SCALE := 1.0                                                   # Keep authored guide coordinates in their native maze-cell scale; they may extend beyond the panel.
 const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
 const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Match the top-down cone width from the Wall_Grid reference image.
 const CAMERA_REAR_OFFSET := 0.46                                                             # Place the cell-locked camera just in front of the rear wall for the current facing.
@@ -163,6 +169,66 @@ const STRAIGHT_WALL_SLOTS := [                                                  
 	{"id": 27, "lateral": 0, "depth": 0, "edge": VIEW_LEFT, "draw": 91},                       # Describe one numbered straight-wall overlay and the map edge that controls it.
 	{"id": 28, "lateral": 0, "depth": 0, "edge": VIEW_RIGHT, "draw": 92},                      # Describe one numbered straight-wall overlay and the map edge that controls it.
 ]                                                                                           # Close the current list, dictionary, call, or expression.
+
+# Authored straight-view audit labels copied from StraightViewGraph_N_S_E_W_Blue.png.
+# "screen" is the invariant 160x120 player view; "map" is relative to the current cell's fixed center.
+const CARDINAL_SLOT_GUIDE := [
+	{"id": 1, "screen": Vector2(66, 42), "map": Vector2(0.0, -3.5)},
+	{"id": 2, "screen": Vector2(92, 42), "map": Vector2(0.5, -3.5)},
+	{"id": 3, "screen": Vector2(49, 45), "map": Vector2(-1.0, -3.0)},
+	{"id": 4, "screen": Vector2(78, 45), "map": Vector2(0.0, -3.0)},
+	{"id": 5, "screen": Vector2(111, 45), "map": Vector2(1.0, -3.0)},
+	{"id": 6, "screen": Vector2(26, 50), "map": Vector2(-1.5, -2.5)},
+	{"id": 7, "screen": Vector2(60, 50), "map": Vector2(-0.5, -2.5)},
+	{"id": 8, "screen": Vector2(100, 50), "map": Vector2(0.5, -2.5)},
+	{"id": 9, "screen": Vector2(138, 52), "map": Vector2(1.5, -2.5)},
+	{"id": 10, "screen": Vector2(3, 54), "map": Vector2(-2.3, -2.0)},
+	{"id": 11, "screen": Vector2(35, 55), "map": Vector2(-1.0, -2.0)},
+	{"id": 12, "screen": Vector2(80, 55), "map": Vector2(0.0, -2.0)},
+	{"id": 13, "screen": Vector2(124, 55), "map": Vector2(1.0, -2.0)},
+	{"id": 14, "screen": Vector2(157, 55), "map": Vector2(2.3, -2.0)},
+	{"id": 15, "screen": Vector2(2, 61), "map": Vector2(-1.0, -1.5)},
+	{"id": 16, "screen": Vector2(50, 63), "map": Vector2(0.0, -1.5)},
+	{"id": 17, "screen": Vector2(110, 64), "map": Vector2(1.0, -1.5)},
+	{"id": 18, "screen": Vector2(157, 61), "map": Vector2(2.0, -1.5)},
+	{"id": 19, "screen": Vector2(16, 74), "map": Vector2(-1.0, -1.0)},
+	{"id": 20, "screen": Vector2(80, 74), "map": Vector2(0.0, -1.0)},
+	{"id": 21, "screen": Vector2(141, 74), "map": Vector2(1.0, -1.0)},
+	{"id": 22, "screen": Vector2(25, 88), "map": Vector2(-0.5, -0.5)},
+	{"id": 23, "screen": Vector2(130, 88), "map": Vector2(0.5, -0.5)},
+	{"id": 24, "screen": Vector2(3, 96), "map": Vector2(-1.0, -0.25)},
+	{"id": 25, "screen": Vector2(80, 96), "map": Vector2(0.0, -0.25)},
+	{"id": 26, "screen": Vector2(155, 96), "map": Vector2(1.0, -0.25)},
+	{"id": 27, "screen": Vector2(5, 108), "map": Vector2(-0.4, 0.0)},
+	{"id": 28, "screen": Vector2(153, 108), "map": Vector2(0.4, 0.0)},
+]
+
+# Fixed player-camera grid copied from the straight-view reference. It never rotates with cardinal facing.
+const CARDINAL_PLAYER_GRID_LINES := [
+	[Vector2(0, 58), Vector2(32, 46)], [Vector2(32, 46), Vector2(64, 44)], [Vector2(64, 44), Vector2(96, 44)], [Vector2(96, 44), Vector2(128, 46)], [Vector2(128, 46), Vector2(160, 58)],
+	[Vector2(0, 56), Vector2(160, 56)], [Vector2(64, 44), Vector2(40, 70)], [Vector2(96, 44), Vector2(120, 70)],
+	[Vector2(40, 70), Vector2(0, 112)], [Vector2(120, 70), Vector2(160, 112)], [Vector2(0, 70), Vector2(160, 70)], [Vector2(0, 96), Vector2(160, 96)],
+]
+
+# Same guide's top-down world diagram, expressed relative to the fixed center of the player cell.
+const CARDINAL_TOPDOWN_GRID_LINES := [
+	[Vector2(-0.8, -3.9), Vector2(0.8, -3.9)], [Vector2(-1.7, -3.0), Vector2(1.7, -3.0)], [Vector2(-2.5, -2.5), Vector2(2.5, -2.5)],
+	[Vector2(-2.5, -2.0), Vector2(2.5, -2.0)], [Vector2(-2.0, -1.5), Vector2(2.0, -1.5)], [Vector2(-1.0, -1.0), Vector2(1.0, -1.0)], [Vector2(-0.5, -0.5), Vector2(0.5, -0.5)], [Vector2(-1.0, -0.25), Vector2(1.0, -0.25)],
+	[Vector2(-1.7, -3.0), Vector2(-1.7, -1.5)], [Vector2(-0.8, -3.9), Vector2(-0.8, 0.0)], [Vector2(0.8, -3.9), Vector2(0.8, 0.0)], [Vector2(1.7, -3.0), Vector2(1.7, -1.5)], [Vector2(-0.4, 0.0), Vector2(0.4, 0.0)],
+]
+
+# Canonical cardinal source-grid segments. Each blue segment owns exactly one 01..28 art-slot label.
+const CARDINAL_SLOT_TOPOLOGY := [
+	{"id": 1, "a": Vector2(-0.5, -4.0), "b": Vector2(-0.5, -3.5)}, {"id": 2, "a": Vector2(0.5, -4.0), "b": Vector2(0.5, -3.5)},
+	{"id": 3, "a": Vector2(-1.5, -3.5), "b": Vector2(-0.5, -3.5)}, {"id": 4, "a": Vector2(-0.5, -3.5), "b": Vector2(0.5, -3.5)}, {"id": 5, "a": Vector2(0.5, -3.5), "b": Vector2(1.5, -3.5)},
+	{"id": 6, "a": Vector2(-1.5, -3.5), "b": Vector2(-1.5, -2.5)}, {"id": 7, "a": Vector2(-0.5, -3.5), "b": Vector2(-0.5, -2.5)}, {"id": 8, "a": Vector2(0.5, -3.5), "b": Vector2(0.5, -2.5)}, {"id": 9, "a": Vector2(1.5, -3.5), "b": Vector2(1.5, -2.5)},
+	{"id": 10, "a": Vector2(-2.5, -2.5), "b": Vector2(-1.5, -2.5)}, {"id": 11, "a": Vector2(-1.5, -2.5), "b": Vector2(-0.5, -2.5)}, {"id": 12, "a": Vector2(-0.5, -2.5), "b": Vector2(0.5, -2.5)}, {"id": 13, "a": Vector2(0.5, -2.5), "b": Vector2(1.5, -2.5)}, {"id": 14, "a": Vector2(1.5, -2.5), "b": Vector2(2.5, -2.5)},
+	{"id": 15, "a": Vector2(-1.5, -2.5), "b": Vector2(-1.5, -1.5)}, {"id": 16, "a": Vector2(-0.5, -2.5), "b": Vector2(-0.5, -1.5)}, {"id": 17, "a": Vector2(0.5, -2.5), "b": Vector2(0.5, -1.5)}, {"id": 18, "a": Vector2(1.5, -2.5), "b": Vector2(1.5, -1.5)},
+	{"id": 19, "a": Vector2(-1.5, -1.5), "b": Vector2(-0.5, -1.5)}, {"id": 20, "a": Vector2(-0.5, -1.5), "b": Vector2(0.5, -1.5)}, {"id": 21, "a": Vector2(0.5, -1.5), "b": Vector2(1.5, -1.5)},
+	{"id": 22, "a": Vector2(-0.5, -1.5), "b": Vector2(-0.5, -0.5)}, {"id": 23, "a": Vector2(0.5, -1.5), "b": Vector2(0.5, -0.5)},
+	{"id": 24, "a": Vector2(-1.5, -0.5), "b": Vector2(-0.5, -0.5)}, {"id": 25, "a": Vector2(-0.5, -0.5), "b": Vector2(0.5, -0.5)}, {"id": 26, "a": Vector2(0.5, -0.5), "b": Vector2(1.5, -0.5)},
+	{"id": 27, "a": Vector2(-0.5, -0.5), "b": Vector2(-0.5, 0.0)}, {"id": 28, "a": Vector2(0.5, -0.5), "b": Vector2(0.5, 0.0)},
+]
 
 const STRAIGHT_VISIBILITY_BRANCHES := [                                                      # Define near-to-far wall checks that build the visible straight-view render list.
 	[                                                                                          # Start the center sightline branch.
@@ -350,17 +416,26 @@ var was_left_turn_pressed := false                                              
 var was_right_turn_pressed := false                                                         # Track previous-frame right turn input so snapped turns only fire once per press.
 var was_regenerate_map_pressed := false                                                      # Track previous-frame map-regenerate input so it fires once per key press.
 var was_slot_grid_debug_pressed := false                                                     # Track previous-frame slot-grid toggle input so it fires once per key press.
+var was_debug_menu_pressed := false                                                          # Track previous-frame debug-menu input so it opens or closes once per key press.
 var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
 var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
 var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
 var player_views: Array[Dictionary] = []                                                     # Store per-player playfield, map, wall, and sprite node references.
+var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
+var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
+var debug_menu_open := false                                                                 # Track whether the debug-menu panel is currently visible.
 
 
 
 # _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
 func _ready() -> void:                                                                      # Declare this function.
 	_ensure_input_actions()                                                                    # Register local input actions before the first input polling frame.
-	_build_fixed_reference_maze_wall_edges()                                                     # Load the current fixed 4x4 thin-wall test maze before rendering.
+	if TEMP_EMPTY_GRID_AUDIT:                                                                  # Use the isolated wall-free slot-guide test surface when explicitly requested.
+		_build_empty_grid_audit_wall_edges()                                                       # Build an empty 5x5 map with no physical wall edges.
+	elif TEMP_RANDOM_GRID_AUDIT:                                                               # Exercise the renderer and debug overlay against a populated test maze.
+		_build_random_maze_wall_edges()                                                             # Build a connected 9x9 maze while preserving its closed outer boundary.
+	else:                                                                                      # Preserve the saved reference maze outside this temporary audit mode.
+		_build_fixed_reference_maze_wall_edges()                                                   # Load the current fixed 4x4 thin-wall test maze before rendering.
 	_load_phase_textures()                                                                     # Call a helper function as part of the current controller step.
 	_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
 	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
@@ -370,6 +445,7 @@ func _ready() -> void:                                                          
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
+	_setup_debug_menu()                                                                        # Create the shared on-screen menu for toggling diagnostic overlays.
 	if enable_3d_diagnostic:                                                                   # Only create the deprecated 3D diagnostic when explicitly requested.
 		_setup_3d_diagnostic()                                                                    # Create the side-by-side 3D map diagnostic view.
 	_render_all_player_views()                                                                 # Draw both starting screens and both debug maps.
@@ -386,8 +462,115 @@ func _input(event: InputEvent) -> void:                                         
 
 
 
+# _setup_debug_menu: Builds a shared on-screen menu for the current overlay diagnostics.
+func _setup_debug_menu() -> void:
+	debug_menu_panel = PanelContainer.new()                                                    # Create one UI panel above both local player views.
+	debug_menu_panel.name = "DebugOverlayMenu"                                                # Give the panel a clear scene-tree name for editor inspection.
+	debug_menu_panel.position = Vector2(12.0, 92.0)                                            # Place the menu below the existing runtime status text.
+	debug_menu_panel.custom_minimum_size = Vector2(268.0, 0.0)                                # Keep labels readable without covering the entire game window.
+	debug_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP                                  # Prevent mouse clicks on the menu from passing to the playfield.
+	debug_menu_panel.visible = false                                                           # Start closed so the prototype view stays uncluttered.
+	canvas_layer.add_child(debug_menu_panel)                                                   # Put the menu on the same UI layer as the status text and source maps.
+
+	var content := VBoxContainer.new()                                                         # Stack the title, option rows, and usage hint vertically.
+	content.add_theme_constant_override("separation", 4)                                     # Keep the compact debug controls easy to scan.
+	debug_menu_panel.add_child(content)                                                        # Place the menu content inside the bordered panel.
+
+	var title := Label.new()                                                                   # Create a concise header for the menu.
+	title.text = "DEBUG OVERLAYS"                                                             # Identify the runtime diagnostic control panel.
+	title.add_theme_font_size_override("font_size", 18)                                      # Give the header a distinct visual weight.
+	content.add_child(title)                                                                   # Add the header before the option rows.
+
+	_add_debug_menu_check(content, "source_map", "Map Walls")                               # Add the logical-map and wall-contact overlay toggle.
+	_add_debug_menu_check(content, "rays", "Ray Casts")                                     # Add the raycast inspection overlay toggle.
+	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
+	_add_debug_menu_check(content, "slot_grid", "Slot Grid (F2)")                           # Add the existing F2 quick-toggle as a menu option.
+	_add_debug_menu_check(content, "selected_slots", "Selected Slots")                       # Add the selected-wall comparison overlay toggle.
+
+	var hint := Label.new()                                                                    # Provide the close hotkey inside the panel itself.
+	hint.text = "F3 closes this menu"                                                         # Make the invocation/close behavior discoverable at runtime.
+	hint.add_theme_font_size_override("font_size", 14)                                       # Keep the hint secondary to the controls.
+	content.add_child(hint)                                                                    # Finish the panel with the usage hint.
+
+
+
+# _add_debug_menu_check: Adds one checkbox and binds it to a named existing debug option.
+func _add_debug_menu_check(parent: VBoxContainer, option_key: String, label_text: String) -> void:
+	var check := CheckBox.new()                                                                # Create a visible checkbox before the compact option title.
+	check.text = label_text                                                                    # Describe the visual diagnostic controlled by the checkbox.
+	check.button_pressed = _debug_option_value(option_key)                                    # Match its initial state to the existing inspector/runtime toggle.
+	check.toggled.connect(_set_debug_option.bind(option_key))                                 # Apply user clicks through the shared option setter.
+	parent.add_child(check)                                                                    # Add the checkbox to the menu's vertical stack.
+	debug_menu_checks[option_key] = check                                                     # Save the node so keyboard toggles can refresh it later.
+
+
+
+# _toggle_debug_menu: Opens or closes the debug control panel and refreshes its displayed state.
+func _toggle_debug_menu() -> void:
+	debug_menu_open = not debug_menu_open                                                      # Flip the menu visibility state once per F3 press.
+	if debug_menu_panel != null:                                                               # Guard against calls before _ready has created the panel.
+		debug_menu_panel.visible = debug_menu_open                                               # Apply the new panel visibility.
+	if debug_menu_open:                                                                        # Refresh checkbox state whenever the panel is opened.
+		_refresh_debug_menu()                                                                    # Reflect inspector values and F2 toggles in every row.
+	_update_status()                                                                           # Update the runtime help text to advertise the current menu state.
+
+
+
+# _debug_option_value: Reads one existing debug toggle by its stable menu key.
+func _debug_option_value(option_key: String) -> bool:
+	match option_key:                                                                          # Resolve the menu key without exposing property names to UI construction.
+		"source_map":
+			return show_top_down_source_overlay                                                     # Return the logical-map and physical-wall overlay state.
+		"rays":
+			return show_raycast_debug                                                              # Return the visibility ray overlay state.
+		"extents":
+			return show_perspective_extents_overlay                                                # Return the measured floor/actor extent overlay state.
+		"slot_grid":
+			return show_slot_grid_debug                                                            # Return the blue wall-slot audit overlay state.
+		"selected_slots":
+			return show_selected_wall_slot_debug                                                   # Return the renderer-selection comparison overlay state.
+		_:
+			return false                                                                           # Keep unknown future menu keys safely disabled.
+
+
+
+# _set_debug_option: Updates one existing debug toggle, redraws both views, and syncs the menu.
+func _set_debug_option(enabled: bool, option_key: String) -> void:
+	match option_key:                                                                          # Assign only the existing diagnostic flags selected by the menu.
+		"source_map":
+			show_top_down_source_overlay = enabled                                                 # Show or hide the top-down wall/contact source map.
+		"rays":
+			show_raycast_debug = enabled                                                           # Show or hide sampled visibility rays and their hit markers.
+		"extents":
+			show_perspective_extents_overlay = enabled                                             # Show or hide projected floor and actor-boundary guides.
+		"slot_grid":
+			show_slot_grid_debug = enabled                                                         # Show or hide the blue numbered wall-slot audit grid.
+		"selected_slots":
+			show_selected_wall_slot_debug = enabled                                                # Show or hide renderer-selected wall-slot highlights.
+		_:
+			return                                                                                # Ignore unsupported keys without redrawing.
+	_render_all_player_views()                                                                 # Redraw every local view immediately so changes are visible at once.
+	_refresh_debug_menu()                                                                      # Keep all checkbox states synchronized after a click.
+	_update_status()                                                                           # Keep the status hint synchronized with the current menu state.
+
+
+
+# _refresh_debug_menu: Synchronizes visible menu checkboxes without emitting extra toggle callbacks.
+func _refresh_debug_menu() -> void:
+	for option_key in debug_menu_checks:                                                       # Visit every checkbox created by _setup_debug_menu.
+		var check: CheckBox = debug_menu_checks[option_key]                                      # Read the checkbox stored for this menu key.
+		if check != null:                                                                        # Skip a node only if it has been freed during scene teardown.
+			check.set_pressed_no_signal(_debug_option_value(String(option_key)))                   # Reflect the current flag without recursively redrawing.
+
+
+
 # _setup_local_multiplayer: Creates player two's view nodes and initializes two independent local player states.
 func _setup_local_multiplayer() -> void:                                                    # Declare this function.
+	if TEMP_GRID_AUDIT:                                                                        # Keep this focused slot-grid test free of a second player or second viewport.
+		player_views = [{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": null}] # Retain only player one's existing view nodes.
+		player_states = [_make_player_state(0, Vector2i(4, 4), 0)]                               # Place one player at the center of the empty 9x9 grid, facing north.
+		_bind_player_context(0)                                                                   # Bind the sole test player into the legacy renderer globals.
+		return                                                                                    # Skip creating player two's view and opponent sprites.
 	var player_one_opponent := _create_character_sprite("OpponentSprite")                       # Create player one's sprite used for seeing player two.
 	maze_content.add_child(player_one_opponent)                                                 # Put the opponent sprite into player one's clipped camera content.
 	var player_two_viewport := Node2D.new()                                                     # Create a second cropped playfield container for player two.
@@ -669,9 +852,13 @@ func _render_all_player_views() -> void:                                        
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
+	if _read_toggle_debug_menu():                                                              # Check for a one-shot request to open or close the debug menu.
+		_toggle_debug_menu()                                                                     # Change panel visibility without changing any diagnostic state.
+		return                                                                                   # Keep the menu hotkey from also advancing gameplay this frame.
 	if _read_toggle_slot_grid_debug():                                                         # Check for a one-shot request to toggle the blue slot-grid audit overlay.
 		show_slot_grid_debug = not show_slot_grid_debug                                           # Flip the diagnostic overlay visibility for every local viewport.
 		_render_all_player_views()                                                                # Redraw immediately so the overlay appears or disappears without waiting for movement.
+		_refresh_debug_menu()                                                                     # Keep the menu checkbox synchronized with the F2 quick toggle.
 		_update_status()                                                                          # Refresh the status text after the debug toggle.
 		return                                                                                    # Skip movement this frame because this key press was only a debug toggle.
 	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
@@ -918,6 +1105,15 @@ func _update_view_slot_debug_overlay() -> void:                                 
 		return                                                                                    # Return after clearing stale children.
 	var source_presence := _debug_slot_has_wall_by_id()                                        # Read which numbered source-map slots are currently blocked.
 	var screen_slots := _view_slot_screen_segments()                                           # Read the local screen-space guide lines for this camera angle.
+	if not _is_turn_45_view():                                                                 # Cardinal camera views use the fixed authored floor-grid skeleton.
+		for grid_line in CARDINAL_PLAYER_GRID_LINES:                                               # Draw each reference floor-grid segment once, not once per wall slot.
+			_add_view_slot_debug_line(grid_line[0], grid_line[1], SLOT_GRID_DEBUG_OPEN_COLOR, 1.0)   # Keep this camera-local grid open-blue on the wall-free audit map.
+		for slot in screen_slots:                                                                  # Add the 01..28 labels at their paired fixed player-view positions.
+			var wall_id := int(slot["id"])                                                          # Read the stable transparent-wall art-slot ID.
+			var label_position: Vector2 = slot["label"]                                              # Read its exact camera-local guide coordinate.
+			var label_color := SLOT_GRID_DEBUG_WALL_COLOR if bool(source_presence.get(wall_id, false)) else SLOT_GRID_DEBUG_LABEL_COLOR # Match label state to the same renderer selection used on the top-down guide.
+			_add_view_slot_debug_label(label_position, wall_id, label_color)                         # Draw one unrotated camera-view label.
+		return                                                                                    # Do not draw the old per-slot tick marks in cardinal views.
 	for slot in screen_slots:                                                                  # Draw every local slot guide for the current cardinal or halfway-turn view.
 		var segment: Array[Vector2] = [slot["a"], slot["b"]]                                     # Read the screen-space endpoints from the guide table.
 		if segment.size() < 2:                                                                    # Skip invalid slot geometry defensively.
@@ -933,6 +1129,10 @@ func _update_view_slot_debug_overlay() -> void:                                 
 # _debug_slot_has_wall_by_id: Collapses source-map diagnostic slots into a quick wall-present lookup by local id.
 func _debug_slot_has_wall_by_id() -> Dictionary:                                            # Declare this function.
 	var source_presence := {}                                                                  # Store whether each local slot id currently maps to a real wall.
+	if not _is_turn_45_view():                                                                 # Straight ids name renderer art slots rather than unique physical map edges.
+		for slot in _build_straight_render_list():                                                # Reuse the renderer's final, visibility-filtered art-slot selection.
+			source_presence[int(slot["id"])] = true                                                  # Mark precisely the IDs whose transparent wall art is being drawn.
+		return source_presence                                                                     # Keep both debug diagrams 1:1 with the player view.
 	for slot in _all_debug_wall_slot_segments():                                               # Visit every source-map slot candidate for this view.
 		var wall_id := int(slot["id"])                                                            # Read this local wall-slot id.
 		var already_present := bool(source_presence.get(wall_id, false))                          # Preserve any earlier true value for repeated ids.
@@ -945,13 +1145,43 @@ func _debug_slot_has_wall_by_id() -> Dictionary:                                
 func _view_slot_screen_segments() -> Array:                                                 # Declare this function.
 	if _is_turn_45_view():                                                                    # Use the explicit halfway-turn guide because physical map projection is not the screen diagram.
 		return _turn_45_view_slot_screen_segments()                                               # Return the 16-slot halfway-turn player-view guide.
-	var segments := []                                                                         # Store the straight-view guide records.
-	for slot in _all_debug_wall_slot_segments():                                               # Keep the existing straight-view projection while the diagonal audit is being corrected.
-		var segment := _debug_slot_screen_segment(slot)                                          # Project the source-map slot segment into the 160x120 player view.
-		if segment.size() < 2:                                                                    # Skip invalid slot geometry defensively.
-			continue                                                                                 # Continue to the next straight slot.
-		segments.append(_view_slot_screen_record(int(slot["id"]), segment[0], segment[1], (segment[0] + segment[1]) * 0.5)) # Store the projected straight-view guide record.
-	return segments                                                                            # Return all straight-view guide records.
+	var segments := []                                                                         # Store the camera-invariant straight-view guide records.
+	for slot in _cardinal_debug_slot_records():                                                # Use the same conceptual art-slot diagram as the top-down overlay.
+		segments.append(_view_slot_screen_record(int(slot["id"]), slot["screen_a"], slot["screen_b"], slot["screen_label"])) # Preserve the matching canonical label position without a Variant-array cast.
+	return segments                                                                            # Return all 28 stable player-view slot records.
+
+
+
+# _cardinal_debug_slot_records: Builds one camera-relative art-slot diagram for both cardinal debug views.
+func _cardinal_debug_slot_records() -> Array:                                               # Declare this function.
+	var records := []                                                                          # Store one canonical record per transparent straight-wall art asset.
+	for guide in CARDINAL_SLOT_GUIDE:                                                          # Use the authored N/S/E/W guide instead of deriving art labels from map edges.
+		var wall_id := int(guide["id"])                                                          # Read the renderer asset ID represented by this authored guide mark.
+		var screen_label: Vector2 = guide["screen"]                                               # Keep the player-view label at its exact guide location.
+		var topology := {}                                                                         # Find the one canonical world-grid segment that owns this art-slot ID.
+		for candidate in CARDINAL_SLOT_TOPOLOGY:                                                   # Search the explicit 01..28 segment table.
+			if int(candidate["id"]) == wall_id:                                                     # Match this screen label to its world segment.
+				topology = candidate                                                                    # Keep the matching segment record.
+				break                                                                                   # Each ID has exactly one segment.
+		if topology.is_empty():                                                                   # Guard against incomplete future tables.
+			continue                                                                                  # Skip an unpaired slot instead of inventing a line.
+		var map_a: Vector2 = topology["a"]                                                        # Read the exact first endpoint of the owned source-grid segment.
+		var map_b: Vector2 = topology["b"]                                                        # Read the exact second endpoint of the owned source-grid segment.
+		var map_label := (map_a + map_b) * 0.5                                                     # Place this ID directly on its own blue source-grid segment.
+		var half_line := 4.0 if screen_label.y < 60.0 else 7.0                                    # Use compact guide ticks so labels stay legible instead of becoming a second floor mesh.
+		var edge := _straight_wall_slot_edge(wall_id)                                              # Recover whether this asset represents a front, left, or right wall family.
+		var screen_tangent := Vector2.RIGHT if edge == VIEW_FRONT else Vector2.DOWN               # Preserve vertical player-view guide lines for side-wall art.
+		records.append({"id": wall_id, "local_label": map_label, "map_a": map_a, "map_b": map_b, "screen_a": screen_label - screen_tangent * half_line, "screen_b": screen_label + screen_tangent * half_line, "screen_label": screen_label}) # Store the shared orientation-aware art-slot definition.
+	return records                                                                             # Return the stable 28-slot diagram.
+
+
+
+# _straight_wall_slot_edge: Returns the art-wall family associated with one straight-view slot ID.
+func _straight_wall_slot_edge(wall_id: int) -> String:                                      # Declare this function.
+	for slot in STRAIGHT_WALL_SLOTS:                                                          # Look up the renderer's authoritative metadata for this asset ID.
+		if int(slot["id"]) == wall_id:                                                           # Stop at the exact numbered wall art slot.
+			return str(slot["edge"])                                                               # Return its front/left/right wall family.
+	return VIEW_FRONT                                                                           # Fall back safely to a front-facing guide segment for unknown IDs.
 
 
 
@@ -1233,6 +1463,23 @@ func _make_3d_material(color: Color) -> StandardMaterial3D:                     
 func _layout_viewport() -> void:                                                            # Declare this function.
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
 	var status_margin := 84.0                                                                  # Reserve screen space for the three-line debug status text.
+	if TEMP_GRID_AUDIT and player_views.size() == 1:                                           # Use a clean side-by-side layout for the one-player 9x9 audit.
+		var side_gutter := SIDE_BY_SIDE_GUTTER * 2.0                                               # Leave a clear gap between the player camera and source grid.
+		var audit_size := Vector2(VIEWPORT_SIZE.x + side_gutter + DEBUG_MAP_PANEL_SIZE.x, DEBUG_MAP_PANEL_SIZE.y) # Fit the 160x120 view beside its 160x160 map.
+		var audit_available := Vector2(viewport_size.x, maxf(viewport_size.y - status_margin, DEBUG_MAP_PANEL_SIZE.y)) # Reserve the status area before scaling the audit layout.
+		var audit_scale := minf(audit_available.x / audit_size.x, audit_available.y / audit_size.y) # Scale both panels uniformly to the available window.
+		var audit_origin := Vector2((viewport_size.x - audit_size.x * audit_scale) * 0.5, status_margin + (audit_available.y - audit_size.y * audit_scale) * 0.5) # Center the two-panel audit below status.
+		var audit_view: Dictionary = player_views[0]                                               # Read the sole player/view bundle.
+		var audit_map: Node2D = audit_view.get("debug_map_overlay", null)                        # Read the top-down grid panel.
+		var audit_camera: Node2D = audit_view.get("maze_viewport", null)                         # Read the player camera panel.
+		if audit_map != null:                                                                      # Position the source grid to the right of the player view.
+			audit_map.visible = show_top_down_source_overlay                                           # Respect the existing map overlay toggle.
+			audit_map.scale = Vector2.ONE * audit_scale                                                # Match the player-view scaling.
+			audit_map.position = audit_origin + Vector2((VIEWPORT_SIZE.x + side_gutter) * audit_scale, 0.0) # Park the grid off to the side.
+		if audit_camera != null:                                                                   # Center the shorter player camera vertically against the square map.
+			audit_camera.scale = Vector2.ONE * audit_scale                                             # Match the source-grid scaling.
+			audit_camera.position = audit_origin + Vector2(0.0, (DEBUG_MAP_PANEL_SIZE.y - VIEWPORT_SIZE.y) * 0.5 * audit_scale) # Align the camera at the map's vertical center.
+		return                                                                                    # Skip the normal two-player, two-row layout.
 	var combined_size := Vector2(VIEWPORT_SIZE.x * 2.0 + SIDE_BY_SIDE_GUTTER, VIEWPORT_SIZE.y * 2.0 + SIDE_BY_SIDE_GUTTER) # Build a two-column, two-row source-pixel layout.
 	var available_size := Vector2(viewport_size.x, maxf(viewport_size.y - status_margin, VIEWPORT_SIZE.y)) # Compute the window area available below the status label.
 	var view_scale := minf(available_size.x / combined_size.x, available_size.y / combined_size.y) # Scale the full four-panel layout uniformly.
@@ -1481,6 +1728,9 @@ func _add_debug_visible_wall_slots() -> void:                                   
 func _add_debug_all_wall_slot_numbers() -> void:                                           # Declare this function.
 	if not show_slot_grid_debug:                                                              # Respect the shared slot-grid diagnostic toggle.
 		return                                                                                    # Return without adding any blue slot labels.
+	if not _is_turn_45_view():                                                                 # Cardinal views use the stable art-slot diagram, not physical edge projection.
+		_add_cardinal_debug_slot_diagram()                                                         # Draw the world-space half of the same diagram used in the player view.
+		return                                                                                    # Keep the old physical-edge audit isolated to the separate 45-degree guide.
 	var stacked_labels := {}                                                                   # Track repeated map positions so labels do not completely overlap.
 	for slot in _all_debug_wall_slot_segments():                                               # Visit every cardinal or halfway-turn local slot candidate.
 		if not slot.has("a") or not slot.has("b"):                                                # Require physical source-map endpoints.
@@ -1495,6 +1745,26 @@ func _add_debug_all_wall_slot_numbers() -> void:                                
 		var stack_index := int(stacked_labels.get(stack_key, 0))                                   # Read how many labels have already used this point.
 		stacked_labels[stack_key] = stack_index + 1                                                # Record that this point now has another label.
 		_add_debug_wall_slot_label(midpoint + Vector2(0.0, float(stack_index) * 5.0), wall_id, SLOT_GRID_DEBUG_LABEL_COLOR) # Label the slot with a blue two-digit id.
+
+
+
+# _add_cardinal_debug_slot_diagram: Draws the canonical art-slot diagram around the current cell's fixed center.
+func _add_cardinal_debug_slot_diagram() -> void:                                            # Declare this function.
+	var active_ids := _debug_slot_has_wall_by_id()                                             # Use the renderer's final art-slot selection for the matching color state.
+	var forward := Vector2(_facing_vector()).normalized()                                     # Rotate the diagram with the cardinal view direction only.
+	var right := Vector2(-_left_vector()).normalized()                                        # Use a cardinal camera-right axis for the matching rotation.
+	var pivot := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)          # Anchor at the current cell's fixed grid center, never the rear camera origin.
+	for slot in _cardinal_debug_slot_records():                                                # Draw every stable transparent-wall art-slot guide record.
+		var local_label: Vector2 = slot["local_label"]                                           # Read the matching shared label point.
+		var local_a: Vector2 = slot["map_a"]                                                      # Read the exact blue source-grid segment endpoint A for this ID.
+		var local_b: Vector2 = slot["map_b"]                                                      # Read the exact blue source-grid segment endpoint B for this ID.
+		var start := _debug_map_world_position(pivot + right * local_a.x * CARDINAL_SLOT_GUIDE_MAP_SCALE - forward * local_a.y * CARDINAL_SLOT_GUIDE_MAP_SCALE) # Rotate this owned source-grid segment into world space.
+		var end := _debug_map_world_position(pivot + right * local_b.x * CARDINAL_SLOT_GUIDE_MAP_SCALE - forward * local_b.y * CARDINAL_SLOT_GUIDE_MAP_SCALE)     # Keep the matching segment aligned with its label.
+		var label := _debug_map_world_position(pivot + right * local_label.x * CARDINAL_SLOT_GUIDE_MAP_SCALE - forward * local_label.y * CARDINAL_SLOT_GUIDE_MAP_SCALE) # Keep far art-slot labels ahead of the player inside the matching cone.
+		var wall_id := int(slot["id"])                                                            # Read the stable art-slot ID.
+		var color := SLOT_GRID_DEBUG_WALL_COLOR if bool(active_ids.get(wall_id, false)) else SLOT_GRID_DEBUG_OPEN_COLOR # Match player-view and world-diagram selection state.
+		_add_debug_line(start, end, color, 1.0)                                                    # Draw only the blue source-grid segment owned by this ID.
+		_add_debug_wall_slot_label(label, wall_id, color)                                         # Draw exactly one rotating top-down label for this art slot.
 
 
 
@@ -1695,9 +1965,9 @@ func _add_debug_panel_background() -> void:                                     
 	var background := Polygon2D.new()                                                          # Create a filled rectangle for the diagnostic panel background.
 	background.polygon = PackedVector2Array([                                                  # Define the four corners of the 160x120 source map panel.
 		Vector2.ZERO,                                                                             # Add the top-left corner.
-		Vector2(VIEWPORT_SIZE.x, 0.0),                                                            # Add the top-right corner.
-		VIEWPORT_SIZE,                                                                            # Add the bottom-right corner.
-		Vector2(0.0, VIEWPORT_SIZE.y),                                                            # Add the bottom-left corner.
+		Vector2(DEBUG_MAP_PANEL_SIZE.x, 0.0),                                                     # Add the top-right corner.
+		DEBUG_MAP_PANEL_SIZE,                                                                     # Add the bottom-right corner.
+		Vector2(0.0, DEBUG_MAP_PANEL_SIZE.y),                                                     # Add the bottom-left corner.
 	])                                                                                          # Close the panel polygon point list.
 	background.color = Color(0.04, 0.05, 0.06, 0.92)                                           # Fill the panel with a dark diagnostic background.
 	background.z_index = -10                                                                    # Keep the background behind the map lines and markers.
@@ -1938,6 +2208,19 @@ func _stable_view_name() -> String:                                             
 # _render_straight_wall_view: Composes the stable environment from the floor and whichever numbered straight-wall overlays are visible from the map.
 func _render_straight_wall_view() -> void:                                                  # Declare this function.
 	_hide_slot_nodes()                                                                         # Call a helper function as part of the current controller step.
+	if TEMP_EMPTY_GRID_AUDIT:                                                                  # Keep only the explicitly wall-free audit camera free of baked and transparent wall art.
+		if floor_sprite != null:                                                                 # Use the real captured floor/ceiling strip, not a procedural substitute.
+			floor_sprite.visible = true                                                              # Show the base environment frame.
+			floor_sprite.texture = floor_texture                                                     # Use assets/Environment/Floor_Turn.png.
+			floor_sprite.region_rect = Rect2(0.0, 0.0, VIEWPORT_SIZE.x, VIEWPORT_SIZE.y)             # Draw only its first straight-view 160x120 frame.
+			floor_sprite.position = Vector2.ZERO                                                     # Keep the frame aligned to the camera crop.
+		var audit_background := environment_layer.get_node_or_null("EmptyGridAuditEnvironment") as Node2D # Find any earlier procedural placeholder from this temporary mode.
+		if audit_background != null:                                                              # The captured floor frame replaces that placeholder.
+			audit_background.visible = false                                                         # Hide it without deleting nodes from a live scene.
+		for wall_id in straight_wall_nodes.keys():                                                 # Ensure every transparent numbered wall overlay is hidden.
+			straight_wall_nodes[wall_id].visible = false                                              # Suppress wall art regardless of map/raycast state.
+		last_visible_wall_ids.clear()                                                             # Report no selected wall art in the status/debug overlays.
+		return                                                                                    # Skip the normal captured corridor base and wall-render list.
 
 	if floor_sprite != null:                                                                   # Run the following block only when this condition is true.
 		floor_sprite.visible = true                                                               # Update the reusable base floor sprite.
@@ -1970,6 +2253,49 @@ func _render_straight_wall_view() -> void:                                      
 
 	if enable_3d_diagnostic:                                                                   # Only mirror wall labels into the deprecated 3D diagnostic when it is active.
 		_update_3d_slot_labels(visible_slots)                                                     # Mirror the same numbered wall-slot labels into the 3D diagnostic view.
+
+
+
+# _render_empty_grid_audit_environment: Draws a wall-free floor and ceiling for the open-grid slot audit.
+func _render_empty_grid_audit_environment() -> void:
+	if floor_sprite != null:                                                                   # The captured base frame contains baked corridor walls, so hide it in this mode.
+		floor_sprite.visible = false                                                               # Keep only the procedural, wall-free background visible.
+	var root := environment_layer.get_node_or_null("EmptyGridAuditEnvironment") as Node2D     # Reuse the simple background across redraws.
+	if root == null:                                                                           # Create it only once for this single-player temporary mode.
+		root = Node2D.new()                                                                       # Hold the ceiling, horizon, and floor color fields.
+		root.name = "EmptyGridAuditEnvironment"                                                   # Make the temporary renderer identifiable in the scene tree.
+		environment_layer.add_child(root)                                                         # Place it behind player sprites and debug overlays.
+		var ceiling := Polygon2D.new()                                                            # Create a flat ceiling field with no wall geometry.
+		ceiling.polygon = PackedVector2Array([Vector2(0, 0), Vector2(160, 0), Vector2(160, 46), Vector2(0, 46)]) # Fill the upper camera area.
+		ceiling.color = Color("a87749")                                                           # Use the existing environment's ceiling family without copying any wall pixels.
+		root.add_child(ceiling)                                                                   # Add the ceiling first, behind the horizon and floor.
+		var horizon := Polygon2D.new()                                                            # Create a narrow empty horizon gap between ceiling and floor.
+		horizon.polygon = PackedVector2Array([Vector2(0, 46), Vector2(160, 46), Vector2(160, 54), Vector2(0, 54)]) # Keep the distance field wall-free.
+		horizon.color = Color("171717")                                                           # Use a dark open-space band instead of a back wall.
+		root.add_child(horizon)                                                                   # Add the empty horizon after the ceiling.
+		var floor := Polygon2D.new()                                                              # Create the perspective floor field below the horizon.
+		floor.polygon = PackedVector2Array([Vector2(52, 54), Vector2(108, 54), Vector2(160, 120), Vector2(0, 120)]) # Draw an open floor trapezoid with no wall surfaces.
+		floor.color = Color("ffbd78")                                                             # Use the existing floor palette without wall geometry.
+		root.add_child(floor)                                                                     # Add the floor below the open horizon.
+		for floor_y in [66.0, 82.0, 102.0]:                                                      # Add receding cross-lines so the floor still communicates camera perspective.
+			var ratio: float = (floor_y - 54.0) / 66.0                                                # Convert this depth row into a 0..1 floor interpolation.
+			var left_x := lerpf(52.0, 0.0, ratio)                                                    # Expand the floor's left edge toward the near camera edge.
+			var right_x := lerpf(108.0, 160.0, ratio)                                                # Expand the floor's right edge toward the near camera edge.
+			_add_empty_audit_floor_line(root, Vector2(left_x, floor_y), Vector2(right_x, floor_y))   # Draw one crisp receding horizontal floor seam.
+		for floor_x in [0.0, 40.0, 80.0, 120.0, 160.0]:                                          # Add floor depth lines that converge at the open horizon.
+			_add_empty_audit_floor_line(root, Vector2(80.0, 54.0), Vector2(floor_x, 120.0))          # Draw one perspective ray without introducing a wall.
+	root.visible = true                                                                         # Keep the procedural floor/ceiling visible on every redraw.
+
+
+
+# _add_empty_audit_floor_line: Adds a crisp perspective seam to the procedural wall-free floor.
+func _add_empty_audit_floor_line(parent: Node2D, start: Vector2, end: Vector2) -> void:
+	var line := Line2D.new()                                                                    # Create one thin floor-grid seam.
+	line.points = PackedVector2Array([start, end])                                             # Set its perspective endpoints.
+	line.width = 1.0                                                                            # Match the pixel-art floor seam weight.
+	line.default_color = Color("8b5f3c")                                                       # Use a muted brown floor-line color.
+	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                    # Keep the seam crisp at scaled resolutions.
+	parent.add_child(line)                                                                      # Add the seam above the flat floor polygon.
 
 
 
@@ -2763,6 +3089,7 @@ func _ensure_input_actions() -> void:                                           
 	_ensure_key_action(ACTION_TURN_RIGHT, [KEY_E])                                            # Bind E to player-one snapped right turns.
 	_ensure_key_action(ACTION_REGENERATE_MAP, [KEY_R])                                        # Bind R to runtime maze regeneration.
 	_ensure_key_action(ACTION_TOGGLE_SLOT_GRID_DEBUG, [KEY_F2])                               # Bind F2 to the blue slot-grid audit overlay toggle.
+	_ensure_key_action(ACTION_TOGGLE_DEBUG_MENU, [KEY_F3])                                    # Bind F3 to the grouped debug-overlay menu toggle.
 	_ensure_key_action(ACTION_P2_MOVE_LEFT, [KEY_KP_4])                                       # Bind numpad 4 to player-two local strafe-left movement.
 	_ensure_key_action(ACTION_P2_MOVE_RIGHT, [KEY_KP_6])                                      # Bind numpad 6 to player-two local strafe-right movement.
 	_ensure_key_action(ACTION_P2_MOVE_FORWARD, [KEY_KP_8])                                    # Bind numpad 8 to player-two local forward movement.
@@ -2882,6 +3209,15 @@ func _read_toggle_slot_grid_debug() -> bool:                                    
 	var slot_grid_just_pressed := slot_grid_pressed and not was_slot_grid_debug_pressed        # Detect the first frame of the slot-grid toggle key press.
 	was_slot_grid_debug_pressed = slot_grid_pressed                                           # Store current toggle state for next frame.
 	return slot_grid_just_pressed                                                             # Return whether the diagnostic overlay should toggle this frame.
+
+
+
+# _read_toggle_debug_menu: Returns true once when the debug-overlay menu hotkey is pressed.
+func _read_toggle_debug_menu() -> bool:
+	var debug_menu_pressed := Input.is_action_pressed(ACTION_TOGGLE_DEBUG_MENU) or _is_key_down(KEY_F3) # Read the current F3 debug-menu key state.
+	var debug_menu_just_pressed := debug_menu_pressed and not was_debug_menu_pressed           # Detect the first frame of the menu hotkey press.
+	was_debug_menu_pressed = debug_menu_pressed                                                # Store current menu key state for next frame.
+	return debug_menu_just_pressed                                                            # Return whether the debug panel should open or close this frame.
 
 
 
@@ -3895,6 +4231,21 @@ func _left_vector_for_index(facing_index: int) -> Vector2i:                     
 
 
 
+# _build_empty_grid_audit_wall_edges: Builds the temporary wall-free 5x5 grid used to isolate slot-guide geometry.
+func _build_empty_grid_audit_wall_edges() -> void:
+	wall_edges.clear()                                                                         # Discard the saved/reference maze before creating the isolated test surface.
+	for y in range(MAP_HEIGHT):                                                                # Visit every row in the temporary 5x5 grid.
+		for x in range(MAP_WIDTH):                                                               # Visit every cell in the temporary 5x5 grid.
+			wall_edges[Vector2i(x, y)] = {WALL_EDGE_N: false, WALL_EDGE_E: false, WALL_EDGE_S: false, WALL_EDGE_W: false} # Leave all four cell edges open for an uncluttered diagnostic map.
+	grid_position = Vector2i(4, 4)                                                            # Start the sole player at the center of the 9x9 grid.
+	facing = 0                                                                                 # Start facing north so cardinal turns can be audited from a known state.
+	turn_45_direction = 0                                                                      # Start in a committed cardinal view, not a halfway turn.
+	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Use the usual in-cell resting position.
+	pending_grid_delta = Vector2i.ZERO                                                        # Clear any stale crossing request.
+	last_blocked_direction = ""                                                                # Clear any stale blocked-movement diagnostic.
+
+
+
 # _build_fixed_reference_maze_wall_edges: Restores the current saved 4x4 thin-wall maze instead of rerolling on startup.
 func _build_fixed_reference_maze_wall_edges() -> void:                                     # Declare this function.
 	wall_edges.clear()                                                                         # Clear any previous map wall data before loading the fixed reference map.
@@ -3928,6 +4279,16 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 func _regenerate_runtime_map() -> void:                                                     # Declare this function.
 	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
 	was_regenerate_map_pressed = true                                                          # Keep the regenerate key from firing again until released.
+	if TEMP_GRID_AUDIT:                                                                        # Keep R scoped to the single-player 9x9 audit map.
+		if TEMP_RANDOM_GRID_AUDIT:                                                               # Generate another enclosed, connected random map for wall-render testing.
+			_build_random_maze_wall_edges()                                                           # Preserve the generator's closed exterior boundary.
+		else:                                                                                    # Retain the alternate wall-free audit behavior.
+			_build_empty_grid_audit_wall_edges()                                                       # Restore the same empty 9x9 surface.
+		player_states = [_make_player_state(0, Vector2i(4, 4), 0)]                               # Restore the sole centered audit player.
+		_bind_player_context(0)                                                                   # Rebind the only active player view.
+		_render_all_player_views()                                                                # Redraw the single audit view and source map.
+		_update_status()                                                                          # Refresh the one-player status text.
+		return                                                                                    # Skip the normal two-player random-maze reset.
 	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
 	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset both local players into opposite corners of the new shared map.
 	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.
@@ -4127,7 +4488,7 @@ func _update_status() -> void:                                                  
 		if bool(state.get("is_transitioning", false)):                                           # Show captured phase progress when this player is transitioning.
 			phase_text = "%s phase %d" % [String(state.get("active_sequence_name", "idle")), int(state.get("phase_index", 0)) + 1] # Format the transition status.
 		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s" % [player_index + 1, phase_text, state_facing_name, state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else ""]) # Add this player status line.
-	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map. F2 toggles slot grid." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing"] # Update the on-screen debug status label.
+	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map. F2 slot grid. F3 %s debug menu." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing", "closes" if debug_menu_open else "opens"] # Update the on-screen debug status label.
 
 
 
