@@ -14,6 +14,7 @@ const DIR_W := "W"                                                              
 const VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
 const PHASE_SECONDS := 0.10                                                                 # Set how long each captured transition frame is displayed.
+const TURN_PASSTHROUGH_SECONDS := 0.10                                                      # Display each 22/66 camera interpolation frame briefly before the next stable orientation.
 const MOVE_UNITS_PER_SECOND := 1.70                                                         # Set movement in normalized half-tile units so X and Y ground speed match.
 const HOME_LOCAL_FLOOR_POSITION := Vector2(0.5, 0.68)                                       # Set the resting local position inside a tile.
 const FORWARD_TRIGGER_Y := 0.56                                                             # Set the forward threshold where crossing into the next tile begins.
@@ -477,6 +478,9 @@ var active_sequence_name := "idle"                                              
 var phase_index := 0                                                                        # Track the current frame index within the active transition.
 var phase_timer := 0.0                                                                      # Accumulate time until the next transition frame should display.
 var is_transitioning := false                                                               # Track whether a captured transition animation is currently playing.
+var is_turn_passthrough := false                                                            # Track whether a 22 or 66-degree camera interpolation frame is currently playing.
+var turn_passthrough_timer := 0.0                                                          # Accumulate the visible duration of the active 22/66 frame.
+var turn_passthrough_target := ""                                                         # Store whether the interpolation lands on a diagonal, next cardinal, or previous cardinal view.
 
 var facing := 0                                                                             # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
 var turn_45_direction := 0                                                                   # Track a temporary halfway turn stop: -1=left, 0=cardinal, 1=right.
@@ -727,6 +731,9 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"phase_index": 0,                                                                          # Store the current transition frame index.
 		"phase_timer": 0.0,                                                                        # Store elapsed time inside the current transition frame.
 		"is_transitioning": false,                                                                 # Store whether this player is in a captured transition.
+		"is_turn_passthrough": false,                                                              # Store whether this player is crossing a 22/66 camera stage.
+		"turn_passthrough_timer": 0.0,                                                             # Store the elapsed interpolation-frame time.
+		"turn_passthrough_target": "",                                                            # Store the interpolation destination.
 		"facing": start_facing,                                                                    # Store this player's camera direction.
 		"turn_45_direction": 0,                                                                     # Store whether this player is stopped on a halfway turn view.
 		"turn_step": 0,                                                                              # Store the current 22/45/66 interpolation stage.
@@ -805,6 +812,9 @@ func _bind_player_context(player_index: int) -> void:                           
 	phase_index = int(state.get("phase_index", 0))                                             # Restore this player's transition frame index.
 	phase_timer = float(state.get("phase_timer", 0.0))                                         # Restore this player's transition timer.
 	is_transitioning = bool(state.get("is_transitioning", false))                              # Restore whether this player is in a captured transition.
+	is_turn_passthrough = bool(state.get("is_turn_passthrough", false))                         # Restore whether this player is crossing a 22/66 camera stage.
+	turn_passthrough_timer = float(state.get("turn_passthrough_timer", 0.0))                    # Restore elapsed interpolation-frame time.
+	turn_passthrough_target = String(state.get("turn_passthrough_target", ""))                  # Restore the interpolation destination.
 	facing = int(state.get("facing", 0))                                                        # Restore this player's facing.
 	turn_45_direction = int(state.get("turn_45_direction", 0))                                  # Restore this player's temporary halfway-turn direction.
 	turn_step = int(state.get("turn_step", 2 if turn_45_direction != 0 else 0))                   # Restore the current interpolation stage, preserving old saved diagonal states.
@@ -836,6 +846,9 @@ func _save_player_context(player_index: int) -> void:                           
 	state["phase_index"] = phase_index                                                         # Save this player's transition frame index.
 	state["phase_timer"] = phase_timer                                                         # Save this player's transition timer.
 	state["is_transitioning"] = is_transitioning                                               # Save this player's transition flag.
+	state["is_turn_passthrough"] = is_turn_passthrough                                         # Save whether this player is crossing a 22/66 camera stage.
+	state["turn_passthrough_timer"] = turn_passthrough_timer                                   # Save elapsed interpolation-frame time.
+	state["turn_passthrough_target"] = turn_passthrough_target                                 # Save the interpolation destination.
 	state["facing"] = facing                                                                    # Save this player's facing.
 	state["turn_45_direction"] = turn_45_direction                                             # Save this player's temporary halfway-turn direction.
 	state["turn_step"] = turn_step                                                             # Save this player's current interpolation stage.
@@ -872,6 +885,9 @@ func _process_player_context(delta: float) -> void:                             
 	if is_transitioning:                                                                       # Advance captured transition playback for this player if enabled.
 		_advance_transition(delta)                                                                # Move this player's transition to the next frame when needed.
 		return                                                                                    # Return after transition processing.
+	if is_turn_passthrough:                                                                    # Let an authored 22/66 camera frame finish before accepting new movement or turn input.
+		_advance_turn_passthrough(delta)                                                         # Advance the lightweight camera-only interpolation.
+		return                                                                                    # Keep the player physically fixed during this brief camera movement.
 	var turn_direction := _read_turn()                                                         # Read this player's one-shot turn input.
 	if _is_turn_45_view() and turn_direction != 0:                                             # Reserve a new Q/E press for committing or cancelling the halfway turn.
 		_process_turn_45_input(turn_direction)                                                     # Apply the requested twist while leaving ordinary movement available at 45 degrees.
@@ -4127,12 +4143,12 @@ func _request_transition(sequence_name: String) -> void:                        
 
 
 
-# _request_half_turn_or_transition: Enters the 45-degree validation stop unless captured transition playback is explicitly enabled.
+# _request_half_turn_or_transition: Starts the authored 22-degree passthrough toward a stable diagonal view unless captured transitions are enabled.
 func _request_half_turn_or_transition(sequence_name: String, half_turn_direction: int) -> void: # Declare this function.
 	if use_captured_transitions:                                                               # Preserve the old full-frame captured transition path when that toggle is enabled.
 		_request_transition(sequence_name)                                                        # Start or snap the existing transition sequence.
 		return                                                                                    # Return after requesting the legacy transition.
-	_enter_turn_45(half_turn_direction)                                                        # Stop on the temporary halfway-turn art for validation.
+	_enter_turn_45(half_turn_direction)                                                        # Start the camera-only 22-degree lead-in toward the diagonal view.
 
 
 
@@ -4141,49 +4157,74 @@ func _enter_turn_45(half_turn_direction: int) -> void:                          
 	var preserved_world_position := _current_player_world_position()                           # Capture the player's physical map point before changing the camera basis.
 	turn_45_direction = -1 if half_turn_direction < 0 else 1                                  # Store whether this halfway view is between cardinal-left or cardinal-right.
 	turn_step = 1                                                                              # Begin at the 22-degree interpolation stage.
-	active_sequence_name = "turn_22"                                                          # Label the debug state as the first turn interpolation view.
+	active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[_active_turn_visual_stage()]              # Label the visible 22-degree interpolation frame, including reversed turns.
 	is_transitioning = false                                                                   # Ensure stable renderer mode stays active.
 	active_sequence = []                                                                       # Clear any stale captured transition frames.
 	phase_index = 0                                                                            # Reset captured transition frame bookkeeping.
 	phase_timer = 0.0                                                                          # Reset captured transition time bookkeeping.
-	character_is_moving = false                                                                # Freeze actor movement state while validating the wall art.
+	character_is_moving = false                                                                # Freeze actor movement only while this brief camera interpolation plays.
 	last_blocked_direction = ""                                                                # Clear movement-blocked labels because movement is disabled in this view.
 	_set_player_world_position_for_current_view(preserved_world_position)                      # Re-express the same physical point in the newly active diagonal camera coordinates.
-	_show_stable()                                                                             # Render the 45-degree wall view immediately.
+	_show_stable()                                                                             # Render the 22-degree wall view immediately.
+	_begin_turn_passthrough("to_diagonal")                                                     # Continue automatically into the stable 45-degree diagonal view.
 
 
 
-# _process_turn_45_input: Advances, reverses, or commits the 22 -> 45 -> 66 turn sequence.
+# _process_turn_45_input: Leaves a stable diagonal view through the appropriate 22 or 66-degree passthrough frame.
 func _process_turn_45_input(turn_direction: int) -> void:                                  # Declare this function.
 	var preserved_world_position := _current_player_world_position()                           # Keep the player fixed on the source map while committing or cancelling this camera rotation.
-	character_is_moving = false                                                                # Keep this player idle while the halfway-turn view is on screen.
-	run_dir = DIR_N                                                                            # Keep the hidden local body in a deterministic idle direction.
-	aim_dir = DIR_N                                                                            # Keep the hidden local aim direction camera-forward.
-	world_run_dir = _direction_string_for_facing(facing)                                      # Preserve the committed cardinal world direction for other views.
-	world_aim_dir = _direction_string_for_facing(facing)                                      # Preserve the committed cardinal aim direction for other views.
 	if turn_direction == 0:                                                                    # Stay on the halfway view when no twist key was just pressed.
 		return                                                                                    # Return without changing the halfway-turn state.
-	if turn_direction == turn_45_direction:                                                    # Advance clockwise or counterclockwise through the authored view-relative turn stages.
-		if turn_step < 3:                                                                        # Keep the next cardinal view until the player has seen 22, 45, and 66 degrees.
-			turn_step += 1                                                                         # Advance from 22 to 45, or from 45 to 66.
-			active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[turn_step]                            # Label the active interpolation stage for the debug status.
-			_set_player_world_position_for_current_view(preserved_world_position)                  # Keep the player fixed while the visible camera basis changes.
-			_show_stable()                                                                         # Redraw the next authored floor and wall set.
-			return                                                                                # Wait for the next matching turn input.
-		var sequence_name := "turn_left" if turn_45_direction < 0 else "turn_right"             # Commit after the 66-degree stage.
-		_finish_snap_transition(sequence_name)                                                   # Apply the adjacent cardinal facing while preserving the physical world position.
-		return                                                                                  # Return after committing the turn.
-	if turn_step > 1:                                                                          # Let an opposite turn input smoothly back out one interpolation stage.
-		turn_step -= 1                                                                           # Step from 66 to 45 or from 45 to 22.
-		active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[turn_step]                              # Keep the debug status aligned with the visible stage.
-		_set_player_world_position_for_current_view(preserved_world_position)                    # Reproject the unchanged player point through the earlier view angle.
-		_show_stable()                                                                           # Redraw the previous authored floor and wall set.
-		return                                                                                  # Wait for a later turn input.
-	turn_45_direction = 0                                                                      # Leave the first 22-degree stage when the player reverses direction.
-	turn_step = 0                                                                              # Restore the original cardinal view.
-	_set_player_world_position_for_current_view(preserved_world_position)                      # Convert the unchanged world point back into the committed cardinal camera coordinates.
-	active_sequence_name = "idle"                                                              # Return the debug label to stable cardinal view.
-	_show_stable()                                                                             # Redraw the original cardinal wall view.
+	if turn_direction == turn_45_direction:                                                    # Continue through 66 toward the next cardinal orientation.
+		turn_step = 3                                                                            # Select the exit interpolation stage (reversed automatically for counterclockwise turns).
+		active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[_active_turn_visual_stage()]            # Label the actual visible 22 or 66-degree art stage.
+		_set_player_world_position_for_current_view(preserved_world_position)                    # Preserve the same physical point under the changed camera basis.
+		_show_stable()                                                                           # Render the exit interpolation wall set.
+		_begin_turn_passthrough("to_next_cardinal")                                              # Finish automatically at the neighboring cardinal direction.
+		return                                                                                    # Do not require an additional turn-key press.
+	turn_step = 1                                                                              # Select the entry interpolation stage while backing out toward the original cardinal view.
+	active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[_active_turn_visual_stage()]              # Label the actual visible 22 or 66-degree art stage.
+	_set_player_world_position_for_current_view(preserved_world_position)                      # Preserve the same physical point under the changed camera basis.
+	_show_stable()                                                                             # Render the return interpolation wall set.
+	_begin_turn_passthrough("to_previous_cardinal")                                            # Finish automatically at the original cardinal direction.
+
+
+
+# _begin_turn_passthrough: Starts a short, camera-only 22/66-degree interpolation frame.
+func _begin_turn_passthrough(target: String) -> void:
+	is_turn_passthrough = true                                                                 # Block new movement and turn input until this one authored frame has displayed.
+	turn_passthrough_timer = 0.0                                                               # Start timing the interpolation frame from its first rendered update.
+	turn_passthrough_target = target                                                          # Remember which stable orientation follows this frame.
+
+
+# _advance_turn_passthrough: Finishes a 22/66-degree interpolation and enters its stable destination view.
+func _advance_turn_passthrough(delta: float) -> void:
+	turn_passthrough_timer += delta                                                           # Accumulate visible time for the current interpolation frame.
+	if turn_passthrough_timer < TURN_PASSTHROUGH_SECONDS:                                     # Keep the authored 22/66 art on screen for its full duration.
+		return                                                                                   # Wait until the frame has completed.
+	var target := turn_passthrough_target                                                     # Preserve the destination before clearing transient state.
+	var preserved_world_position := _current_player_world_position()                          # Capture the physical player point before changing the camera basis.
+	is_turn_passthrough = false                                                               # Resume ordinary input after this function reaches a stable orientation.
+	turn_passthrough_timer = 0.0                                                              # Clear elapsed interpolation time for the next turn.
+	turn_passthrough_target = ""                                                              # Clear the completed destination marker.
+	match target:                                                                              # Choose the stable orientation after the animated stage.
+		"to_diagonal":                                                                         # Complete cardinal -> 22 -> diagonal.
+			turn_step = 2                                                                          # Make the 45-degree view a stable, mobile diagonal orientation.
+			active_sequence_name = "turn_45"                                                      # Keep the status/debug state explicit.
+			_set_player_world_position_for_current_view(preserved_world_position)                 # Reproject the unchanged player point into the 45-degree basis.
+			_show_stable()                                                                         # Draw the established 45-degree floor and wall view.
+		"to_next_cardinal":                                                                    # Complete diagonal -> 66 -> neighboring cardinal.
+			var sequence_name := "turn_left" if turn_45_direction < 0 else "turn_right"          # Commit the cardinal rotation in the active turn direction.
+			_finish_snap_transition(sequence_name)                                                 # Apply that facing while preserving the physical player position.
+		"to_previous_cardinal":                                                                # Complete diagonal -> 22 -> original cardinal.
+			turn_45_direction = 0                                                                  # Clear the temporary diagonal basis without changing committed facing.
+			turn_step = 0                                                                          # Restore the original cardinal renderer.
+			active_sequence_name = "idle"                                                         # Return status/debug state to stable cardinal.
+			_set_player_world_position_for_current_view(preserved_world_position)                 # Reproject the unchanged player point into the original cardinal basis.
+			_show_stable()                                                                         # Draw the restored cardinal floor and wall view.
+			_position_player()                                                                     # Refresh the local player projection immediately.
+			_update_debug_map_overlay()                                                            # Refresh the top-down orientation and slot graph immediately.
+			_update_status()                                                                       # Refresh the status line at the stable destination.
 
 
 
@@ -4191,6 +4232,9 @@ func _process_turn_45_input(turn_direction: int) -> void:                       
 func _finish_snap_transition(sequence_name: String) -> void:                                # Declare this function.
 	var preserved_world_position := _current_player_world_position()                           # Capture the pre-turn physical point before any facing basis is changed.
 	is_transitioning = false                                                                   # Ensure the controller stays in stable/input mode.
+	is_turn_passthrough = false                                                               # Ensure a completed cardinal snap cannot leave a stale camera interpolation active.
+	turn_passthrough_timer = 0.0                                                              # Clear any previous 22/66 interpolation time.
+	turn_passthrough_target = ""                                                              # Clear any previous 22/66 interpolation destination.
 	if sequence_name == "turn_left" or sequence_name == "turn_right":                         # Only a completed turn leaves the halfway camera orientation.
 		turn_45_direction = 0                                                                      # Return to a committed cardinal direction after the matching second twist.
 		turn_step = 0                                                                              # Clear the 22/45/66 interpolation stage after reaching the new cardinal direction.
