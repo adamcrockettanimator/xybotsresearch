@@ -119,6 +119,44 @@ const TURN_45_DIAGNOSTIC_ROW_IDS := [                                           
 	[11, 8, 9, 14],                                                                             # Label the near-mid row from local left to local right.
 	[15, 12, 13, 16],                                                                           # Label the closest row from local left to local right.
 ]                                                                                           # Close the halfway-turn diagnostic id table.
+const TURN_22_PLAYER_SLOT_GUIDE := [                                                        # Copy the player-view positions from Grid_Turn22_NE.png in 160x120 playfield pixels.
+	{"id": 1, "label": Vector2(56.3, 50.0), "tangent": Vector2.DOWN, "half": 5.0},      # Far inner-left vertical wall.
+	{"id": 2, "label": Vector2(94.6, 50.0), "tangent": Vector2.DOWN, "half": 5.0},      # Far inner-right vertical wall.
+	{"id": 3, "label": Vector2(8.3, 54.0), "tangent": Vector2.RIGHT, "half": 6.0},      # Far local-left horizontal wall.
+	{"id": 4, "label": Vector2(36.3, 54.0), "tangent": Vector2.RIGHT, "half": 6.0},     # Far inner-left horizontal wall.
+	{"id": 5, "label": Vector2(85.7, 54.0), "tangent": Vector2.RIGHT, "half": 6.0},     # Far inner-right horizontal wall.
+	{"id": 6, "label": Vector2(127.7, 51.0), "tangent": Vector2.RIGHT, "half": 6.0},    # Far local-right horizontal wall.
+	{"id": 7, "label": Vector2(9.4, 67.9), "tangent": Vector2.DOWN, "half": 6.0},       # Left middle vertical wall.
+	{"id": 8, "label": Vector2(71.0, 60.9), "tangent": Vector2(1.0, 0.5), "half": 6.0}, # Inner-left middle diagonal wall.
+	{"id": 9, "label": Vector2(124.0, 57.9), "tangent": Vector2(1.0, 0.5), "half": 6.0},# Inner-right middle diagonal wall.
+	{"id": 10, "label": Vector2(36.7, 72.7), "tangent": Vector2.RIGHT, "half": 7.0},    # Left middle horizontal wall.
+	{"id": 11, "label": Vector2(116.3, 63.9), "tangent": Vector2.RIGHT, "half": 7.0},   # Center middle horizontal wall.
+	{"id": 12, "label": Vector2(159.0, 59.9), "tangent": Vector2.RIGHT, "half": 6.0},   # Right middle horizontal wall.
+	{"id": 13, "label": Vector2(99.4, 77.6), "tangent": Vector2(1.0, 0.5), "half": 8.0},# Near inner-left diagonal wall.
+	{"id": 14, "label": Vector2(159.0, 66.7), "tangent": Vector2.RIGHT, "half": 6.0},   # Near inner-right horizontal wall.
+	{"id": 15, "label": Vector2(46.3, 102.1), "tangent": Vector2(1.0, -0.5), "half": 10.0}, # Near left floor diagonal.
+	{"id": 16, "label": Vector2(152.3, 83.3), "tangent": Vector2.RIGHT, "half": 8.0},   # Near right horizontal wall.
+	{"id": 17, "label": Vector2(147.4, 103.9), "tangent": Vector2(1.0, 0.5), "half": 10.0}, # Near right floor diagonal.
+]                                                                                           # Close the authored 22-degree player-view guide.
+const TURN_66_PLAYER_SLOT_GUIDE := [                                                        # Copy the player-view positions from Grid_Turn66_NE.png in 160x120 playfield pixels.
+	{"id": 1, "label": Vector2(78.6, 47.0), "tangent": Vector2.RIGHT, "half": 6.0},     # Far inner-left horizontal wall.
+	{"id": 2, "label": Vector2(116.0, 48.4), "tangent": Vector2.RIGHT, "half": 6.0},    # Far inner-right horizontal wall.
+	{"id": 3, "label": Vector2(46.3, 49.4), "tangent": Vector2.DOWN, "half": 5.0},      # Far-right vertical wall.
+	{"id": 4, "label": Vector2(87.1, 54.0), "tangent": Vector2.RIGHT, "half": 6.0},     # Upper-right middle wall.
+	{"id": 5, "label": Vector2(137.7, 56.0), "tangent": Vector2.RIGHT, "half": 6.0},    # Lower-right middle wall.
+	{"id": 6, "label": Vector2(160.0, 56.7), "tangent": Vector2.DOWN, "half": 6.0},     # Nearest right vertical wall.
+	{"id": 7, "label": Vector2(46.4, 57.9), "tangent": Vector2.RIGHT, "half": 6.0},     # Upper center-right horizontal wall.
+	{"id": 8, "label": Vector2(101.0, 59.1), "tangent": Vector2.RIGHT, "half": 6.0},    # Middle center-right horizontal wall.
+	{"id": 9, "label": Vector2(159.1, 66.7), "tangent": Vector2.DOWN, "half": 6.0},     # Lower center-right horizontal wall.
+	{"id": 10, "label": Vector2(12.3, 58.4), "tangent": Vector2.DOWN, "half": 6.0},     # Far center vertical wall.
+	{"id": 11, "label": Vector2(52.6, 64.4), "tangent": Vector2.DOWN, "half": 7.0},     # Upper center vertical wall.
+	{"id": 12, "label": Vector2(130.3, 70.7), "tangent": Vector2.RIGHT, "half": 7.0},   # Lower center vertical wall.
+	{"id": 13, "label": Vector2(13.1, 67.0), "tangent": Vector2.RIGHT, "half": 6.0},    # Upper inner horizontal wall.
+	{"id": 14, "label": Vector2(66.6, 76.7), "tangent": Vector2(1.0, -0.5), "half": 8.0}, # Middle inner diagonal wall.
+	{"id": 15, "label": Vector2(22.4, 85.3), "tangent": Vector2(1.0, 0.5), "half": 9.0}, # Upper inner vertical wall.
+	{"id": 16, "label": Vector2(120.9, 100.1), "tangent": Vector2(1.0, 0.5), "half": 10.0}, # Lower inner floor diagonal.
+	{"id": 17, "label": Vector2(22.6, 103.0), "tangent": Vector2(1.0, -0.5), "half": 10.0}, # Nearest left floor diagonal.
+]                                                                                           # Close the authored 66-degree player-view guide.
 const TURN_45_DIAGNOSTIC_SLOT_EDGES := [                                                    # Store each 45-degree slot as a unique grid-edge in local turn-space u/v coordinates.
 	{"id": 3, "a": Vector2(1.0, 2.0), "b": Vector2(2.0, 2.0)},                                 # Map the far local-left horizontal slot from the corrected guide.
 	{"id": 1, "a": Vector2(2.0, 2.0), "b": Vector2(3.0, 2.0)},                                 # Map the far inner-left horizontal slot from the corrected guide.
@@ -1170,7 +1208,7 @@ func _update_view_slot_debug_overlay() -> void:                                 
 		var line_color := SLOT_GRID_DEBUG_WALL_COLOR if bool(source_presence.get(wall_id, false)) else SLOT_GRID_DEBUG_OPEN_COLOR # Brighten blocked source edges and fade open candidates.
 		_add_view_slot_debug_line(segment[0], segment[1], line_color, 1.0)                        # Draw the projected slot line on the player-view grid.
 		var label_position: Vector2 = slot.get("label", (segment[0] + segment[1]) * 0.5)           # Use the tuned label position when the guide table supplies one.
-		_add_view_slot_debug_label(label_position, wall_id, SLOT_GRID_DEBUG_LABEL_COLOR)           # Label the projected slot line with its local id.
+		_add_view_slot_debug_label(label_position, wall_id, line_color)                            # Give the player-view number the same selected/open state as its source edge.
 
 
 
@@ -1205,18 +1243,17 @@ func _view_slot_screen_segments() -> Array:                                     
 	return segments                                                                            # Return all 28 stable player-view slot records.
 
 
-# _turn_stage_slot_screen_segments: Builds an authored-stage screen guide directly from opaque 22/66 wall art bounds.
+# _turn_stage_slot_screen_segments: Returns the authored local guide that pairs every 22/66 art id to its source-map edge.
 func _turn_stage_slot_screen_segments() -> Array:
+	var guide := TURN_22_PLAYER_SLOT_GUIDE if _active_turn_visual_stage() == 1 else TURN_66_PLAYER_SLOT_GUIDE # Select the stage's reference diagram, including reverse turns.
 	var segments := []                                                                         # Store the local labels for every authored intermediate overlay.
-	for wall_id in _active_turn_wall_textures().keys():                                        # Visit the 17 local IDs in the active 22 or 66-degree art set.
-		var texture: Texture2D = _active_turn_wall_textures()[wall_id]                            # Read this stage's transparent wall overlay.
-		var bounds := _texture_opaque_bounds(texture)                                             # Find the visible wall footprint in the 160x120 player view.
-		if bounds.size == Vector2.ZERO:                                                           # Ignore unexpected empty overlay files.
-			continue                                                                                # Skip this missing guide footprint.
-		var center := bounds.get_center()                                                         # Label the actual authored wall position instead of a 45-degree proxy.
-		var half_line := minf(maxf(bounds.size.x * 0.25, 4.0), 18.0)                              # Keep a short readable guide line inside each wall footprint.
-		segments.append(_view_slot_screen_record(int(wall_id), center - Vector2.RIGHT * half_line, center + Vector2.RIGHT * half_line, center)) # Keep the debug number on its own authored stage art.
-	return segments                                                                            # Return all 22/66 artwork-aligned slot guides.
+	for entry in guide:                                                                        # Visit each reference number exactly once.
+		var label: Vector2 = entry["label"]                                                     # Read the hand-authored player-view label position.
+		var tangent: Vector2 = entry["tangent"]                                                 # Read the matching local guide-line direction.
+		tangent = tangent.normalized()                                                            # Keep diagonal guide marks at their authored length.
+		var half_length := float(entry["half"])                                                 # Keep the guide line at its authored readable length.
+		segments.append(_view_slot_screen_record(int(entry["id"]), label - tangent * half_length, label + tangent * half_length, label)) # Keep the screen number paired to the same source-edge id.
+	return segments                                                                            # Return all 22/66 reference-aligned slot guides.
 
 
 
