@@ -16,6 +16,7 @@ const SIDE_BY_SIDE_GUTTER := 8.0                                                
 const PHASE_SECONDS := 0.10                                                                 # Set how long each captured transition frame is displayed.
 const TURN_PASSTHROUGH_SECONDS := 0.10                                                      # Display each 22/66 camera interpolation frame briefly before the next stable orientation.
 const MOVE_UNITS_PER_SECOND := 1.70                                                         # Set movement in normalized half-tile units so X and Y ground speed match.
+const DIAGONAL_CORNER_GRACE := 0.15                                                         # Give true 45-degree crossings roughly three body widths of tolerance before allowing a side-cell camera handoff.
 const HOME_LOCAL_FLOOR_POSITION := Vector2(0.5, 0.68)                                       # Set the resting local position inside a tile.
 const FORWARD_TRIGGER_Y := 0.56                                                             # Set the forward threshold where crossing into the next tile begins.
 const BACKWARD_TRIGGER_Y := 0.84                                                            # Set the backward threshold where crossing into the previous tile begins.
@@ -37,7 +38,13 @@ const WALLS_STRAIGHT_ROOT := "res://assets/Environment/WallsStraight"           
 const WALLS_TURN_22_ROOT := "res://assets/Environment/Walls_Turn_22"                        # Point to the 17 transparent first-quarter turn wall overlays.
 const WALLS_TURN_45_ROOT := "res://assets/Environment/Walls_Turn_45"                        # Point to the 16 transparent halfway-turn wall overlay sprites.
 const WALLS_TURN_66_ROOT := "res://assets/Environment/Walls_Turn_66"                        # Point to the 17 transparent third-quarter turn wall overlays.
+const WALLS_FWD_1_ROOT := "res://assets/Environment/Walls_Fwd_1"                            # Point to the 20 transparent first forward-transition wall overlays.
+const WALLS_FWD_2_ROOT := "res://assets/Environment/Walls_Fwd_2"                            # Point to the 26 transparent second forward-transition wall overlays.
 const FLOOR_TURN_TEXTURE := "res://assets/Environment/Floor_Turn.png"                       # Point to the floor strip whose first frame is used as the straight-view base.
+const FLOOR_FWD_1_TEXTURE := "res://assets/Environment/FloorFwd_1.png"                      # Point to the first authored forward-transition floor frame.
+const FLOOR_FWD_2_TEXTURE := "res://assets/Environment/FloorFwd_2.png"                      # Point to the second authored forward-transition floor frame.
+const FORWARD_PASSTHROUGH_SECONDS := 0.075                                                   # Keep both forward camera frames brisk while still making their geometry readable.
+const FORWARD_RUN_ANIMATION_SPEED := 1.75                                                     # Let the body visibly keep running while the two authored camera frames catch up.
 const TURN_STAGE_SEQUENCE_NAMES := ["idle", "turn_22", "turn_45", "turn_66"]               # Name the cardinal and authored intermediate turn views for debug status.
 const PLAYER_FRAMES := "res://assets/frames/renamed_trimmed_sequence/capture_frames.tres"   # Point to the baked player animation SpriteFrames resource.
 const PLAYER_IDLE_TEXTURE := "res://assets/frames/IdleN_AimN/IdleN_AimN.png"                # Point to the user-provided first-player idle sprite.
@@ -214,6 +221,57 @@ const TURN_66_DIAGNOSTIC_SLOT_EDGES := [                                        
 	{"id": 16, "a": Vector2(1, 0), "b": Vector2(1, -1)},                                # Slot 16: lower inner vertical edge.
 	{"id": 17, "a": Vector2(0, 0), "b": Vector2(1, 0)},                                 # Slot 17: nearest left horizontal edge.
 ]                                                                                           # Close the authored 66-degree source-map graph.
+const FWD_1_DIAGNOSTIC_SLOT_EDGES := [                                                      # Store the authored first forward-frame graph in camera-local grid space.
+	{"id": 1, "a": Vector2(-0.5, 3.96), "b": Vector2(0.5, 3.96), "draw": 10},          # Far center horizontal edge.
+	{"id": 2, "a": Vector2(-0.5, 3.96), "b": Vector2(-0.5, 2.96), "draw": 11},        # Far inner-left vertical edge.
+	{"id": 3, "a": Vector2(0.5, 3.96), "b": Vector2(0.5, 2.96), "draw": 12},          # Far inner-right vertical edge.
+	{"id": 4, "a": Vector2(-1.5, 2.96), "b": Vector2(-0.5, 2.96), "draw": 20},        # Upper outer-left horizontal edge.
+	{"id": 5, "a": Vector2(-0.5, 2.96), "b": Vector2(0.5, 2.96), "draw": 21},         # Upper center horizontal edge.
+	{"id": 6, "a": Vector2(0.5, 2.96), "b": Vector2(1.5, 2.96), "draw": 22},          # Upper outer-right horizontal edge.
+	{"id": 7, "a": Vector2(-1.5, 2.96), "b": Vector2(-1.5, 1.96), "draw": 30},        # Upper outer-left vertical edge.
+	{"id": 8, "a": Vector2(-0.5, 2.96), "b": Vector2(-0.5, 1.96), "draw": 31},        # Upper inner-left vertical edge.
+	{"id": 9, "a": Vector2(0.5, 2.96), "b": Vector2(0.5, 1.96), "draw": 32},          # Upper inner-right vertical edge.
+	{"id": 10, "a": Vector2(1.5, 2.96), "b": Vector2(1.5, 1.96), "draw": 33},         # Upper outer-right vertical edge.
+	{"id": 11, "a": Vector2(-1.5, 1.96), "b": Vector2(-0.5, 1.96), "draw": 40},       # Middle outer-left horizontal edge.
+	{"id": 12, "a": Vector2(-0.5, 1.96), "b": Vector2(0.5, 1.96), "draw": 41},        # Middle center horizontal edge.
+	{"id": 13, "a": Vector2(0.5, 1.96), "b": Vector2(1.5, 1.96), "draw": 42},         # Middle outer-right horizontal edge.
+	{"id": 14, "a": Vector2(-0.5, 1.96), "b": Vector2(-0.5, 0.96), "draw": 50},       # Lower inner-left vertical edge.
+	{"id": 15, "a": Vector2(0.5, 1.96), "b": Vector2(0.5, 0.96), "draw": 51},         # Lower inner-right vertical edge.
+	{"id": 16, "a": Vector2(-1.5, 0.96), "b": Vector2(-0.5, 0.96), "draw": 60},       # Near left horizontal edge.
+	{"id": 17, "a": Vector2(-0.5, 0.96), "b": Vector2(0.5, 0.96), "draw": 61},        # Near center/front horizontal edge.
+	{"id": 18, "a": Vector2(0.5, 0.96), "b": Vector2(1.5, 0.96), "draw": 62},         # Near right horizontal edge.
+	{"id": 19, "a": Vector2(-0.5, 0.96), "b": Vector2(-0.5, -0.04), "draw": 70},      # Closest left inner vertical continuation: 02 -> 08 -> 14 -> 19.
+	{"id": 20, "a": Vector2(0.5, 0.96), "b": Vector2(0.5, -0.04), "draw": 71},        # Closest right inner vertical continuation: 03 -> 09 -> 15 -> 20.
+]                                                                                           # Keep Fwd 1 independent of cardinal and turn graph data.
+const FWD_2_DIAGNOSTIC_SLOT_EDGES := [                                                      # Store the authored second forward-frame graph in camera-local grid space.
+	{"id": 1, "a": Vector2(-0.5, 4.96), "b": Vector2(-0.5, 3.96), "draw": 10},        # Far left inner vertical edge: 01 -> 07 -> 14 -> 20 -> 25.
+	{"id": 2, "a": Vector2(0.5, 4.96), "b": Vector2(0.5, 3.96), "draw": 11},          # Far right inner vertical edge: 02 -> 08 -> 15 -> 21 -> 26.
+	{"id": 3, "a": Vector2(-1.5, 3.96), "b": Vector2(-0.5, 3.96), "draw": 20},        # Far outer-left horizontal edge.
+	{"id": 4, "a": Vector2(-0.5, 3.96), "b": Vector2(0.5, 3.96), "draw": 21},         # Far center horizontal edge.
+	{"id": 5, "a": Vector2(0.5, 3.96), "b": Vector2(1.5, 3.96), "draw": 22},          # Far outer-right horizontal edge.
+	{"id": 6, "a": Vector2(-1.5, 3.96), "b": Vector2(-1.5, 2.96), "draw": 30},        # Far outer-left vertical edge.
+	{"id": 7, "a": Vector2(-0.5, 3.96), "b": Vector2(-0.5, 2.96), "draw": 31},        # Far inner-left vertical edge.
+	{"id": 8, "a": Vector2(0.5, 3.96), "b": Vector2(0.5, 2.96), "draw": 32},          # Far inner-right vertical edge.
+	{"id": 9, "a": Vector2(1.5, 3.96), "b": Vector2(1.5, 2.96), "draw": 33},          # Far outer-right vertical edge.
+	{"id": 10, "a": Vector2(-1.5, 2.96), "b": Vector2(-0.5, 2.96), "draw": 40},       # Upper outer-left horizontal edge.
+	{"id": 11, "a": Vector2(-0.5, 2.96), "b": Vector2(0.5, 2.96), "draw": 41},        # Upper center horizontal edge.
+	{"id": 12, "a": Vector2(0.5, 2.96), "b": Vector2(1.5, 2.96), "draw": 42},         # Upper outer-right horizontal edge.
+	{"id": 13, "a": Vector2(-1.5, 2.96), "b": Vector2(-1.5, 1.96), "draw": 50},       # Upper outer-left vertical edge.
+	{"id": 14, "a": Vector2(-0.5, 2.96), "b": Vector2(-0.5, 1.96), "draw": 51},       # Upper inner-left vertical edge.
+	{"id": 15, "a": Vector2(0.5, 2.96), "b": Vector2(0.5, 1.96), "draw": 52},         # Upper inner-right vertical edge.
+	{"id": 16, "a": Vector2(1.5, 2.96), "b": Vector2(1.5, 1.96), "draw": 53},         # Upper outer-right vertical edge.
+	{"id": 17, "a": Vector2(-1.5, 1.96), "b": Vector2(-0.5, 1.96), "draw": 60},       # Middle outer-left horizontal edge.
+	{"id": 18, "a": Vector2(-0.5, 1.96), "b": Vector2(0.5, 1.96), "draw": 61},        # Middle center horizontal edge.
+	{"id": 19, "a": Vector2(0.5, 1.96), "b": Vector2(1.5, 1.96), "draw": 62},         # Middle outer-right horizontal edge.
+	{"id": 20, "a": Vector2(-0.5, 1.96), "b": Vector2(-0.5, 0.96), "draw": 70},       # Lower inner-left vertical edge.
+	{"id": 21, "a": Vector2(0.5, 1.96), "b": Vector2(0.5, 0.96), "draw": 71},         # Lower inner-right vertical edge.
+	{"id": 22, "a": Vector2(-1.5, 0.96), "b": Vector2(-0.5, 0.96), "draw": 80},       # Immediate front row, left segment.
+	{"id": 23, "a": Vector2(-0.5, 0.96), "b": Vector2(0.5, 0.96), "draw": 81},        # Immediate front row, center segment.
+	{"id": 24, "a": Vector2(0.5, 0.96), "b": Vector2(1.5, 0.96), "draw": 82},         # Immediate front row, right segment.
+	{"id": 25, "a": Vector2(-0.5, 0.96), "b": Vector2(-0.5, -0.04), "draw": 90},      # Closest left side of the entered cell.
+	{"id": 26, "a": Vector2(0.5, 0.96), "b": Vector2(0.5, -0.04), "draw": 91},        # Closest right side of the entered cell.
+]                                                                                           # Keep Fwd 2 independent of cardinal and turn graph data.
+const FWD_GRAPH_FORWARD_OFFSET := Vector2(0.0, 1.0)                                        # Both Fwd frames sample one cell ahead toward the destination camera position.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
 const DIAGNOSTIC_3D_CELL_WIDTH := 1.35                                                       # Widen the diagnostic cell volume so the 3D hallway better matches the 2D projection.
@@ -458,9 +516,13 @@ var straight_wall_textures: Dictionary = {}                                     
 var turn_45_wall_textures: Dictionary = {}                                                  # Store the 16 numbered halfway-turn wall textures by wall id.
 var turn_22_wall_textures: Dictionary = {}                                                  # Store the 17 numbered 22-degree turn wall textures by wall id.
 var turn_66_wall_textures: Dictionary = {}                                                  # Store the 17 numbered 66-degree turn wall textures by wall id.
+var fwd_1_wall_textures: Dictionary = {}                                                    # Store the 20 numbered first forward-frame wall textures by wall id.
+var fwd_2_wall_textures: Dictionary = {}                                                    # Store the 26 numbered second forward-frame wall textures by wall id.
 var straight_wall_nodes: Dictionary = {}                                                    # Store the 28 numbered straight-wall Sprite2D nodes by wall id.
 var straight_wall_label_nodes: Dictionary = {}                                               # Store debug labels attached to straight-wall overlay sprites.
 var floor_texture: Texture2D                                                                # Store the loaded floor texture strip.
+var floor_fwd_1_texture: Texture2D                                                          # Store the first forward-transition floor texture.
+var floor_fwd_2_texture: Texture2D                                                          # Store the second forward-transition floor texture.
 var floor_sprite: Sprite2D                                                                  # Store the base floor Sprite2D used by the straight renderer.
 var environment_layer: Node2D                                                               # Store the parent node for all composited environment sprites.
 var perspective_extents_overlay: Node2D                                                     # Store the projected-square debug overlay for the currently bound player view.
@@ -485,6 +547,11 @@ var turn_passthrough_target := ""                                               
 var facing := 0                                                                             # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
 var turn_45_direction := 0                                                                   # Track a temporary halfway turn stop: -1=left, 0=cardinal, 1=right.
 var turn_step := 0                                                                           # Track a view-relative quarter-turn stage: 0=cardinal, 1=22, 2=45, 3=66.
+var forward_step := 0                                                                        # Track a forward camera stage: 0=stable, 1=Floor/WallsFwd_1, 2=Floor/WallsFwd_2.
+var forward_passthrough_timer := 0.0                                                        # Accumulate the display time of the active forward frame.
+var forward_transition_name := ""                                                          # Remember whether the staged crossing finishes forward or backward.
+var manual_forward_step_enabled := false                                                    # Let the debug menu hold Fwd frames until a fresh forward input advances them.
+var was_manual_forward_step_pressed := false                                                # Latch forward input so a held left stick cannot skip multiple Fwd frames.
 var grid_position := Vector2i(0, 3)                                                         # Track the current cell in the top-down maze map.
 var local_floor_position := HOME_LOCAL_FLOOR_POSITION                                       # Track the character position inside the current tile.
 var run_dir := DIR_N                                                                        # Track the body movement direction used for animation selection.
@@ -529,6 +596,7 @@ func _ready() -> void:                                                          
 	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
 	_load_straight_wall_textures()                                                             # Call a helper function as part of the current controller step.
 	_load_turn_wall_textures()                                                                 # Load the 22, 45, and 66-degree turn wall overlay sprites.
+	_load_forward_wall_textures()                                                              # Load the two authored forward-transition floor and wall overlay sets.
 	_setup_viewport()                                                                          # Call a helper function as part of the current controller step.
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
@@ -574,6 +642,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
 	_add_debug_menu_check(content, "slot_grid", "Slot Grid (F2)")                           # Add the existing F2 quick-toggle as a menu option.
 	_add_debug_menu_check(content, "selected_slots", "Selected Slots")                       # Add the selected-wall comparison overlay toggle.
+	_add_debug_menu_check(content, "manual_forward", "Manual Forward")                      # Hold Fwd frames until the player deliberately presses forward again.
 
 	var hint := Label.new()                                                                    # Provide the close hotkey inside the panel itself.
 	hint.text = "F3 closes this menu"                                                         # Make the invocation/close behavior discoverable at runtime.
@@ -617,6 +686,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_slot_grid_debug                                                            # Return the blue wall-slot audit overlay state.
 		"selected_slots":
 			return show_selected_wall_slot_debug                                                   # Return the renderer-selection comparison overlay state.
+		"manual_forward":
+			return manual_forward_step_enabled                                                      # Return whether Fwd frames wait for repeated forward input.
 		_:
 			return false                                                                           # Keep unknown future menu keys safely disabled.
 
@@ -635,6 +706,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_slot_grid_debug = enabled                                                         # Show or hide the blue numbered wall-slot audit grid.
 		"selected_slots":
 			show_selected_wall_slot_debug = enabled                                                # Show or hide renderer-selected wall-slot highlights.
+		"manual_forward":
+			manual_forward_step_enabled = enabled                                                   # Toggle input-driven Fwd 1 -> Fwd 2 -> destination stepping.
 		_:
 			return                                                                                # Ignore unsupported keys without redrawing.
 	_render_all_player_views()                                                                 # Redraw every local view immediately so changes are visible at once.
@@ -737,6 +810,10 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"facing": start_facing,                                                                    # Store this player's camera direction.
 		"turn_45_direction": 0,                                                                     # Store whether this player is stopped on a halfway turn view.
 		"turn_step": 0,                                                                              # Store the current 22/45/66 interpolation stage.
+		"forward_step": 0,                                                                           # Store the current Fwd 1/Fwd 2 camera stage.
+		"forward_passthrough_timer": 0.0,                                                           # Store elapsed automatic Fwd stage time.
+		"forward_transition_name": "",                                                            # Store the pending cell-crossing result after Fwd 2.
+		"was_manual_forward_step_pressed": false,                                                   # Store the one-shot forward-step input latch.
 		"grid_position": start_cell,                                                               # Store this player's source-map cell.
 		"local_floor_position": HOME_LOCAL_FLOOR_POSITION,                                        # Store this player's position inside the current cell.
 		"run_dir": DIR_N,                                                                          # Store this player's current body movement animation direction.
@@ -818,6 +895,10 @@ func _bind_player_context(player_index: int) -> void:                           
 	facing = int(state.get("facing", 0))                                                        # Restore this player's facing.
 	turn_45_direction = int(state.get("turn_45_direction", 0))                                  # Restore this player's temporary halfway-turn direction.
 	turn_step = int(state.get("turn_step", 2 if turn_45_direction != 0 else 0))                   # Restore the current interpolation stage, preserving old saved diagonal states.
+	forward_step = int(state.get("forward_step", 0))                                          # Restore this player's active forward camera stage.
+	forward_passthrough_timer = float(state.get("forward_passthrough_timer", 0.0))             # Restore elapsed time in the active forward frame.
+	forward_transition_name = String(state.get("forward_transition_name", ""))                # Restore the cell-crossing result that follows the second forward frame.
+	was_manual_forward_step_pressed = bool(state.get("was_manual_forward_step_pressed", false)) # Restore the one-shot Fwd-step input latch.
 	grid_position = state.get("grid_position", Vector2i.ZERO)                                  # Restore this player's current map cell.
 	local_floor_position = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)        # Restore this player's local cell position.
 	run_dir = String(state.get("run_dir", DIR_N))                                              # Restore this player's run animation direction.
@@ -852,6 +933,10 @@ func _save_player_context(player_index: int) -> void:                           
 	state["facing"] = facing                                                                    # Save this player's facing.
 	state["turn_45_direction"] = turn_45_direction                                             # Save this player's temporary halfway-turn direction.
 	state["turn_step"] = turn_step                                                             # Save this player's current interpolation stage.
+	state["forward_step"] = forward_step                                                       # Save this player's active forward camera stage.
+	state["forward_passthrough_timer"] = forward_passthrough_timer                            # Save elapsed time in the active forward frame.
+	state["forward_transition_name"] = forward_transition_name                                # Save the cell-crossing result that follows the forward frames.
+	state["was_manual_forward_step_pressed"] = was_manual_forward_step_pressed                 # Save the one-shot Fwd-step input latch.
 	state["grid_position"] = grid_position                                                     # Save this player's map cell.
 	state["local_floor_position"] = local_floor_position                                       # Save this player's local cell position.
 	state["run_dir"] = run_dir                                                                  # Save this player's run animation direction.
@@ -882,9 +967,20 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 
 # _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
+	var manual_forward_step_just_pressed := _read_manual_forward_step_input() if manual_forward_step_enabled else false # Sample every enabled frame so a held stick cannot skip stages.
 	if is_transitioning:                                                                       # Advance captured transition playback for this player if enabled.
 		_advance_transition(delta)                                                                # Move this player's transition to the next frame when needed.
 		return                                                                                    # Return after transition processing.
+	if forward_step != 0:                                                                      # Keep input frozen while either authored forward camera frame is on screen.
+		character_is_moving = true                                                               # Keep the player in the running state while the camera crosses the cell edge.
+		_keep_forward_run_animating()                                                            # Force continuous, slightly faster run playback so the camera transition cannot read as a body pause.
+		if manual_forward_step_enabled:                                                           # Hold Fwd 1 and Fwd 2 until the player presses forward again.
+			if manual_forward_step_just_pressed:                                                    # Advance exactly one authored stage per fresh forward input.
+				_advance_forward_passthrough(delta, true)                                             # Move Fwd 1 -> Fwd 2 or Fwd 2 -> destination immediately.
+		else:
+			_advance_forward_passthrough(delta)                                                     # Preserve automatic, brisk Fwd playback when the debug toggle is off.
+		return                                                                                    # Do not accept another move or turn during the short camera transition.
+	player_sprite.speed_scale = 1.0                                                            # Restore the ordinary animation pace as soon as Fwd playback has completed.
 	if is_turn_passthrough:                                                                    # Let an authored 22/66 camera frame finish before accepting new movement or turn input.
 		_advance_turn_passthrough(delta)                                                         # Advance the lightweight camera-only interpolation.
 		return                                                                                    # Keep the player physically fixed during this brief camera movement.
@@ -924,6 +1020,10 @@ func _process_player_context(delta: float) -> void:                             
 func _render_bound_player_context() -> void:                                              # Declare this function.
 	if is_transitioning:                                                                       # Keep captured transition frames visible when a transition is playing.
 		_position_player()                                                                        # Keep the player sprite registered over the transition frame.
+	elif _is_forward_view():                                                                   # Compose the transparent forward walls over their matching standalone floor frame.
+		_show_stable()                                                                            # Draw floor first, then the selected wall overlays.
+		_position_player()                                                                        # Keep the local player above the forward-frame environment.
+		_position_opponent_sprite()                                                              # Keep the other player in the normal depth-sorted layer.
 	elif _is_turn_45_view():                                                                  # Render the halfway-turn floor and wall sprites with normal actor support.
 		_show_stable()                                                                            # Compose the 45-degree floor and wall sprites.
 		_position_player()                                                                        # Keep the local player visible and mobile in a diagonal view.
@@ -1207,6 +1307,14 @@ func _update_view_slot_debug_overlay() -> void:                                 
 		return                                                                                    # Return after clearing stale children.
 	var source_presence := _debug_slot_has_wall_by_id()                                        # Read which numbered source-map slots are currently blocked.
 	var screen_slots := _view_slot_screen_segments()                                           # Read the local screen-space guide lines for this camera angle.
+	if _is_forward_view():                                                                      # Forward frames own a distinct local graph; never substitute the cardinal guide.
+		for slot in screen_slots:                                                                  # Draw the active frame's art-derived labels and ticks.
+			var segment: Array[Vector2] = [slot["a"], slot["b"]]                                 # Read the screen guide endpoints paired with one Fwd overlay.
+			var wall_id := int(slot["id"])                                                         # Keep the local label tied to the same source-edge id.
+			var color := SLOT_GRID_DEBUG_WALL_COLOR if bool(source_presence.get(wall_id, false)) else SLOT_GRID_DEBUG_OPEN_COLOR # Match the actual selected art state.
+			_add_view_slot_debug_line(segment[0], segment[1], color, 1.0)                           # Draw the short guide on the corresponding transparent wall art.
+			_add_view_slot_debug_label(slot.get("label", (segment[0] + segment[1]) * 0.5), wall_id, color) # Keep the label over the same visible art region.
+		return
 	if not _is_turn_45_view():                                                                 # Cardinal camera views use the fixed authored floor-grid skeleton.
 		for grid_line in CARDINAL_PLAYER_GRID_LINES:                                               # Draw each reference floor-grid segment once, not once per wall slot.
 			_add_view_slot_debug_line(grid_line[0], grid_line[1], SLOT_GRID_DEBUG_OPEN_COLOR, 1.0)   # Keep this camera-local grid open-blue on the wall-free audit map.
@@ -1231,6 +1339,10 @@ func _update_view_slot_debug_overlay() -> void:                                 
 # _debug_slot_has_wall_by_id: Collapses source-map diagnostic slots into a quick wall-present lookup by local id.
 func _debug_slot_has_wall_by_id() -> Dictionary:                                            # Declare this function.
 	var source_presence := {}                                                                  # Store whether each local slot id currently maps to a real wall.
+	if _is_forward_view():                                                                      # Evaluate the active forward graph independently from straight and turn slots.
+		for slot in _build_forward_render_list():
+			source_presence[int(slot["id"])] = true
+		return source_presence
 	if not _is_turn_45_view():                                                                 # Straight ids name renderer art slots rather than unique physical map edges.
 		for slot in _build_straight_render_list():                                                # Reuse the renderer's final, visibility-filtered art-slot selection.
 			source_presence[int(slot["id"])] = true                                                 # Mark precisely the IDs whose transparent wall art is being drawn.
@@ -1249,6 +1361,8 @@ func _debug_slot_has_wall_by_id() -> Dictionary:                                
 
 # _view_slot_screen_segments: Returns the player-view guide segments for cardinal or halfway-turn slot audits.
 func _view_slot_screen_segments() -> Array:                                                 # Declare this function.
+	if _is_forward_view():                                                                     # Forward art has its own authored slot graphs and cannot use the stable cardinal guide.
+		return _forward_view_slot_screen_segments()                                                # Keep local labels attached to the opaque regions of the active Fwd art.
 	if _is_turn_45_view():                                                                    # Use the explicit halfway-turn guide because physical map projection is not the screen diagram.
 		if turn_step != 2:                                                                        # Do not reuse the 45-degree guide at either interpolation stage.
 			return _turn_stage_slot_screen_segments()                                               # Build labels from the actual 22 or 66 wall artwork positions.
@@ -1822,7 +1936,7 @@ func _add_debug_visible_wall_slots() -> void:                                   
 		return                                                                                    # Return without drawing green selected-wall lines or labels.
 	var highlight_color := Color(0.0, 1.0, 0.25, 0.95)                                       # Use green to mark wall slots that the renderer currently selected.
 	var sample_color := Color(1.0, 0.0, 0.85, 0.95)                                          # Use magenta for the sample point that selected the 45-degree art slot.
-	var visible_slots := _build_turn_45_render_list() if _is_turn_45_view() else _build_straight_render_list() # Rebuild the same visible-slot list used by the active 2D renderer.
+	var visible_slots := _build_forward_render_list() if _is_forward_view() else (_build_turn_45_render_list() if _is_turn_45_view() else _build_straight_render_list()) # Rebuild the same active renderer list for all view types.
 	var labeled_segments := {}                                                                # Track label positions so repeated physical edges do not stack identical labels.
 	for slot in visible_slots:                                                                # Iterate through every wall slot currently selected for drawing.
 		var wall_id := int(slot["id"])                                                          # Read the numbered 2D wall-slot id.
@@ -1847,7 +1961,7 @@ func _add_debug_visible_wall_slots() -> void:                                   
 func _add_debug_all_wall_slot_numbers() -> void:                                           # Declare this function.
 	if not show_slot_grid_debug:                                                              # Respect the shared slot-grid diagnostic toggle.
 		return                                                                                    # Return without adding any blue slot labels.
-	if not _is_turn_45_view():                                                                 # Cardinal views use the stable art-slot diagram, not physical edge projection.
+	if not _is_forward_view() and not _is_turn_45_view():                                     # Only stable cardinal views use the established cardinal art-slot diagram.
 		_add_cardinal_debug_slot_diagram()                                                         # Draw the world-space half of the same diagram used in the player view.
 		return                                                                                    # Keep the old physical-edge audit isolated to the separate 45-degree guide.
 	var stacked_labels := {}                                                                   # Track repeated map positions so labels do not completely overlap.
@@ -1889,6 +2003,12 @@ func _add_cardinal_debug_slot_diagram() -> void:                                
 
 # _all_debug_wall_slot_segments: Returns the diagnostic local slot segments for the current cardinal or halfway-turn view.
 func _all_debug_wall_slot_segments() -> Array:                                             # Declare this function.
+	if _is_forward_view():                                                                      # Forward stages expose their own source-map topology.
+		var forward_segments := []
+		for slot in _forward_slot_records():
+			var segment := _forward_slot_world_segment(slot)
+			forward_segments.append({"id": int(slot["id"]), "a": segment[0], "b": segment[1], "has_wall": _segment_has_wall_for_debug(segment[0], segment[1])})
+		return forward_segments
 	if _is_turn_45_view():                                                                    # Use the 16-slot halfway-turn audit table for diagonal views.
 		return _turn_debug_wall_slot_segments()                                                   # Return the active 22, 45, or 66-degree graph.
 	return _straight_debug_wall_slot_segments()                                                # Return the 28 straight slot candidates.
@@ -2271,6 +2391,14 @@ func _load_turn_wall_textures() -> void:                                        
 	turn_66_wall_textures = _load_numbered_turn_wall_textures(WALLS_TURN_66_ROOT, "WallsTurn_66", 17) # Load the final interpolation stage.
 
 
+# _load_forward_wall_textures: Loads the two standalone floor frames and their transparent forward wall overlays.
+func _load_forward_wall_textures() -> void:
+	floor_fwd_1_texture = _load_png_texture(FLOOR_FWD_1_TEXTURE)                              # Load the first forward floor independently of the turn texture strip.
+	floor_fwd_2_texture = _load_png_texture(FLOOR_FWD_2_TEXTURE)                              # Load the second forward floor independently of the turn texture strip.
+	fwd_1_wall_textures = _load_numbered_turn_wall_textures(WALLS_FWD_1_ROOT, "WallsFwd_1", 20) # Load every numbered first forward overlay.
+	fwd_2_wall_textures = _load_numbered_turn_wall_textures(WALLS_FWD_2_ROOT, "WallsFwd_2", 26) # Load every numbered second forward overlay.
+
+
 # _load_numbered_turn_wall_textures: Loads one numbered transparent wall-overlay set.
 func _load_numbered_turn_wall_textures(root: String, prefix: String, count: int) -> Dictionary:
 	var textures: Dictionary = {}                                                             # Store textures by their view-relative wall id.
@@ -2328,6 +2456,9 @@ func _show_stable() -> void:                                                    
 	if environment_layer != null and not straight_wall_textures.is_empty():                    # Run the following block only when this condition is true.
 		playfield.visible = false                                                                 # Update the captured playfield sprite display.
 		environment_layer.visible = true                                                          # Update the environment renderer container.
+		if _is_forward_view() and not _active_forward_wall_textures().is_empty():                # Keep each forward camera stage on its own floor and slot grid.
+			_render_forward_wall_view()                                                              # Compose the active forward floor followed by its wall overlays.
+			return                                                                                    # Do not fall through to cardinal or turn rendering.
 		if _is_turn_45_view() and not _active_turn_wall_textures().is_empty():                    # Use the active 22, 45, or 66-degree art while a turn is in progress.
 			_render_turn_45_wall_view()                                                              # Compose the temporary 45-degree wall view.
 			return                                                                                    # Return after rendering the halfway-turn view.
@@ -2381,6 +2512,7 @@ func _render_straight_wall_view() -> void:                                      
 
 	if floor_sprite != null:                                                                   # Run the following block only when this condition is true.
 		floor_sprite.visible = true                                                               # Update the reusable base floor sprite.
+		floor_sprite.region_enabled = true                                                        # Restore turn-strip cropping after a standalone forward floor was shown.
 		floor_sprite.texture = floor_texture                                                      # Update the reusable base floor sprite.
 		floor_sprite.region_rect = Rect2(0.0, 0.0, VIEWPORT_SIZE.x, VIEWPORT_SIZE.y)              # Use the first floor-strip frame for straight cardinal views.
 		floor_sprite.position = Vector2.ZERO                                                      # Update the reusable base floor sprite.
@@ -2462,6 +2594,7 @@ func _render_turn_45_wall_view() -> void:                                       
 
 	if floor_sprite != null:                                                                   # Configure the base floor sprite when it exists.
 		floor_sprite.visible = true                                                               # Show the floor underneath the transparent 45-degree walls.
+		floor_sprite.region_enabled = true                                                        # Restore turn-strip cropping after a standalone forward floor was shown.
 		floor_sprite.texture = floor_texture                                                      # Use the shared floor strip texture.
 		floor_sprite.region_rect = Rect2(0.0, VIEWPORT_SIZE.y * float(_active_turn_visual_stage()), VIEWPORT_SIZE.x, VIEWPORT_SIZE.y) # Use the clockwise-authored floor frame, reversing it for counterclockwise turns.
 		floor_sprite.position = Vector2.ZERO                                                      # Keep the floor aligned to the playfield origin.
@@ -2502,6 +2635,101 @@ func _active_turn_wall_textures() -> Dictionary:
 			return turn_66_wall_textures                                                          # Use 66-degree art immediately before reaching the next cardinal view.
 		_:
 			return turn_45_wall_textures                                                          # Use the existing 45-degree art at the diagonal midpoint.
+
+
+# _is_forward_view: Reports whether a live forward camera frame is visible.
+func _is_forward_view() -> bool:
+	return forward_step != 0                                                                    # A manual step holds the same live stage rather than using a separate frozen debug state.
+
+
+# _active_forward_visual_stage: Returns the currently visible Fwd art stage.
+func _active_forward_visual_stage() -> int:
+	return forward_step                                                                         # Manual mode holds this live stage until the next forward input.
+
+
+# _active_forward_wall_textures: Returns the texture set paired with the active forward floor frame.
+func _active_forward_wall_textures() -> Dictionary:
+	return fwd_1_wall_textures if _active_forward_visual_stage() == 1 else fwd_2_wall_textures # Each stage owns a separate numbered overlay set.
+
+
+# _render_forward_wall_view: Composes an authored forward floor, then transparent walls, in back-to-front order.
+func _render_forward_wall_view() -> void:
+	_hide_slot_nodes()                                                                         # Remove obsolete coarse environment sprites before the full-frame composition.
+	if floor_sprite != null:                                                                   # Reuse the floor node that always sits beneath the wall overlay nodes.
+		floor_sprite.visible = true                                                               # Keep the floor visible before drawing transparent wall layers.
+		floor_sprite.region_enabled = false                                                       # Forward floors are individual 160x120 images, not frames in the turn strip.
+		floor_sprite.texture = floor_fwd_1_texture if _active_forward_visual_stage() == 1 else floor_fwd_2_texture # Pair floor and wall stage exactly.
+		floor_sprite.position = Vector2.ZERO                                                      # Align the standalone floor image with the playfield origin.
+	for wall_id in straight_wall_nodes.keys():                                                 # Clear any previous cardinal, turn, or forward wall overlays.
+		straight_wall_nodes[wall_id].visible = false                                               # Avoid stale pixels from an earlier renderer mode.
+	var visible_slots := _build_forward_render_list()                                          # Resolve this stage's independent source-grid wall slots.
+	last_visible_wall_ids.clear()                                                              # Keep status and selected-slot debugging tied to the active forward renderer.
+	for slot in visible_slots:
+		last_visible_wall_ids.append(int(slot["id"]))                                            # Record every overlay actually selected this frame.
+	visible_slots.sort_custom(func(a, b): return int(a["draw"]) < int(b["draw"]))            # Paint distant overlays first so nearer walls remain in front.
+	for slot in visible_slots:
+		var wall_id := int(slot["id"])                                                          # Read the numbered art slot.
+		var wall_sprite: Sprite2D = straight_wall_nodes.get(wall_id)                              # Reuse the matching full-frame wall node.
+		var texture: Texture2D = _active_forward_wall_textures().get(wall_id)                     # Read this stage's transparent wall asset.
+		if wall_sprite == null or texture == null:
+			continue
+		wall_sprite.texture = texture                                                             # Draw the transparent wall artwork over the floor.
+		wall_sprite.position = Vector2.ZERO                                                       # Keep all overlays in the authored 160x120 coordinate system.
+		wall_sprite.z_index = int(slot["draw"])                                                  # Preserve the stage grid's back-to-front visibility order.
+		wall_sprite.visible = true                                                                # Reveal this selected wall overlay.
+
+
+# _forward_slot_records: Builds independent local/world slot graphs for the two forward frames.
+func _forward_slot_records() -> Array:
+	return FWD_1_DIAGNOSTIC_SLOT_EDGES if _active_forward_visual_stage() == 1 else FWD_2_DIAGNOSTIC_SLOT_EDGES # Use the authored frame-specific source map; never synthesize a generic fan.
+
+
+# _forward_view_slot_screen_segments: Places Fwd debug labels directly on their paired transparent wall art.
+func _forward_view_slot_screen_segments() -> Array:
+	var segments := []                                                                         # Store one local debug mark per numbered Fwd asset.
+	var textures := _active_forward_wall_textures()                                            # Use the exact texture set currently being composed.
+	for slot in _forward_slot_records():                                                       # Visit each authored source-map edge once.
+		var wall_id := int(slot["id"])                                                         # Keep the art name, world edge, and local debug mark tied to one id.
+		var texture: Texture2D = textures.get(wall_id)                                            # Read the corresponding transparent full-frame wall layer.
+		if texture == null:                                                                      # Skip an incomplete art set without fabricating a local position.
+			continue
+		var bounds := _texture_opaque_bounds(texture)                                            # Measure where this art is actually visible in the 160x120 camera frame.
+		if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:                                        # Ignore an empty transparent layer defensively.
+			continue
+		var label := bounds.get_center()                                                         # Put the number on the matching visible wall rather than on the cardinal floor grid.
+		var tangent := Vector2.RIGHT if bounds.size.x >= bounds.size.y else Vector2.DOWN         # Mirror the dominant visible wall orientation with a short blue tick.
+		var half := clampf(maxf(bounds.size.x, bounds.size.y) * 0.14, 4.0, 10.0)                 # Keep the guide readable without redrawing a second floor mesh.
+		segments.append(_view_slot_screen_record(wall_id, label - tangent * half, label + tangent * half, label)) # Keep this local label 1:1 with the actual overlay asset.
+	return segments                                                                             # Return the active Fwd frame's local debug graph.
+
+
+# _forward_slot_world_segment: Rotates one forward-grid source edge into the cardinal world-map basis.
+func _forward_slot_world_segment(slot: Dictionary) -> Array[Vector2]:
+	var frame_offset := FWD_GRAPH_FORWARD_OFFSET if forward_transition_name != "backward" else Vector2.ZERO # Reverse playback keeps the authored Fwd graphs in place instead of backing them into the destination cell.
+	var local_a: Vector2 = slot["a"] + frame_offset                                          # Read the first endpoint in the independent forward-grid basis.
+	var local_b: Vector2 = slot["b"] + frame_offset                                          # Read the second endpoint in the independent forward-grid basis.
+	return _snapped_debug_segment_from_camera_local((local_a + local_b) * 0.5, local_b - local_a) # Snap the authored guide edge onto its corresponding real thin-wall map edge.
+
+
+# _build_forward_render_list: Selects visible blocked edges from the active forward frame's own graph.
+func _build_forward_render_list() -> Array:
+	var visible_edges := {}                                                                    # Index first-hit physical walls to avoid drawing geometry hidden behind nearer walls.
+	if forward_transition_name != "backward":                                                 # The ordinary ray fan already describes the forward camera direction.
+		for edge in _visible_physical_wall_edges():
+			visible_edges[String(edge["key"])] = true
+	var result := []                                                                           # Store the overlays selected by the independent forward graph.
+	for slot in _forward_slot_records():
+		var segment := _forward_slot_world_segment(slot)                                         # Convert the authored local graph edge to the active world orientation.
+		var key := _physical_edge_key(segment[0], segment[1])                                    # Build a stable map-edge key for this slot.
+		if not _segment_has_wall_for_debug(segment[0], segment[1]):
+			continue
+		if forward_transition_name != "backward" and not visible_edges.has(key):                # Reverse travel uses its own destination-cell graph instead of the departing-cell ray cache.
+			continue
+		var selected: Dictionary = slot.duplicate()                                              # Preserve guide metadata for both debug panels.
+		selected["segment_a"] = segment[0]
+		selected["segment_b"] = segment[1]
+		result.append(selected)
+	return result                                                                               # Return only real, ray-visible walls for compositing.
 
 
 
@@ -3450,6 +3678,22 @@ func _read_movement() -> Vector2:                                               
 
 
 
+# _read_manual_forward_step_input: Returns one forward input edge from W/numpad 8 or the Xbox left stick.
+func _read_manual_forward_step_input() -> bool:
+	var forward_pressed := _is_player_move_forward_pressed()                                  # Let keyboard forward use the same diagnostic behavior as the controller.
+	var backward_pressed := _is_player_move_backward_pressed()                                # Let keyboard backward advance a reverse Fwd sequence.
+	if active_player_index == 0:                                                               # Player one may also use the connected Xbox left stick.
+		var stick := _xbox_left_stick()                                                           # Read the same camera-local vector used by ordinary movement.
+		forward_pressed = forward_pressed or (stick.y <= -XBOX_STICK_DEADZONE and absf(stick.y) > absf(stick.x)) # Require an intentional predominantly-forward push.
+		backward_pressed = backward_pressed or (stick.y >= XBOX_STICK_DEADZONE and absf(stick.y) > absf(stick.x)) # Require an intentional predominantly-backward push.
+	var desired_pressed := backward_pressed if forward_step != 0 and forward_transition_name == "backward" else forward_pressed # Match the held frame to its travel direction.
+	var vertical_pressed := forward_pressed or backward_pressed                                # Latch either travel direction so the initial crossing press cannot skip its first frame.
+	var just_pressed := desired_pressed and not was_manual_forward_step_pressed                # Advance only after the stick/key was released and pushed again.
+	was_manual_forward_step_pressed = vertical_pressed                                         # Remember the current vertical input state for the next frame.
+	return just_pressed                                                                         # Return exactly one pulse for this press.
+
+
+
 # _move_inside_tile: Moves the player locally, crossing open edges at trigger thresholds and sliding to wall contact on blocked edges.
 func _move_inside_tile(movement: Vector2, delta: float) -> void:                            # Declare this function.
 	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into right/forward physical tile-offset movement.
@@ -3510,9 +3754,50 @@ func _move_inside_tile_diagonal(movement: Vector2, delta: float) -> void:       
 	var world_position := _current_player_world_position()                                     # Start from the same world point shown by the top-down diagnostic map.
 	var world_delta := (_view_right_vector() * physical_movement.x + _view_forward_vector() * physical_movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta # Convert the visible diagonal input into world-grid travel.
 	last_blocked_direction = ""                                                               # Clear stale feedback before applying this frame's collision checks.
+	if _try_move_diagonal_corner_direct(world_position, world_delta):                          # Let a genuine diagonal crossing land in its diagonal cell without briefly visiting a side-adjacent camera cell.
+		return                                                                                    # Keep the world/grid state already committed by the diagonal-corner helper.
 	world_position = _move_diagonal_world_axis(world_position, world_delta.x, Vector2i(1, 0), "right", "left") # Sweep east/west first so an angled move can slide along a blocked north/south wall.
 	world_position = _move_diagonal_world_axis(world_position, world_delta.y, Vector2i(0, 1), "back", "front") # Sweep north/south second using the world position produced by the first sweep.
 	_set_player_world_position_for_current_view(world_position)                                # Re-express the valid world point in the current diagonal camera-local coordinates.
+
+
+
+# _try_move_diagonal_corner_direct: Holds a slight one-axis overrun at a 45-degree corner, then commits directly to the diagonal destination.
+func _try_move_diagonal_corner_direct(world_position: Vector2, world_delta: Vector2) -> bool:
+	if is_zero_approx(world_delta.x) or is_zero_approx(world_delta.y):                         # Reserve this correction for actual two-axis diagonal travel, not cardinal/side movement in a diagonal view.
+		return false                                                                              # Let the normal axis sweeps handle non-diagonal motion.
+	var source_cell := grid_position                                                            # Keep the camera anchored to its current cell while the two boundary crossings converge.
+	var x_delta := 1 if world_delta.x > 0.0 else -1                                            # Identify the intended east or west diagonal destination component.
+	var y_delta := 1 if world_delta.y > 0.0 else -1                                            # Identify the intended south or north diagonal destination component.
+	var candidate := world_position + world_delta                                              # Test the uninterrupted diagonal destination before modifying either coordinate.
+	var crosses_x := candidate.x >= float(source_cell.x + 1) if x_delta > 0 else candidate.x < float(source_cell.x) # Detect crossing the intended source-cell X edge.
+	var crosses_y := candidate.y >= float(source_cell.y + 1) if y_delta > 0 else candidate.y < float(source_cell.y) # Detect crossing the intended source-cell Y edge.
+	if not crosses_x and not crosses_y:                                                        # Stay on normal movement while both coordinates remain inside the current cell.
+		return false                                                                              # Let the axis sweeps keep the in-cell projection exact.
+	var x_edge := Vector2i(x_delta, 0)                                                         # Represent the intended first horizontal map-edge crossing.
+	var y_edge := Vector2i(0, y_delta)                                                         # Represent the intended first vertical map-edge crossing.
+	if crosses_x and crosses_y:                                                                # Both sides have cleared the shared corner this update.
+		if _can_cross_diagonal_corner(source_cell, x_edge, y_edge):                              # Require a complete legal route around the corner; never tunnel through two walls.
+			_set_player_world_position_for_current_view(candidate)                                # Commit the camera and player directly into the diagonal destination cell.
+			return true                                                                             # Prevent the old per-axis path from visiting either side cell.
+		return false                                                                              # Fall back to normal independent sweeps so blocked diagonal movement can slide naturally.
+	var pending_edge := x_edge if crosses_x else y_edge                                        # Identify the one edge that crossed a tiny amount ahead of the other.
+	var other_boundary := float(source_cell.y + 1) if y_delta > 0 else float(source_cell.y) if crosses_x else float(source_cell.x + 1) if x_delta > 0 else float(source_cell.x) # Locate the remaining companion edge without changing camera cell yet.
+	var other_coordinate := candidate.y if crosses_x else candidate.x                          # Measure the un-crossed coordinate against that companion edge.
+	if absf(other_coordinate - other_boundary) > DIAGONAL_CORNER_GRACE:                        # Only forgive a few pixels of numerical/input skew, never a deliberate side-cell move.
+		return false                                                                              # Let normal side crossing take over once the movement is no longer a true corner crossing.
+	if not _can_cross_edge(source_cell, pending_edge) or not _can_cross_diagonal_corner(source_cell, x_edge, y_edge): # Do not hold a side overrun when no legal diagonal route exists.
+		return false                                                                              # Preserve standard collision and sliding around blocked corners.
+	_set_player_world_position_in_camera_cell(candidate, source_cell)                          # Keep the camera on the source diagonal cell while the second axis reaches its boundary.
+	return true                                                                                 # Skip the independent sweeps that would otherwise flash the side-adjacent cell.
+
+
+
+# _can_cross_diagonal_corner: Accepts a diagonal destination only when at least one orthogonal two-edge route is open.
+func _can_cross_diagonal_corner(source_cell: Vector2i, x_edge: Vector2i, y_edge: Vector2i) -> bool:
+	var x_then_y := _can_cross_edge(source_cell, x_edge) and _can_cross_edge(source_cell + x_edge, y_edge) # Test the route that enters the horizontal neighbor first.
+	var y_then_x := _can_cross_edge(source_cell, y_edge) and _can_cross_edge(source_cell + y_edge, x_edge) # Test the route that enters the vertical neighbor first.
+	return x_then_y or y_then_x                                                                # Permit the diagonal only when a real non-tunneling route exists.
 
 
 
@@ -3558,6 +3843,13 @@ func _current_player_world_position() -> Vector2:                               
 # _set_player_world_position_for_current_view: Stores a valid world point as local coordinates under the active cardinal or halfway-turn camera.
 func _set_player_world_position_for_current_view(world_position: Vector2) -> void:          # Declare this function.
 	grid_position = Vector2i(floori(world_position.x), floori(world_position.y))               # Assign the source-map cell actually containing this point.
+	_set_player_world_position_in_camera_cell(world_position, grid_position)                   # Re-express the point using the cell selected from its true world ownership.
+
+
+
+# _set_player_world_position_in_camera_cell: Reprojects a world point through an explicitly retained camera cell for brief diagonal-corner grace.
+func _set_player_world_position_in_camera_cell(world_position: Vector2, camera_cell: Vector2i) -> void:
+	grid_position = camera_cell                                                                # Keep the requested camera/source-map cell even when the actor is a few pixels over one companion edge.
 	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Rebuild that cell's fixed center.
 	var relative := world_position - cell_center                                                # Measure the player point from its newly assigned cell center.
 	var offset := Vector2(relative.dot(_view_right_vector()) / LOCAL_TILE_WORLD_HALF_EXTENT, relative.dot(_view_forward_vector()) / LOCAL_TILE_WORLD_HALF_EXTENT) # Convert world displacement back into the active camera-local right/forward units.
@@ -3570,6 +3862,9 @@ func _try_cross_tile(sequence_name: String, grid_delta: Vector2i, blocked_label:
 	if _can_cross_edge(grid_position, grid_delta):                                             # Run the following block only when this condition is true.
 		pending_grid_delta = grid_delta                                                           # Compute and store this value for the current step.
 		last_blocked_direction = ""                                                               # Compute and store this value for the current step.
+		if (sequence_name == "forward" or sequence_name == "backward") and not _is_turn_45_view(): # Use authored Fwd art only for cardinal forward/backward crossings.
+			_begin_forward_passthrough(sequence_name)                                                 # Play 1 -> 2 forward or the authored reverse 2 -> 1 before committing the cell.
+			return                                                                                    # Keep the old captured transition path available for strafes and diagonal motion.
 		_request_transition(sequence_name)                                                         # Cross through a captured phase or immediate snap.
 	else:                                                                                      # Run this fallback branch when previous conditions were not met.
 		last_blocked_direction = blocked_label                                                    # Compute and store this value for the current step.
@@ -3579,9 +3874,10 @@ func _try_cross_tile(sequence_name: String, grid_delta: Vector2i, blocked_label:
 # _position_player: Projects the player local tile position into the 160x120 perspective floor trapezoid.
 func _position_player() -> void:                                                            # Declare this function.
 	player_sprite.visible = true                                                              # Restore the local actor after temporary 45-degree validation views hide it.
-	var depth := clampf(local_floor_position.y, 0.0, 1.0)                                      # Store mutable runtime state for assets, rendering, movement, or debug output.
+	var display_local_position := _forward_display_local_position()                            # Let the actor travel smoothly through authored Fwd camera frames without changing collision or the source-map graph.
+	var depth := clampf(display_local_position.y, 0.0, 1.0)                                    # Project the visual actor from its interpolated Fwd depth or its ordinary live depth.
 	var projection := _self_actor_projection_at_local_depth(depth)                              # Sample self-view feet from the true local position and scale from visible S0 space.
-	var screen_ratio_x := _self_screen_side_ratio_for_projection(local_floor_position.x, projection) # Clamp only the rendered feet anchor inside the visible floor polygon.
+	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Clamp only the rendered feet anchor inside the visible floor polygon.
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured character height for this depth.
 	var sprite_scale := actor_height / _sprite_body_height_to_foot(player_sprite)               # Scale the visible body span, not transparent frame padding, to the measured study.
@@ -3589,6 +3885,20 @@ func _position_player() -> void:                                                
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
 	player_sprite.z_index = LOCAL_CHARACTER_LAYER                                              # Keep the local body above wall art; the clipped viewport trims anything outside the camera frame.
+
+
+
+# _forward_display_local_position: Smoothly moves the rendered actor across Fwd 1 and Fwd 2 while the physical crossing remains safely edge-locked.
+func _forward_display_local_position() -> Vector2:
+	if forward_step == 0:                                                                      # Use the actual in-cell position outside an authored forward transition.
+		return local_floor_position                                                              # Keep ordinary movement, collision, and debug behavior unchanged.
+	var is_backward := forward_transition_name == "backward"                                  # Reverse the visual travel when backing into the cell behind the player.
+	var first_stage := (forward_step == 2) if is_backward else (forward_step == 1)             # Fwd 2 is chronologically first during reverse playback; Fwd 1 is first when moving forward.
+	var stage_fraction := 0.5 if manual_forward_step_enabled else clampf(forward_passthrough_timer / FORWARD_PASSTHROUGH_SECONDS, 0.0, 1.0) # Hold each manual debug frame at its visual midpoint, or smoothly advance timed playback.
+	var travel_fraction := (0.0 if first_stage else 0.5) + stage_fraction * 0.5                # Convert the two authored frames into one continuous 0..1 visual movement.
+	var start_y := BACKWARD_WALL_CONTACT_Y if is_backward else FORWARD_WALL_CONTACT_Y          # Start at the crossing edge in the source cell.
+	var end_y := FORWARD_WALL_CONTACT_Y if is_backward else BACKWARD_WALL_CONTACT_Y            # End at the matching entry edge in the destination cell.
+	return Vector2(local_floor_position.x, lerpf(start_y, end_y, travel_fraction))             # Preserve side position while continuously carrying the rendered body through the camera catch-up.
 
 
 
@@ -4097,6 +4407,15 @@ func _play_best_animation(is_moving: bool) -> void:                             
 
 
 
+# _keep_forward_run_animating: Ensures the player visibly runs throughout the short Fwd camera catch-up.
+func _keep_forward_run_animating() -> void:
+	_play_best_animation(true)                                                                 # Select the same view-relative running set used during ordinary held movement.
+	if not player_sprite.is_playing():                                                         # Recover if another render/state change stopped the AnimatedSprite2D at the crossing edge.
+		player_sprite.play()                                                                     # Resume the current run without resetting it to frame zero.
+	player_sprite.speed_scale = FORWARD_RUN_ANIMATION_SPEED                                    # Advance enough frames during Fwd 1/Fwd 2 for the body to remain visibly active.
+
+
+
 # _best_animation_for: Finds the exact or nearest fallback animation for a requested run and aim direction.
 func _best_animation_for(run: String, aim: String, is_moving: bool) -> StringName:          # Declare this function.
 	if not is_moving and available_animations.has("IdleN_AimN"):                               # Run the following block only when this condition is true.
@@ -4142,7 +4461,33 @@ func _request_transition(sequence_name: String) -> void:                        
 	_finish_snap_transition(sequence_name)                                                     # Apply the transition result immediately with no captured phase playback.
 
 
+# _begin_forward_passthrough: Starts the two-frame cardinal forward/backward camera transition.
+func _begin_forward_passthrough(sequence_name: String) -> void:
+	forward_step = 2 if sequence_name == "backward" else 1                                     # Reverse travel walks the authored camera frames backward: Fwd 2 then Fwd 1.
+	forward_passthrough_timer = 0.0                                                            # Start timing from the first rendered update.
+	forward_transition_name = sequence_name                                                    # Preserve whether the destination enters from its rear or front edge.
+	active_sequence_name = "forward_%d" % forward_step                                        # Report the visible authored stage in the debug status.
+	character_is_moving = true                                                                 # Keep the run animation alive while the camera moves through the transition frames.
+	_keep_forward_run_animating()                                                              # Continue and visibly advance the current running animation instead of switching to idle.
+	_show_stable()                                                                              # Render the first forward floor and its independent wall grid immediately.
 
+
+# _advance_forward_passthrough: Advances one Fwd stage automatically or from one fresh manual forward input.
+func _advance_forward_passthrough(delta: float, manual_step: bool = false) -> void:
+	if not manual_step:                                                                        # Time stages only during normal automatic playback.
+		forward_passthrough_timer += delta                                                       # Accumulate visible duration for the current authored frame.
+		if forward_passthrough_timer < FORWARD_PASSTHROUGH_SECONDS:
+			return
+	forward_passthrough_timer = 0.0                                                            # Restart timing for the second frame or clear it before the stable result.
+	if (forward_transition_name != "backward" and forward_step == 1) or (forward_transition_name == "backward" and forward_step == 2): # Advance in the authored travel order.
+		forward_step = 1 if forward_transition_name == "backward" else 2                       # Use Fwd 1 -> Fwd 2 forward and Fwd 2 -> Fwd 1 backward.
+		active_sequence_name = "forward_%d" % forward_step                                      # Keep the currently visible stage explicit in status/debug text.
+		_show_stable()                                                                            # Render the second independent forward grid.
+		return
+	var sequence_name := forward_transition_name                                               # Preserve the final movement result before clearing transient state.
+	forward_step = 0                                                                            # Return to stable cardinal rendering.
+	forward_transition_name = ""                                                              # Clear the completed transition marker.
+	_finish_snap_transition(sequence_name)                                                     # Commit the target cell and restore the ordinary stable renderer.
 # _request_half_turn_or_transition: Starts the authored 22-degree passthrough toward a stable diagonal view unless captured transitions are enabled.
 func _request_half_turn_or_transition(sequence_name: String, half_turn_direction: int) -> void: # Declare this function.
 	if use_captured_transitions:                                                               # Preserve the old full-frame captured transition path when that toggle is enabled.
@@ -4813,7 +5158,9 @@ func _update_status() -> void:                                                  
 		var state_sprite: AnimatedSprite2D = state_view.get("player_sprite", null)               # Read this player's sprite for animation reporting.
 		var state_animation := String(state_sprite.animation) if state_sprite != null else "-"    # Format this player's current animation name.
 		var phase_text := "stable"                                                               # Default this player to stable mode.
-		if bool(state.get("is_transitioning", false)):                                           # Show captured phase progress when this player is transitioning.
+		if int(state.get("forward_step", 0)) != 0:                                               # Show which live forward interpolation floor/wall set is visible.
+			phase_text = "forward %d%s" % [int(state.get("forward_step", 0)), " manual" if manual_forward_step_enabled else ""] # Identify whether the visible frame waits for a fresh forward input.
+		elif bool(state.get("is_transitioning", false)):                                        # Show captured phase progress when this player is transitioning.
 			phase_text = "%s phase %d" % [String(state.get("active_sequence_name", "idle")), int(state.get("phase_index", 0)) + 1] # Format the transition status.
 		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s" % [player_index + 1, phase_text, state_facing_name, state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else ""]) # Add this player status line.
 	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map. F2 slot grid. F3 %s debug menu." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing", "closes" if debug_menu_open else "opens"] # Update the on-screen debug status label.
