@@ -33,8 +33,11 @@ const PHASE_ROOT := "res://assets/reference_xybots_local/playfield_phases"      
 const STABLE_VIEW_ROOT := "res://assets/reference_xybots_local/stable_views"                # Point to old full-frame stable-view fallback assets.
 const SLOT_ROOT := "res://assets/reference_xybots_local/environment_slots"                  # Point to old coarse slot fallback assets.
 const WALLS_STRAIGHT_ROOT := "res://assets/Environment/WallsStraight"                       # Point to the 28 transparent straight-wall overlay sprites.
+const WALLS_TURN_22_ROOT := "res://assets/Environment/Walls_Turn_22"                        # Point to the 17 transparent first-quarter turn wall overlays.
 const WALLS_TURN_45_ROOT := "res://assets/Environment/Walls_Turn_45"                        # Point to the 16 transparent halfway-turn wall overlay sprites.
+const WALLS_TURN_66_ROOT := "res://assets/Environment/Walls_Turn_66"                        # Point to the 17 transparent third-quarter turn wall overlays.
 const FLOOR_TURN_TEXTURE := "res://assets/Environment/Floor_Turn.png"                       # Point to the floor strip whose first frame is used as the straight-view base.
+const TURN_STAGE_SEQUENCE_NAMES := ["idle", "turn_22", "turn_45", "turn_66"]               # Name the cardinal and authored intermediate turn views for debug status.
 const PLAYER_FRAMES := "res://assets/frames/renamed_trimmed_sequence/capture_frames.tres"   # Point to the baked player animation SpriteFrames resource.
 const PLAYER_IDLE_TEXTURE := "res://assets/frames/IdleN_AimN/IdleN_AimN.png"                # Point to the user-provided first-player idle sprite.
 
@@ -78,6 +81,8 @@ const ACTION_P2_MOVE_FORWARD := "xybots_p2_move_forward"                        
 const ACTION_P2_MOVE_BACKWARD := "xybots_p2_move_backward"                                  # Name the second-player input action for moving away from the camera-facing edge.
 const ACTION_P2_TURN_LEFT := "xybots_p2_turn_left"                                          # Name the second-player input action for rotating the view left.
 const ACTION_P2_TURN_RIGHT := "xybots_p2_turn_right"                                        # Name the second-player input action for rotating the view right.
+const XBOX_STICK_DEADZONE := 0.22                                                            # Ignore small Xbox-stick drift around its physical center.
+const XBOX_TURN_THRESHOLD := 0.62                                                            # Require a deliberate right-stick push before issuing one turn input.
 const DEBUG_MAP_CELL_SIZE := 16.0                                                           # Fit the temporary 9x9 diagnostic grid inside its own side panel.
 const DEBUG_MAP_PANEL_SIZE := Vector2(160.0, 160.0)                                        # Give the 9x9 source grid a square panel beside the player view.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(8.0, 8.0)                                      # Center the temporary 9x9 grid inside its 160x160 side panel.
@@ -132,6 +137,44 @@ const TURN_45_DIAGNOSTIC_SLOT_EDGES := [                                        
 	{"id": 13, "a": Vector2(1.0, 0.0), "b": Vector2(2.0, 0.0)},                                # Map the closest inner-right horizontal slot from the corrected guide.
 	{"id": 16, "a": Vector2(1.0, 0.0), "b": Vector2(1.0, -1.0)},                               # Map the closest local-right vertical slot from the corrected guide.
 ]                                                                                           # Close the corrected 45-degree source-map audit edge table.
+const TURN_22_DIAGNOSTIC_SLOT_EDGES := [                                                    # Store the independent 17-slot Grid_Turn22_NE graph.
+	{"id": 1, "a": Vector2(1, 3), "b": Vector2(1, 2)},                                  # Slot 01: far inner-left vertical edge.
+	{"id": 2, "a": Vector2(2, 3), "b": Vector2(2, 2)},                                  # Slot 02: far inner-right vertical edge.
+	{"id": 3, "a": Vector2(-1, 2), "b": Vector2(0, 2)},                                 # Slot 03: far left horizontal edge.
+	{"id": 4, "a": Vector2(0, 2), "b": Vector2(1, 2)},                                  # Slot 04: far inner-left horizontal edge.
+	{"id": 5, "a": Vector2(1, 2), "b": Vector2(2, 2)},                                  # Slot 05: far inner-right horizontal edge.
+	{"id": 6, "a": Vector2(2, 2), "b": Vector2(3, 2)},                                  # Slot 06: far right horizontal edge.
+	{"id": 7, "a": Vector2(0, 2), "b": Vector2(0, 1)},                                  # Slot 07: left middle vertical edge.
+	{"id": 8, "a": Vector2(1, 2), "b": Vector2(1, 1)},                                  # Slot 08: inner-left middle vertical edge.
+	{"id": 9, "a": Vector2(2, 2), "b": Vector2(2, 1)},                                  # Slot 09: inner-right middle vertical edge.
+	{"id": 10, "a": Vector2(0, 1), "b": Vector2(1, 1)},                                 # Slot 10: left middle horizontal edge.
+	{"id": 11, "a": Vector2(1, 1), "b": Vector2(2, 1)},                                 # Slot 11: center middle horizontal edge.
+	{"id": 12, "a": Vector2(2, 1), "b": Vector2(3, 1)},                                 # Slot 12: right middle horizontal edge.
+	{"id": 13, "a": Vector2(1, 1), "b": Vector2(1, 0)},                                 # Slot 13: near inner-left vertical edge.
+	{"id": 14, "a": Vector2(2, 1), "b": Vector2(2, 0)},                                 # Slot 14: near inner-right vertical edge.
+	{"id": 15, "a": Vector2(0, 0), "b": Vector2(1, 0)},                                 # Slot 15: near left horizontal edge.
+	{"id": 16, "a": Vector2(1, 0), "b": Vector2(2, 0)},                                 # Slot 16: near center horizontal edge.
+	{"id": 17, "a": Vector2(1, 0), "b": Vector2(1, -1)},                                # Slot 17: closest inner-left vertical edge.
+]                                                                                           # Close the authored 22-degree source-map graph.
+const TURN_66_DIAGNOSTIC_SLOT_EDGES := [                                                    # Store the independent 17-slot Grid_Turn66_NE graph.
+	{"id": 1, "a": Vector2(3, 1), "b": Vector2(4, 1)},                                  # Slot 01: upper-right horizontal edge.
+	{"id": 2, "a": Vector2(3, 0), "b": Vector2(4, 0)},                                  # Slot 02: middle-right horizontal edge.
+	{"id": 3, "a": Vector2(3, 2), "b": Vector2(3, 1)},                                  # Slot 03: far-right vertical edge.
+	{"id": 4, "a": Vector2(3, 1), "b": Vector2(3, 0)},                                  # Slot 04: upper-right middle vertical edge.
+	{"id": 5, "a": Vector2(3, 0), "b": Vector2(3, -1)},                                 # Slot 05: lower-right middle vertical edge.
+	{"id": 6, "a": Vector2(3, -1), "b": Vector2(3, -2)},                                # Slot 06: nearest right vertical edge.
+	{"id": 7, "a": Vector2(2, 1), "b": Vector2(3, 1)},                                  # Slot 07: upper center-right horizontal edge.
+	{"id": 8, "a": Vector2(2, 0), "b": Vector2(3, 0)},                                  # Slot 08: middle center-right horizontal edge.
+	{"id": 9, "a": Vector2(2, -1), "b": Vector2(3, -1)},                                # Slot 09: lower center-right horizontal edge.
+	{"id": 10, "a": Vector2(2, 2), "b": Vector2(2, 1)},                                 # Slot 10: far center vertical edge.
+	{"id": 11, "a": Vector2(2, 1), "b": Vector2(2, 0)},                                 # Slot 11: upper center vertical edge.
+	{"id": 12, "a": Vector2(2, 0), "b": Vector2(2, -1)},                                # Slot 12: lower center vertical edge.
+	{"id": 13, "a": Vector2(1, 1), "b": Vector2(2, 1)},                                 # Slot 13: upper inner horizontal edge.
+	{"id": 14, "a": Vector2(1, 0), "b": Vector2(2, 0)},                                 # Slot 14: middle inner horizontal edge.
+	{"id": 15, "a": Vector2(1, 1), "b": Vector2(1, 0)},                                 # Slot 15: upper inner vertical edge.
+	{"id": 16, "a": Vector2(1, 0), "b": Vector2(1, -1)},                                # Slot 16: lower inner vertical edge.
+	{"id": 17, "a": Vector2(0, 0), "b": Vector2(1, 0)},                                 # Slot 17: nearest left horizontal edge.
+]                                                                                           # Close the authored 66-degree source-map graph.
 const DIAGNOSTIC_3D_WALL_HEIGHT := 1.2                                                       # Set the generated 3D wall height in world units.
 const DIAGNOSTIC_3D_WALL_THICKNESS := 0.06                                                   # Set the generated 3D thin-wall thickness in world units.
 const DIAGNOSTIC_3D_CELL_WIDTH := 1.35                                                       # Widen the diagnostic cell volume so the 3D hallway better matches the 2D projection.
@@ -374,6 +417,8 @@ var slot_textures: Dictionary = {}                                              
 var slot_nodes: Dictionary = {}                                                             # Store old coarse slot Sprite2D nodes by slot name.
 var straight_wall_textures: Dictionary = {}                                                 # Store the 28 numbered straight-wall textures by wall id.
 var turn_45_wall_textures: Dictionary = {}                                                  # Store the 16 numbered halfway-turn wall textures by wall id.
+var turn_22_wall_textures: Dictionary = {}                                                  # Store the 17 numbered 22-degree turn wall textures by wall id.
+var turn_66_wall_textures: Dictionary = {}                                                  # Store the 17 numbered 66-degree turn wall textures by wall id.
 var straight_wall_nodes: Dictionary = {}                                                    # Store the 28 numbered straight-wall Sprite2D nodes by wall id.
 var straight_wall_label_nodes: Dictionary = {}                                               # Store debug labels attached to straight-wall overlay sprites.
 var floor_texture: Texture2D                                                                # Store the loaded floor texture strip.
@@ -397,6 +442,7 @@ var is_transitioning := false                                                   
 
 var facing := 0                                                                             # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
 var turn_45_direction := 0                                                                   # Track a temporary halfway turn stop: -1=left, 0=cardinal, 1=right.
+var turn_step := 0                                                                           # Track a view-relative quarter-turn stage: 0=cardinal, 1=22, 2=45, 3=66.
 var grid_position := Vector2i(0, 3)                                                         # Track the current cell in the top-down maze map.
 var local_floor_position := HOME_LOCAL_FLOOR_POSITION                                       # Track the character position inside the current tile.
 var run_dir := DIR_N                                                                        # Track the body movement direction used for animation selection.
@@ -440,7 +486,7 @@ func _ready() -> void:                                                          
 	_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
 	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
 	_load_straight_wall_textures()                                                             # Call a helper function as part of the current controller step.
-	_load_turn_45_wall_textures()                                                              # Load the temporary 45-degree turn wall overlay sprites.
+	_load_turn_wall_textures()                                                                 # Load the 22, 45, and 66-degree turn wall overlay sprites.
 	_setup_viewport()                                                                          # Call a helper function as part of the current controller step.
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
@@ -613,6 +659,7 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 func _make_audit_player_state(player_index: int, start_cell: Vector2i, start_facing: int, start_turn_45: int, start_local_position: Vector2) -> Dictionary: # Declare this function.
 	var state := _make_player_state(player_index, start_cell, start_facing)                    # Build the normal state record first.
 	state["turn_45_direction"] = start_turn_45                                                  # Apply the requested cardinal or halfway-turn view.
+	state["turn_step"] = 2 if start_turn_45 != 0 else 0                                         # Keep audit diagonal starts on the 45-degree stage.
 	state["local_floor_position"] = start_local_position                                       # Apply the requested in-cell actor position.
 	state["world_run_dir"] = _direction_string_for_facing(start_facing)                        # Keep the world run direction coherent with the audit facing.
 	state["world_aim_dir"] = _direction_string_for_facing(start_facing)                        # Keep the world aim direction coherent with the audit facing.
@@ -644,6 +691,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"is_transitioning": false,                                                                 # Store whether this player is in a captured transition.
 		"facing": start_facing,                                                                    # Store this player's camera direction.
 		"turn_45_direction": 0,                                                                     # Store whether this player is stopped on a halfway turn view.
+		"turn_step": 0,                                                                              # Store the current 22/45/66 interpolation stage.
 		"grid_position": start_cell,                                                               # Store this player's source-map cell.
 		"local_floor_position": HOME_LOCAL_FLOOR_POSITION,                                        # Store this player's position inside the current cell.
 		"run_dir": DIR_N,                                                                          # Store this player's current body movement animation direction.
@@ -721,6 +769,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	is_transitioning = bool(state.get("is_transitioning", false))                              # Restore whether this player is in a captured transition.
 	facing = int(state.get("facing", 0))                                                        # Restore this player's facing.
 	turn_45_direction = int(state.get("turn_45_direction", 0))                                  # Restore this player's temporary halfway-turn direction.
+	turn_step = int(state.get("turn_step", 2 if turn_45_direction != 0 else 0))                   # Restore the current interpolation stage, preserving old saved diagonal states.
 	grid_position = state.get("grid_position", Vector2i.ZERO)                                  # Restore this player's current map cell.
 	local_floor_position = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)        # Restore this player's local cell position.
 	run_dir = String(state.get("run_dir", DIR_N))                                              # Restore this player's run animation direction.
@@ -751,6 +800,7 @@ func _save_player_context(player_index: int) -> void:                           
 	state["is_transitioning"] = is_transitioning                                               # Save this player's transition flag.
 	state["facing"] = facing                                                                    # Save this player's facing.
 	state["turn_45_direction"] = turn_45_direction                                             # Save this player's temporary halfway-turn direction.
+	state["turn_step"] = turn_step                                                             # Save this player's current interpolation stage.
 	state["grid_position"] = grid_position                                                     # Save this player's map cell.
 	state["local_floor_position"] = local_floor_position                                       # Save this player's local cell position.
 	state["run_dir"] = run_dir                                                                  # Save this player's run animation direction.
@@ -785,9 +835,9 @@ func _process_player_context(delta: float) -> void:                             
 		_advance_transition(delta)                                                                # Move this player's transition to the next frame when needed.
 		return                                                                                    # Return after transition processing.
 	var turn_direction := _read_turn()                                                         # Read this player's one-shot turn input.
-	if _is_turn_45_view():                                                                     # Freeze movement while validating the temporary halfway-turn frame.
-		_process_turn_45_input(turn_direction)                                                     # Let another twist key commit or cancel the halfway turn.
-		return                                                                                    # Return without movement while the player is on a 45-degree view.
+	if _is_turn_45_view() and turn_direction != 0:                                             # Reserve a new Q/E press for committing or cancelling the halfway turn.
+		_process_turn_45_input(turn_direction)                                                     # Apply the requested twist while leaving ordinary movement available at 45 degrees.
+		return                                                                                    # Do not also move during the twist button press.
 	if turn_direction < 0:                                                                     # Handle a left turn request.
 		_request_half_turn_or_transition("turn_left", -1)                                          # Enter a 45-degree stop or use the old captured transition path.
 		return                                                                                    # Return after turn processing.
@@ -799,16 +849,19 @@ func _process_player_context(delta: float) -> void:                             
 		run_dir = _movement_to_first_player_run_dir(movement)                                     # Select the visible body-run direction for this local view.
 		aim_dir = DIR_N                                                                           # Keep this player's aim locked camera-forward in their own view.
 		character_is_moving = true                                                                # Mark this player as moving so opponents can play run animations.
-		world_run_dir = _world_movement_dir_for_local_movement(movement, facing)                  # Convert local movement into shared-world direction for other players.
-		world_aim_dir = _direction_string_for_facing(facing)                                      # Store the camera-facing aim direction in shared-world space.
+		world_run_dir = _world_movement_dir_for_current_view(movement)                            # Convert local movement through the visible cardinal or diagonal camera basis.
+		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
 		_play_best_animation(true)                                                                # Start or maintain the moving animation.
-		_move_inside_tile(movement, delta)                                                        # Apply local movement and wall/crossing checks.
+		if _is_turn_45_view():                                                                  # Keep the world position aligned with the visible diagonal camera basis.
+			_move_inside_tile_diagonal(movement, delta)                                               # Move and collide in actual world space while retaining the halfway view.
+		else:                                                                                    # Preserve the established cardinal movement and transition behavior.
+			_move_inside_tile(movement, delta)                                                        # Apply local movement and wall/crossing checks.
 	else:                                                                                      # Handle no movement input.
 		run_dir = DIR_N                                                                           # Reset the visible body direction to camera-forward idle.
 		aim_dir = DIR_N                                                                           # Keep aim camera-forward while idle.
 		character_is_moving = false                                                               # Mark this player as idle for opponent first-frame fallback.
-		world_run_dir = _direction_string_for_facing(facing)                                      # Use facing as the idle body direction until idle variants exist.
-		world_aim_dir = _direction_string_for_facing(facing)                                      # Store the camera-facing aim direction in shared-world space.
+		world_run_dir = _direction_string_for_world_vector(_view_forward_vector())                # Use the visible camera direction as the idle body fallback.
+		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
 		_play_best_animation(false)                                                               # Play the best idle animation.
 
 
@@ -817,20 +870,15 @@ func _process_player_context(delta: float) -> void:                             
 func _render_bound_player_context() -> void:                                              # Declare this function.
 	if is_transitioning:                                                                       # Keep captured transition frames visible when a transition is playing.
 		_position_player()                                                                        # Keep the player sprite registered over the transition frame.
-	elif _is_turn_45_view():                                                                  # Render the temporary halfway-turn wall validation view.
+	elif _is_turn_45_view():                                                                  # Render the halfway-turn floor and wall sprites with normal actor support.
 		_show_stable()                                                                            # Compose the 45-degree floor and wall sprites.
-		player_sprite.visible = false                                                            # Hide the local actor during wall-art validation for diagonal views.
-		if opponent_sprite != null:                                                              # Hide the opponent sprite if this view owns one.
-			opponent_sprite.visible = false                                                          # Keep all actors out of the temporary 45-degree validation view.
+		_position_player()                                                                        # Keep the local player visible and mobile in a diagonal view.
+		_position_opponent_sprite()                                                              # Keep other players visible when their projection overlaps the diagonal view.
 	else:                                                                                      # Render a stable wall-sprite scene when no transition is playing.
 		_show_stable()                                                                            # Compose the floor and visible wall sprites for this player's view.
 		_position_player()                                                                        # Project this player's local cell position into the playfield.
 		_position_opponent_sprite()                                                              # Project the other local player into this player's screen when visible.
-	if _is_turn_45_view():                                                                     # Suppress actor-position diagnostics during the wall-only halfway-turn validation view.
-		if perspective_extents_overlay != null:                                                   # Hide the overlay root when this player view owns one.
-			perspective_extents_overlay.visible = false                                               # Keep colored actor extents from covering the 45-degree wall art.
-	else:                                                                                      # Keep normal actor-position diagnostics in cardinal views.
-		_update_perspective_extents_overlay()                                                     # Redraw the projected-square extents over this player's camera view.
+	_update_perspective_extents_overlay()                                                       # Keep the actor-position diagnostics available for cardinal and diagonal views.
 	_update_view_slot_debug_overlay()                                                         # Redraw the blue player-view slot audit labels for this camera orientation.
 	_update_debug_map_overlay()                                                               # Redraw this player's top-down map with the shared maze and both players.
 	if enable_3d_diagnostic and active_player_index == 0:                                     # Keep deprecated 3D diagnostics tied to player one only.
@@ -1131,8 +1179,12 @@ func _debug_slot_has_wall_by_id() -> Dictionary:                                
 	var source_presence := {}                                                                  # Store whether each local slot id currently maps to a real wall.
 	if not _is_turn_45_view():                                                                 # Straight ids name renderer art slots rather than unique physical map edges.
 		for slot in _build_straight_render_list():                                                # Reuse the renderer's final, visibility-filtered art-slot selection.
-			source_presence[int(slot["id"])] = true                                                  # Mark precisely the IDs whose transparent wall art is being drawn.
+			source_presence[int(slot["id"])] = true                                                 # Mark precisely the IDs whose transparent wall art is being drawn.
 		return source_presence                                                                     # Keep both debug diagrams 1:1 with the player view.
+	if turn_step != 2:                                                                         # The 22 and 66 guides are authored in screen space, not on the old 45-degree lookup grid.
+		for slot in _build_turn_45_render_list():                                                # Reuse the current stage's actual ray-visible wall selection.
+			source_presence[int(slot["id"])] = true                                                # Mark only the overlays currently selected for this intermediate view.
+		return source_presence                                                                    # Keep the intermediate guide colors tied to what is actually drawn.
 	for slot in _all_debug_wall_slot_segments():                                               # Visit every source-map slot candidate for this view.
 		var wall_id := int(slot["id"])                                                            # Read this local wall-slot id.
 		var already_present := bool(source_presence.get(wall_id, false))                          # Preserve any earlier true value for repeated ids.
@@ -1144,11 +1196,27 @@ func _debug_slot_has_wall_by_id() -> Dictionary:                                
 # _view_slot_screen_segments: Returns the player-view guide segments for cardinal or halfway-turn slot audits.
 func _view_slot_screen_segments() -> Array:                                                 # Declare this function.
 	if _is_turn_45_view():                                                                    # Use the explicit halfway-turn guide because physical map projection is not the screen diagram.
+		if turn_step != 2:                                                                        # Do not reuse the 45-degree guide at either interpolation stage.
+			return _turn_stage_slot_screen_segments()                                               # Build labels from the actual 22 or 66 wall artwork positions.
 		return _turn_45_view_slot_screen_segments()                                               # Return the 16-slot halfway-turn player-view guide.
 	var segments := []                                                                         # Store the camera-invariant straight-view guide records.
 	for slot in _cardinal_debug_slot_records():                                                # Use the same conceptual art-slot diagram as the top-down overlay.
 		segments.append(_view_slot_screen_record(int(slot["id"]), slot["screen_a"], slot["screen_b"], slot["screen_label"])) # Preserve the matching canonical label position without a Variant-array cast.
 	return segments                                                                            # Return all 28 stable player-view slot records.
+
+
+# _turn_stage_slot_screen_segments: Builds an authored-stage screen guide directly from opaque 22/66 wall art bounds.
+func _turn_stage_slot_screen_segments() -> Array:
+	var segments := []                                                                         # Store the local labels for every authored intermediate overlay.
+	for wall_id in _active_turn_wall_textures().keys():                                        # Visit the 17 local IDs in the active 22 or 66-degree art set.
+		var texture: Texture2D = _active_turn_wall_textures()[wall_id]                            # Read this stage's transparent wall overlay.
+		var bounds := _texture_opaque_bounds(texture)                                             # Find the visible wall footprint in the 160x120 player view.
+		if bounds.size == Vector2.ZERO:                                                           # Ignore unexpected empty overlay files.
+			continue                                                                                # Skip this missing guide footprint.
+		var center := bounds.get_center()                                                         # Label the actual authored wall position instead of a 45-degree proxy.
+		var half_line := minf(maxf(bounds.size.x * 0.25, 4.0), 18.0)                              # Keep a short readable guide line inside each wall footprint.
+		segments.append(_view_slot_screen_record(int(wall_id), center - Vector2.RIGHT * half_line, center + Vector2.RIGHT * half_line, center)) # Keep the debug number on its own authored stage art.
+	return segments                                                                            # Return all 22/66 artwork-aligned slot guides.
 
 
 
@@ -1601,9 +1669,7 @@ func _debug_map_camera_local_position(local_position: Vector2) -> Vector2:      
 
 # _debug_map_player_position: Converts the real player cell plus local offset into a top-down overlay point.
 func _debug_map_player_position() -> Vector2:                                               # Declare this function.
-	var local_offset := _local_position_to_tile_offset(local_floor_position)                   # Convert art-space position into right/forward tile offset.
-	var world_offset := Vector2(-_left_vector()) * local_offset.x + Vector2(_facing_vector()) * local_offset.y # Rotate the local offset into world grid axes.
-	return _debug_map_cell_center(grid_position) + world_offset * (DEBUG_MAP_CELL_SIZE * LOCAL_TILE_WORLD_HALF_EXTENT) # Return the overlay coordinate for the true intra-cell player position.
+	return _debug_map_world_position(_current_player_world_position())                         # Use the same diagonal-aware world point that movement and collision use.
 
 
 
@@ -1771,8 +1837,18 @@ func _add_cardinal_debug_slot_diagram() -> void:                                
 # _all_debug_wall_slot_segments: Returns the diagnostic local slot segments for the current cardinal or halfway-turn view.
 func _all_debug_wall_slot_segments() -> Array:                                             # Declare this function.
 	if _is_turn_45_view():                                                                    # Use the 16-slot halfway-turn audit table for diagonal views.
-		return _turn_45_debug_wall_slot_segments()                                                # Return diagonal slot candidates.
+		return _turn_debug_wall_slot_segments()                                                   # Return the active 22, 45, or 66-degree graph.
 	return _straight_debug_wall_slot_segments()                                                # Return the 28 straight slot candidates.
+
+
+# _turn_stage_debug_wall_slot_segments: Returns the actual ray-selected source edges for a 22 or 66-degree stage.
+func _turn_stage_debug_wall_slot_segments() -> Array:
+	var segments := []                                                                         # Store the current stage's physical wall-edge diagnostics.
+	for slot in _build_turn_45_render_list():                                                  # Reuse the active camera basis and its visibility-selected wall slots.
+		if not slot.has("segment_a") or not slot.has("segment_b"):                              # Require the concrete source-map edge attached by the renderer.
+			continue                                                                                # Skip incomplete records defensively.
+		segments.append({"id": int(slot["id"]), "a": slot["segment_a"], "b": slot["segment_b"], "has_wall": true}) # Keep the guide attached to the actual selected map edge.
+	return segments                                                                            # Return the stage-specific selected-edge diagnostic list.
 
 
 
@@ -1793,12 +1869,12 @@ func _straight_debug_wall_slot_segments() -> Array:                             
 
 
 
-# _turn_45_debug_wall_slot_segments: Converts the corrected 16 halfway-turn local slots into source-map edge segments.
-func _turn_45_debug_wall_slot_segments() -> Array:                                        # Declare this function.
+# _turn_debug_wall_slot_segments: Converts the active authored turn graph into source-map edge segments.
+func _turn_debug_wall_slot_segments() -> Array:
 	var segments := []                                                                         # Store diagnostic halfway-turn slot records.
-	for slot_edge in TURN_45_DIAGNOSTIC_SLOT_EDGES:                                          # Visit each unique corrected 45-degree local grid edge.
+	for slot_edge in _active_turn_slot_edges():                                                # Visit each unique edge from the active 22, 45, or 66-degree graph.
 		var wall_id := int(slot_edge["id"])                                                     # Read the local halfway-turn wall-slot id.
-		var physical_segment := _turn_45_slot_edge_world_segment(slot_edge)                      # Rotate this local u/v edge into the current world-grid orientation.
+		var physical_segment := _turn_45_slot_edge_world_segment(slot_edge)                      # Rotate this authored local edge into the current world-grid orientation.
 		if physical_segment.size() < 2:                                                         # Skip malformed snapped geometry defensively.
 			continue                                                                                # Continue to the next halfway-turn slot.
 		segments.append({                                                                        # Store the independent diagnostic segment record.
@@ -1808,6 +1884,25 @@ func _turn_45_debug_wall_slot_segments() -> Array:                              
 			"has_wall": _segment_has_wall_for_debug(physical_segment[0], physical_segment[1]),     # Record whether this source-map edge is actually blocked.
 		})                                                                                       # Close this halfway-turn diagnostic slot record.
 	return segments                                                                            # Return all 16 halfway-turn diagnostic slots.
+
+
+# _active_turn_slot_edges: Selects the independent authored graph for the current turn stage.
+func _active_turn_slot_edges() -> Array:
+	match _active_turn_visual_stage():                                                          # Keep each authored interpolation frame tied to its own source-edge graph.
+		1:                                                                                       # The first stop is the 22-degree frame.
+			return TURN_22_DIAGNOSTIC_SLOT_EDGES                                                   # Select the 17 edges that own the WallsTurn_22 art.
+		3:                                                                                       # The last stop is the 66-degree frame.
+			return TURN_66_DIAGNOSTIC_SLOT_EDGES                                                   # Select the 17 edges that own the WallsTurn_66 art.
+		_:
+			return TURN_45_DIAGNOSTIC_SLOT_EDGES                                                   # Preserve the established 45-degree graph at the midpoint.
+
+
+
+# _active_turn_visual_stage: Returns the clockwise-authored art phase currently visible to the player.
+func _active_turn_visual_stage() -> int:
+	if turn_45_direction < 0:                                                                  # A counterclockwise turn walks the N-to-E reference art backwards.
+		return 4 - turn_step                                                                     # Map input steps 1/2/3 to visual phases 66/45/22.
+	return turn_step                                                                           # Keep clockwise turns in their authored 22/45/66 order.
 
 
 
@@ -2116,12 +2211,21 @@ func _load_straight_wall_textures() -> void:                                    
 
 
 
-# _load_turn_45_wall_textures: Loads the 16 transparent halfway-turn wall overlay textures.
-func _load_turn_45_wall_textures() -> void:                                                # Declare this function.
-	for wall_id in range(1, 17):                                                              # Iterate over each numbered 45-degree wall overlay.
-		var texture := _load_png_texture("%s/WallsTurn_45_%02d.png" % [WALLS_TURN_45_ROOT, wall_id]) # Load this halfway-turn wall texture.
-		if texture != null:                                                                       # Store only textures that were loaded successfully.
-			turn_45_wall_textures[wall_id] = texture                                                 # Cache this 45-degree wall texture by its diagram id.
+# _load_turn_wall_textures: Loads the transparent overlays used at each view-relative turn stage.
+func _load_turn_wall_textures() -> void:                                                   # Declare this function.
+	turn_22_wall_textures = _load_numbered_turn_wall_textures(WALLS_TURN_22_ROOT, "WallsTurn_22", 17) # Load the first interpolation stage.
+	turn_45_wall_textures = _load_numbered_turn_wall_textures(WALLS_TURN_45_ROOT, "WallsTurn_45", 16) # Load the diagonal halfway stage.
+	turn_66_wall_textures = _load_numbered_turn_wall_textures(WALLS_TURN_66_ROOT, "WallsTurn_66", 17) # Load the final interpolation stage.
+
+
+# _load_numbered_turn_wall_textures: Loads one numbered transparent wall-overlay set.
+func _load_numbered_turn_wall_textures(root: String, prefix: String, count: int) -> Dictionary:
+	var textures: Dictionary = {}                                                             # Store textures by their view-relative wall id.
+	for wall_id in range(1, count + 1):                                                       # Visit every authored overlay in this turn stage.
+		var texture := _load_png_texture("%s/%s_%02d.png" % [root, prefix, wall_id])             # Load one transparent full-screen overlay.
+		if texture != null:                                                                       # Keep only successfully loaded assets.
+			textures[wall_id] = texture                                                             # Cache the texture by its local slot id.
+	return textures                                                                            # Return the completed texture lookup.
 
 
 
@@ -2171,7 +2275,7 @@ func _show_stable() -> void:                                                    
 	if environment_layer != null and not straight_wall_textures.is_empty():                    # Run the following block only when this condition is true.
 		playfield.visible = false                                                                 # Update the captured playfield sprite display.
 		environment_layer.visible = true                                                          # Update the environment renderer container.
-		if _is_turn_45_view() and not turn_45_wall_textures.is_empty():                           # Use halfway-turn art when this player is paused on a diagonal view.
+		if _is_turn_45_view() and not _active_turn_wall_textures().is_empty():                    # Use the active 22, 45, or 66-degree art while a turn is in progress.
 			_render_turn_45_wall_view()                                                              # Compose the temporary 45-degree wall view.
 			return                                                                                    # Return after rendering the halfway-turn view.
 		_render_straight_wall_view()                                                              # Call a helper function as part of the current controller step.
@@ -2299,14 +2403,14 @@ func _add_empty_audit_floor_line(parent: Node2D, start: Vector2, end: Vector2) -
 
 
 
-# _render_turn_45_wall_view: Composes the temporary halfway-turn environment from frame 3 floor art and 16 numbered overlays.
+# _render_turn_45_wall_view: Composes the active 22, 45, or 66-degree turn environment from its authored floor frame and overlays.
 func _render_turn_45_wall_view() -> void:                                                  # Declare this function.
 	_hide_slot_nodes()                                                                         # Hide legacy coarse slot sprites before drawing full-screen wall overlays.
 
 	if floor_sprite != null:                                                                   # Configure the base floor sprite when it exists.
 		floor_sprite.visible = true                                                               # Show the floor underneath the transparent 45-degree walls.
 		floor_sprite.texture = floor_texture                                                      # Use the shared floor strip texture.
-		floor_sprite.region_rect = Rect2(0.0, VIEWPORT_SIZE.y * 2.0, VIEWPORT_SIZE.x, VIEWPORT_SIZE.y) # Use the third 160x120 frame for the 45-degree floor.
+		floor_sprite.region_rect = Rect2(0.0, VIEWPORT_SIZE.y * float(_active_turn_visual_stage()), VIEWPORT_SIZE.x, VIEWPORT_SIZE.y) # Use the clockwise-authored floor frame, reversing it for counterclockwise turns.
 		floor_sprite.position = Vector2.ZERO                                                      # Keep the floor aligned to the playfield origin.
 
 	for wall_id in straight_wall_nodes.keys():                                                 # Reuse the existing numbered wall sprite nodes for this temporary renderer.
@@ -2323,7 +2427,7 @@ func _render_turn_45_wall_view() -> void:                                       
 	for slot in visible_slots:                                                                 # Draw every selected 45-degree wall overlay.
 		var wall_id := int(slot["id"])                                                            # Read the numbered halfway-turn wall id.
 		var wall_sprite: Sprite2D = straight_wall_nodes.get(wall_id)                              # Reuse the matching numbered sprite node.
-		var texture: Texture2D = turn_45_wall_textures.get(wall_id)                               # Read the 45-degree wall texture for this id.
+		var texture: Texture2D = _active_turn_wall_textures().get(wall_id)                         # Read the active turn-stage wall texture for this id.
 		if wall_sprite == null or texture == null:                                                # Skip incomplete texture/node pairs defensively.
 			continue                                                                                 # Continue to the next visible wall slot.
 		wall_sprite.texture = texture                                                             # Draw the 45-degree full-screen overlay texture.
@@ -2334,6 +2438,17 @@ func _render_turn_45_wall_view() -> void:                                       
 
 	if enable_3d_diagnostic:                                                                   # Only mirror labels into the deprecated 3D diagnostic when it is active.
 		_hide_3d_slot_labels()                                                                    # Hide 3D labels because the diagnostic model has no diagonal wall slots yet.
+
+
+# _active_turn_wall_textures: Returns the view-relative wall art for the current interpolation stage.
+func _active_turn_wall_textures() -> Dictionary:
+	match _active_turn_visual_stage():
+		1:
+			return turn_22_wall_textures                                                          # Use 22-degree art immediately after leaving a cardinal view.
+		3:
+			return turn_66_wall_textures                                                          # Use 66-degree art immediately before reaching the next cardinal view.
+		_:
+			return turn_45_wall_textures                                                          # Use the existing 45-degree art at the diagonal midpoint.
 
 
 
@@ -2423,7 +2538,7 @@ func _build_turn_45_render_list() -> Array:                                     
 	var visible_edge_keys := {}                                                                # Store the physical source edges first-hit by the diagonal ray fan.
 	for edge in physical_edges:                                                                # Index every ray-visible physical edge by its canonical grid-edge key.
 		visible_edge_keys[String(edge["key"])] = edge                                             # Preserve the ray-hit edge for quick slot lookup.
-	for diagnostic_slot in _turn_45_debug_wall_slot_segments():                                # Walk the same corrected 16-slot source-map table used by the audit overlay.
+	for diagnostic_slot in _turn_debug_wall_slot_segments():                                   # Walk the active authored 22, 45, or 66-degree source-map graph.
 		if not bool(diagnostic_slot["has_wall"]):                                                 # Skip candidate slots whose underlying map edge is open.
 			continue                                                                                 # Continue to the next corrected 45-degree slot.
 		var key := _physical_edge_key(diagnostic_slot["a"], diagnostic_slot["b"])                  # Build the canonical physical edge key controlled by this slot.
@@ -2432,14 +2547,22 @@ func _build_turn_45_render_list() -> Array:                                     
 		var wall_id := int(diagnostic_slot["id"])                                                  # Read this 45-degree slot id.
 		if emitted_ids.has(wall_id):                                                              # Avoid drawing duplicate overlays for repeated ray-hit edges.
 			continue                                                                                 # Continue to the next visible edge.
-		var slot := _turn_45_slot_by_id(wall_id).duplicate()                                      # Copy the 45-degree art metadata for this corrected slot id.
+		var slot := _turn_wall_slot_by_id(wall_id).duplicate()                                    # Copy the active turn-stage art metadata for this authored slot id.
 		slot["segment_a"] = diagnostic_slot["a"]                                                  # Preserve the controlled physical source edge for top-down selected-slot debug.
 		slot["segment_b"] = diagnostic_slot["b"]                                                  # Preserve the controlled physical source edge for top-down selected-slot debug.
 		render_list.append(slot)                                                                  # Add this visible 45-degree slot to the render list.
 		emitted_ids[wall_id] = true                                                               # Mark the slot id as emitted.
-	render_list = _prune_turn_45_occluded_slots(render_list)                                   # Remove far diagonal slots hidden by nearer 45-degree wall pieces.
+	if turn_step == 2:                                                                          # The existing occlusion branches are authored only for the 45-degree graph.
+		render_list = _prune_turn_45_occluded_slots(render_list)                                 # Remove far diagonal slots hidden by nearer 45-degree wall pieces.
 	render_list.sort_custom(func(a, b): return int(a["draw"]) < int(b["draw"]))                # Sort by the 45-degree diagram's back-to-front draw order.
 	return render_list                                                                         # Return the selected 45-degree wall-slot list.
+
+
+# _turn_wall_slot_by_id: Returns metadata for the active authored turn-stage slot.
+func _turn_wall_slot_by_id(wall_id: int) -> Dictionary:
+	if turn_step == 2:                                                                          # Reuse the calibrated draw ordering for the existing 45-degree assets.
+		return _turn_45_slot_by_id(wall_id)                                                       # Return its established metadata.
+	return {"id": wall_id, "draw": wall_id}                                                  # Intermediate graphs have their own IDs and draw in authored numeric order.
 
 
 
@@ -3130,6 +3253,41 @@ func _is_key_down(keycode: int) -> bool:                                        
 
 
 
+# _primary_xbox_joypad_id: Returns the first connected controller so one plugged-in Xbox pad drives player one.
+func _primary_xbox_joypad_id() -> int:                                                      # Declare this function.
+	var connected_joypads := Input.get_connected_joypads()                                    # Ask Godot for the currently available gamepad device ids.
+	if connected_joypads.is_empty():                                                          # Keep keyboard controls fully usable when no controller is connected.
+		return -1                                                                               # Report that there is no gamepad to read.
+	return int(connected_joypads[0])                                                          # Use the first connected pad as player one's controller.
+
+
+
+# _xbox_left_stick: Reads the primary Xbox pad's movement stick as screen-local X/right and Y/down input.
+func _xbox_left_stick() -> Vector2:                                                         # Declare this function.
+	var device_id := _primary_xbox_joypad_id()                                                 # Find the controller that should drive player one.
+	if device_id < 0:                                                                          # Return neutral input when no controller is attached.
+		return Vector2.ZERO                                                                      # Keep keyboard-only use unchanged.
+	var stick := Vector2(Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X), Input.get_joy_axis(device_id, JOY_AXIS_LEFT_Y)) # Read the standard Xbox left-stick axes.
+	if stick.length() < XBOX_STICK_DEADZONE:                                                   # Discard minor hardware drift.
+		return Vector2.ZERO                                                                      # Treat the stick as centered inside the dead zone.
+	return stick.limit_length(1.0)                                                            # Preserve analog strength while keeping diagonal travel bounded.
+
+
+
+# _xbox_right_stick_turn: Converts a deliberate right-stick horizontal push into the existing one-shot turn direction.
+func _xbox_right_stick_turn() -> int:                                                       # Declare this function.
+	var device_id := _primary_xbox_joypad_id()                                                 # Find the controller that should drive player one.
+	if device_id < 0:                                                                          # Return no turn when no controller is attached.
+		return 0                                                                                 # Keep keyboard-only use unchanged.
+	var horizontal := Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_X)                         # Read the standard Xbox right-stick horizontal axis.
+	if horizontal <= -XBOX_TURN_THRESHOLD:                                                    # Treat a strong left push as the existing left-turn action.
+		return -1                                                                                # Request one left turn while the input latch handles repeats.
+	if horizontal >= XBOX_TURN_THRESHOLD:                                                     # Treat a strong right push as the existing right-turn action.
+		return 1                                                                                 # Request one right turn while the input latch handles repeats.
+	return 0                                                                                   # Keep the stick neutral below the deliberate-turn threshold.
+
+
+
 # _is_player_move_left_pressed: Returns whether the currently bound player is holding local-left movement.
 func _is_player_move_left_pressed() -> bool:                                                # Declare this function.
 	if active_player_index == 1:                                                              # Use number keys for player two.
@@ -3180,8 +3338,9 @@ func _is_player_turn_right_pressed() -> bool:                                   
 
 # _read_turn: Reads Q/E or arrow-key turning input and returns the requested turn direction.
 func _read_turn() -> int:                                                                   # Declare this function.
-	var left_pressed := _is_player_turn_left_pressed()                                        # Read the current left-turn key state for the bound player.
-	var right_pressed := _is_player_turn_right_pressed()                                      # Read the current right-turn key state for the bound player.
+	var xbox_turn := _xbox_right_stick_turn() if active_player_index == 0 else 0               # Let player one's right stick use the same turn latch as Q/E.
+	var left_pressed := _is_player_turn_left_pressed() or xbox_turn < 0                        # Read the current left-turn key or controller state for the bound player.
+	var right_pressed := _is_player_turn_right_pressed() or xbox_turn > 0                      # Read the current right-turn key or controller state for the bound player.
 	var left_just_pressed := left_pressed and not was_left_turn_pressed                        # Detect the first frame of a left-turn key press.
 	var right_just_pressed := right_pressed and not was_right_turn_pressed                     # Detect the first frame of a right-turn key press.
 	was_left_turn_pressed = left_pressed                                                      # Store current left-turn state for next frame.
@@ -3224,6 +3383,8 @@ func _read_toggle_debug_menu() -> bool:
 # _read_movement: Reads WASD or arrow movement input and returns a normalized local movement vector.
 func _read_movement() -> Vector2:                                                           # Declare this function.
 	var movement := Vector2.ZERO                                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
+	if active_player_index == 0:                                                               # Reserve the first connected Xbox controller for player one.
+		movement += _xbox_left_stick()                                                            # Add analog left-stick travel in the same screen-local axes as WASD.
 	if _is_player_move_left_pressed():                                                         # Read the bound player's local strafe-left input.
 		movement.x -= 1.0                                                                         # Continue the controller logic for this section.
 	if _is_player_move_right_pressed():                                                        # Read the bound player's local strafe-right input.
@@ -3232,7 +3393,7 @@ func _read_movement() -> Vector2:                                               
 		movement.y -= 1.0                                                                         # Continue the controller logic for this section.
 	if _is_player_move_backward_pressed():                                                     # Read the bound player's local backward input.
 		movement.y += 1.0                                                                         # Continue the controller logic for this section.
-	return movement.normalized() if movement != Vector2.ZERO else Vector2.ZERO                 # Return this computed result to the caller.
+	return movement.limit_length(1.0)                                                          # Preserve analog stick strength while keeping keyboard diagonals at normal speed.
 
 
 
@@ -3287,6 +3448,67 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 	if not is_transitioning:                                                                   # Keep free local movement bounded when no tile-crossing transition started.
 		tile_offset = Vector2(clampf(tile_offset.x, -1.0, 1.0), clampf(tile_offset.y, -1.0, 1.0)) # Keep the physical offset inside this tile after free movement.
 		local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the clamped physical offset back into local art-space registration.
+
+
+
+# _move_inside_tile_diagonal: Moves through the world using the active 45-degree camera axes and real grid-edge collision.
+func _move_inside_tile_diagonal(movement: Vector2, delta: float) -> void:                   # Declare this function.
+	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into camera-right/camera-forward movement.
+	var world_position := _current_player_world_position()                                     # Start from the same world point shown by the top-down diagnostic map.
+	var world_delta := (_view_right_vector() * physical_movement.x + _view_forward_vector() * physical_movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta # Convert the visible diagonal input into world-grid travel.
+	last_blocked_direction = ""                                                               # Clear stale feedback before applying this frame's collision checks.
+	world_position = _move_diagonal_world_axis(world_position, world_delta.x, Vector2i(1, 0), "right", "left") # Sweep east/west first so an angled move can slide along a blocked north/south wall.
+	world_position = _move_diagonal_world_axis(world_position, world_delta.y, Vector2i(0, 1), "back", "front") # Sweep north/south second using the world position produced by the first sweep.
+	_set_player_world_position_for_current_view(world_position)                                # Re-express the valid world point in the current diagonal camera-local coordinates.
+
+
+
+# _move_diagonal_world_axis: Applies one world-axis motion component, stopping at blocked cell edges and allowing wall slides.
+func _move_diagonal_world_axis(world_position: Vector2, distance: float, positive_delta: Vector2i, positive_label: String, negative_label: String) -> Vector2: # Declare this function.
+	if is_zero_approx(distance):                                                               # Skip an axis with no requested motion.
+		return world_position                                                                     # Keep the current world position unchanged.
+	var axis_is_x := positive_delta.x != 0                                                     # Determine whether this sweep changes world X or world Y.
+	var current_cell := Vector2i(floori(world_position.x), floori(world_position.y))           # Read the source-map cell currently containing the player.
+	var candidate := world_position                                                             # Start the candidate at the current valid position.
+	if axis_is_x:                                                                               # Apply an east/west movement component.
+		candidate.x += distance                                                                    # Move only along X for this collision sweep.
+	else:                                                                                       # Apply a north/south movement component.
+		candidate.y += distance                                                                    # Move only along Y for this collision sweep.
+	var current_axis := world_position.x if axis_is_x else world_position.y                    # Read the starting coordinate on the moved axis.
+	var candidate_axis := candidate.x if axis_is_x else candidate.y                            # Read the proposed coordinate on the moved axis.
+	var current_index := floori(current_axis)                                                  # Find the starting integer cell index along the moved axis.
+	var candidate_index := floori(candidate_axis)                                              # Find the proposed integer cell index along the moved axis.
+	if current_index == candidate_index:                                                       # Keep free movement that stays inside the current cell.
+		return candidate                                                                          # No grid edge was crossed.
+	var crossing_delta := positive_delta if distance > 0.0 else -positive_delta                # Choose the cardinal source-map edge being crossed.
+	if _can_cross_edge(current_cell, crossing_delta):                                          # Allow movement through an open edge into the neighboring grid cell.
+		return candidate                                                                          # The following axis sweep will use the new cell when necessary.
+	var boundary := float(current_index + 1) if distance > 0.0 else float(current_index)       # Locate the blocked east/south or west/north cell edge.
+	var safe_axis := boundary - 0.0001 if distance > 0.0 else boundary + 0.0001                # Stay just inside the current cell so its ownership remains stable.
+	if axis_is_x:                                                                               # Clamp the rejected east/west candidate.
+		candidate.x = safe_axis                                                                    # Keep the player pressed against the source-map wall.
+	else:                                                                                       # Clamp the rejected north/south candidate.
+		candidate.y = safe_axis                                                                    # Keep the player pressed against the source-map wall.
+	last_blocked_direction = positive_label if distance > 0.0 else negative_label              # Report the screen-relative diagonal-view direction that was blocked.
+	return candidate                                                                            # Return the axis-clamped world point so the other axis can still slide.
+
+
+
+# _current_player_world_position: Converts the bound player's camera-local offset into the actual world point, including halfway turns.
+func _current_player_world_position() -> Vector2:                                           # Declare this function.
+	var tile_offset := _local_position_to_tile_offset(local_floor_position)                    # Convert art-space local position into signed right/forward coordinates.
+	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Anchor the player at the center of their current source-map cell.
+	return cell_center + _view_right_vector() * tile_offset.x * LOCAL_TILE_WORLD_HALF_EXTENT + _view_forward_vector() * tile_offset.y * LOCAL_TILE_WORLD_HALF_EXTENT # Rotate the offset through the exact visible camera basis.
+
+
+
+# _set_player_world_position_for_current_view: Stores a valid world point as local coordinates under the active cardinal or halfway-turn camera.
+func _set_player_world_position_for_current_view(world_position: Vector2) -> void:          # Declare this function.
+	grid_position = Vector2i(floori(world_position.x), floori(world_position.y))               # Assign the source-map cell actually containing this point.
+	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Rebuild that cell's fixed center.
+	var relative := world_position - cell_center                                                # Measure the player point from its newly assigned cell center.
+	var offset := Vector2(relative.dot(_view_right_vector()) / LOCAL_TILE_WORLD_HALF_EXTENT, relative.dot(_view_forward_vector()) / LOCAL_TILE_WORLD_HALF_EXTENT) # Convert world displacement back into the active camera-local right/forward units.
+	local_floor_position = Vector2(_signed_unit_to_axis(offset.x, HOME_LOCAL_FLOOR_POSITION.x, STRAFE_LEFT_WALL_CONTACT_X, STRAFE_RIGHT_WALL_CONTACT_X), _signed_forward_unit_to_axis(offset.y)) # Preserve that coordinate without snapping it into another camera basis.
 
 
 
@@ -3377,12 +3599,11 @@ func _effective_player_state(player_index: int) -> Dictionary:                  
 
 # _player_state_world_position: Converts a player's cell and local offset into shared world-grid coordinates.
 func _player_state_world_position(state: Dictionary) -> Vector2:                            # Declare this function.
-	var state_facing := int(state.get("facing", 0))                                            # Read the player's facing for local-offset rotation.
 	var state_cell: Vector2i = state.get("grid_position", Vector2i.ZERO)                       # Read the player's current cell.
 	var state_local: Vector2 = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)    # Read the player's local position inside that cell.
 	var local_offset := _local_position_to_tile_offset(state_local)                            # Convert art-space local position into right/forward tile offsets.
-	var right := Vector2(-_left_vector_for_index(state_facing)).normalized()                   # Compute that player's world-right direction.
-	var forward := Vector2(_facing_vector_for_index(state_facing)).normalized()                # Compute that player's world-forward direction.
+	var forward := _view_forward_vector_for_state(state)                                       # Use the saved visible cardinal or diagonal view direction.
+	var right := Vector2(-forward.y, forward.x).normalized()                                  # Build the matching camera-right direction from that visible forward vector.
 	return Vector2(float(state_cell.x) + 0.5, float(state_cell.y) + 0.5) + right * local_offset.x * LOCAL_TILE_WORLD_HALF_EXTENT + forward * local_offset.y * LOCAL_TILE_WORLD_HALF_EXTENT # Return the world-grid point inside the cell.
 
 
@@ -3698,19 +3919,12 @@ func _texture_body_height_to_foot(texture: Texture2D) -> float:                 
 
 # _movement_to_first_player_run_dir: Maps local movement input to the first-player run animation while keeping aim camera-forward.
 func _movement_to_first_player_run_dir(movement: Vector2) -> String:                        # Declare this function.
-	# In first-player view, aim stays camera-forward/north. Side-facing run
-	# animations describe how the body moves while still aiming north.
-	if movement.y < 0.0 and movement.x < 0.0:                                                  # Run the following block only when this condition is true.
-		return DIR_W                                                                              # Return this computed result to the caller.
-	if movement.y < 0.0 and movement.x > 0.0:                                                  # Run the following block only when this condition is true.
-		return DIR_E                                                                              # Return this computed result to the caller.
-	if movement.x < 0.0:                                                                       # Run the following block only when this condition is true.
-		return DIR_W                                                                              # Return this computed result to the caller.
-	if movement.x > 0.0:                                                                       # Run the following block only when this condition is true.
-		return DIR_E                                                                              # Return this computed result to the caller.
-	if movement.y > 0.0:                                                                       # Run the following block only when this condition is true.
-		return DIR_S                                                                              # Return this computed result to the caller.
-	return DIR_N                                                                               # Return this computed result to the caller.
+	# Analog sticks nearly always include a small off-axis value. Choose the
+	# dominant input axis so a forward stick push still plays RunN_AimN rather
+	# than being mistaken for a W+D diagonal input.
+	if absf(movement.y) >= absf(movement.x):                                                   # Prefer forward/back when the stick is primarily vertical.
+		return DIR_S if movement.y > 0.0 else DIR_N                                              # Select the matching cardinal run animation.
+	return DIR_E if movement.x > 0.0 else DIR_W                                                # Select the matching cardinal left/right run animation.
 
 
 
@@ -3720,6 +3934,13 @@ func _world_movement_dir_for_local_movement(movement: Vector2, facing_index: int
 	var right := Vector2(-_left_vector_for_index(facing_index))                                 # Convert the player's camera-right direction into a Vector2.
 	var world_vector := right * movement.x + forward * -movement.y                              # Rotate local side/forward input into world grid space.
 	return _direction_string_for_world_vector(world_vector)                                     # Return the cardinal direction that best describes the movement.
+
+
+
+# _world_movement_dir_for_current_view: Converts local movement through the active cardinal or halfway-turn camera basis.
+func _world_movement_dir_for_current_view(movement: Vector2) -> String:                       # Declare this function.
+	var world_vector := _view_right_vector() * movement.x + _view_forward_vector() * -movement.y # Rotate local movement through the actual visible camera direction.
+	return _direction_string_for_world_vector(world_vector)                                     # Use the nearest available cardinal animation direction for diagonal travel.
 
 
 
@@ -3878,22 +4099,26 @@ func _request_half_turn_or_transition(sequence_name: String, half_turn_direction
 
 
 
-# _enter_turn_45: Shows the halfway-turn view without changing the committed cardinal facing.
+# _enter_turn_45: Starts a view-relative turn at the 22-degree interpolation view without changing the committed cardinal facing.
 func _enter_turn_45(half_turn_direction: int) -> void:                                     # Declare this function.
+	var preserved_world_position := _current_player_world_position()                           # Capture the player's physical map point before changing the camera basis.
 	turn_45_direction = -1 if half_turn_direction < 0 else 1                                  # Store whether this halfway view is between cardinal-left or cardinal-right.
-	active_sequence_name = "turn_45"                                                          # Label the debug state as a halfway-turn render.
+	turn_step = 1                                                                              # Begin at the 22-degree interpolation stage.
+	active_sequence_name = "turn_22"                                                          # Label the debug state as the first turn interpolation view.
 	is_transitioning = false                                                                   # Ensure stable renderer mode stays active.
 	active_sequence = []                                                                       # Clear any stale captured transition frames.
 	phase_index = 0                                                                            # Reset captured transition frame bookkeeping.
 	phase_timer = 0.0                                                                          # Reset captured transition time bookkeeping.
 	character_is_moving = false                                                                # Freeze actor movement state while validating the wall art.
 	last_blocked_direction = ""                                                                # Clear movement-blocked labels because movement is disabled in this view.
+	_set_player_world_position_for_current_view(preserved_world_position)                      # Re-express the same physical point in the newly active diagonal camera coordinates.
 	_show_stable()                                                                             # Render the 45-degree wall view immediately.
 
 
 
-# _process_turn_45_input: Handles the second twist click while movement is frozen on a halfway-turn view.
+# _process_turn_45_input: Advances, reverses, or commits the 22 -> 45 -> 66 turn sequence.
 func _process_turn_45_input(turn_direction: int) -> void:                                  # Declare this function.
+	var preserved_world_position := _current_player_world_position()                           # Keep the player fixed on the source map while committing or cancelling this camera rotation.
 	character_is_moving = false                                                                # Keep this player idle while the halfway-turn view is on screen.
 	run_dir = DIR_N                                                                            # Keep the hidden local body in a deterministic idle direction.
 	aim_dir = DIR_N                                                                            # Keep the hidden local aim direction camera-forward.
@@ -3901,12 +4126,25 @@ func _process_turn_45_input(turn_direction: int) -> void:                       
 	world_aim_dir = _direction_string_for_facing(facing)                                      # Preserve the committed cardinal aim direction for other views.
 	if turn_direction == 0:                                                                    # Stay on the halfway view when no twist key was just pressed.
 		return                                                                                    # Return without changing the halfway-turn state.
-	if turn_direction == turn_45_direction:                                                    # Commit the cardinal turn when the player presses the same twist direction again.
-		var sequence_name := "turn_left" if turn_45_direction < 0 else "turn_right"               # Convert the halfway direction to the existing transition label.
-		turn_45_direction = 0                                                                      # Clear the halfway view before applying the final cardinal turn.
-		_finish_snap_transition(sequence_name)                                                     # Apply the cardinal turn and rotate the in-tile local offset.
-		return                                                                                    # Return after committing the turn.
-	turn_45_direction = 0                                                                      # Cancel the halfway view when the opposite twist key is pressed.
+	if turn_direction == turn_45_direction:                                                    # Advance clockwise or counterclockwise through the authored view-relative turn stages.
+		if turn_step < 3:                                                                        # Keep the next cardinal view until the player has seen 22, 45, and 66 degrees.
+			turn_step += 1                                                                         # Advance from 22 to 45, or from 45 to 66.
+			active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[turn_step]                            # Label the active interpolation stage for the debug status.
+			_set_player_world_position_for_current_view(preserved_world_position)                  # Keep the player fixed while the visible camera basis changes.
+			_show_stable()                                                                         # Redraw the next authored floor and wall set.
+			return                                                                                # Wait for the next matching turn input.
+		var sequence_name := "turn_left" if turn_45_direction < 0 else "turn_right"             # Commit after the 66-degree stage.
+		_finish_snap_transition(sequence_name)                                                   # Apply the adjacent cardinal facing while preserving the physical world position.
+		return                                                                                  # Return after committing the turn.
+	if turn_step > 1:                                                                          # Let an opposite turn input smoothly back out one interpolation stage.
+		turn_step -= 1                                                                           # Step from 66 to 45 or from 45 to 22.
+		active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[turn_step]                              # Keep the debug status aligned with the visible stage.
+		_set_player_world_position_for_current_view(preserved_world_position)                    # Reproject the unchanged player point through the earlier view angle.
+		_show_stable()                                                                           # Redraw the previous authored floor and wall set.
+		return                                                                                  # Wait for a later turn input.
+	turn_45_direction = 0                                                                      # Leave the first 22-degree stage when the player reverses direction.
+	turn_step = 0                                                                              # Restore the original cardinal view.
+	_set_player_world_position_for_current_view(preserved_world_position)                      # Convert the unchanged world point back into the committed cardinal camera coordinates.
 	active_sequence_name = "idle"                                                              # Return the debug label to stable cardinal view.
 	_show_stable()                                                                             # Redraw the original cardinal wall view.
 
@@ -3914,10 +4152,16 @@ func _process_turn_45_input(turn_direction: int) -> void:                       
 
 # _finish_snap_transition: Applies a movement or turn result immediately and redraws the stable view.
 func _finish_snap_transition(sequence_name: String) -> void:                                # Declare this function.
+	var preserved_world_position := _current_player_world_position()                           # Capture the pre-turn physical point before any facing basis is changed.
 	is_transitioning = false                                                                   # Ensure the controller stays in stable/input mode.
-	turn_45_direction = 0                                                                      # Clear any temporary halfway-turn view when a cardinal transition completes.
+	if sequence_name == "turn_left" or sequence_name == "turn_right":                         # Only a completed turn leaves the halfway camera orientation.
+		turn_45_direction = 0                                                                      # Return to a committed cardinal direction after the matching second twist.
+		turn_step = 0                                                                              # Clear the 22/45/66 interpolation stage after reaching the new cardinal direction.
 	_apply_grid_result(sequence_name)                                                          # Apply the pending cell delta or facing rotation.
-	_reset_local_position_after_transition(sequence_name)                                      # Put the player on the correct entry edge in the new cell or facing.
+	if sequence_name == "turn_left" or sequence_name == "turn_right":                         # A turn changes only camera orientation, never the physical player point.
+		_set_player_world_position_for_current_view(preserved_world_position)                      # Reproject the unchanged world point through the newly committed cardinal basis.
+	else:                                                                                       # Preserve the established entry-contact rules for ordinary cell movement.
+		_reset_local_position_after_transition(sequence_name)                                      # Put the player on the correct entry edge in the new cell or facing.
 	active_sequence = []                                                                       # Clear any previous captured sequence frames.
 	phase_index = 0                                                                            # Reset captured phase bookkeeping.
 	phase_timer = 0.0                                                                          # Reset captured phase timing.
@@ -3976,6 +4220,7 @@ func _advance_transition(delta: float) -> void:                                 
 func _finish_transition() -> void:                                                          # Declare this function.
 	is_transitioning = false                                                                   # Compute and store this value for the current step.
 	turn_45_direction = 0                                                                      # Clear any temporary halfway-turn view when a captured transition completes.
+	turn_step = 0                                                                              # Clear any intermediate turn stage when a captured transition completes.
 	_apply_grid_result(active_sequence_name)                                                   # Call a helper function as part of the current controller step.
 	_reset_local_position_after_transition(active_sequence_name)                               # Call a helper function as part of the current controller step.
 	phase_index = 0                                                                            # Compute and store this value for the current step.
@@ -4154,11 +4399,11 @@ func _view_forward_vector() -> Vector2:                                         
 func _view_forward_vector_for_state(state: Dictionary) -> Vector2:                         # Declare this function.
 	var state_facing := int(state.get("facing", 0))                                           # Read the saved player's committed cardinal facing.
 	var state_turn_45 := int(state.get("turn_45_direction", 0))                                # Read the saved player's temporary halfway-turn direction.
+	var state_turn_step := int(state.get("turn_step", 2 if state_turn_45 != 0 else 0))          # Read the saved 22/45/66 interpolation stage.
 	var cardinal_forward := Vector2(_facing_vector_for_index(state_facing)).normalized()       # Convert that committed facing to a world vector.
 	if state_turn_45 == 0:                                                                    # Use the cardinal direction when no halfway-turn view is active.
 		return cardinal_forward                                                                  # Return the saved player's cardinal view direction.
-	var cardinal_right := Vector2(-_left_vector_for_index(state_facing)).normalized()          # Compute that saved player's cardinal camera-right vector.
-	return (cardinal_forward + cardinal_right * float(state_turn_45)).normalized()             # Return the saved player's temporary diagonal view direction.
+	return cardinal_forward.rotated(deg_to_rad(22.5 * float(state_turn_step * state_turn_45))) # Return the saved player's active turn-view direction.
 
 
 
@@ -4176,11 +4421,10 @@ func _view_left_vector() -> Vector2:                                            
 
 
 
-# _turn_45_view_forward_vector: Returns the diagonal halfway-turn view direction for the current player.
+# _turn_45_view_forward_vector: Returns the active 22, 45, or 66-degree turn-view direction for the current player.
 func _turn_45_view_forward_vector() -> Vector2:                                            # Declare this function.
 	var cardinal_forward := Vector2(_facing_vector()).normalized()                             # Start from the committed cardinal facing.
-	var cardinal_right := Vector2(-_left_vector()).normalized()                                # Compute the committed cardinal camera-right direction.
-	return (cardinal_forward + cardinal_right * float(turn_45_direction)).normalized()         # Rotate halfway toward the requested left or right cardinal direction.
+	return cardinal_forward.rotated(deg_to_rad(22.5 * float(turn_step * turn_45_direction)))   # Rotate toward the requested cardinal in authored 22-degree increments.
 
 
 
@@ -4193,7 +4437,7 @@ func _turn_45_view_right_vector() -> Vector2:                                   
 
 # _is_turn_45_view: Returns whether this player is currently stopped on the halfway-turn validation view.
 func _is_turn_45_view() -> bool:                                                           # Declare this function.
-	return turn_45_direction != 0                                                            # Report whether a temporary halfway turn is active.
+	return turn_45_direction != 0 and turn_step != 0                                         # Report whether any temporary 22/45/66 turn view is active.
 
 
 
@@ -4240,6 +4484,7 @@ func _build_empty_grid_audit_wall_edges() -> void:
 	grid_position = Vector2i(4, 4)                                                            # Start the sole player at the center of the 9x9 grid.
 	facing = 0                                                                                 # Start facing north so cardinal turns can be audited from a known state.
 	turn_45_direction = 0                                                                      # Start in a committed cardinal view, not a halfway turn.
+	turn_step = 0                                                                              # Start outside any 22/45/66 interpolation stage.
 	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Use the usual in-cell resting position.
 	pending_grid_delta = Vector2i.ZERO                                                        # Clear any stale crossing request.
 	last_blocked_direction = ""                                                                # Clear any stale blocked-movement diagnostic.
@@ -4269,6 +4514,7 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 	grid_position = Vector2i(0, MAP_HEIGHT - 1)                                               # Start at the southwest cell used by the random-map generator.
 	facing = 0                                                                                 # Face north into the saved generated map.
 	turn_45_direction = 0                                                                      # Reset any temporary halfway-turn view when restoring the map.
+	turn_step = 0                                                                              # Reset any 22/45/66 interpolation stage when restoring the map.
 	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Reset the player to the normal local tile position.
 	pending_grid_delta = Vector2i.ZERO                                                         # Clear any stale cell-crossing request.
 	last_blocked_direction = ""                                                                # Clear any stale blocked-movement status.
@@ -4331,6 +4577,7 @@ func _build_random_maze_wall_edges() -> void:                                   
 	grid_position = start_cell                                                                 # Place the player at the start of the generated maze.
 	facing = 0                                                                                 # Face north so the first view looks into the map.
 	turn_45_direction = 0                                                                      # Reset any temporary halfway-turn view when generating a new map.
+	turn_step = 0                                                                              # Reset any 22/45/66 interpolation stage when generating a new map.
 	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Reset the player to the normal local tile position.
 	pending_grid_delta = Vector2i.ZERO                                                         # Clear any stale cell-crossing request.
 	last_blocked_direction = ""                                                                # Clear any stale blocked-movement status.
