@@ -26,8 +26,8 @@ const FORWARD_WALL_CONTACT_Y := 0.56                                            
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
 const MAP_WIDTH := 9                                                                        # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
 const MAP_HEIGHT := 9                                                                       # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
-const TEMP_EMPTY_GRID_AUDIT := false                                                        # Keep the wall-free 9x9 surface available for future slot-diagram checks.
-const TEMP_RANDOM_GRID_AUDIT := true                                                        # Test the corrected debug system against a connected random 9x9 maze with closed exterior walls.
+const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
+const TEMP_RANDOM_GRID_AUDIT := true                                                        # Use a mixed open/blocked 9x9 maze to check tuned local projections against real wall selection.
 const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
 const MAP_EXTRA_OPENING_CHANCE := 0.18                                                      # Add a few loops after maze carving so the interior is not a strict tree.
 
@@ -576,6 +576,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
 @export var show_slot_grid_debug := true                                                     # Show blue diagnostic slot numbers in the top-down and player-view grids.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
+@export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
 
 @export_group("3D Diagnostic Camera")                                                       # Group the editable 3D diagnostic camera controls in the Godot inspector.
 @export_range(45.0, 110.0, 1.0) var diagnostic_3d_camera_fov := 78.0                         # Let the user tune the 3D diagnostic camera field of view.
@@ -636,6 +637,7 @@ var turn_passthrough_target := ""                                               
 var facing := 0                                                                             # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
 var turn_45_direction := 0                                                                   # Track a temporary halfway turn stop: -1=left, 0=cardinal, 1=right.
 var turn_step := 0                                                                           # Track a view-relative quarter-turn stage: 0=cardinal, 1=22, 2=45, 3=66.
+var manual_turn_step_enabled := false                                                       # Let the debug menu hold the authored 22/66 turn frames until a fresh turn input advances them.
 var forward_step := 0                                                                        # Track a forward camera stage: 0=stable, 1=Floor/WallsFwd_1, 2=Floor/WallsFwd_2.
 var forward_passthrough_timer := 0.0                                                        # Accumulate the display time of the active forward frame.
 var forward_transition_name := ""                                                          # Remember whether the staged crossing finishes forward or backward.
@@ -673,6 +675,12 @@ var player_views: Array[Dictionary] = []                                        
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_open := false                                                                 # Track whether the debug-menu panel is currently visible.
+var slot_graph_tuner_enabled := false                                                        # Let the visible current graph accept direct endpoint tuning.
+var slot_graph_tuner_overrides: Dictionary = {}                                              # Store source-vector edits by active graph and slot ID.
+var slot_graph_tuner_drag: Dictionary = {}                                                   # Track the one player-view endpoint currently under the mouse.
+var slot_graph_tuner_hover: Dictionary = {}                                                  # Track the endpoint under the cursor so handles have a clear hover state.
+var slot_graph_tuner_undo: Array[Dictionary] = []                                            # Preserve complete override snapshots for Ctrl+Z during a tuning session.
+const SLOT_GRAPH_TUNER_PATH := "res://slot_graph_tuner.json"                                # Keep saved tuning data in the project for Git backup.
 
 
 
@@ -697,6 +705,7 @@ func _ready() -> void:                                                          
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
 	_setup_debug_menu()                                                                        # Create the shared on-screen menu for toggling diagnostic overlays.
+	_load_slot_graph_tuner_overrides()                                                         # Restore saved slot-vector adjustments before the first render.
 	if enable_3d_diagnostic:                                                                   # Only create the deprecated 3D diagnostic when explicitly requested.
 		_setup_3d_diagnostic()                                                                    # Create the side-by-side 3D map diagnostic view.
 	_render_all_player_views()                                                                 # Draw both starting screens and both debug maps.
@@ -706,6 +715,11 @@ func _ready() -> void:                                                          
 
 # _input: Records keyboard press and release events so movement does not depend only on raw polling.
 func _input(event: InputEvent) -> void:                                                     # Declare this function.
+	if event is InputEventKey and event.pressed and event.ctrl_pressed and event.keycode == KEY_Z: # Reserve standard Ctrl+Z for graph tuning undo.
+		if _slot_graph_tuner_undo_last_edit():                                                   # Undo only when an edit snapshot exists.
+			return                                                                                # Keep Ctrl+Z from reaching unrelated input handling.
+	if _handle_slot_graph_tuner_input(event):                                                  # Let the visible graph consume endpoint drags before gameplay input.
+		return                                                                                    # Prevent a graph drag from also driving the player.
 	if event is InputEventKey and not event.echo:                                             # Only handle real keyboard press/release events once.
 		held_keycodes[int(event.keycode)] = event.pressed                                       # Store whether this logical key is currently held.
 		if event.physical_keycode != 0:                                                         # Preserve physical key bindings when Godot supplies them.
@@ -736,9 +750,16 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "rays", "Ray Casts")                                     # Add the raycast inspection overlay toggle.
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
 	_add_debug_menu_check(content, "slot_grid", "Slot Grid (F2)")                           # Add the existing F2 quick-toggle as a menu option.
+	_add_debug_menu_check(content, "render_walls", "Render Walls")                          # Let floor/grid tuning run without opaque wall art covering the player view.
 	_add_debug_menu_check(content, "selected_slots", "Selected Slots")                       # Add the selected-wall comparison overlay toggle.
 	_add_debug_menu_check(content, "manual_forward", "Manual Forward")                      # Hold Fwd frames until the player deliberately presses forward again.
 	_add_debug_menu_check(content, "manual_strafe", "Manual Strafe")                        # Hold side-camera frames until the player deliberately presses sideways again.
+	_add_debug_menu_check(content, "manual_turn", "Manual Turn")                            # Hold 22/66 frames until a fresh Q/E or right-stick turn input advances them.
+	_add_debug_menu_check(content, "slot_tuner", "Slot Graph Tuner")                        # Enable current-screen graph endpoint dragging.
+	var save_tuner := Button.new()                                                             # Provide an explicit, reversible save action.
+	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
+	save_tuner.pressed.connect(_save_slot_graph_tuner_overrides)                              # Save edits only when deliberately requested.
+	content.add_child(save_tuner)                                                              # Place save beneath the tuner toggle.
 
 	var hint := Label.new()                                                                    # Provide the close hotkey inside the panel itself.
 	hint.text = "F3 closes this menu"                                                         # Make the invocation/close behavior discoverable at runtime.
@@ -780,12 +801,18 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_perspective_extents_overlay                                                # Return the measured floor/actor extent overlay state.
 		"slot_grid":
 			return show_slot_grid_debug                                                            # Return the blue wall-slot audit overlay state.
+		"render_walls":
+			return render_wall_art                                                                 # Return whether transparent wall overlays are currently visible.
 		"selected_slots":
 			return show_selected_wall_slot_debug                                                   # Return the renderer-selection comparison overlay state.
 		"manual_forward":
 			return manual_forward_step_enabled                                                      # Return whether Fwd frames wait for repeated forward input.
 		"manual_strafe":
 			return manual_strafe_step_enabled                                                       # Return whether side-camera frames wait for repeated lateral input.
+		"manual_turn":
+			return manual_turn_step_enabled                                                         # Return whether 22/66 turn frames wait for repeated turn input.
+		"slot_tuner":
+			return slot_graph_tuner_enabled                                                        # Return whether the current graph accepts endpoint drags.
 		_:
 			return false                                                                           # Keep unknown future menu keys safely disabled.
 
@@ -802,12 +829,19 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_perspective_extents_overlay = enabled                                             # Show or hide projected floor and actor-boundary guides.
 		"slot_grid":
 			show_slot_grid_debug = enabled                                                         # Show or hide the blue numbered wall-slot audit grid.
+		"render_walls":
+			render_wall_art = enabled                                                              # Hide/reveal only rendered wall overlays; map walls and collision remain active.
 		"selected_slots":
 			show_selected_wall_slot_debug = enabled                                                # Show or hide renderer-selected wall-slot highlights.
 		"manual_forward":
 			manual_forward_step_enabled = enabled                                                   # Toggle input-driven Fwd 1 -> Fwd 2 -> destination stepping.
 		"manual_strafe":
 			manual_strafe_step_enabled = enabled                                                    # Toggle input-driven Right 1 -> 2 -> 3 stepping.
+		"manual_turn":
+			manual_turn_step_enabled = enabled                                                      # Toggle input-driven 22/66 turn stepping.
+		"slot_tuner":
+			slot_graph_tuner_enabled = enabled                                                     # Toggle direct editing of the graph currently on screen.
+			if enabled: show_slot_grid_debug = true                                                 # Ensure the draggable blue endpoints are visible when tuning starts.
 		_:
 			return                                                                                # Ignore unsupported keys without redrawing.
 	_render_all_player_views()                                                                 # Redraw every local view immediately so changes are visible at once.
@@ -1081,6 +1115,7 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
 	var manual_forward_step_just_pressed := _read_manual_forward_step_input() if manual_forward_step_enabled else false # Sample every enabled frame so a held stick cannot skip stages.
 	var manual_strafe_step_just_pressed := _read_manual_strafe_step_input() if manual_strafe_step_enabled else false # Sample every enabled frame so a held stick cannot skip side stages.
+	var manual_turn_step_direction := _read_turn() if manual_turn_step_enabled else 0         # Sample a fresh Q/E or right-stick turn only when turn-stage inspection is enabled.
 	if is_transitioning:                                                                       # Advance captured transition playback for this player if enabled.
 		_advance_transition(delta)                                                                # Move this player's transition to the next frame when needed.
 		return                                                                                    # Return after transition processing.
@@ -1104,9 +1139,13 @@ func _process_player_context(delta: float) -> void:                             
 		return                                                                                    # Do not accept another move or turn during the short side transition.
 	player_sprite.speed_scale = 1.0                                                            # Restore the ordinary animation pace as soon as Fwd playback has completed.
 	if is_turn_passthrough:                                                                    # Let an authored 22/66 camera frame finish before accepting new movement or turn input.
-		_advance_turn_passthrough(delta)                                                         # Advance the lightweight camera-only interpolation.
+		if manual_turn_step_enabled:                                                              # Hold the current 22/66 visual frame for direct graph tuning.
+			if manual_turn_step_direction != 0:                                                     # Require a release and a new turn input before progressing.
+				_advance_turn_passthrough(delta, true)                                                # Advance exactly one authored turn stage.
+		else:
+			_advance_turn_passthrough(delta)                                                       # Preserve ordinary short automatic turns when debug stepping is off.
 		return                                                                                    # Keep the player physically fixed during this brief camera movement.
-	var turn_direction := _read_turn()                                                         # Read this player's one-shot turn input.
+	var turn_direction := manual_turn_step_direction if manual_turn_step_enabled else _read_turn() # Reuse the sampled turn edge so manual mode cannot consume it twice.
 	if _is_turn_45_view() and turn_direction != 0:                                             # Reserve a new Q/E press for committing or cancelling the halfway turn.
 		_process_turn_45_input(turn_direction)                                                     # Apply the requested twist while leaving ordinary movement available at 45 degrees.
 		return                                                                                    # Do not also move during the twist button press.
@@ -1154,6 +1193,7 @@ func _render_bound_player_context() -> void:                                    
 		_show_stable()                                                                            # Compose the floor and visible wall sprites for this player's view.
 		_position_player()                                                                        # Project this player's local cell position into the playfield.
 		_position_opponent_sprite()                                                              # Project the other local player into this player's screen when visible.
+	_apply_wall_art_debug_visibility()                                                         # Let the debug toggle hide wall art after any renderer has selected its real source-map slots.
 	_update_perspective_extents_overlay()                                                       # Keep the actor-position diagnostics available for cardinal and diagonal views.
 	_update_view_slot_debug_overlay()                                                         # Redraw the blue player-view slot audit labels for this camera orientation.
 	_update_debug_map_overlay()                                                               # Redraw this player's top-down map with the shared maze and both players.
@@ -1170,6 +1210,15 @@ func _render_all_player_views() -> void:                                        
 		_render_bound_player_context()                                                           # Redraw that player's view and map.
 		_save_player_context(player_index)                                                       # Store any renderer-updated debug ids.
 	_bind_player_context(0)                                                                    # Leave player one bound after the all-player redraw.
+
+
+# _apply_wall_art_debug_visibility: Hides only selected transparent wall layers while preserving the floor, source graph, raycasts, and collisions.
+func _apply_wall_art_debug_visibility() -> void:
+	if render_wall_art:                                                                        # Each renderer has already made its selected wall sprites visible during this redraw.
+		return                                                                                   # Leave that normal compositing result untouched.
+	for wall_sprite in straight_wall_nodes.values():                                           # Visit the reusable sprites shared by straight, turn, forward, and strafe renderers.
+		if wall_sprite is Sprite2D:                                                              # Ignore any malformed future dictionary entry defensively.
+			wall_sprite.visible = false                                                            # Hide artwork only; do not alter map edges or selected-slot records.
 
 
 
@@ -1436,16 +1485,21 @@ func _update_view_slot_debug_overlay() -> void:                                 
 			var color := SLOT_GRID_DEBUG_WALL_COLOR if bool(source_presence.get(wall_id, false)) else SLOT_GRID_DEBUG_OPEN_COLOR # Match the actual selected art state.
 			_add_view_slot_debug_line(segment[0], segment[1], color, 1.0)                           # Draw the source segment projected onto this frame's floor grid.
 			_add_view_slot_debug_label(slot.get("label", (segment[0] + segment[1]) * 0.5), wall_id, color) # Keep the label on the same projected floor-grid segment.
+			if slot_graph_tuner_enabled:                                                           # Let the same current-screen tuner edit any active transition graph.
+				_add_slot_graph_tuner_handle(segment[0], wall_id, "a")                              # Draw the first source-vector endpoint with hover/selection feedback.
+				_add_slot_graph_tuner_handle(segment[1], wall_id, "b")                              # Draw the second source-vector endpoint with hover/selection feedback.
 		return
-	if not _is_turn_45_view():                                                                 # Cardinal camera views use the fixed authored floor-grid skeleton.
-		for grid_line in CARDINAL_PLAYER_GRID_LINES:                                               # Draw each reference floor-grid segment once, not once per wall slot.
-			_add_view_slot_debug_line(grid_line[0], grid_line[1], SLOT_GRID_DEBUG_OPEN_COLOR, 1.0)   # Keep this camera-local grid open-blue on the wall-free audit map.
-		for slot in screen_slots:                                                                  # Add the 01..28 labels at their paired fixed player-view positions.
+	if not _is_turn_45_view():                                                                 # Cardinal camera views now draw their editable slot vectors directly instead of an unrelated fixed skeleton.
+		for slot in screen_slots:                                                                  # Draw the 01..28 player-local vectors whose endpoints the tuner actually owns.
 			var wall_id := int(slot["id"])                                                          # Read the stable transparent-wall art-slot ID.
-			var label_position: Vector2 = slot["label"]                                              # Read its exact camera-local guide coordinate.
-			var label_color := SLOT_GRID_DEBUG_WALL_COLOR if bool(source_presence.get(wall_id, false)) else SLOT_GRID_DEBUG_LABEL_COLOR # Match label state to the same renderer selection used on the top-down guide.
-			_add_view_slot_debug_label(label_position, wall_id, label_color)                         # Draw one unrotated camera-view label.
-		return                                                                                    # Do not draw the old per-slot tick marks in cardinal views.
+			var segment: Array[Vector2] = [slot["a"], slot["b"]]                                   # Use exactly the two draggable player-local endpoints.
+			var line_color := SLOT_GRID_DEBUG_WALL_COLOR if bool(source_presence.get(wall_id, false)) else SLOT_GRID_DEBUG_OPEN_COLOR # Keep color tied to the unchanged top-down wall selection.
+			_add_view_slot_debug_line(segment[0], segment[1], line_color, 1.0)                       # Draw a vector that remains connected to its visible handles.
+			_add_view_slot_debug_label(slot["label"], wall_id, line_color)                           # Keep the slot number with its user-tuned vector.
+			if slot_graph_tuner_enabled:                                                             # Expose the main idle/cardinal guide through the same endpoint handles.
+				_add_slot_graph_tuner_handle(segment[0], wall_id, "a")                                # Make the first authored endpoint draggable.
+				_add_slot_graph_tuner_handle(segment[1], wall_id, "b")                                # Make the second authored endpoint draggable.
+		return                                                                                    # The old fixed skeleton is intentionally omitted because it cannot follow player-local edits.
 	for slot in screen_slots:                                                                  # Draw every local slot guide for the current cardinal or halfway-turn view.
 		var segment: Array[Vector2] = [slot["a"], slot["b"]]                                     # Read the screen-space endpoints from the guide table.
 		if segment.size() < 2:                                                                    # Skip invalid slot geometry defensively.
@@ -1455,6 +1509,9 @@ func _update_view_slot_debug_overlay() -> void:                                 
 		_add_view_slot_debug_line(segment[0], segment[1], line_color, 1.0)                        # Draw the projected slot line on the player-view grid.
 		var label_position: Vector2 = slot.get("label", (segment[0] + segment[1]) * 0.5)           # Use the tuned label position when the guide table supplies one.
 		_add_view_slot_debug_label(label_position, wall_id, line_color)                            # Give the player-view number the same selected/open state as its source edge.
+		if slot_graph_tuner_enabled:                                                               # Let 22/45/66 guides use the same no-snap point editor.
+			_add_slot_graph_tuner_handle(segment[0], wall_id, "a")                                  # Draw the first direct-edit endpoint.
+			_add_slot_graph_tuner_handle(segment[1], wall_id, "b")                                  # Draw the second direct-edit endpoint.
 
 
 
@@ -1485,17 +1542,17 @@ func _debug_slot_has_wall_by_id() -> Dictionary:                                
 # _view_slot_screen_segments: Returns the player-view guide segments for cardinal or halfway-turn slot audits.
 func _view_slot_screen_segments() -> Array:                                                 # Declare this function.
 	if _is_strafe_view():                                                                      # Side art has its own authored slot graphs and cannot use the stable cardinal guide.
-		return _strafe_view_slot_screen_segments()                                                # Keep local labels attached to the opaque regions of the active side art.
+		return _slot_graph_tuner_apply_screen_overrides(_strafe_view_slot_screen_segments())     # Tune the displayed side guide without changing its world-space source graph.
 	if _is_forward_view():                                                                     # Forward art has its own authored slot graphs and cannot use the stable cardinal guide.
-		return _forward_view_slot_screen_segments()                                                # Keep local labels attached to the opaque regions of the active Fwd art.
+		return _slot_graph_tuner_apply_screen_overrides(_forward_view_slot_screen_segments())     # Keep editable player-local tuning separate from the Fwd source graph.
 	if _is_turn_45_view():                                                                    # Use the explicit halfway-turn guide because physical map projection is not the screen diagram.
 		if turn_step != 2:                                                                        # Do not reuse the 45-degree guide at either interpolation stage.
-			return _turn_stage_slot_screen_segments()                                               # Build labels from the actual 22 or 66 wall artwork positions.
-		return _turn_45_view_slot_screen_segments()                                               # Return the 16-slot halfway-turn player-view guide.
+			return _slot_graph_tuner_apply_screen_overrides(_turn_stage_slot_screen_segments())    # Tune the displayed 22/66 guide without changing its rotated source edges.
+		return _slot_graph_tuner_apply_screen_overrides(_turn_45_view_slot_screen_segments())    # Tune the displayed 45-degree guide without changing its source graph.
 	var segments := []                                                                         # Store the camera-invariant straight-view guide records.
 	for slot in _cardinal_debug_slot_records():                                                # Use the same conceptual art-slot diagram as the top-down overlay.
 		segments.append(_view_slot_screen_record(int(slot["id"]), slot["screen_a"], slot["screen_b"], slot["screen_label"])) # Preserve the matching canonical label position without a Variant-array cast.
-	return segments                                                                            # Return all 28 stable player-view slot records.
+	return _slot_graph_tuner_apply_screen_overrides(segments)                                  # Let the idle/cardinal player-view graph be tuned independently of its source topology.
 
 
 # _turn_stage_slot_screen_segments: Returns the authored local guide that pairs every 22/66 art id to its source-map edge.
@@ -1624,6 +1681,20 @@ func _add_view_slot_debug_label(position: Vector2, wall_id: int, color: Color) -
 	label.scale = Vector2(0.30, 0.30)                                                         # Keep all-slot labels small enough to coexist in the playfield.
 	label.position = position + Vector2(-4.0, -4.0)                                           # Center the label around the projected slot line.
 	view_slot_overlay.add_child(label)                                                        # Add the label to the active player-view slot overlay.
+
+
+# _add_slot_graph_tuner_handle: Draws a clearly clickable endpoint and the selected translation gizmo.
+func _add_slot_graph_tuner_handle(position: Vector2, wall_id: int, endpoint_key: String) -> void:
+	var selected := not slot_graph_tuner_drag.is_empty() and int(slot_graph_tuner_drag.get("id", -1)) == wall_id and String(slot_graph_tuner_drag.get("endpoint", "")) == endpoint_key # Keep the captured handle yellow while it is being moved.
+	var hovered := not slot_graph_tuner_hover.is_empty() and int(slot_graph_tuner_hover.get("id", -1)) == wall_id and String(slot_graph_tuner_hover.get("endpoint", "")) == endpoint_key # Brighten the handle directly under the mouse.
+	var color := Color(1.0, 0.85, 0.05, 1.0) if selected else (Color(0.2, 1.0, 1.0, 1.0) if hovered else Color(0.1, 0.45, 1.0, 1.0)) # Distinguish selected, hover, and idle states.
+	var handle := Polygon2D.new()                                                              # Use a diamond so endpoints remain visible over thin blue guide lines.
+	handle.polygon = PackedVector2Array([position + Vector2(0, -3), position + Vector2(3, 0), position + Vector2(0, 3), position + Vector2(-3, 0)]) # Draw a six-pixel draggable target.
+	handle.color = color                                                                       # Apply the current interaction state color.
+	view_slot_overlay.add_child(handle)                                                        # Keep the handle in the same clipped player-view space as its graph.
+	if selected:                                                                               # Add a simple crosshair gizmo around the actively translated point.
+		_add_view_slot_debug_line(position - Vector2(10, 0), position + Vector2(10, 0), color, 1.0) # Expose horizontal translation direction.
+		_add_view_slot_debug_line(position - Vector2(0, 10), position + Vector2(0, 10), color, 1.0) # Expose vertical translation direction.
 
 
 
@@ -2832,23 +2903,15 @@ func _forward_slot_records() -> Array:
 	return FWD_1_DIAGNOSTIC_SLOT_EDGES if _active_forward_visual_stage() == 1 else FWD_2_DIAGNOSTIC_SLOT_EDGES # Use the authored frame-specific source map; never synthesize a generic fan.
 
 
-# _forward_view_slot_screen_segments: Places Fwd debug labels directly on their paired transparent wall art.
+# _forward_view_slot_screen_segments: Projects the authored Fwd source graph directly onto its painted floor perspective.
 func _forward_view_slot_screen_segments() -> Array:
-	var segments := []                                                                         # Store one local debug mark per numbered Fwd asset.
-	var textures := _active_forward_wall_textures()                                            # Use the exact texture set currently being composed.
-	for slot in _forward_slot_records():                                                       # Visit each authored source-map edge once.
-		var wall_id := int(slot["id"])                                                         # Keep the art name, world edge, and local debug mark tied to one id.
-		var texture: Texture2D = textures.get(wall_id)                                            # Read the corresponding transparent full-frame wall layer.
-		if texture == null:                                                                      # Skip an incomplete art set without fabricating a local position.
-			continue
-		var bounds := _texture_opaque_bounds(texture)                                            # Measure where this art is actually visible in the 160x120 camera frame.
-		if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:                                        # Ignore an empty transparent layer defensively.
-			continue
-		var label := bounds.get_center()                                                         # Put the number on the matching visible wall rather than on the cardinal floor grid.
-		var tangent := Vector2.RIGHT if bounds.size.x >= bounds.size.y else Vector2.DOWN         # Mirror the dominant visible wall orientation with a short blue tick.
-		var half := clampf(maxf(bounds.size.x, bounds.size.y) * 0.14, 4.0, 10.0)                 # Keep the guide readable without redrawing a second floor mesh.
-		segments.append(_view_slot_screen_record(wall_id, label - tangent * half, label + tangent * half, label)) # Keep this local label 1:1 with the actual overlay asset.
-	return segments                                                                             # Return the active Fwd frame's local debug graph.
+	var segments := []                                                                         # Store one local debug vector per numbered Fwd asset.
+	for slot in _forward_slot_records():                                                       # Visit the same immutable local topology used by renderer selection and the top-down graph.
+		var screen_a := _forward_authored_floor_screen_point(slot["a"])                          # Place the first source endpoint on the matching Fwd floor grid.
+		var screen_b := _forward_authored_floor_screen_point(slot["b"])                          # Place the second source endpoint on that same player-local floor grid.
+		var wall_id := int(slot["id"])                                                          # Keep source edge, transparent art ID, and local vector 1:1.
+		segments.append(_view_slot_screen_record(wall_id, screen_a, screen_b, (screen_a + screen_b) * 0.5)) # Let the user fine-tune a coherent connected graph rather than isolated texture ticks.
+	return segments                                                                             # Return the active Fwd frame's player-local slot graph.
 
 
 # _forward_slot_world_segment: Rotates one forward-grid source edge into the cardinal world-map basis.
@@ -2951,11 +3014,194 @@ func _render_strafe_wall_view() -> void:
 
 # _strafe_slot_records: Builds independent stage-specific side-transition source graphs from the authored Right 1/2/3 diagrams.
 func _strafe_slot_records() -> Array:
+	var base: Array = []                                                                      # Start with the immutable authored graph for the visible side frame.
 	if strafe_step == 1:                                                                      # Right 1 now uses the complete 24-slot topology supplied in the user's diagram.
-		return STRAFE_1_DIAGNOSTIC_SLOT_EDGES                                                    # Keep its numbered source graph independent from the later Right stages.
-	if strafe_step == 2:                                                                      # Right 2 uses its own authored 22-slot topology supplied in the user's diagram.
-		return STRAFE_2_DIAGNOSTIC_SLOT_EDGES                                                    # Keep its asymmetric final column and leaving/entering edges independent from Right 1.
-	return STRAFE_3_DIAGNOSTIC_SLOT_EDGES                                                      # Right 3 uses its completed authored 24-slot topology rather than the temporary generated fallback.
+		base = STRAFE_1_DIAGNOSTIC_SLOT_EDGES                                                    # Keep its numbered source graph independent from the later Right stages.
+	elif strafe_step == 2:                                                                     # Right 2 uses its own authored 22-slot topology supplied in the user's diagram.
+		base = STRAFE_2_DIAGNOSTIC_SLOT_EDGES                                                    # Keep its asymmetric final column and leaving/entering edges independent from Right 1.
+	else:                                                                                       # Use Right 3's completed topology at the final strafe frame.
+		base = STRAFE_3_DIAGNOSTIC_SLOT_EDGES                                                    # Keep Right 3 independent of all other frame data.
+	return base                                                                                # Keep source topology immutable: it is the authoritative world-map and wall-selection graph.
+
+
+# _slot_graph_records_with_overrides: Applies saved JSON endpoint edits without mutating the authored constants.
+func _slot_graph_records_with_overrides(context_key: String, base: Array) -> Array:
+	var result: Array = []                                                                     # Return independent dictionaries so tuning never edits a constant table.
+	var context: Dictionary = slot_graph_tuner_overrides.get(context_key, {})                  # Read overrides for exactly this visible graph.
+	for original in base:                                                                      # Preserve every untouched authored slot.
+		var slot: Dictionary = original.duplicate()                                              # Copy its metadata and endpoints.
+		var saved: Dictionary = context.get(str(int(slot["id"])), {})                           # Look up a possible edited endpoint pair.
+		if not saved.is_empty():                                                                 # Replace only fields explicitly saved by the tuner.
+			slot["a"] = Vector2(float(saved["a"][0]), float(saved["a"][1]))                    # Restore the first local source endpoint.
+			slot["b"] = Vector2(float(saved["b"][0]), float(saved["b"][1]))                    # Restore the second local source endpoint.
+		result.append(slot)                                                                      # Keep the corrected slot in the active graph.
+	return result                                                                              # Return the live graph used by map selection and rendering.
+
+
+# _slot_graph_tuner_context_key: Names the currently displayed local graph without encoding its world orientation.
+func _slot_graph_tuner_context_key() -> String:
+	if _is_strafe_view():                                                                     # Right art has three independently authored player-local graphs.
+		return "strafe_%d" % strafe_step                                                        # Keep Right 1, 2, and 3 calibration independent.
+	if _is_forward_view():                                                                    # Forward and backward share art but need separately reviewable camera passes.
+		var travel := "backward" if forward_transition_name == "backward" else "forward"      # Preserve the direction being calibrated in the saved JSON key.
+		return "%s_%d" % [travel, _active_forward_visual_stage()]                              # Keep Fwd 1 and Fwd 2 independent for each travel direction.
+	if _is_turn_45_view():                                                                   # Use the authored visible turn phase, regardless of clockwise/counterclockwise playback.
+		return "turn_%d" % _active_turn_visual_stage()                                         # Share the matching 22, 45, or 66 player-local guide across map rotation.
+	return "idle_cardinal"                                                                   # Cardinal idle views use one camera-local graph whose world source rotates beneath it.
+
+
+# _slot_graph_tuner_apply_screen_overrides: Applies only saved player-view coordinates and leaves world graph selection untouched.
+func _slot_graph_tuner_apply_screen_overrides(base: Array) -> Array:
+	var result: Array = []                                                                    # Return independent records so constants and source topology remain immutable.
+	var context: Dictionary = slot_graph_tuner_overrides.get(_slot_graph_tuner_context_key(), {}) # Read only the graph currently visible to the player.
+	for original in base:                                                                     # Preserve all untouched records exactly as authored.
+		var slot: Dictionary = original.duplicate()                                             # Copy this local-screen record before adding optional display calibration.
+		var original_a: Vector2 = slot["a"]                                                     # Keep the pre-tune midpoint so labels travel coherently with endpoint edits.
+		var original_b: Vector2 = slot["b"]                                                     # Keep the matching second endpoint.
+		var saved: Dictionary = context.get(str(int(slot["id"])), {})                           # Read the optional saved endpoints for this numbered art slot.
+		if saved.has("a"):                                                                     # Override only the handle the user actually moved.
+			slot["a"] = Vector2(float(saved["a"][0]), float(saved["a"][1]))                    # Restore JSON-safe player-view coordinates.
+		if saved.has("b"):                                                                     # Keep the untouched endpoint at its authored location when only one handle changed.
+			slot["b"] = Vector2(float(saved["b"][0]), float(saved["b"][1]))                    # Restore the second JSON-safe player-view coordinate.
+		var original_mid := (original_a + original_b) * 0.5                                     # Measure where the slot was authored before local tuning.
+		var tuned_mid: Vector2 = (slot["a"] + slot["b"]) * 0.5                                # Measure the new player-view centre.
+		slot["label"] = slot.get("label", original_mid) + (tuned_mid - original_mid)           # Carry the numbered label with its edited local guide segment.
+		result.append(slot)                                                                     # Keep the adjusted display record without touching map vectors.
+	return result                                                                             # Return the current local calibration.
+
+
+# _handle_slot_graph_tuner_input: Lets whichever player-local graph is currently displayed edit only its screen endpoints.
+func _handle_slot_graph_tuner_input(event: InputEvent) -> bool:
+	if not slot_graph_tuner_enabled or _view_slot_screen_segments().is_empty():               # Keep ordinary play untouched when no local slot graph is visible.
+		return false                                                                             # Do not consume normal input.
+	if not (event is InputEventMouseButton or event is InputEventMouseMotion):                 # Ignore keyboard and controller events.
+		return false                                                                             # Leave them for normal game handling.
+	var screen_point: Vector2 = maze_content.get_global_transform_with_canvas().affine_inverse() * event.position # Convert window pixels into the active 160x120 player-view space.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:             # Start or stop one endpoint drag.
+		if event.pressed:                                                                        # Search visible endpoint handles on press.
+			var handle := _slot_graph_tuner_handle_at(screen_point)                                # Choose one logical intersection rather than the first overlapping screen primitive.
+			if not handle.is_empty():                                                              # Begin a drag only when the pointer hits a visible tuner handle.
+				var selected_slot := _slot_graph_tuner_slot_endpoint(int(handle["id"]), String(handle["endpoint"])) # Recover this logical endpoint's current player-local point.
+				if not selected_slot.is_empty():                                                     # Protect against a stale endpoint after the graph changes.
+					slot_graph_tuner_undo.append(slot_graph_tuner_overrides.duplicate(true))           # Save one complete pre-drag snapshot for Ctrl+Z.
+					slot_graph_tuner_drag = _slot_graph_tuner_drag_group(selected_slot["point"], int(handle["id"]), String(handle["endpoint"])) # Capture only the authored shared intersection.
+					slot_graph_tuner_hover = handle.duplicate()                                        # Keep the selected handle visibly active immediately.
+					# The normal _process render immediately following this input refreshes the gizmo once; avoid a second full two-player redraw here.
+					return true                                                                        # Consume this mouse press.
+			return false                                                                            # Let clicks away from a handle behave normally.
+		slot_graph_tuner_drag.clear()                                                            # Release the active handle.
+		return true                                                                              # Consume the release following a drag.
+	if event is InputEventMouseMotion and not slot_graph_tuner_drag.is_empty():                # Update the captured endpoint while the mouse moves.
+		var anchor: Vector2 = slot_graph_tuner_drag["anchor"]                                  # Read the player-view position shared by the selected intersection.
+		var translation := screen_point - anchor                                                 # Move every joined local projection endpoint by one identical screen offset.
+		for member in slot_graph_tuner_drag["members"]:                                         # Apply the shared translation to all slots meeting at this intersection.
+			_slot_graph_tuner_set_screen_endpoint(int(member["id"]), String(member["endpoint"]), member["screen"] + translation) # Preserve the intersection without changing source-map vectors.
+		# The next normal frame redraws this local overlay once; do not synchronously rebuild both player views for every mouse event.
+		return true                                                                              # Consume this drag motion.
+	if event is InputEventMouseMotion:                                                         # Refresh the hover state even when no endpoint is currently captured.
+		var hover := _slot_graph_tuner_handle_at(screen_point)                                   # Find the nearest visible endpoint under the cursor.
+		if hover != slot_graph_tuner_hover:                                                      # Redraw only when the interaction state has changed.
+			slot_graph_tuner_hover = hover                                                         # Store the new hover identity (or an empty dictionary).
+			# The ordinary frame render updates hover color without adding an input-event redraw.
+		return not hover.is_empty()                                                              # Consume motion only when it is over a graph handle.
+	return false                                                                                # Leave unrelated mouse events untouched.
+
+
+func _strafe_source_point_from_screen(screen_point: Vector2) -> Vector2:
+	var depth: float = clampf(4.96 - (screen_point.y - 44.0) * 4.0 / 52.0, 0.96, 4.96)        # Invert the authored FloorRight depth bands approximately.
+	var half_width: float = lerpf(80.0, 10.0, (depth - 0.96) / 4.0)                           # Approximate the painted FloorRight trapezoid width at this depth.
+	var lateral: float = 0.5 + (screen_point.x - 80.0) / maxf(half_width, 0.001)              # Convert screen x back into the active graph's local lateral coordinate.
+	return Vector2(lateral, depth)                                                             # Return a grid-valid local source point.
+
+
+func _slot_graph_tuner_handle_at(screen_point: Vector2) -> Dictionary:
+	if _slot_graph_tuner_context_key() != "turn_2":                                          # Only the 45-degree guide has intentionally overlapping but distinct authored intersections.
+		for slot in _view_slot_screen_segments():                                                # Use the first actual handle hit for ordinary graphs; grouping is resolved later by its authored endpoint key.
+			for endpoint_key in ["a", "b"]:
+				if screen_point.distance_to(slot[endpoint_key]) <= 5.0:
+					return {"id": int(slot["id"]), "endpoint": endpoint_key}
+		return {}
+	var best: Dictionary = {}                                                                 # Keep the most useful logical node under this overlapping visual point.
+	var best_group_size := -1                                                                 # Prefer the largest authored intersection when several handles share screen pixels.
+	for slot in _view_slot_screen_segments():                                                  # Test every endpoint visible in the active player-view graph.
+		for endpoint_key in ["a", "b"]:                                                        # Check both editable ends of each vector.
+			if screen_point.distance_to(slot[endpoint_key]) <= 5.0:                                # Match the visible diamond's grab radius.
+				var candidate := {"id": int(slot["id"]), "endpoint": endpoint_key}              # Identify this endpoint before checking its logical intersection.
+				var group_size: int = _slot_graph_tuner_drag_group(slot[endpoint_key], int(slot["id"]), endpoint_key)["members"].size() # Resolve authored grouping instead of trusting visual overlap.
+				if group_size > best_group_size:                                                     # Prefer the shared node the user is most likely trying to tune.
+					best = candidate                                                                  # Keep that logical handle identity.
+					best_group_size = group_size                                                      # Remember its authored intersection size.
+	return best                                                                                # Report no handle only when the pointer misses every endpoint.
+
+
+# _slot_graph_tuner_slot_endpoint: Resolves one live local-screen endpoint by its stable slot identity.
+func _slot_graph_tuner_slot_endpoint(wall_id: int, endpoint_key: String) -> Dictionary:
+	for slot in _view_slot_screen_segments():                                                  # Search the graph currently displayed to the player.
+		if int(slot["id"]) == wall_id:                                                          # Match the numbered transparent-wall slot.
+			return {"point": slot[endpoint_key]}                                                  # Return its current display point, including any unsaved edits.
+	return {}                                                                                  # Avoid creating a drag from an endpoint absent in this graph.
+
+
+func _slot_graph_tuner_drag_group(screen_position: Vector2, wall_id: int, endpoint_key: String) -> Dictionary:
+	var members: Array = []                                                                    # Collect every graph endpoint that visually shares this intersection.
+	var group_key := _slot_graph_tuner_endpoint_group_key(wall_id, endpoint_key, screen_position) # Resolve authored connectivity before considering visual overlap.
+	for slot in _view_slot_screen_segments():                                                  # Compare the visible current-frame endpoint positions.
+		for candidate_key in ["a", "b"]:                                                       # Include both ends of every slot line.
+			if _slot_graph_tuner_endpoint_group_key(int(slot["id"]), candidate_key, slot[candidate_key]) == group_key: # Move only endpoints which belong to this authored graph intersection.
+				members.append({"id": int(slot["id"]), "endpoint": candidate_key, "screen": slot[candidate_key]}) # Keep each joined local projection endpoint and its pre-drag location.
+	var anchor := screen_position                                                              # Use the clicked player-view point as the translation anchor.
+	return {"id": wall_id, "endpoint": endpoint_key, "anchor": anchor, "members": members} # Preserve the whole intersection for the drag lifecycle.
+
+
+# _slot_graph_tuner_endpoint_group_key: Gives a display endpoint an authored intersection identity instead of merging layers that merely overlap on screen.
+func _slot_graph_tuner_endpoint_group_key(wall_id: int, endpoint_key: String, screen_position: Vector2) -> String:
+	if _slot_graph_tuner_context_key() == "turn_2":                                         # The 45-degree turn guide has two distinct depth layers that intentionally cross at the same pixels.
+		var key := "%02d:%s" % [wall_id, endpoint_key]                                         # Name this exact hand-authored guide endpoint.
+		if key in ["12:b", "13:a", "15:b", "16:a"]:                                         # Keep the actual near-turn four-way junction joined.
+			return "turn_45_near_junction"                                                        # Move 12/13/15/16 as one intersection.
+		if key in ["08:b", "09:a"]:                                                           # Keep the earlier depth layer independent even though it currently projects to the same point.
+			return "turn_45_middle_junction"                                                      # Move 08/09 without disturbing the nearer four-way node.
+	return "%s:%.2f:%.2f" % [_slot_graph_tuner_context_key(), screen_position.x, screen_position.y] # In all other graphs, exact matching display endpoints form one intersection.
+
+
+func _slot_graph_tuner_strafe_source_endpoint(wall_id: int, endpoint_key: String) -> Vector2:
+	for slot in _strafe_slot_records():                                                        # Read the live graph including any earlier unsaved tuner edits.
+		if int(slot["id"]) == wall_id: return slot[endpoint_key]                               # Return the requested authoritative local endpoint.
+	return Vector2.ZERO                                                                         # Fall back safely only for a stale handle after a graph change.
+
+
+func _slot_graph_tuner_undo_last_edit() -> bool:
+	if not slot_graph_tuner_enabled or slot_graph_tuner_undo.is_empty(): return false          # Keep ordinary Ctrl+Z untouched outside an active tuner edit history.
+	slot_graph_tuner_overrides = slot_graph_tuner_undo.pop_back()                              # Restore the complete source-vector state from before the drag.
+	slot_graph_tuner_drag.clear()                                                              # Drop any stale captured handle after history travel.
+	# The next normal frame restores the local overlay; top-down source selection never changed.
+	return true                                                                                # Report that Ctrl+Z was consumed by the tuner.
+
+
+func _slot_graph_tuner_set_screen_endpoint(wall_id: int, endpoint_key: String, point: Vector2) -> void:
+	var context_key := _slot_graph_tuner_context_key()                                        # Keep edits isolated to the graph presently being viewed.
+	var context: Dictionary = slot_graph_tuner_overrides.get(context_key, {})                  # Read or create this frame's overrides.
+	var existing: Dictionary = context.get(str(wall_id), {})                                   # Preserve the opposite endpoint when changing one handle.
+	if existing.is_empty():                                                                    # Seed a new override from the currently displayed player-view endpoints.
+		for slot in _view_slot_screen_segments():                                                 # Find the matching visible slot.
+			if int(slot["id"]) == wall_id:                                                        # Stop at the selected slot.
+				existing = {"a": [slot["a"].x, slot["a"].y], "b": [slot["b"].x, slot["b"].y]} # Copy both player-local endpoints before replacing one.
+				break
+	existing[endpoint_key] = [point.x, point.y]                                                # Store the snapped edited endpoint as JSON-safe numbers.
+	context[str(wall_id)] = existing                                                           # Write the edited slot into its frame context.
+	slot_graph_tuner_overrides[context_key] = context                                          # Retain the context for live selection and later saving.
+
+
+func _load_slot_graph_tuner_overrides() -> void:
+	if not FileAccess.file_exists(SLOT_GRAPH_TUNER_PATH): return                               # Keep first launch clean until the user saves a guide.
+	var text := FileAccess.get_file_as_string(SLOT_GRAPH_TUNER_PATH)                           # Read saved project-local tuner data.
+	var parsed: Variant = JSON.parse_string(text)                                              # Decode the JSON object without relying on Variant inference.
+	if parsed is Dictionary: slot_graph_tuner_overrides = parsed                               # Accept only the expected dictionary root.
+
+
+func _save_slot_graph_tuner_overrides() -> void:
+	var file: FileAccess = FileAccess.open(SLOT_GRAPH_TUNER_PATH, FileAccess.WRITE)            # Save to the visible project file requested by the user.
+	if file != null: file.store_string(JSON.stringify(slot_graph_tuner_overrides, "\t"))       # Preserve readable indented JSON for review and Git.
 
 
 
@@ -2973,12 +3219,40 @@ func _strafe_slot_world_segment(slot: Dictionary) -> Array[Vector2]:
 func _strafe_view_slot_screen_segments() -> Array:
 	var segments := []                                                                         # Store one fixed floor-grid record per numbered side-transition slot.
 	for slot in _strafe_slot_records():                                                        # Visit every authored source edge once.
-		var screen_a := _strafe_authored_floor_screen_point(slot["a"])                         # Project from the frame's stable authored graph, never from a moving world camera.
-		var screen_b := _strafe_authored_floor_screen_point(slot["b"])                         # Keep the paired endpoint on that same immutable FloorRight perspective grid.
+		var screen_a := _strafe_authored_floor_screen_point(slot["a"])                           # Start with the immutable authored player-local projection.
+		var screen_b := _strafe_authored_floor_screen_point(slot["b"])                           # Leave source geometry untouched; the wrapper applies display-only edits.
 		var wall_id := int(slot["id"])                                                        # Keep the art id, world edge, and player-view floor mark 1:1.
 		var label_position := (screen_a + screen_b) * 0.5                                       # Put the number at the centre of its own authored floor-grid segment.
 		segments.append(_view_slot_screen_record(wall_id, screen_a, screen_b, label_position)) # Store the floor-grid line and its paired label.
 	return segments                                                                             # Return the active side-transition floor-grid graph.
+
+
+func _slot_graph_tuner_screen_point(wall_id: int, endpoint_key: String, fallback: Vector2) -> Vector2:
+	var context: Dictionary = slot_graph_tuner_overrides.get(_slot_graph_tuner_context_key(), {}) # Read only this frame's player-view projection edits.
+	var saved: Dictionary = context.get(str(wall_id), {})                                     # Find the optional per-slot local screen coordinates.
+	if saved.has(endpoint_key):                                                                # Use a direct player-view point when the tuner has supplied one.
+		return Vector2(float(saved[endpoint_key][0]), float(saved[endpoint_key][1]))            # Restore JSON-safe [x, y] coordinates.
+	return fallback                                                                             # Preserve the authored projection until a handle is moved.
+
+
+
+# _forward_authored_floor_screen_point: Maps one Fwd 1/2 source-grid point onto the ordinary forward floor perspective.
+func _forward_authored_floor_screen_point(local_point: Vector2) -> Vector2:
+	var row_depths: Array[float] = [-0.04, 0.96, 1.96, 2.96, 3.96, 4.96]                     # Keep the entered-cell edge plus the five authored Fwd depth rows.
+	var row_half_widths: Array[float] = [80.0, 53.333, 40.0, 30.0, 25.0, 10.0]              # Match the painted Fwd floor from full near width to the narrow distant corridor.
+	var row_y: Array[float] = [112.0, 96.0, 70.0, 58.0, 50.0, 44.0]                         # Keep vertices on the visible floor instead of clustering them on wall art.
+	var depth: float = clampf(local_point.y, row_depths[0], row_depths[row_depths.size() - 1]) # Keep malformed future entries inside the authored perspective range.
+	var lower_index: int = 0                                                                  # Find the near-side row surrounding this graph point.
+	for index in range(row_depths.size() - 1):                                                # Locate the adjacent pair of authored depth rows.
+		if depth >= row_depths[index] and depth <= row_depths[index + 1]:                       # Stop once the point lies within this perspective band.
+			lower_index = index                                                                    # Preserve its index for interpolation.
+			break                                                                                  # No later band can also contain the point.
+	var upper_index: int = mini(lower_index + 1, row_depths.size() - 1)                      # Clamp at the far row.
+	var span: float = maxf(row_depths[upper_index] - row_depths[lower_index], 0.001)         # Guard against a malformed zero-height band.
+	var blend: float = clampf((depth - row_depths[lower_index]) / span, 0.0, 1.0)            # Interpolate through the painted floor perspective between rows.
+	var half_width: float = lerpf(row_half_widths[lower_index], row_half_widths[upper_index], blend) # Taper with depth while retaining the authored centerline.
+	var screen_y: float = lerpf(row_y[lower_index], row_y[upper_index], blend)               # Keep the endpoint exactly on its depth band.
+	return Vector2(80.0 + local_point.x * half_width, screen_y)                              # Fwd source x=0 is the camera centreline, unlike the side-transition graph's x=0.5 seam.
 
 
 
@@ -4898,10 +5172,11 @@ func _begin_turn_passthrough(target: String) -> void:
 
 
 # _advance_turn_passthrough: Finishes a 22/66-degree interpolation and enters its stable destination view.
-func _advance_turn_passthrough(delta: float) -> void:
-	turn_passthrough_timer += delta                                                           # Accumulate visible time for the current interpolation frame.
-	if turn_passthrough_timer < TURN_PASSTHROUGH_SECONDS:                                     # Keep the authored 22/66 art on screen for its full duration.
-		return                                                                                   # Wait until the frame has completed.
+func _advance_turn_passthrough(delta: float, manual_step: bool = false) -> void:
+	if not manual_step:                                                                        # Time stages only during normal automatic playback.
+		turn_passthrough_timer += delta                                                          # Accumulate visible time for the current interpolation frame.
+		if turn_passthrough_timer < TURN_PASSTHROUGH_SECONDS:                                   # Keep the authored 22/66 art on screen for its full duration.
+			return                                                                                 # Wait until the frame has completed.
 	var target := turn_passthrough_target                                                     # Preserve the destination before clearing transient state.
 	var preserved_world_position := _current_player_world_position()                          # Capture the physical player point before changing the camera basis.
 	is_turn_passthrough = false                                                               # Resume ordinary input after this function reaches a stable orientation.
