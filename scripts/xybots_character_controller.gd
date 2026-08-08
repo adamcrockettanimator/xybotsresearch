@@ -52,6 +52,7 @@ const FLOOR_RIGHT_3_TEXTURE := "res://assets/Environment/FloorRight_3.png"      
 const FORWARD_PASSTHROUGH_SECONDS := 0.075                                                   # Keep both forward camera frames brisk while still making their geometry readable.
 const FORWARD_RUN_ANIMATION_SPEED := 1.75                                                     # Let the body visibly keep running while the two authored camera frames catch up.
 const STRAFE_PASSTHROUGH_SECONDS := 0.075                                                    # Keep each authored side-camera frame equally brisk during ordinary automatic strafing.
+const GRANULAR_STAGE_TRAVEL_DISTANCE := 0.34                                                  # Require real held-stick travel between authored camera anchors in granular movement mode.
 const TURN_STAGE_SEQUENCE_NAMES := ["idle", "turn_22", "turn_45", "turn_66"]               # Name the cardinal and authored intermediate turn views for debug status.
 const PLAYER_FRAMES := "res://assets/frames/renamed_trimmed_sequence/capture_frames.tres"   # Point to the baked player animation SpriteFrames resource.
 const PLAYER_IDLE_TEXTURE := "res://assets/frames/IdleN_AimN/IdleN_AimN.png"                # Point to the user-provided first-player idle sprite.
@@ -648,6 +649,8 @@ var strafe_passthrough_timer := 0.0                                             
 var strafe_transition_name := ""                                                           # Remember whether the staged crossing commits to local left or local right.
 var manual_strafe_step_enabled := true                                                      # Let the debug menu hold each side-camera stage until a fresh lateral input advances it.
 var was_manual_strafe_step_pressed := false                                                 # Latch lateral input so a held stick cannot skip multiple side-camera stages.
+var granular_movement_enabled := true                                                        # Start in spatial authored-camera-anchor movement; F3 remains available to compare the legacy cell-based mode.
+var granular_stage_travel := 0.0                                                            # Accumulate held travel between neighboring authored camera anchors.
 var grid_position := Vector2i(0, 3)                                                         # Track the current cell in the top-down maze map.
 var local_floor_position := HOME_LOCAL_FLOOR_POSITION                                       # Track the character position inside the current tile.
 var run_dir := DIR_N                                                                        # Track the body movement direction used for animation selection.
@@ -755,6 +758,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "manual_forward", "Manual Forward")                      # Hold Fwd frames until the player deliberately presses forward again.
 	_add_debug_menu_check(content, "manual_strafe", "Manual Strafe")                        # Hold side-camera frames until the player deliberately presses sideways again.
 	_add_debug_menu_check(content, "manual_turn", "Manual Turn")                            # Hold 22/66 frames until a fresh Q/E or right-stick turn input advances them.
+	_add_debug_menu_check(content, "granular_movement", "Granular Movement")                # Switch from one-camera-per-cell travel to spatial authored camera anchors.
 	_add_debug_menu_check(content, "slot_tuner", "Slot Graph Tuner")                        # Enable current-screen graph endpoint dragging.
 	var save_tuner := Button.new()                                                             # Provide an explicit, reversible save action.
 	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
@@ -811,6 +815,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return manual_strafe_step_enabled                                                       # Return whether side-camera frames wait for repeated lateral input.
 		"manual_turn":
 			return manual_turn_step_enabled                                                         # Return whether 22/66 turn frames wait for repeated turn input.
+		"granular_movement":
+			return granular_movement_enabled                                                         # Return whether the player travels through stable authored camera anchors.
 		"slot_tuner":
 			return slot_graph_tuner_enabled                                                        # Return whether the current graph accepts endpoint drags.
 		_:
@@ -839,6 +845,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			manual_strafe_step_enabled = enabled                                                    # Toggle input-driven Right 1 -> 2 -> 3 stepping.
 		"manual_turn":
 			manual_turn_step_enabled = enabled                                                      # Toggle input-driven 22/66 turn stepping.
+		"granular_movement":
+			granular_movement_enabled = enabled                                                      # Toggle sustained-input traversal through stable intermediate camera anchors.
 		"slot_tuner":
 			slot_graph_tuner_enabled = enabled                                                     # Toggle direct editing of the graph currently on screen.
 			if enabled: show_slot_grid_debug = true                                                 # Ensure the draggable blue endpoints are visible when tuning starts.
@@ -952,6 +960,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"strafe_passthrough_timer": 0.0,                                                            # Store elapsed automatic side-camera stage time.
 		"strafe_transition_name": "",                                                             # Store the pending left/right cell-crossing result after Right 3/1.
 		"was_manual_strafe_step_pressed": false,                                                    # Store the one-shot lateral-step input latch.
+		"granular_stage_travel": 0.0,                                                               # Store held travel between neighboring authored camera anchors.
 		"grid_position": start_cell,                                                               # Store this player's source-map cell.
 		"local_floor_position": HOME_LOCAL_FLOOR_POSITION,                                        # Store this player's position inside the current cell.
 		"run_dir": DIR_N,                                                                          # Store this player's current body movement animation direction.
@@ -1041,6 +1050,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	strafe_passthrough_timer = float(state.get("strafe_passthrough_timer", 0.0))              # Restore elapsed time in the active side-camera frame.
 	strafe_transition_name = String(state.get("strafe_transition_name", ""))                 # Restore the side-crossing result that follows the third frame.
 	was_manual_strafe_step_pressed = bool(state.get("was_manual_strafe_step_pressed", false)) # Restore the one-shot side-step input latch.
+	granular_stage_travel = float(state.get("granular_stage_travel", 0.0))                    # Restore held travel between neighboring authored camera anchors.
 	grid_position = state.get("grid_position", Vector2i.ZERO)                                  # Restore this player's current map cell.
 	local_floor_position = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)        # Restore this player's local cell position.
 	run_dir = String(state.get("run_dir", DIR_N))                                              # Restore this player's run animation direction.
@@ -1083,6 +1093,7 @@ func _save_player_context(player_index: int) -> void:                           
 	state["strafe_passthrough_timer"] = strafe_passthrough_timer                              # Save elapsed time in the active side-camera frame.
 	state["strafe_transition_name"] = strafe_transition_name                                  # Save the side-crossing result that follows the third frame.
 	state["was_manual_strafe_step_pressed"] = was_manual_strafe_step_pressed                  # Save the one-shot side-step input latch.
+	state["granular_stage_travel"] = granular_stage_travel                                    # Save held travel between neighboring authored camera anchors.
 	state["grid_position"] = grid_position                                                     # Save this player's map cell.
 	state["local_floor_position"] = local_floor_position                                       # Save this player's local cell position.
 	state["run_dir"] = run_dir                                                                  # Save this player's run animation direction.
@@ -1115,46 +1126,55 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
 	var manual_forward_step_just_pressed := _read_manual_forward_step_input() if manual_forward_step_enabled else false # Sample every enabled frame so a held stick cannot skip stages.
 	var manual_strafe_step_just_pressed := _read_manual_strafe_step_input() if manual_strafe_step_enabled else false # Sample every enabled frame so a held stick cannot skip side stages.
-	var manual_turn_step_direction := _read_turn() if manual_turn_step_enabled else 0         # Sample a fresh Q/E or right-stick turn only when turn-stage inspection is enabled.
+	var sampled_turn_direction := _read_turn() if (manual_turn_step_enabled or granular_movement_enabled) else 0 # Sample a fresh turn once when either debug mode needs deliberate stage control.
+	var manual_turn_step_direction := sampled_turn_direction if manual_turn_step_enabled else 0 # Preserve the existing Manual Turn behavior without sampling the turn latch twice.
 	if is_transitioning:                                                                       # Advance captured transition playback for this player if enabled.
 		_advance_transition(delta)                                                                # Move this player's transition to the next frame when needed.
 		return                                                                                    # Return after transition processing.
 	if forward_step != 0:                                                                      # Keep input frozen while either authored forward camera frame is on screen.
-		character_is_moving = true                                                               # Keep the player in the running state while the camera crosses the cell edge.
-		_keep_forward_run_animating()                                                            # Force continuous, slightly faster run playback so the camera transition cannot read as a body pause.
-		if manual_forward_step_enabled:                                                           # Hold Fwd 1 and Fwd 2 until the player presses forward again.
-			if manual_forward_step_just_pressed:                                                    # Advance exactly one authored stage per fresh forward input.
-				_advance_forward_passthrough(delta, true)                                             # Move Fwd 1 -> Fwd 2 or Fwd 2 -> destination immediately.
+		if granular_movement_enabled:                                                             # Let held directional travel choose the next Fwd anchor later in this frame.
+			pass                                                                                    # Do not advance on time or a key press; the spatial travel helper handles the active stage.
 		else:
-			_advance_forward_passthrough(delta)                                                     # Preserve automatic, brisk Fwd playback when the debug toggle is off.
-		return                                                                                    # Do not accept another move or turn during the short camera transition.
+			character_is_moving = true                                                               # Keep the player in the running state while the camera crosses the cell edge.
+			_keep_forward_run_animating()                                                            # Force continuous, slightly faster run playback so the camera transition cannot read as a body pause.
+			if manual_forward_step_enabled:                                                           # Hold Fwd 1 and Fwd 2 until the player presses forward again.
+				if manual_forward_step_just_pressed:                                                    # Advance exactly one authored stage per fresh forward input.
+					_advance_forward_passthrough(delta, true)                                             # Move Fwd 1 -> Fwd 2 or Fwd 2 -> destination immediately.
+			else:
+				_advance_forward_passthrough(delta)                                                     # Preserve automatic, brisk Fwd playback when the debug toggle is off.
+			return                                                                                    # Do not accept another move or turn during the short camera transition.
 	if strafe_step != 0:                                                                       # Keep input frozen while one of the authored side-camera frames is on screen.
-		character_is_moving = true                                                               # Keep the player marked as running for their own and the opponent's view.
-		_keep_forward_run_animating()                                                            # Reuse the visibly continuous running animation used by Fwd transitions.
-		if manual_strafe_step_enabled:                                                           # Hold Right 1/2/3 until a fresh matching lateral input arrives.
-			if manual_strafe_step_just_pressed:
-				_advance_strafe_passthrough(delta, true)                                             # Advance exactly one authored side-camera frame per new sideways push.
+		if granular_movement_enabled:                                                             # Let held directional travel choose the next Right anchor later in this frame.
+			pass                                                                                    # Do not advance on time or a key press; the spatial travel helper handles the active stage.
 		else:
-			_advance_strafe_passthrough(delta)                                                     # Preserve automatic three-frame side-camera playback by default.
-		return                                                                                    # Do not accept another move or turn during the short side transition.
+			character_is_moving = true                                                               # Keep the player marked as running for their own and the opponent's view.
+			_keep_forward_run_animating()                                                            # Reuse the visibly continuous running animation used by Fwd transitions.
+			if manual_strafe_step_enabled:                                                           # Hold Right 1/2/3 until a fresh matching lateral input arrives.
+				if manual_strafe_step_just_pressed:
+					_advance_strafe_passthrough(delta, true)                                             # Advance exactly one authored side-camera frame per new sideways push.
+			else:
+				_advance_strafe_passthrough(delta)                                                     # Preserve automatic three-frame side-camera playback by default.
+			return                                                                                    # Do not accept another move or turn during the short side transition.
 	player_sprite.speed_scale = 1.0                                                            # Restore the ordinary animation pace as soon as Fwd playback has completed.
-	if is_turn_passthrough:                                                                    # Let an authored 22/66 camera frame finish before accepting new movement or turn input.
-		if manual_turn_step_enabled:                                                              # Hold the current 22/66 visual frame for direct graph tuning.
-			if manual_turn_step_direction != 0:                                                     # Require a release and a new turn input before progressing.
-				_advance_turn_passthrough(delta, true)                                                # Advance exactly one authored turn stage.
-		else:
-			_advance_turn_passthrough(delta)                                                       # Preserve ordinary short automatic turns when debug stepping is off.
-		return                                                                                    # Keep the player physically fixed during this brief camera movement.
-	var turn_direction := manual_turn_step_direction if manual_turn_step_enabled else _read_turn() # Reuse the sampled turn edge so manual mode cannot consume it twice.
-	if _is_turn_45_view() and turn_direction != 0:                                             # Reserve a new Q/E press for committing or cancelling the halfway turn.
-		_process_turn_45_input(turn_direction)                                                     # Apply the requested twist while leaving ordinary movement available at 45 degrees.
-		return                                                                                    # Do not also move during the twist button press.
-	if turn_direction < 0:                                                                     # Handle a left turn request.
-		_request_half_turn_or_transition("turn_left", -1)                                          # Enter a 45-degree stop or use the old captured transition path.
-		return                                                                                    # Return after turn processing.
-	if turn_direction > 0:                                                                     # Handle a right turn request.
-		_request_half_turn_or_transition("turn_right", 1)                                          # Enter a 45-degree stop or use the old captured transition path.
-		return                                                                                    # Return after turn processing.
+	var held_translation_stage := granular_movement_enabled and (forward_step != 0 or strafe_step != 0) # Keep an unfinished Fwd/Right graph self-contained while the player runs inside it.
+	if not held_translation_stage:                                                             # Only turns whose camera graph is complete may change the active camera basis.
+		if is_turn_passthrough:                                                                    # Let an authored 22/66 camera frame finish before accepting new movement or turn input.
+			if manual_turn_step_enabled:                                                              # Hold the current 22/66 visual frame for direct graph tuning.
+				if manual_turn_step_direction != 0:                                                     # Require a release and a new turn input before progressing.
+					_advance_turn_passthrough(delta, true)                                                # Advance exactly one authored turn stage.
+			else:
+				_advance_turn_passthrough(delta)                                                       # Preserve ordinary short automatic turns when debug stepping is off.
+			return                                                                                    # Keep the player physically fixed during this brief camera movement.
+		var turn_direction := sampled_turn_direction if (manual_turn_step_enabled or granular_movement_enabled) else _read_turn() # Reuse the sampled turn edge so granular mode cannot consume the turn latch twice.
+		if _is_turn_45_view() and turn_direction != 0:                                             # Reserve a new Q/E press for committing or cancelling the halfway turn.
+			_process_turn_45_input(turn_direction)                                                     # Apply the requested twist while leaving ordinary movement available at 45 degrees.
+			return                                                                                    # Do not also move during the twist button press.
+		if turn_direction < 0:                                                                     # Handle a left turn request.
+			_request_half_turn_or_transition("turn_left", -1)                                          # Enter a 45-degree stop or use the old captured transition path.
+			return                                                                                    # Return after turn processing.
+		if turn_direction > 0:                                                                     # Handle a right turn request.
+			_request_half_turn_or_transition("turn_right", 1)                                          # Enter a 45-degree stop or use the old captured transition path.
+			return                                                                                    # Return after turn processing.
 	var movement := _read_movement()                                                           # Read this player's local movement input.
 	if movement != Vector2.ZERO:                                                               # Choose moving animation and move through the current cell.
 		run_dir = _movement_to_first_player_run_dir(movement)                                     # Select the visible body-run direction for this local view.
@@ -1163,6 +1183,11 @@ func _process_player_context(delta: float) -> void:                             
 		world_run_dir = _world_movement_dir_for_current_view(movement)                            # Convert local movement through the visible cardinal or diagonal camera basis.
 		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
 		_play_best_animation(true)                                                                # Start or maintain the moving animation.
+		if held_translation_stage:                                                               # Move between stable camera anchors only while the player continues to hold the travel direction.
+			var stage_completed := _advance_granular_translation_stage(movement, delta)             # Advance/reverse one authored translation anchor once enough physical travel has accumulated.
+			if stage_completed:                                                                     # The final anchor committed a new cell this frame.
+				return                                                                                # Let the completed stable view render before accepting a fresh crossing input next frame.
+			movement = _granular_stage_free_movement(movement)                                      # Preserve free running on the other axis while preventing accidental nested edge crossings.
 		if _is_turn_45_view():                                                                  # Keep the world position aligned with the visible diagonal camera basis.
 			_move_inside_tile_diagonal(movement, delta)                                               # Move and collide in actual world space while retaining the halfway view.
 		else:                                                                                    # Preserve the established cardinal movement and transition behavior.
@@ -4269,12 +4294,79 @@ func _read_manual_strafe_step_input() -> bool:
 
 
 
+# _granular_stage_free_movement: Removes only the axis that is currently traversing authored camera anchors.
+func _granular_stage_free_movement(movement: Vector2) -> Vector2:
+	if forward_step != 0:                                                                      # A Fwd graph owns forward/backward travel until it reaches its neighboring cell.
+		movement.y = 0.0                                                                         # Keep local left/right running available without triggering another front/back crossing.
+	elif strafe_step != 0:                                                                     # A Right graph owns local-left/local-right travel until it reaches its neighboring cell.
+		movement.x = 0.0                                                                         # Keep local forward/back running available without triggering another side crossing.
+	return movement                                                                            # Return the remaining free in-cell motion.
+
+
+# _advance_granular_translation_stage: Moves to the next or previous authored camera anchor from sustained stick/keyboard travel.
+func _advance_granular_translation_stage(movement: Vector2, delta: float) -> bool:
+	var travel_input := 0.0                                                                    # Measure signed intent along the one axis owned by the active translation graph.
+	if forward_step != 0:                                                                      # Read movement in the forward/backward graph's travel direction.
+		travel_input = movement.y if forward_transition_name == "backward" else -movement.y     # Positive always means continue toward the pending destination.
+	elif strafe_step != 0:                                                                     # Read movement in the local-left/local-right graph's travel direction.
+		travel_input = -movement.x if strafe_transition_name == "strafe_left" else movement.x   # Positive always means continue toward the pending destination.
+	if is_zero_approx(travel_input):                                                           # Do not change camera anchor while the player is only running perpendicular to the crossing.
+		return false                                                                              # Keep the current authored pose stable.
+	granular_stage_travel += travel_input * MOVE_UNITS_PER_SECOND * delta                      # Turn held analog/keyboard travel into spatial progress instead of elapsed camera time.
+	if absf(granular_stage_travel) < GRANULAR_STAGE_TRAVEL_DISTANCE:                           # Keep the current camera anchor until the player has covered one sub-cell distance.
+		return false                                                                              # No authored anchor boundary was crossed this frame.
+	var advancing := granular_stage_travel > 0.0                                               # Distinguish continuing toward the pending cell from retreating to the previous stable anchor.
+	granular_stage_travel -= signf(granular_stage_travel) * GRANULAR_STAGE_TRAVEL_DISTANCE     # Preserve any small excess travel for the next sub-cell boundary.
+	if advancing:                                                                              # Continue toward the destination through the authored stage order.
+		if forward_step != 0:                                                                    # Advance Fwd 1 -> Fwd 2 -> destination or the reversed order when backing up.
+			_advance_forward_passthrough(delta, true)                                               # Advance without consulting the normal timed/manual playback modes.
+		else:                                                                                    # Advance Right 1 -> Right 2 -> Right 3 -> destination or the reversed order when moving left.
+			_advance_strafe_passthrough(delta, true)                                                # Advance without consulting the normal timed/manual playback modes.
+	else:                                                                                      # Move back one authored anchor while the player holds the opposite travel direction.
+		_retreat_granular_translation_stage()                                                     # Restore the preceding stage or the original source-cell camera without committing a cell.
+	if forward_step == 0 and strafe_step == 0:                                                 # Either the destination committed or the player returned to the source stable cell.
+		granular_stage_travel = 0.0                                                              # Do not carry stale sub-cell travel into the next ordinary movement state.
+		return true                                                                               # Let the caller stop before applying stale pre-snap movement.
+	return false                                                                                # Keep the new intermediate anchor active.
+
+
+# _retreat_granular_translation_stage: Reverses one spatial camera-anchor step without changing the committed source cell.
+func _retreat_granular_translation_stage() -> void:
+	if forward_step != 0:                                                                      # Reverse Fwd 1/2 according to the authored playback direction.
+		var first_forward_stage := (forward_transition_name != "backward" and forward_step == 1) or (forward_transition_name == "backward" and forward_step == 2) # Identify the anchor directly adjacent to the source stable camera.
+		if first_forward_stage:                                                                   # Leave the granular crossing entirely when retreating behind its first anchor.
+			forward_step = 0                                                                        # Restore cardinal stable rendering without committing the pending cell.
+			forward_transition_name = ""                                                          # Clear the cancelled crossing marker.
+			pending_grid_delta = Vector2i.ZERO                                                     # Keep the player in the original source cell.
+			_show_stable()                                                                          # Redraw the source-cell camera immediately.
+			return                                                                                  # No earlier Fwd anchor exists.
+		forward_step = 2 if forward_transition_name == "backward" else 1                       # Move Fwd 1/2 back one authored pose.
+		active_sequence_name = "forward_%d" % forward_step                                      # Keep status and tuner context aligned with the restored pose.
+		_show_stable()                                                                            # Draw the restored Fwd floor and wall graph.
+		return                                                                                    # Finish the forward retreat.
+	var first_strafe_stage := (strafe_transition_name == "strafe_right" and strafe_step == 1) or (strafe_transition_name == "strafe_left" and strafe_step == 3) # Identify the anchor adjacent to the source stable camera.
+	if first_strafe_stage:                                                                     # Leave the granular side crossing when retreating behind its first anchor.
+		strafe_step = 0                                                                          # Restore cardinal stable rendering without committing the pending cell.
+		strafe_transition_name = ""                                                            # Clear the cancelled crossing marker.
+		pending_grid_delta = Vector2i.ZERO                                                       # Keep the player in the original source cell.
+		_show_stable()                                                                            # Redraw the source-cell camera immediately.
+		return                                                                                    # No earlier Right anchor exists.
+	strafe_step += 1 if strafe_transition_name == "strafe_left" else -1                      # Move Right 3/2/1 back one authored pose in the correct travel direction.
+	active_sequence_name = "strafe_%d" % strafe_step                                         # Keep status and tuner context aligned with the restored pose.
+	_show_stable()                                                                             # Draw the restored Right floor and wall graph.
+
+
+
 # _move_inside_tile: Moves the player locally, crossing open edges at trigger thresholds and sliding to wall contact on blocked edges.
 func _move_inside_tile(movement: Vector2, delta: float) -> void:                            # Declare this function.
 	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into right/forward physical tile-offset movement.
 	var tile_offset := _local_position_to_tile_offset(local_floor_position)                     # Convert current local art position into normalized physical tile offset.
 	tile_offset += physical_movement * MOVE_UNITS_PER_SECOND * delta                           # Move in physical tile space so every direction uses the same ground speed.
 	local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the physical offset back into local art-space registration.
+	if granular_movement_enabled and (forward_step != 0 or strafe_step != 0):                 # Keep a granular camera anchor in its source cell until held travel crosses into the neighboring anchor.
+		tile_offset = Vector2(clampf(tile_offset.x, -1.0, 1.0), clampf(tile_offset.y, -1.0, 1.0)) # Allow full free running inside the current cell, but do not start a nested edge transition.
+		local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Re-register the bounded player position for the held camera pose.
+		return                                                                                    # Let sustained travel, rather than an accidental boundary touch, select the next authored camera pose.
 
 	if physical_movement.y > 0.0 and tile_offset.y >= 1.0:                                     # Handle crossing or blocking at the camera-forward physical edge.
 		if _can_cross_edge(grid_position, _facing_vector()):                                      # Check whether the forward tile edge is open.
@@ -4472,7 +4564,7 @@ func _forward_display_local_position() -> Vector2:
 		return local_floor_position                                                              # Keep ordinary movement, collision, and debug behavior unchanged.
 	var is_backward := forward_transition_name == "backward"                                  # Reverse the visual travel when backing into the cell behind the player.
 	var first_stage := (forward_step == 2) if is_backward else (forward_step == 1)             # Fwd 2 is chronologically first during reverse playback; Fwd 1 is first when moving forward.
-	var stage_fraction := 0.5 if manual_forward_step_enabled else clampf(forward_passthrough_timer / FORWARD_PASSTHROUGH_SECONDS, 0.0, 1.0) # Hold each manual debug frame at its visual midpoint, or smoothly advance timed playback.
+	var stage_fraction := _granular_stage_visual_fraction() if granular_movement_enabled else 0.5 if manual_forward_step_enabled else clampf(forward_passthrough_timer / FORWARD_PASSTHROUGH_SECONDS, 0.0, 1.0) # Let granular movement visibly cover ground inside each stable Fwd pose; preserve legacy manual/timed playback otherwise.
 	var travel_fraction := (0.0 if first_stage else 0.5) + stage_fraction * 0.5                # Convert the two authored frames into one continuous 0..1 visual movement.
 	var start_y := BACKWARD_WALL_CONTACT_Y if is_backward else FORWARD_WALL_CONTACT_Y          # Start at the crossing edge in the source cell.
 	var end_y := FORWARD_WALL_CONTACT_Y if is_backward else BACKWARD_WALL_CONTACT_Y            # End at the matching entry edge in the destination cell.
@@ -4496,7 +4588,26 @@ func _strafe_display_local_position() -> Vector2:
 	var display_x := float(right_stage_x[chronological_stage - 1])                             # Place the actor near the appropriate moving border for this authored floor frame.
 	if is_left:                                                                                # The same captured rightward floor frames play in reverse for a local-left crossing.
 		display_x = 1.0 - display_x                                                              # Mirror each frame's inward offset so the actor remains just inside the correct side of the border.
+	if granular_movement_enabled:                                                              # Let the actor visibly run through each held camera pose instead of remaining welded to its painted border.
+		var crossing_fraction := _granular_strafe_crossing_fraction()                             # Use one continuous 0..1 crossing path shared by all three camera anchors.
+		display_x = lerpf(0.72, 0.28, crossing_fraction)                                         # Keep the body velocity continuous while the surrounding authored camera pose snaps.
+		if is_left:                                                                                # Mirror the same continuous actor path for local-left traversal.
+			display_x = 1.0 - display_x                                                              # Preserve equivalent motion for the reverse artwork order.
 	return Vector2(display_x, local_floor_position.y)                                          # Preserve forward depth while anchoring the body to the artwork's actual crossing line.
+
+
+
+# _granular_stage_visual_fraction: Returns signed within-anchor travel for character registration without advancing the camera.
+func _granular_stage_visual_fraction() -> float:
+	return clampf(granular_stage_travel / GRANULAR_STAGE_TRAVEL_DISTANCE, -1.0, 1.0)           # Keep reverse travel visible and never let a single frame draw beyond the current authored pose.
+
+
+
+# _granular_strafe_crossing_fraction: Converts the active Right 1/2/3 anchor plus in-anchor travel into one continuous visual path.
+func _granular_strafe_crossing_fraction() -> float:
+	var chronological_stage := 4 - strafe_step if strafe_transition_name == "strafe_left" else strafe_step # Normalize reverse playback into the authored rightward order.
+	var stage_progress := _granular_stage_visual_fraction()                                    # Measure the player's signed travel inside the currently held camera anchor.
+	return clampf((float(chronological_stage - 1) + stage_progress) / 3.0, 0.0, 1.0)           # Make stage 1's end and stage 2's start the exact same body position, eliminating anchor jitter.
 
 
 
@@ -5063,6 +5174,7 @@ func _request_transition(sequence_name: String) -> void:                        
 func _begin_forward_passthrough(sequence_name: String) -> void:
 	forward_step = 2 if sequence_name == "backward" else 1                                     # Reverse travel walks the authored camera frames backward: Fwd 2 then Fwd 1.
 	forward_passthrough_timer = 0.0                                                            # Start timing from the first rendered update.
+	granular_stage_travel = 0.0                                                                # Start the first granular camera-anchor interval with no inherited travel.
 	forward_transition_name = sequence_name                                                    # Preserve whether the destination enters from its rear or front edge.
 	active_sequence_name = "forward_%d" % forward_step                                        # Report the visible authored stage in the debug status.
 	character_is_moving = true                                                                 # Keep the run animation alive while the camera moves through the transition frames.
@@ -5093,6 +5205,7 @@ func _advance_forward_passthrough(delta: float, manual_step: bool = false) -> vo
 func _begin_strafe_passthrough(sequence_name: String) -> void:
 	strafe_step = 3 if sequence_name == "strafe_left" else 1                                  # Local-right walks 1 -> 2 -> 3; local-left replays the authored frames 3 -> 2 -> 1.
 	strafe_passthrough_timer = 0.0                                                            # Start timing from the first rendered side-camera update.
+	granular_stage_travel = 0.0                                                                # Start the first granular camera-anchor interval with no inherited travel.
 	strafe_transition_name = sequence_name                                                    # Preserve whether the destination enters from its left or right edge.
 	active_sequence_name = "strafe_%d" % strafe_step                                          # Report the visible authored stage in the debug status.
 	character_is_moving = true                                                                 # Keep the run animation alive while the camera moves through the side frames.
@@ -5136,11 +5249,12 @@ func _enter_turn_45(half_turn_direction: int) -> void:                          
 	active_sequence = []                                                                       # Clear any stale captured transition frames.
 	phase_index = 0                                                                            # Reset captured transition frame bookkeeping.
 	phase_timer = 0.0                                                                          # Reset captured transition time bookkeeping.
-	character_is_moving = false                                                                # Freeze actor movement only while this brief camera interpolation plays.
-	last_blocked_direction = ""                                                                # Clear movement-blocked labels because movement is disabled in this view.
+	character_is_moving = false                                                                # Start the new angle idle; stable-stage mode permits ordinary movement from the next frame.
+	last_blocked_direction = ""                                                                # Clear stale collision feedback while the camera basis changes.
 	_set_player_world_position_for_current_view(preserved_world_position)                      # Re-express the same physical point in the newly active diagonal camera coordinates.
 	_show_stable()                                                                             # Render the 22-degree wall view immediately.
-	_begin_turn_passthrough("to_diagonal")                                                     # Continue automatically into the stable 45-degree diagonal view.
+	if not granular_movement_enabled:                                                          # Preserve the ordinary animated cardinal -> 22 -> 45 turn when granular movement is off.
+		_begin_turn_passthrough("to_diagonal")                                                   # Continue automatically into the stable 45-degree diagonal view.
 
 
 
@@ -5149,6 +5263,29 @@ func _process_turn_45_input(turn_direction: int) -> void:                       
 	var preserved_world_position := _current_player_world_position()                           # Keep the player fixed on the source map while committing or cancelling this camera rotation.
 	if turn_direction == 0:                                                                    # Stay on the halfway view when no twist key was just pressed.
 		return                                                                                    # Return without changing the halfway-turn state.
+	if granular_movement_enabled:                                                              # Treat every 22/45/66 pose as a movable stable angle rather than an automatic passthrough.
+		if turn_direction == turn_45_direction:                                                   # Advance clockwise/counterclockwise toward the requested neighboring cardinal view.
+			if turn_step < 3:                                                                       # Move only one authored angle at a time: 22 -> 45 -> 66.
+				turn_step += 1                                                                        # Select the next stable authored camera pose.
+				active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[_active_turn_visual_stage()]        # Keep debug status aligned with that visible pose.
+				_set_player_world_position_for_current_view(preserved_world_position)                 # Keep the body at the same physical world point while the camera angle snaps.
+				_show_stable()                                                                        # Draw the new stable turn pose immediately.
+			else:
+				var next_sequence := "turn_left" if turn_45_direction < 0 else "turn_right"        # Commit the final 66 -> cardinal snap in the requested direction.
+				_finish_snap_transition(next_sequence)                                                 # Restore the new cardinal camera with no timed phase playback.
+		else:                                                                                     # Step back toward the original cardinal orientation.
+			if turn_step > 1:                                                                       # Move 66 -> 45 -> 22 one authored angle at a time.
+				turn_step -= 1                                                                        # Select the preceding stable authored camera pose.
+				active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[_active_turn_visual_stage()]        # Keep debug status aligned with that visible pose.
+				_set_player_world_position_for_current_view(preserved_world_position)                 # Keep the body fixed while the view snaps back.
+				_show_stable()                                                                        # Render the preceding stable turn pose.
+			else:
+				turn_45_direction = 0                                                                # Leave the 22-degree pose for the original cardinal camera.
+				turn_step = 0                                                                        # Clear the temporary angle state.
+				active_sequence_name = "idle"                                                        # Restore the ordinary stable status label.
+				_set_player_world_position_for_current_view(preserved_world_position)                 # Reproject the unchanged body point through the restored cardinal basis.
+				_show_stable()                                                                        # Draw the restored cardinal camera immediately.
+		return                                                                                    # Do not start the old timed 22/66 passthrough path.
 	if turn_direction == turn_45_direction:                                                    # Continue through 66 toward the next cardinal orientation.
 		turn_step = 3                                                                            # Select the exit interpolation stage (reversed automatically for counterclockwise turns).
 		active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[_active_turn_visual_stage()]            # Label the actual visible 22 or 66-degree art stage.
@@ -5789,13 +5926,13 @@ func _update_status() -> void:                                                  
 		var state_animation := String(state_sprite.animation) if state_sprite != null else "-"    # Format this player's current animation name.
 		var phase_text := "stable"                                                               # Default this player to stable mode.
 		if int(state.get("forward_step", 0)) != 0:                                               # Show which live forward interpolation floor/wall set is visible.
-			phase_text = "forward %d%s" % [int(state.get("forward_step", 0)), " manual" if manual_forward_step_enabled else ""] # Identify whether the visible frame waits for a fresh forward input.
+			phase_text = "forward %d%s" % [int(state.get("forward_step", 0)), " granular" if granular_movement_enabled else " manual" if manual_forward_step_enabled else ""] # Identify whether the visible frame is a spatial camera anchor or waits for manual input.
 		elif int(state.get("strafe_step", 0)) != 0:                                               # Show which live side interpolation floor/wall set is visible.
-			phase_text = "strafe %d%s" % [int(state.get("strafe_step", 0)), " manual" if manual_strafe_step_enabled else ""] # Identify whether the visible frame waits for a fresh lateral input.
+			phase_text = "strafe %d%s" % [int(state.get("strafe_step", 0)), " granular" if granular_movement_enabled else " manual" if manual_strafe_step_enabled else ""] # Identify whether the visible frame is a spatial camera anchor or waits for manual input.
 		elif bool(state.get("is_transitioning", false)):                                        # Show captured phase progress when this player is transitioning.
 			phase_text = "%s phase %d" % [String(state.get("active_sequence_name", "idle")), int(state.get("phase_index", 0)) + 1] # Format the transition status.
 		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s" % [player_index + 1, phase_text, state_facing_name, state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else ""]) # Add this player status line.
-	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map. F2 slot grid. F3 %s debug menu." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing", "closes" if debug_menu_open else "opens"] # Update the on-screen debug status label.
+	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. Granular Movement uses held travel between camera anchors. R rerolls map. F2 slot grid. F3 %s debug menu." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing", "closes" if debug_menu_open else "opens"] # Update the on-screen debug status label.
 
 
 
