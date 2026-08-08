@@ -11,13 +11,24 @@ config_version=5
 [application]
 
 config/name="XybotsResearch"
-run/main_scene="res://main.tscn"
+run/main_scene="res://experiments/coordinate_template_hallway/coordinate_template_hallway.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+
+[display]
+
+[display/window]
+
+size/viewport_width=160
+size/viewport_height=120
+size/window_width_override=640
+size/window_height_override=480
+stretch/mode="canvas_items"
+stretch/scale_mode="integer"
 
 [editor_plugins]
 

@@ -1,0 +1,71 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://experiments/coordinate_template_hallway/coordinate_template_hallway.gd" id="1_controller"]
+[ext_resource type="Shader" path="res://experiments/coordinate_template_hallway/coordinate_template_hallway.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://experiments/coordinate_template_hallway/assets/coordinates3.png" id="3_template"]
+[ext_resource type="Texture2D" path="res://assets/Environment/Floor_Turn.png" id="4_floor_turn"]
+[ext_resource type="Texture2D" path="res://assets/Environment/WallsStraight/Walls_Straight_25.png" id="5_wall_25"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_projective"]
+shader = ExtResource("2_shader")
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_floor_turn_first_frame"]
+atlas = ExtResource("4_floor_turn")
+region = Rect2(0, 0, 160, 120)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_xybots_walls"]
+shader = ExtResource("2_shader")
+
+[node name="CoordinateTemplateHallway" type="Node2D"]
+script = ExtResource("1_controller")
+
+[node name="XybotsFloorCeiling" type="Sprite2D" parent="."]
+position = Vector2(80, 60)
+texture = SubResource("AtlasTexture_floor_turn_first_frame")
+texture_filter = 1
+visible = false
+z_index = 1
+
+[node name="ProjectivePlanes" type="Polygon2D" parent="."]
+texture_filter = 1
+material = SubResource("ShaderMaterial_projective")
+
+[node name="XybotsWallPlanes" type="Polygon2D" parent="."]
+texture_filter = 1
+material = SubResource("ShaderMaterial_xybots_walls")
+visible = false
+z_index = 2
+
+[node name="TemplateOverlay" type="Sprite2D" parent="."]
+position = Vector2(80, 60)
+texture = ExtResource("3_template")
+texture_filter = 1
+modulate = Color(1, 1, 1, 0.38)
+visible = false
+z_index = 3
+
+[node name="DebugOverlay" type="Node2D" parent="."]
+z_index = 4
+
+[node name="StatusLabel" type="Label" parent="."]
+offset_left = 3.0
+offset_top = 3.0
+offset_right = 157.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(1, 1, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 1
+theme_override_font_sizes/font_size = 6
+z_index = 5
+
+[node name="SamplingReadout" type="Label" parent="."]
+offset_left = 94.0
+offset_top = 3.0
+offset_right = 157.0
+offset_bottom = 12.0
+theme_override_colors/font_color = Color(0.45, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 1
+theme_override_font_sizes/font_size = 6
+horizontal_alignment = 2
+z_index = 5
