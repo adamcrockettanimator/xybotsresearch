@@ -646,7 +646,7 @@ var was_manual_forward_step_pressed := false                                    
 var strafe_step := 0                                                                         # Track a side-camera stage: 0=stable, 1..3=Floor/WallsRight_1..3.
 var strafe_passthrough_timer := 0.0                                                         # Accumulate automatic display time for the active side-camera frame.
 var strafe_transition_name := ""                                                           # Remember whether the staged crossing commits to local left or local right.
-var manual_strafe_step_enabled := true                                                      # Let the debug menu hold each side-camera stage until a fresh lateral input advances it.
+var manual_strafe_step_enabled := false                                                     # Automatic by default; the debug menu can still hold each side-camera stage for inspection.
 var was_manual_strafe_step_pressed := false                                                 # Latch lateral input so a held stick cannot skip multiple side-camera stages.
 var grid_position := Vector2i(0, 3)                                                         # Track the current cell in the top-down maze map.
 var local_floor_position := HOME_LOCAL_FLOOR_POSITION                                       # Track the character position inside the current tile.
