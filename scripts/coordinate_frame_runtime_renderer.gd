@@ -6,6 +6,8 @@ extends Node
 
 const VIEW_SIZE := Vector2(160.0, 120.0)
 const MASTER_WALL_PATH := "res://assets/Environment/StripeTest.png"
+const RUNTIME_MASTER_WALL_MAIN_PATH := "res://assets/Environment/Runtime_Master_Wall_Main.png"
+const RUNTIME_MASTER_WALL_MAIN_HEIGHT_PATH := "res://assets/Environment/Runtime_Master_Wall_Main_height.png"
 const DEBUG_WALL_TEXTURE_PATHS := [
 	"res://assets/Environment/stripeTest_1px.png",
 	"res://assets/Environment/stripeTest_2px.png",
@@ -48,9 +50,12 @@ var wall_art_sprite: Sprite2D
 var wall_render_image: Image
 var wall_render_texture: ImageTexture
 var wall_source_image: Image
+var wall_height_image: Image
 var coordinate_background: Sprite2D
 var status: Label
 var runtime_status: Label
+var parallax_tuner_panel: PanelContainer
+var parallax_tuner_open := false
 var last_signature := ""
 var show_runtime_walls := true
 var show_quad_outlines := false
@@ -63,6 +68,13 @@ var last_wall_entries: Array[Dictionary] = []
 var wall_mip_images: Array[Image] = []
 var integer_uv_scale_snap_enabled := false
 var wall_ewa_filter_enabled := false
+var wall_parallax_enabled := true
+var parallax_max_texels := 4.0
+var parallax_side_multiplier := 1.0
+var parallax_vertical_multiplier := 1.0
+var parallax_height_anchor := 0.0
+var parallax_height_gamma := 1.0
+var parallax_layer_count := 12
 var template_textures: Dictionary = {}
 var legacy_environment_nodes: Array[CanvasItem] = []
 var diagonal_forward_clock := 0.0
@@ -111,6 +123,7 @@ func _initialize() -> void:
 	# Runtime_Master_Wall is already the exact 128x88 master canvas.  The older
 	# source sat inside a 160x120 authored sprite sheet and needed cropping.
 	wall_source_image = master_texture.get_image()
+	_set_height_texture_for_color_path(MASTER_WALL_PATH)
 	_rebuild_wall_mip_chain()
 	wall_render_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
 	wall_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
@@ -137,6 +150,7 @@ func _initialize() -> void:
 	runtime_status.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
 	runtime_status.add_theme_constant_override("outline_size", 3)
 	controller.canvas_layer.add_child(runtime_status)
+	_setup_parallax_tuner()
 	_rebuild()
 
 func _process(delta: float) -> void:
@@ -184,6 +198,12 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_J:
 			set_wall_ewa_filter_enabled(not wall_ewa_filter_enabled)
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_P:
+			set_wall_parallax_enabled(not wall_parallax_enabled)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_O:
+			_toggle_parallax_tuner()
+			get_viewport().set_input_as_handled()
 
 func _rebuild() -> void:
 	if runtime_wall_layer == null:
@@ -229,10 +249,32 @@ func _set_wall_source_texture(path: String) -> void:
 		return
 	master_texture = next_texture
 	wall_source_image = next_image
+	_set_height_texture_for_color_path(path)
 	active_wall_texture_label = path.get_file().get_basename()
 	_rebuild_wall_mip_chain()
 	_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_refresh_runtime_status(last_wall_entries.size())
+
+
+# _set_height_texture_for_color_path: Height data belongs to one specific
+# authored color texture.  Other test textures intentionally stay flat so the
+# stripe/mip experiments remain isolated and comparable.
+func _set_height_texture_for_color_path(color_path: String) -> void:
+	wall_height_image = null
+	if color_path != RUNTIME_MASTER_WALL_MAIN_PATH:
+		return
+	var height_texture := load(RUNTIME_MASTER_WALL_MAIN_HEIGHT_PATH) as Texture2D
+	if height_texture == null:
+		push_error("Could not load runtime wall height texture: %s" % RUNTIME_MASTER_WALL_MAIN_HEIGHT_PATH)
+		return
+	var height_image := height_texture.get_image()
+	if height_image == null:
+		push_error("Could not read runtime wall height texture: %s" % RUNTIME_MASTER_WALL_MAIN_HEIGHT_PATH)
+		return
+	if height_image.get_size() != wall_source_image.get_size():
+		push_error("Runtime wall color and height textures must have matching dimensions.")
+		return
+	wall_height_image = height_image
 
 
 # set_integer_uv_scale_snap_enabled: Quantizes the texture footprint before it
@@ -251,8 +293,102 @@ func set_wall_ewa_filter_enabled(enabled: bool) -> void:
 	_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_refresh_runtime_status(last_wall_entries.size())
 
+
+# set_wall_parallax_enabled: Lets the raised/recessed master-wall test be
+# compared directly against the same projected quads without relief mapping.
+func set_wall_parallax_enabled(enabled: bool) -> void:
+	wall_parallax_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
+
+# _setup_parallax_tuner: Builds a separate, visible live-tuning panel instead
+# of appending controls below the clipped F3 menu.  It lives on the CanvasLayer
+# and only changes this experimental CPU renderer while the game keeps running.
+func _setup_parallax_tuner() -> void:
+	if controller == null or controller.canvas_layer == null:
+		return
+	if parallax_tuner_panel != null:
+		return
+	parallax_tuner_panel = PanelContainer.new()
+	parallax_tuner_panel.name = "RuntimeWallParallaxTuner"
+	parallax_tuner_panel.position = Vector2(292.0, 104.0)
+	parallax_tuner_panel.custom_minimum_size = Vector2(270.0, 0.0)
+	parallax_tuner_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	parallax_tuner_panel.visible = false
+	controller.canvas_layer.add_child(parallax_tuner_panel)
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 3)
+	parallax_tuner_panel.add_child(section)
+	var heading := Label.new()
+	heading.text = "RUNTIME WALL PARALLAX  [O closes]"
+	heading.add_theme_font_size_override("font_size", 14)
+	section.add_child(heading)
+	var hint := Label.new()
+	hint.text = "Live tuning • applies to Runtime_Master_Wall_Main"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 11)
+	section.add_child(hint)
+	_add_parallax_tuning_slider(section, "Depth", "depth", 0.0, 16.0, 0.25, parallax_max_texels, "px")
+	_add_parallax_tuning_slider(section, "Side", "side", -2.0, 2.0, 0.05, parallax_side_multiplier, "x")
+	_add_parallax_tuning_slider(section, "Vertical", "vertical", -2.0, 2.0, 0.05, parallax_vertical_multiplier, "x")
+	_add_parallax_tuning_slider(section, "Anchor tone", "anchor", 0.0, 1.0, 0.01, parallax_height_anchor, "")
+	_add_parallax_tuning_slider(section, "Height curve", "gamma", 0.15, 4.0, 0.05, parallax_height_gamma, "")
+	_add_parallax_tuning_slider(section, "March layers", "layers", 1.0, 32.0, 1.0, float(parallax_layer_count), "")
+
+
+func _toggle_parallax_tuner() -> void:
+	if parallax_tuner_panel == null:
+		return
+	parallax_tuner_open = not parallax_tuner_open
+	parallax_tuner_panel.visible = parallax_tuner_open
+	_refresh_runtime_status(last_wall_entries.size())
+
+
+# _add_parallax_tuning_slider: Adds one readable label/slider pair.  The bound
+# callback keeps the displayed value and the CPU wall image synchronized while
+# the user drags, so it is suitable for visual tuning in a running game.
+func _add_parallax_tuning_slider(parent: VBoxContainer, title: String, key: String, minimum: float, maximum: float, step: float, initial: float, suffix: String) -> void:
+	var value_label := Label.new()
+	value_label.add_theme_font_size_override("font_size", 12)
+	parent.add_child(value_label)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = step
+	slider.value = initial
+	slider.custom_minimum_size = Vector2(250.0, 18.0)
+	slider.tooltip_text = "Live runtime-wall parallax tuning"
+	parent.add_child(slider)
+	_update_parallax_slider_label(value_label, title, initial, suffix)
+	slider.value_changed.connect(func(value: float) -> void:
+		_set_parallax_tuning_value(key, value)
+		_update_parallax_slider_label(value_label, title, value, suffix)
+	)
+
+
+func _update_parallax_slider_label(label: Label, title: String, value: float, suffix: String) -> void:
+	if title == "Anchor tone":
+		var anchor_name := "black" if value <= 0.01 else "white" if value >= 0.99 else "grey"
+		label.text = "Anchor tone: %.2f (%s stays fixed)" % [value, anchor_name]
+		return
+	var formatted := "%d" % roundi(value) if suffix.is_empty() and title == "March layers" else "%.2f" % value
+	label.text = "%s: %s%s" % [title, formatted, suffix]
+
+
+func _set_parallax_tuning_value(key: String, value: float) -> void:
+	match key:
+		"depth": parallax_max_texels = value
+		"side": parallax_side_multiplier = value
+		"vertical": parallax_vertical_multiplier = value
+		"anchor": parallax_height_anchor = value
+		"gamma": parallax_height_gamma = value
+		"layers": parallax_layer_count = maxi(1, roundi(value))
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
 func _refresh_runtime_status(visible_wall_count: int) -> void:
-	var status_text := "Coord %s | %d walls | Tex:%s [G/K] | T:%s Y:%s U:%s | H:%s J:%s" % [_pose_key(), visible_wall_count, active_wall_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF"]
+	var status_text := "Coord %s | %d walls | Tex:%s [G/K] | T:%s Y:%s U:%s | H:%s J:%s P:%s O:%s" % [_pose_key(), visible_wall_count, active_wall_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and wall_height_image != null else "OFF", "ON" if parallax_tuner_open else "OFF"]
 	status.text = status_text
 	runtime_status.text = status_text
 
@@ -296,7 +432,7 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 			var uv := _inverse_homography_uv(row0, row1, row2, Vector2(x, y))
 			if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
 				continue
-			var color := _sample_projected_wall(row0, row1, row2, Vector2(x, y), uv)
+			var color := _sample_projected_wall(entry, row0, row1, row2, Vector2(x, y), uv)
 			if color.a <= 0.0:
 				continue
 			color.r *= light
@@ -321,15 +457,18 @@ func _inverse_homography_uv(row0: Vector3, row1: Vector3, row2: Vector3, pixel: 
 # _sample_projected_wall: Samples the master texture according to the local
 # screen-to-texture footprint.  The default branch preserves old nearest
 # sampling exactly; the two experiments only alter this final lookup.
-func _sample_projected_wall(row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, uv: Vector2) -> Color:
+func _sample_projected_wall(entry: Dictionary, row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, uv: Vector2) -> Color:
 	if wall_source_image == null:
 		return Color.TRANSPARENT
+	var sample_uv := _parallax_occlusion_uv(entry, uv)
+	if sample_uv.x < 0.0 or sample_uv.x > 1.0 or sample_uv.y < 0.0 or sample_uv.y > 1.0:
+		return Color.TRANSPARENT
 	if not integer_uv_scale_snap_enabled and not wall_ewa_filter_enabled:
-		return _sample_image_nearest(wall_source_image, uv)
+		return _sample_image_nearest(wall_source_image, sample_uv)
 	var uv_x := _inverse_homography_uv(row0, row1, row2, pixel + Vector2.RIGHT)
 	var uv_y := _inverse_homography_uv(row0, row1, row2, pixel + Vector2.DOWN)
 	if uv_x.x < 0.0 or uv_y.x < 0.0:
-		return _sample_image_nearest(wall_source_image, uv)
+		return _sample_image_nearest(wall_source_image, sample_uv)
 	var source_size := Vector2(wall_source_image.get_width(), wall_source_image.get_height())
 	var texel_span_x := (uv_x - uv) * source_size
 	var texel_span_y := (uv_y - uv) * source_size
@@ -341,7 +480,7 @@ func _sample_projected_wall(row0: Vector3, row1: Vector3, row2: Vector3, pixel: 
 	var mip_level := _mip_level_for_footprint(minor_footprint)
 	var source := wall_mip_images[mip_level] if not wall_mip_images.is_empty() else wall_source_image
 	if not wall_ewa_filter_enabled:
-		return _sample_image_nearest(source, uv)
+		return _sample_image_nearest(source, sample_uv)
 	# A wall's compressed source axis is not fixed in screen coordinates.  The
 	# inverse homography tells us its local major axis, so these weighted taps
 	# naturally run vertically into depth on straight walls and rotate correctly
@@ -350,18 +489,65 @@ func _sample_projected_wall(row0: Vector3, row1: Vector3, row2: Vector3, pixel: 
 	var major_length := maxf(length_x, length_y)
 	var sample_count := clampi(ceili(major_length / minor_footprint), 1, 8)
 	if sample_count == 1:
-		return _sample_image_nearest(source, uv)
+		return _sample_image_nearest(source, sample_uv)
 	var accumulated := Color(0.0, 0.0, 0.0, 0.0)
 	var total_weight := 0.0
 	for index in range(sample_count):
 		var t := (float(index) + 0.5) / float(sample_count) - 0.5
-		var tap_uv := uv + major_uv * t
+		var tap_uv := sample_uv + major_uv * t
 		if tap_uv.x < 0.0 or tap_uv.x > 1.0 or tap_uv.y < 0.0 or tap_uv.y > 1.0:
 			continue
 		var weight := 1.0 - absf(t) * 1.5
 		accumulated += _sample_image_nearest(source, tap_uv) * weight
 		total_weight += weight
-	return accumulated / total_weight if total_weight > 0.0 else _sample_image_nearest(source, uv)
+	return accumulated / total_weight if total_weight > 0.0 else _sample_image_nearest(source, sample_uv)
+
+
+# _parallax_occlusion_uv: Performs a deliberately shallow parallax-occlusion
+# march through Runtime_Master_Wall_Main_height.  The adjustable anchor tone
+# chooses the stationary greyscale: with black at 0.0, white moves along the
+# ray; with white at 1.0, black moves in the opposite direction; a grey anchor
+# sends lighter and darker detail away from each other.  The texture ray is
+# derived from the actual wall edge and view position, so relief grows while
+# looking along a hallway wall and fades on a front-facing wall.
+func _parallax_occlusion_uv(entry: Dictionary, base_uv: Vector2) -> Vector2:
+	if not wall_parallax_enabled or wall_height_image == null or wall_source_image == null:
+		return base_uv
+	var first: Vector2 = entry.get("first_local", Vector2.ZERO)
+	var second: Vector2 = entry.get("second_local", Vector2.ZERO)
+	var tangent := second - first
+	if tangent.length_squared() < 0.00001:
+		return base_uv
+	tangent = tangent.normalized()
+	var center := (first + second) * 0.5
+	var view_distance := maxf(center.length(), NEAR_CLIP)
+	var sideways_view := clampf(-center.dot(tangent) / view_distance, -1.0, 1.0)
+	var vertical_view := clampf((VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT * 0.5) / maxf(center.y, NEAR_CLIP), -0.35, 0.35)
+	var max_offset := Vector2(
+		sideways_view * parallax_side_multiplier * parallax_max_texels / float(wall_source_image.get_width()),
+		vertical_view * parallax_vertical_multiplier * parallax_max_texels / float(wall_source_image.get_height())
+	)
+	if max_offset.length_squared() < 0.0000001:
+		return base_uv
+	var uv := base_uv
+	var signed_march_depth := 0.0
+	var depth_step := 1.0 / float(parallax_layer_count)
+	var uv_step := max_offset / float(parallax_layer_count)
+	for _layer in range(parallax_layer_count):
+		var height := pow(_sample_image_nearest(wall_height_image, uv).r, parallax_height_gamma)
+		var relative_height := height - parallax_height_anchor
+		if absf(signed_march_depth) >= absf(relative_height):
+			break
+		var direction := 1.0 if relative_height >= 0.0 else -1.0
+		# The anchor gives each tone a signed travel direction.  At the default
+		# black anchor this is the original white-moves behavior; moving the anchor
+		# toward white instead keeps bright relief stable and exposes dark recesses.
+		var next_uv := uv + uv_step * direction
+		if next_uv.x < 0.0 or next_uv.x > 1.0 or next_uv.y < 0.0 or next_uv.y > 1.0:
+			break
+		uv = next_uv
+		signed_march_depth += depth_step * direction
+	return uv
 
 
 func _sample_image_nearest(image: Image, uv: Vector2) -> Color:
@@ -423,6 +609,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var average_depth := (maxf(first_local.y, NEAR_CLIP) + maxf(second_local.y, NEAR_CLIP)) * 0.5
 		result.append({
 			"quad": quad,
+			"first_local": first_local,
+			"second_local": second_local,
 			"depths": Vector2(maxf(first_local.y, NEAR_CLIP), maxf(second_local.y, NEAR_CLIP)),
 			"depth": average_depth,
 			"light": _depth_light(average_depth),
