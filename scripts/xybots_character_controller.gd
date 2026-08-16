@@ -756,6 +756,8 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "manual_strafe", "Manual Strafe")                        # Hold side-camera frames until the player deliberately presses sideways again.
 	_add_debug_menu_check(content, "manual_turn", "Manual Turn")                            # Hold 22/66 frames until a fresh Q/E or right-stick turn input advances them.
 	_add_debug_menu_check(content, "slot_tuner", "Slot Graph Tuner")                        # Enable current-screen graph endpoint dragging.
+	_add_debug_menu_check(content, "coordinate_integer_snap", "Integer UV Snap (H)")       # Quantize runtime-wall texture footprint without moving its projected quad.
+	_add_debug_menu_check(content, "coordinate_wall_ewa", "Wall EWA Filter (J)")           # Use mip-assisted anisotropic samples along each projected wall's compressed UV axis.
 	var save_tuner := Button.new()                                                             # Provide an explicit, reversible save action.
 	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
 	save_tuner.pressed.connect(_save_slot_graph_tuner_overrides)                              # Save edits only when deliberately requested.
@@ -813,6 +815,12 @@ func _debug_option_value(option_key: String) -> bool:
 			return manual_turn_step_enabled                                                         # Return whether 22/66 turn frames wait for repeated turn input.
 		"slot_tuner":
 			return slot_graph_tuner_enabled                                                        # Return whether the current graph accepts endpoint drags.
+		"coordinate_integer_snap":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # The experimental runtime renderer only exists on its dedicated branch/scene.
+			return bool(renderer.integer_uv_scale_snap_enabled) if renderer != null else false     # Keep the ordinary sprite renderer menu safe when the experiment is absent.
+		"coordinate_wall_ewa":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Read the same optional renderer for the filtering comparison state.
+			return bool(renderer.wall_ewa_filter_enabled) if renderer != null else false            # Keep this option disabled outside the coordinate-frame experiment.
 		_:
 			return false                                                                           # Keep unknown future menu keys safely disabled.
 
@@ -842,6 +850,14 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 		"slot_tuner":
 			slot_graph_tuner_enabled = enabled                                                     # Toggle direct editing of the graph currently on screen.
 			if enabled: show_slot_grid_debug = true                                                 # Ensure the draggable blue endpoints are visible when tuning starts.
+		"coordinate_integer_snap":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the optional runtime wall experiment without coupling the base renderer to it.
+			if renderer != null and renderer.has_method("set_integer_uv_scale_snap_enabled"):
+				renderer.set_integer_uv_scale_snap_enabled(enabled)                                  # Apply only the sampling experiment; world/projected geometry remains fixed.
+		"coordinate_wall_ewa":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the same optional renderer for EWA-style wall filtering.
+			if renderer != null and renderer.has_method("set_wall_ewa_filter_enabled"):
+				renderer.set_wall_ewa_filter_enabled(enabled)                                        # Apply mip-assisted anisotropic wall samples immediately.
 		_:
 			return                                                                                # Ignore unsupported keys without redrawing.
 	_render_all_player_views()                                                                 # Redraw every local view immediately so changes are visible at once.

@@ -5,7 +5,19 @@
 extends Node
 
 const VIEW_SIZE := Vector2(160.0, 120.0)
-const MASTER_WALL_PATH := "res://assets/Environment/WallsStraight/Walls_Straight_25.png"
+const MASTER_WALL_PATH := "res://assets/Environment/StripeTest.png"
+const DEBUG_WALL_TEXTURE_PATHS := [
+	"res://assets/Environment/stripeTest_1px.png",
+	"res://assets/Environment/stripeTest_2px.png",
+	"res://assets/Environment/stripeTest_4px.png",
+	"res://assets/Environment/stripeTest_8px.png",
+]
+const RUNTIME_MASTER_WALL_TEXTURE_PATHS := [
+	"res://assets/Environment/Runtime_Master_Wall.png",
+	"res://assets/Environment/Runtime_Master_Wall_Main.png",
+	"res://assets/Environment/Runtime_Master_Wall_Concrete.png",
+	"res://assets/Environment/Runtime_Master_Wall_Wood.png",
+]
 const SHADER_PATH := "res://scripts/coordinate_frame_homography.gdshader"
 const SINGLE_WALL_SHADER_PATH := "res://scripts/coordinate_frame_single_homography.gdshader"
 const TEMPLATE_ROOT := "res://assets/CoordinateFrames/"
@@ -44,6 +56,13 @@ var show_runtime_walls := true
 var show_quad_outlines := false
 var show_projection_points := false
 var master_texture: Texture2D
+var debug_wall_texture_index := -1
+var runtime_master_wall_texture_index := -1
+var active_wall_texture_label := "StripeTest"
+var last_wall_entries: Array[Dictionary] = []
+var wall_mip_images: Array[Image] = []
+var integer_uv_scale_snap_enabled := false
+var wall_ewa_filter_enabled := false
 var template_textures: Dictionary = {}
 var legacy_environment_nodes: Array[CanvasItem] = []
 var diagonal_forward_clock := 0.0
@@ -89,7 +108,10 @@ func _initialize() -> void:
 	runtime_wall_layer = Node2D.new()
 	runtime_wall_layer.name = "CoordinateFrameHomographyWalls"
 	runtime_wall_layer.z_index = 8
-	wall_source_image = master_texture.get_image().get_region(Rect2i(16, 8, 128, 88))
+	# Runtime_Master_Wall is already the exact 128x88 master canvas.  The older
+	# source sat inside a 160x120 authored sprite sheet and needed cropping.
+	wall_source_image = master_texture.get_image()
+	_rebuild_wall_mip_chain()
 	wall_render_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
 	wall_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	wall_render_texture = ImageTexture.create_from_image(wall_render_image)
@@ -150,19 +172,87 @@ func _input(event: InputEvent) -> void:
 			show_projection_points = not show_projection_points
 			_rebuild()
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_G:
+			_cycle_debug_wall_texture()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_K:
+			_cycle_runtime_master_wall_texture()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_H:
+			set_integer_uv_scale_snap_enabled(not integer_uv_scale_snap_enabled)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_J:
+			set_wall_ewa_filter_enabled(not wall_ewa_filter_enabled)
+			get_viewport().set_input_as_handled()
 
 func _rebuild() -> void:
 	if runtime_wall_layer == null:
 		return
 	last_signature = _render_signature()
 	var entries: Array[Dictionary] = _visible_wall_entries()
+	last_wall_entries = entries
 	var accepted_count := entries.size()
 	_update_coordinate_background()
 	_rebuild_runtime_wall_surfaces(entries)
 	_update_debug_outlines(entries)
 	_update_projection_point_debug()
 	runtime_wall_layer.visible = show_runtime_walls
-	var status_text := "Coordinate world: %s | %d ray-visible walls | T art %s | Y quads %s | U points %s" % [_pose_key(), accepted_count, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF"]
+	_refresh_runtime_status(accepted_count)
+
+func _cycle_debug_wall_texture() -> void:
+	# Deliberately do not call _rebuild(): the current map/raycast wall layout
+	# remains untouched.  We only resample the already-projecting quads with the
+	# next test image, which makes filtering comparisons direct and repeatable.
+	debug_wall_texture_index = (debug_wall_texture_index + 1) % DEBUG_WALL_TEXTURE_PATHS.size()
+	_set_wall_source_texture(String(DEBUG_WALL_TEXTURE_PATHS[debug_wall_texture_index]))
+
+
+# _cycle_runtime_master_wall_texture: Switch only the source image used by the
+# live quads.  Unlike a map reroll, this deliberately preserves wall geometry,
+# filtering state, visibility, and the player's current position.
+func _cycle_runtime_master_wall_texture() -> void:
+	runtime_master_wall_texture_index = (runtime_master_wall_texture_index + 1) % RUNTIME_MASTER_WALL_TEXTURE_PATHS.size()
+	_set_wall_source_texture(String(RUNTIME_MASTER_WALL_TEXTURE_PATHS[runtime_master_wall_texture_index]))
+
+
+# _set_wall_source_texture: Loads one master texture and immediately resamples
+# the existing CPU wall image.  Both G stripe tests and K master-art tests use
+# this same path to make their comparisons directly equivalent.
+func _set_wall_source_texture(path: String) -> void:
+	var next_texture := load(path) as Texture2D
+	if next_texture == null:
+		push_error("Could not load runtime wall texture: %s" % path)
+		return
+	var next_image := next_texture.get_image()
+	if next_image == null:
+		push_error("Could not read runtime wall texture: %s" % path)
+		return
+	master_texture = next_texture
+	wall_source_image = next_image
+	active_wall_texture_label = path.get_file().get_basename()
+	_rebuild_wall_mip_chain()
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
+
+# set_integer_uv_scale_snap_enabled: Quantizes the texture footprint before it
+# chooses a mip level.  It deliberately does not move a wall quad or camera.
+func set_integer_uv_scale_snap_enabled(enabled: bool) -> void:
+	integer_uv_scale_snap_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
+
+# set_wall_ewa_filter_enabled: Toggles the wall-oriented anisotropic sample
+# pass.  Its major axis is derived from the inverse homography, so it follows
+# the compressed texture direction of a wall instead of assuming floor axes.
+func set_wall_ewa_filter_enabled(enabled: bool) -> void:
+	wall_ewa_filter_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
+func _refresh_runtime_status(visible_wall_count: int) -> void:
+	var status_text := "Coord %s | %d walls | Tex:%s [G/K] | T:%s Y:%s U:%s | H:%s J:%s" % [_pose_key(), visible_wall_count, active_wall_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF"]
 	status.text = status_text
 	runtime_status.text = status_text
 
@@ -200,27 +290,119 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 	var row0: Vector3 = inverse[0]
 	var row1: Vector3 = inverse[1]
 	var row2: Vector3 = inverse[2]
-	var source_width := wall_source_image.get_width()
-	var source_height := wall_source_image.get_height()
 	var light := float(entry["light"])
 	for y in range(min_y, max_y + 1):
 		for x in range(min_x, max_x + 1):
-			var denominator := row2.x * float(x) + row2.y * float(y) + row2.z
-			if absf(denominator) < 0.00001:
+			var uv := _inverse_homography_uv(row0, row1, row2, Vector2(x, y))
+			if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
 				continue
-			var u := (row0.x * float(x) + row0.y * float(y) + row0.z) / denominator
-			var v := (row1.x * float(x) + row1.y * float(y) + row1.z) / denominator
-			if u < 0.0 or u > 1.0 or v < 0.0 or v > 1.0:
-				continue
-			var sample_x := clampi(floori(u * float(source_width - 1)), 0, source_width - 1)
-			var sample_y := clampi(floori(v * float(source_height - 1)), 0, source_height - 1)
-			var color := wall_source_image.get_pixel(sample_x, sample_y)
+			var color := _sample_projected_wall(row0, row1, row2, Vector2(x, y), uv)
 			if color.a <= 0.0:
 				continue
 			color.r *= light
 			color.g *= light
 			color.b *= light
 			wall_render_image.set_pixel(x, y, color)
+
+
+# _inverse_homography_uv: Evaluates the inverse projective map at a screen
+# pixel.  Keeping it separate lets the filter inspect neighboring UVs without
+# changing any of the quad geometry or visibility code.
+func _inverse_homography_uv(row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2) -> Vector2:
+	var denominator := row2.x * pixel.x + row2.y * pixel.y + row2.z
+	if absf(denominator) < 0.00001:
+		return Vector2(-1.0, -1.0)
+	return Vector2(
+		(row0.x * pixel.x + row0.y * pixel.y + row0.z) / denominator,
+		(row1.x * pixel.x + row1.y * pixel.y + row1.z) / denominator
+	)
+
+
+# _sample_projected_wall: Samples the master texture according to the local
+# screen-to-texture footprint.  The default branch preserves old nearest
+# sampling exactly; the two experiments only alter this final lookup.
+func _sample_projected_wall(row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, uv: Vector2) -> Color:
+	if wall_source_image == null:
+		return Color.TRANSPARENT
+	if not integer_uv_scale_snap_enabled and not wall_ewa_filter_enabled:
+		return _sample_image_nearest(wall_source_image, uv)
+	var uv_x := _inverse_homography_uv(row0, row1, row2, pixel + Vector2.RIGHT)
+	var uv_y := _inverse_homography_uv(row0, row1, row2, pixel + Vector2.DOWN)
+	if uv_x.x < 0.0 or uv_y.x < 0.0:
+		return _sample_image_nearest(wall_source_image, uv)
+	var source_size := Vector2(wall_source_image.get_width(), wall_source_image.get_height())
+	var texel_span_x := (uv_x - uv) * source_size
+	var texel_span_y := (uv_y - uv) * source_size
+	var length_x := texel_span_x.length()
+	var length_y := texel_span_y.length()
+	var minor_footprint := maxf(1.0, minf(length_x, length_y))
+	if integer_uv_scale_snap_enabled:
+		minor_footprint = maxf(1.0, roundf(minor_footprint))
+	var mip_level := _mip_level_for_footprint(minor_footprint)
+	var source := wall_mip_images[mip_level] if not wall_mip_images.is_empty() else wall_source_image
+	if not wall_ewa_filter_enabled:
+		return _sample_image_nearest(source, uv)
+	# A wall's compressed source axis is not fixed in screen coordinates.  The
+	# inverse homography tells us its local major axis, so these weighted taps
+	# naturally run vertically into depth on straight walls and rotate correctly
+	# on oblique walls (the counterpart of a floor anisotropic filter).
+	var major_uv := (uv_x - uv) if length_x >= length_y else (uv_y - uv)
+	var major_length := maxf(length_x, length_y)
+	var sample_count := clampi(ceili(major_length / minor_footprint), 1, 8)
+	if sample_count == 1:
+		return _sample_image_nearest(source, uv)
+	var accumulated := Color(0.0, 0.0, 0.0, 0.0)
+	var total_weight := 0.0
+	for index in range(sample_count):
+		var t := (float(index) + 0.5) / float(sample_count) - 0.5
+		var tap_uv := uv + major_uv * t
+		if tap_uv.x < 0.0 or tap_uv.x > 1.0 or tap_uv.y < 0.0 or tap_uv.y > 1.0:
+			continue
+		var weight := 1.0 - absf(t) * 1.5
+		accumulated += _sample_image_nearest(source, tap_uv) * weight
+		total_weight += weight
+	return accumulated / total_weight if total_weight > 0.0 else _sample_image_nearest(source, uv)
+
+
+func _sample_image_nearest(image: Image, uv: Vector2) -> Color:
+	var sample_x := clampi(floori(uv.x * float(image.get_width() - 1)), 0, image.get_width() - 1)
+	var sample_y := clampi(floori(uv.y * float(image.get_height() - 1)), 0, image.get_height() - 1)
+	return image.get_pixel(sample_x, sample_y)
+
+
+func _mip_level_for_footprint(footprint: float) -> int:
+	if wall_mip_images.is_empty() or footprint <= 1.0:
+		return 0
+	var level := floori(log(footprint) / log(2.0))
+	return clampi(level, 0, wall_mip_images.size() - 1)
+
+
+# _rebuild_wall_mip_chain: Builds small CPU mip levels once per source-texture
+# change.  The 160×120 render then reads these prefiltered images instead of
+# averaging full-resolution texels every output pixel.
+func _rebuild_wall_mip_chain() -> void:
+	wall_mip_images.clear()
+	if wall_source_image == null:
+		return
+	var current := wall_source_image
+	wall_mip_images.append(current)
+	while current.get_width() > 1 or current.get_height() > 1:
+		var next_width := maxi(1, current.get_width() / 2)
+		var next_height := maxi(1, current.get_height() / 2)
+		var next := Image.create(next_width, next_height, false, Image.FORMAT_RGBA8)
+		for y in range(next_height):
+			for x in range(next_width):
+				var color_sum := Color(0.0, 0.0, 0.0, 0.0)
+				var samples := 0
+				for offset_y in range(2):
+					for offset_x in range(2):
+						var source_x := mini(current.get_width() - 1, x * 2 + offset_x)
+						var source_y := mini(current.get_height() - 1, y * 2 + offset_y)
+						color_sum += current.get_pixel(source_x, source_y)
+						samples += 1
+				next.set_pixel(x, y, color_sum / float(samples))
+		wall_mip_images.append(next)
+		current = next
 
 func _visible_wall_entries() -> Array[Dictionary]:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
