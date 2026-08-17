@@ -758,7 +758,8 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "slot_tuner", "Slot Graph Tuner")                        # Enable current-screen graph endpoint dragging.
 	_add_debug_menu_check(content, "coordinate_integer_snap", "Integer UV Snap (H)")       # Quantize runtime-wall texture footprint without moving its projected quad.
 	_add_debug_menu_check(content, "coordinate_wall_ewa", "Wall EWA Filter (J)")           # Use mip-assisted anisotropic samples along each projected wall's compressed UV axis.
-	_add_debug_menu_check(content, "coordinate_wall_parallax", "Wall Parallax (P)")         # Toggle raised/recessed depth mapping on the matching runtime master wall.
+	_add_debug_menu_check(content, "coordinate_wall_parallax", "Wall Layers (P)")           # Toggle Layer 1/Layer 2 view-dependent separation on the runtime wall pass.
+	_add_debug_menu_check(content, "coordinate_layer_edge_clamp", "Layer Edge Clamp (L)")    # Extend offset wall-layer edge texels instead of opening transparent UV seams.
 	var save_tuner := Button.new()                                                             # Provide an explicit, reversible save action.
 	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
 	save_tuner.pressed.connect(_save_slot_graph_tuner_overrides)                              # Save edits only when deliberately requested.
@@ -824,7 +825,10 @@ func _debug_option_value(option_key: String) -> bool:
 			return bool(renderer.wall_ewa_filter_enabled) if renderer != null else false            # Keep this option disabled outside the coordinate-frame experiment.
 		"coordinate_wall_parallax":
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Read the optional depth-map experiment state when this branch is active.
-			return bool(renderer.wall_parallax_enabled) and renderer.wall_height_image != null if renderer != null else false # Only show checked when the active color texture has associated height data.
+			return bool(renderer.wall_parallax_enabled) and renderer.wall_layer1_image != null and renderer.wall_layer2_image != null if renderer != null else false # Only show checked when both authored runtime wall layers are available.
+		"coordinate_layer_edge_clamp":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Read the independent UV-fringe cleanup mode.
+			return bool(renderer.layer_uv_edge_clamp_enabled) if renderer != null else false
 		_:
 			return false                                                                           # Keep unknown future menu keys safely disabled.
 
@@ -866,6 +870,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the runtime wall depth-map experiment without affecting legacy walls.
 			if renderer != null and renderer.has_method("set_wall_parallax_enabled"):
 				renderer.set_wall_parallax_enabled(enabled)                                          # Switch relief mapping while preserving the current layout and source texture.
+		"coordinate_layer_edge_clamp":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the runtime wall layer pass without affecting legacy walls.
+			if renderer != null and renderer.has_method("set_layer_uv_edge_clamp_enabled"):
+				renderer.set_layer_uv_edge_clamp_enabled(enabled)                                    # Choose edge-clamped or raw transparent UV behavior.
 		_:
 			return                                                                                # Ignore unsupported keys without redrawing.
 	_render_all_player_views()                                                                 # Redraw every local view immediately so changes are visible at once.

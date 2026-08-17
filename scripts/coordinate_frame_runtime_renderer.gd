@@ -5,7 +5,9 @@
 extends Node
 
 const VIEW_SIZE := Vector2(160.0, 120.0)
-const MASTER_WALL_PATH := "res://assets/Environment/StripeTest.png"
+const WALL_LAYER1_PATH := "res://assets/Environment/Wall_Layer1.png"
+const WALL_LAYER2_PATH := "res://assets/Environment/Wall_layer2.png"
+const MASTER_WALL_PATH := WALL_LAYER1_PATH
 const RUNTIME_MASTER_WALL_MAIN_PATH := "res://assets/Environment/Runtime_Master_Wall_Main.png"
 const RUNTIME_MASTER_WALL_MAIN_HEIGHT_PATH := "res://assets/Environment/Runtime_Master_Wall_Main_height.png"
 const DEBUG_WALL_TEXTURE_PATHS := [
@@ -51,6 +53,8 @@ var wall_render_image: Image
 var wall_render_texture: ImageTexture
 var wall_source_image: Image
 var wall_height_image: Image
+var wall_layer1_image: Image
+var wall_layer2_image: Image
 var coordinate_background: Sprite2D
 var status: Label
 var runtime_status: Label
@@ -66,15 +70,16 @@ var runtime_master_wall_texture_index := -1
 var active_wall_texture_label := "StripeTest"
 var last_wall_entries: Array[Dictionary] = []
 var wall_mip_images: Array[Image] = []
+var wall_layer1_mip_images: Array[Image] = []
+var wall_layer2_mip_images: Array[Image] = []
 var integer_uv_scale_snap_enabled := false
 var wall_ewa_filter_enabled := false
 var wall_parallax_enabled := true
 var parallax_max_texels := 4.0
 var parallax_side_multiplier := 1.0
 var parallax_vertical_multiplier := 1.0
-var parallax_height_anchor := 0.0
-var parallax_height_gamma := 1.0
-var parallax_layer_count := 12
+var layer_movement_balance := 1.0
+var layer_uv_edge_clamp_enabled := true
 var template_textures: Dictionary = {}
 var legacy_environment_nodes: Array[CanvasItem] = []
 var diagonal_forward_clock := 0.0
@@ -123,7 +128,8 @@ func _initialize() -> void:
 	# Runtime_Master_Wall is already the exact 128x88 master canvas.  The older
 	# source sat inside a 160x120 authored sprite sheet and needed cropping.
 	wall_source_image = master_texture.get_image()
-	_set_height_texture_for_color_path(MASTER_WALL_PATH)
+	_load_runtime_wall_layers()
+	active_wall_texture_label = "Wall_Layer1 + Layer2"
 	_rebuild_wall_mip_chain()
 	wall_render_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
 	wall_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
@@ -201,6 +207,9 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_P:
 			set_wall_parallax_enabled(not wall_parallax_enabled)
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_L:
+			set_layer_uv_edge_clamp_enabled(not layer_uv_edge_clamp_enabled)
+			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_O:
 			_toggle_parallax_tuner()
 			get_viewport().set_input_as_handled()
@@ -256,6 +265,31 @@ func _set_wall_source_texture(path: String) -> void:
 	_refresh_runtime_status(last_wall_entries.size())
 
 
+# _load_runtime_wall_layers: Reads the two authored 128×88 surfaces once.  The
+# base layer is opaque; the front layer's alpha is preserved and composited only
+# after both images have received their individual view-dependent UV offsets.
+func _load_runtime_wall_layers() -> void:
+	wall_layer1_image = null
+	wall_layer2_image = null
+	var layer1_texture := load(WALL_LAYER1_PATH) as Texture2D
+	var layer2_texture := load(WALL_LAYER2_PATH) as Texture2D
+	if layer1_texture == null or layer2_texture == null:
+		push_error("Could not load runtime wall layer textures.")
+		return
+	wall_layer1_image = layer1_texture.get_image()
+	wall_layer2_image = layer2_texture.get_image()
+	if wall_layer1_image == null or wall_layer2_image == null:
+		push_error("Could not read runtime wall layer textures.")
+		return
+	if wall_layer1_image.get_size() != wall_layer2_image.get_size():
+		push_error("Runtime wall layers must share the same dimensions.")
+		wall_layer1_image = null
+		wall_layer2_image = null
+		return
+	wall_layer1_mip_images = _build_mip_chain(wall_layer1_image)
+	wall_layer2_mip_images = _build_mip_chain(wall_layer2_image)
+
+
 # _set_height_texture_for_color_path: Height data belongs to one specific
 # authored color texture.  Other test textures intentionally stay flat so the
 # stripe/mip experiments remain isolated and comparable.
@@ -302,6 +336,15 @@ func set_wall_parallax_enabled(enabled: bool) -> void:
 	_refresh_runtime_status(last_wall_entries.size())
 
 
+# set_layer_uv_edge_clamp_enabled: Extends an offset layer's outermost texel
+# when its UV shift exits the source rectangle.  Unlike tiling, this never
+# repeats windows or trim; it only prevents transparent fringe gaps at a wall.
+func set_layer_uv_edge_clamp_enabled(enabled: bool) -> void:
+	layer_uv_edge_clamp_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
+
 # _setup_parallax_tuner: Builds a separate, visible live-tuning panel instead
 # of appending controls below the clipped F3 menu.  It lives on the CanvasLayer
 # and only changes this experimental CPU renderer while the game keeps running.
@@ -321,20 +364,18 @@ func _setup_parallax_tuner() -> void:
 	section.add_theme_constant_override("separation", 3)
 	parallax_tuner_panel.add_child(section)
 	var heading := Label.new()
-	heading.text = "RUNTIME WALL PARALLAX  [O closes]"
+	heading.text = "RUNTIME WALL LAYERS  [O closes]"
 	heading.add_theme_font_size_override("font_size", 14)
 	section.add_child(heading)
 	var hint := Label.new()
-	hint.text = "Live tuning • applies to Runtime_Master_Wall_Main"
+	hint.text = "Layer 1 base + transparent Layer 2 • live tuning"
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_font_size_override("font_size", 11)
 	section.add_child(hint)
-	_add_parallax_tuning_slider(section, "Depth", "depth", 0.0, 16.0, 0.25, parallax_max_texels, "px")
-	_add_parallax_tuning_slider(section, "Side", "side", -2.0, 2.0, 0.05, parallax_side_multiplier, "x")
-	_add_parallax_tuning_slider(section, "Vertical", "vertical", -2.0, 2.0, 0.05, parallax_vertical_multiplier, "x")
-	_add_parallax_tuning_slider(section, "Anchor tone", "anchor", 0.0, 1.0, 0.01, parallax_height_anchor, "")
-	_add_parallax_tuning_slider(section, "Height curve", "gamma", 0.15, 4.0, 0.05, parallax_height_gamma, "")
-	_add_parallax_tuning_slider(section, "March layers", "layers", 1.0, 32.0, 1.0, float(parallax_layer_count), "")
+	_add_parallax_tuning_slider(section, "Layer separation", "depth", 0.0, 16.0, 0.25, parallax_max_texels, "px")
+	_add_parallax_tuning_slider(section, "Movement balance", "balance", -1.0, 1.0, 0.05, layer_movement_balance, "")
+	_add_parallax_tuning_slider(section, "Side response", "side", -2.0, 2.0, 0.05, parallax_side_multiplier, "x")
+	_add_parallax_tuning_slider(section, "Vertical response", "vertical", -2.0, 2.0, 0.05, parallax_vertical_multiplier, "x")
 
 
 func _toggle_parallax_tuner() -> void:
@@ -368,9 +409,9 @@ func _add_parallax_tuning_slider(parent: VBoxContainer, title: String, key: Stri
 
 
 func _update_parallax_slider_label(label: Label, title: String, value: float, suffix: String) -> void:
-	if title == "Anchor tone":
-		var anchor_name := "black" if value <= 0.01 else "white" if value >= 0.99 else "grey"
-		label.text = "Anchor tone: %.2f (%s stays fixed)" % [value, anchor_name]
+	if title == "Movement balance":
+		var balance_name := "Layer 1 moves" if value <= -0.99 else "Layer 2 moves" if value >= 0.99 else "split opposite"
+		label.text = "Movement balance: %.2f (%s)" % [value, balance_name]
 		return
 	var formatted := "%d" % roundi(value) if suffix.is_empty() and title == "March layers" else "%.2f" % value
 	label.text = "%s: %s%s" % [title, formatted, suffix]
@@ -381,14 +422,14 @@ func _set_parallax_tuning_value(key: String, value: float) -> void:
 		"depth": parallax_max_texels = value
 		"side": parallax_side_multiplier = value
 		"vertical": parallax_vertical_multiplier = value
-		"anchor": parallax_height_anchor = value
-		"gamma": parallax_height_gamma = value
-		"layers": parallax_layer_count = maxi(1, roundi(value))
+		"balance": layer_movement_balance = value
 	_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_refresh_runtime_status(last_wall_entries.size())
 
 func _refresh_runtime_status(visible_wall_count: int) -> void:
-	var status_text := "Coord %s | %d walls | Tex:%s [G/K] | T:%s Y:%s U:%s | H:%s J:%s P:%s O:%s" % [_pose_key(), visible_wall_count, active_wall_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and wall_height_image != null else "OFF", "ON" if parallax_tuner_open else "OFF"]
+	var layer_mode_available := wall_layer1_image != null and wall_layer2_image != null
+	var displayed_texture_label := "Wall_Layer1+Layer2" if wall_parallax_enabled and layer_mode_available else active_wall_texture_label
+	var status_text := "Coord %s | %d walls | Tex:%s [G/K] | T:%s Y:%s U:%s | H:%s J:%s P:%s L:%s O:%s" % [_pose_key(), visible_wall_count, displayed_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if parallax_tuner_open else "OFF"]
 	status.text = status_text
 	runtime_status.text = status_text
 
@@ -454,22 +495,56 @@ func _inverse_homography_uv(row0: Vector3, row1: Vector3, row2: Vector3, pixel: 
 	)
 
 
-# _sample_projected_wall: Samples the master texture according to the local
-# screen-to-texture footprint.  The default branch preserves old nearest
-# sampling exactly; the two experiments only alter this final lookup.
+# _sample_projected_wall: Projects two authored surfaces independently.  The
+# visible base is Layer 1; transparent Layer 2 is then alpha-composited over
+# it.  Their relative UV shift is driven solely by view obliqueness, not a
+# height field, so an artist can control relief directly in the two bitmaps.
 func _sample_projected_wall(entry: Dictionary, row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, uv: Vector2) -> Color:
-	if wall_source_image == null:
+	if wall_parallax_enabled and wall_layer1_image != null and wall_layer2_image != null:
+		var view_offset := _layer_parallax_uv_offset(entry)
+		# -1 = Layer 1 moves and Layer 2 stays; 0 = equal/opposite; +1 = Layer
+		# 1 stays and Layer 2 moves.  This makes the requested movement sharing a
+		# single continuous control rather than an all-or-nothing inversion.
+		var layer1_weight := (layer_movement_balance - 1.0) * 0.5
+		var layer2_weight := (layer_movement_balance + 1.0) * 0.5
+		var bottom := _sample_projected_image(wall_layer1_image, wall_layer1_mip_images, row0, row1, row2, pixel, uv + view_offset * layer1_weight, layer_uv_edge_clamp_enabled)
+		var top := _sample_projected_image(wall_layer2_image, wall_layer2_mip_images, row0, row1, row2, pixel, uv + view_offset * layer2_weight, layer_uv_edge_clamp_enabled)
+		return _alpha_over(bottom, top)
+	return _sample_projected_image(wall_source_image, wall_mip_images, row0, row1, row2, pixel, uv)
+
+
+func _layer_parallax_uv_offset(entry: Dictionary) -> Vector2:
+	var first: Vector2 = entry.get("first_local", Vector2.ZERO)
+	var second: Vector2 = entry.get("second_local", Vector2.ZERO)
+	var tangent := second - first
+	if tangent.length_squared() < 0.00001 or wall_layer1_image == null:
+		return Vector2.ZERO
+	tangent = tangent.normalized()
+	var center := (first + second) * 0.5
+	var view_distance := maxf(center.length(), NEAR_CLIP)
+	var sideways_view := clampf(-center.dot(tangent) / view_distance, -1.0, 1.0)
+	var vertical_view := clampf((VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT * 0.5) / maxf(center.y, NEAR_CLIP), -0.35, 0.35)
+	return Vector2(
+		sideways_view * parallax_side_multiplier * parallax_max_texels / float(wall_layer1_image.get_width()),
+		vertical_view * parallax_vertical_multiplier * parallax_max_texels / float(wall_layer1_image.get_height())
+	)
+
+
+func _sample_projected_image(source_image: Image, mip_chain: Array[Image], row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, sample_uv: Vector2, clamp_to_edge := false) -> Color:
+	if source_image == null:
 		return Color.TRANSPARENT
-	var sample_uv := _parallax_occlusion_uv(entry, uv)
-	if sample_uv.x < 0.0 or sample_uv.x > 1.0 or sample_uv.y < 0.0 or sample_uv.y > 1.0:
+	if clamp_to_edge:
+		sample_uv = sample_uv.clamp(Vector2.ZERO, Vector2.ONE)
+	elif sample_uv.x < 0.0 or sample_uv.x > 1.0 or sample_uv.y < 0.0 or sample_uv.y > 1.0:
 		return Color.TRANSPARENT
 	if not integer_uv_scale_snap_enabled and not wall_ewa_filter_enabled:
-		return _sample_image_nearest(wall_source_image, sample_uv)
+		return _sample_image_nearest(source_image, sample_uv)
+	var uv := _inverse_homography_uv(row0, row1, row2, pixel)
 	var uv_x := _inverse_homography_uv(row0, row1, row2, pixel + Vector2.RIGHT)
 	var uv_y := _inverse_homography_uv(row0, row1, row2, pixel + Vector2.DOWN)
 	if uv_x.x < 0.0 or uv_y.x < 0.0:
-		return _sample_image_nearest(wall_source_image, sample_uv)
-	var source_size := Vector2(wall_source_image.get_width(), wall_source_image.get_height())
+		return _sample_image_nearest(source_image, sample_uv)
+	var source_size := Vector2(source_image.get_width(), source_image.get_height())
 	var texel_span_x := (uv_x - uv) * source_size
 	var texel_span_y := (uv_y - uv) * source_size
 	var length_x := texel_span_x.length()
@@ -477,14 +552,10 @@ func _sample_projected_wall(entry: Dictionary, row0: Vector3, row1: Vector3, row
 	var minor_footprint := maxf(1.0, minf(length_x, length_y))
 	if integer_uv_scale_snap_enabled:
 		minor_footprint = maxf(1.0, roundf(minor_footprint))
-	var mip_level := _mip_level_for_footprint(minor_footprint)
-	var source := wall_mip_images[mip_level] if not wall_mip_images.is_empty() else wall_source_image
+	var mip_level := _mip_level_for_footprint(minor_footprint, mip_chain)
+	var source := mip_chain[mip_level] if not mip_chain.is_empty() else source_image
 	if not wall_ewa_filter_enabled:
 		return _sample_image_nearest(source, sample_uv)
-	# A wall's compressed source axis is not fixed in screen coordinates.  The
-	# inverse homography tells us its local major axis, so these weighted taps
-	# naturally run vertically into depth on straight walls and rotate correctly
-	# on oblique walls (the counterpart of a floor anisotropic filter).
 	var major_uv := (uv_x - uv) if length_x >= length_y else (uv_y - uv)
 	var major_length := maxf(length_x, length_y)
 	var sample_count := clampi(ceili(major_length / minor_footprint), 1, 8)
@@ -495,7 +566,9 @@ func _sample_projected_wall(entry: Dictionary, row0: Vector3, row1: Vector3, row
 	for index in range(sample_count):
 		var t := (float(index) + 0.5) / float(sample_count) - 0.5
 		var tap_uv := sample_uv + major_uv * t
-		if tap_uv.x < 0.0 or tap_uv.x > 1.0 or tap_uv.y < 0.0 or tap_uv.y > 1.0:
+		if clamp_to_edge:
+			tap_uv = tap_uv.clamp(Vector2.ZERO, Vector2.ONE)
+		elif tap_uv.x < 0.0 or tap_uv.x > 1.0 or tap_uv.y < 0.0 or tap_uv.y > 1.0:
 			continue
 		var weight := 1.0 - absf(t) * 1.5
 		accumulated += _sample_image_nearest(source, tap_uv) * weight
@@ -503,51 +576,16 @@ func _sample_projected_wall(entry: Dictionary, row0: Vector3, row1: Vector3, row
 	return accumulated / total_weight if total_weight > 0.0 else _sample_image_nearest(source, sample_uv)
 
 
-# _parallax_occlusion_uv: Performs a deliberately shallow parallax-occlusion
-# march through Runtime_Master_Wall_Main_height.  The adjustable anchor tone
-# chooses the stationary greyscale: with black at 0.0, white moves along the
-# ray; with white at 1.0, black moves in the opposite direction; a grey anchor
-# sends lighter and darker detail away from each other.  The texture ray is
-# derived from the actual wall edge and view position, so relief grows while
-# looking along a hallway wall and fades on a front-facing wall.
-func _parallax_occlusion_uv(entry: Dictionary, base_uv: Vector2) -> Vector2:
-	if not wall_parallax_enabled or wall_height_image == null or wall_source_image == null:
-		return base_uv
-	var first: Vector2 = entry.get("first_local", Vector2.ZERO)
-	var second: Vector2 = entry.get("second_local", Vector2.ZERO)
-	var tangent := second - first
-	if tangent.length_squared() < 0.00001:
-		return base_uv
-	tangent = tangent.normalized()
-	var center := (first + second) * 0.5
-	var view_distance := maxf(center.length(), NEAR_CLIP)
-	var sideways_view := clampf(-center.dot(tangent) / view_distance, -1.0, 1.0)
-	var vertical_view := clampf((VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT * 0.5) / maxf(center.y, NEAR_CLIP), -0.35, 0.35)
-	var max_offset := Vector2(
-		sideways_view * parallax_side_multiplier * parallax_max_texels / float(wall_source_image.get_width()),
-		vertical_view * parallax_vertical_multiplier * parallax_max_texels / float(wall_source_image.get_height())
+func _alpha_over(bottom: Color, top: Color) -> Color:
+	var output_alpha := top.a + bottom.a * (1.0 - top.a)
+	if output_alpha <= 0.0:
+		return Color.TRANSPARENT
+	return Color(
+		(top.r * top.a + bottom.r * bottom.a * (1.0 - top.a)) / output_alpha,
+		(top.g * top.a + bottom.g * bottom.a * (1.0 - top.a)) / output_alpha,
+		(top.b * top.a + bottom.b * bottom.a * (1.0 - top.a)) / output_alpha,
+		output_alpha
 	)
-	if max_offset.length_squared() < 0.0000001:
-		return base_uv
-	var uv := base_uv
-	var signed_march_depth := 0.0
-	var depth_step := 1.0 / float(parallax_layer_count)
-	var uv_step := max_offset / float(parallax_layer_count)
-	for _layer in range(parallax_layer_count):
-		var height := pow(_sample_image_nearest(wall_height_image, uv).r, parallax_height_gamma)
-		var relative_height := height - parallax_height_anchor
-		if absf(signed_march_depth) >= absf(relative_height):
-			break
-		var direction := 1.0 if relative_height >= 0.0 else -1.0
-		# The anchor gives each tone a signed travel direction.  At the default
-		# black anchor this is the original white-moves behavior; moving the anchor
-		# toward white instead keeps bright relief stable and exposes dark recesses.
-		var next_uv := uv + uv_step * direction
-		if next_uv.x < 0.0 or next_uv.x > 1.0 or next_uv.y < 0.0 or next_uv.y > 1.0:
-			break
-		uv = next_uv
-		signed_march_depth += depth_step * direction
-	return uv
 
 
 func _sample_image_nearest(image: Image, uv: Vector2) -> Color:
@@ -556,22 +594,26 @@ func _sample_image_nearest(image: Image, uv: Vector2) -> Color:
 	return image.get_pixel(sample_x, sample_y)
 
 
-func _mip_level_for_footprint(footprint: float) -> int:
-	if wall_mip_images.is_empty() or footprint <= 1.0:
+func _mip_level_for_footprint(footprint: float, mip_chain: Array[Image]) -> int:
+	if mip_chain.is_empty() or footprint <= 1.0:
 		return 0
 	var level := floori(log(footprint) / log(2.0))
-	return clampi(level, 0, wall_mip_images.size() - 1)
+	return clampi(level, 0, mip_chain.size() - 1)
 
 
 # _rebuild_wall_mip_chain: Builds small CPU mip levels once per source-texture
 # change.  The 160×120 render then reads these prefiltered images instead of
 # averaging full-resolution texels every output pixel.
 func _rebuild_wall_mip_chain() -> void:
-	wall_mip_images.clear()
-	if wall_source_image == null:
-		return
-	var current := wall_source_image
-	wall_mip_images.append(current)
+	wall_mip_images = _build_mip_chain(wall_source_image)
+
+
+func _build_mip_chain(source_image: Image) -> Array[Image]:
+	var mip_chain: Array[Image] = []
+	if source_image == null:
+		return mip_chain
+	var current := source_image
+	mip_chain.append(current)
 	while current.get_width() > 1 or current.get_height() > 1:
 		var next_width := maxi(1, current.get_width() / 2)
 		var next_height := maxi(1, current.get_height() / 2)
@@ -587,8 +629,9 @@ func _rebuild_wall_mip_chain() -> void:
 						color_sum += current.get_pixel(source_x, source_y)
 						samples += 1
 				next.set_pixel(x, y, color_sum / float(samples))
-		wall_mip_images.append(next)
+		mip_chain.append(next)
 		current = next
+	return mip_chain
 
 func _visible_wall_entries() -> Array[Dictionary]:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
