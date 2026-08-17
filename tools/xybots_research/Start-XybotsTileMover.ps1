@@ -3,6 +3,15 @@ Add-Type -AssemblyName System.Drawing
 
 $ErrorActionPreference = 'Stop'
 
+# Keep this always-on-top helper single-instance. The Photoshop launcher can
+# be invoked repeatedly from an Action, but duplicate panels would control the
+# same active document and make tile moves unpredictable.
+$createdTileMoverMutex = $false
+$script:xybotsTileMoverMutex = [System.Threading.Mutex]::new($true, 'Local\XybotsTileMover', [ref]$createdTileMoverMutex)
+if (-not $createdTileMoverMutex) {
+    exit 0
+}
+
 $tileSize = 8
 $state = [ordered]@{
     TopRowY = $null
@@ -133,7 +142,21 @@ function Get-DocumentInfo {
         throw new Error("Open the Photoshop document first.");
     }
     var doc = app.activeDocument;
-    return Math.round(doc.width.as("px")) + "," + Math.round(doc.height.as("px"));
+    var previousRulerUnits = app.preferences.rulerUnits;
+    try {
+        // Photoshop 2026's UnitValue.as("px") can return NaN through COM.
+        // With pixels temporarily selected as the ruler unit, .value is the
+        // native numeric pixel count and remains reliable.
+        app.preferences.rulerUnits = Units.PIXELS;
+        var width = Number(doc.width.value);
+        var height = Number(doc.height.value);
+        if (isNaN(width) || isNaN(height)) {
+            throw new Error("Photoshop did not return pixel document dimensions.");
+        }
+        return Math.round(width) + "," + Math.round(height);
+    } finally {
+        app.preferences.rulerUnits = previousRulerUnits;
+    }
 })();
 '@
 
@@ -170,13 +193,32 @@ function Get-SelectedTile {
     if (!app.documents.length) {
         throw new Error("Open the Photoshop document first.");
     }
-    var bounds;
+    var bounds, previousRulerUnits;
     try {
+        // Photoshop 2026 can otherwise return UnitValue strings in the
+        // document's current ruler units. Read the selection explicitly in
+        // pixels so the external helper never tries to parse values such as
+        // "NaN" or a non-pixel measurement.
+        previousRulerUnits = app.preferences.rulerUnits;
+        app.preferences.rulerUnits = Units.PIXELS;
         bounds = app.activeDocument.selection.bounds;
     } catch (error) {
         throw new Error("Select an 8x8 tile with the rectangular marquee first.");
+    } finally {
+        if (previousRulerUnits !== undefined) {
+            app.preferences.rulerUnits = previousRulerUnits;
+        }
     }
-    return Math.round(bounds[0].as("px")) + "," + Math.round(bounds[1].as("px"));
+
+    function pixels(value) {
+        var result = parseFloat(value.as("px"));
+        if (isNaN(result)) {
+            throw new Error("Photoshop did not return a pixel position for the current selection.");
+        }
+        return Math.round(result);
+    }
+
+    return pixels(bounds[0]) + "," + pixels(bounds[1]);
 })();
 '@
 
@@ -249,6 +291,7 @@ function Move-Tile {
     var layerId = $LayerId;
     var doc = app.activeDocument;
     var xybotsMoveResult = "moved";
+    var previousDialogMode = app.displayDialogs;
 
     function selectLayerById(id) {
         var ref = new ActionReference();
@@ -274,28 +317,80 @@ function Move-Tile {
 
         selectTile(sourceX, sourceY);
         try {
-            executeAction(charIDToTypeID("CtTL"), undefined, DialogModes.NO);
+            // Match the original JSX tool's real move operation exactly:
+            // copy the selected pixels, clear them from their source, paste
+            // into a temporary layer, position that layer, then merge it
+            // back down. Copy-to-layer (CtTL) only duplicated the source
+            // pixels in Photoshop 2026, which is why the old helper appeared
+            // to advance without actually moving a tile.
+            doc.selection.copy(false);
+
+            // Photoshop crops transparent pixels out of the clipboard. A
+            // clipboard preview therefore starts at the left of the current
+            // marquee and cannot tell us where its pixels were inside the
+            // original tile. Instead, duplicate the source layer and erase
+            // everything *outside* the source marquee on that disposable
+            // copy. Its bounds give the true in-cell offset.
+            var sourceProbe = sourceLayer.duplicate();
+            var oldRulerUnits = app.preferences.rulerUnits;
+            app.preferences.rulerUnits = Units.PIXELS;
+            var sourceOffsetX, sourceOffsetY;
+            try {
+                doc.activeLayer = sourceProbe;
+                doc.selection.invert();
+                doc.selection.clear();
+                doc.selection.invert();
+                var sourceBounds = sourceProbe.bounds;
+                sourceOffsetX = Math.round(Number(sourceBounds[0].value)) - sourceX;
+                sourceOffsetY = Math.round(Number(sourceBounds[1].value)) - sourceY;
+                if (isNaN(sourceOffsetX) || isNaN(sourceOffsetY)) {
+                    throw new Error("Photoshop did not return pixel bounds for the source tile.");
+                }
+            } finally {
+                app.preferences.rulerUnits = oldRulerUnits;
+                sourceProbe.remove();
+                doc.activeLayer = sourceLayer;
+                selectTile(sourceX, sourceY);
+            }
+
+            doc.selection.clear();
         } catch (cutError) {
-            if (!/empty/i.test(cutError.message)) {
+            // Photoshop 2026 reports an empty pixel selection as error 54
+            // ("User cancelled the operation") after it shows its own
+            // "selected area is empty" dialog. Treat that as an ordinary
+            // empty tile so the panel can report it without interrupting the
+            // workflow.
+            if (!/empty|cancel/i.test(cutError.message) && cutError.number != 54) {
                 throw cutError;
             }
             xybotsMoveResult = "empty";
             selectTile(finalSelectX, finalSelectY);
             return;
         }
-        var movedLayer = doc.activeLayer;
-        if (movedLayer == sourceLayer) {
-            throw new Error("Photoshop did not isolate the selected 8x8 tile; aborting before moving the source layer.");
-        }
+
+        selectTile(targetX, targetY);
+        var movedLayer = doc.paste();
         movedLayer.name = "xybots tile move";
         movedLayer.blendMode = BlendMode.NORMAL;
         movedLayer.opacity = 100;
 
         doc.activeLayer = movedLayer;
-        movedLayer.translate(targetX - sourceX, targetY - sourceY);
+        var targetOldRulerUnits = app.preferences.rulerUnits;
+        app.preferences.rulerUnits = Units.PIXELS;
+        try {
+            var targetBounds = movedLayer.bounds;
+            var pastedTargetX = Math.round(Number(targetBounds[0].value));
+            var pastedTargetY = Math.round(Number(targetBounds[1].value));
+            if (isNaN(pastedTargetX) || isNaN(pastedTargetY)) {
+                throw new Error("Photoshop did not return pixel bounds for the pasted tile.");
+            }
+            movedLayer.translate((targetX + sourceOffsetX) - pastedTargetX, (targetY + sourceOffsetY) - pastedTargetY);
+        } finally {
+            app.preferences.rulerUnits = targetOldRulerUnits;
+        }
 
         try {
-            executeAction(charIDToTypeID("Mrg2"), undefined, DialogModes.NO);
+            doc.activeLayer = movedLayer.merge();
         } catch (mergeError) {
             // If merge-down is refused, leave the small moved-tile layer. The
             // source layer remains locked by id for later operations.
@@ -304,7 +399,12 @@ function Move-Tile {
         selectTile(finalSelectX, finalSelectY);
     }
 
-    doc.suspendHistory("Xybots Tile Move", "xybotsTileMoverMove()");
+    app.displayDialogs = DialogModes.NO;
+    try {
+        doc.suspendHistory("Xybots Tile Move", "xybotsTileMoverMove()");
+    } finally {
+        app.displayDialogs = previousDialogMode;
+    }
     return xybotsMoveResult;
 })();
 "@
