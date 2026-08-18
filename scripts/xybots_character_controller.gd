@@ -574,7 +574,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_raycast_debug := false                                                      # Show individual visibility rays and their first-hit points on the top-down map.
 @export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
-@export var show_slot_grid_debug := true                                                     # Show blue diagnostic slot numbers in the top-down and player-view grids.
+@export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
 
@@ -618,6 +618,9 @@ var environment_layer: Node2D                                                   
 var perspective_extents_overlay: Node2D                                                     # Store the projected-square debug overlay for the currently bound player view.
 var view_slot_overlay: Node2D                                                               # Store the blue player-view slot-number diagnostic overlay for the currently bound view.
 var debug_map_overlay: Node2D                                                               # Store the top-down debug line map drawn over the game view.
+var debug_map_static_layer: Node2D                                                          # Store the persistent maze-grid portion of the top-down map so it is not recreated every frame.
+var debug_map_dynamic_layer: Node2D                                                         # Store player markers, cones, and optional live diagnostics for the top-down map.
+var debug_map_draw_layer: Node2D                                                            # Temporarily routes debug-map helper primitives into the static or dynamic map layer.
 var opponent_sprite: AnimatedSprite2D                                                       # Store the currently bound sprite used to show the other local player.
 var diagnostic_3d_viewport: SubViewport                                                     # Store the low-resolution 3D diagnostic renderer.
 var diagnostic_3d_display: Sprite2D                                                         # Store the 2D sprite that displays the 3D diagnostic viewport texture.
@@ -1040,6 +1043,8 @@ func _store_bound_view_nodes(player_index: int) -> void:                        
 	view["perspective_extents_overlay"] = perspective_extents_overlay                          # Store this player's projected-square debug overlay.
 	view["view_slot_overlay"] = view_slot_overlay                                              # Store this player's blue slot-number audit overlay.
 	view["debug_map_overlay"] = debug_map_overlay                                              # Store this player's top-down debug map overlay.
+	view["debug_map_static_layer"] = debug_map_static_layer                                   # Store this player's retained maze-grid layer.
+	view["debug_map_dynamic_layer"] = debug_map_dynamic_layer                                 # Store this player's live marker/cone layer.
 	player_views[player_index] = view                                                          # Write the updated view bundle back into the array.
 
 
@@ -1060,6 +1065,8 @@ func _bind_player_context(player_index: int) -> void:                           
 	straight_wall_label_nodes = view.get("straight_wall_label_nodes", straight_wall_label_nodes) # Bind this player's wall-label nodes.
 	perspective_extents_overlay = view.get("perspective_extents_overlay", perspective_extents_overlay) # Bind this player's projected-square debug overlay.
 	view_slot_overlay = view.get("view_slot_overlay", view_slot_overlay)                       # Bind this player's blue slot-number audit overlay.
+	debug_map_static_layer = view.get("debug_map_static_layer", debug_map_static_layer)        # Bind this player's retained maze-grid overlay layer.
+	debug_map_dynamic_layer = view.get("debug_map_dynamic_layer", debug_map_dynamic_layer)     # Bind this player's live map-marker overlay layer.
 	debug_map_overlay = view.get("debug_map_overlay", debug_map_overlay)                       # Bind this player's top-down source map.
 	if player_index >= player_states.size():                                                   # Skip state loading if setup has not created states yet.
 		return                                                                                    # Return with only view nodes bound.
@@ -1225,6 +1232,33 @@ func _process_player_context(delta: float) -> void:                             
 
 # _render_bound_player_context: Redraws the currently bound player's wall view, self sprite, opponent sprite, and map.
 func _render_bound_player_context() -> void:                                              # Declare this function.
+	var legacy_render_started_us := Time.get_ticks_usec()                                      # Time the inherited sprite/map/debug pass before the coordinate compositor replaces its environment.
+	var coordinate_renderer: Node = null                                                        # Resolve this view's optional replacement compositor before spending time on legacy artwork.
+	if active_player_index < coordinate_renderers.size():                                      # Only resolve a slot that has been registered for this local player.
+		var candidate_renderer := coordinate_renderers[active_player_index]                       # Read the player-specific compositor without assuming both players exist.
+		if is_instance_valid(candidate_renderer) and candidate_renderer.has_method("render_bound_player_context"): # Accept only a live compositor that can render a bound view.
+			coordinate_renderer = candidate_renderer                                                # Keep the validated replacement renderer for this frame.
+	if coordinate_renderer != null:                                                            # The coordinate renderer owns the environment, so skip the expensive legacy wall/slot composition.
+		# The runtime coordinate renderer maps real grid edges directly into the
+		# Blender-authored frame.  Its source map is the authoritative debug view,
+		# so never leave a previously-drawn legacy slot graph over this compositor.
+		show_slot_grid_debug = false
+		show_selected_wall_slot_debug = false
+		show_perspective_extents_overlay = false
+		if is_instance_valid(view_slot_overlay):
+			view_slot_overlay.visible = false
+		if is_instance_valid(perspective_extents_overlay):
+			perspective_extents_overlay.visible = false
+		_position_player()                                                                        # Keep the active player's sprite synchronized with movement and authored transition frames.
+		_position_opponent_sprite()                                                               # Keep the opponent in the shared local view without invoking legacy wall visibility work.
+		_update_debug_map_overlay()                                                               # Retain the shared top-down map, including both player markers and cones.
+		var coordinate_legacy_elapsed_us := Time.get_ticks_usec() - legacy_render_started_us      # Measure the deliberately retained non-environment work for the profiler.
+		if coordinate_renderer.has_method("record_legacy_render_time"):                         # Let the replacement renderer include this retained controller cost in its CSV sample.
+			coordinate_renderer.record_legacy_render_time(coordinate_legacy_elapsed_us)             # Store the small player/map-only legacy timing value.
+		coordinate_renderer.render_bound_player_context(get_process_delta_time())                 # Render the coordinate environment after the actors and shared map are current.
+		if enable_3d_diagnostic and active_player_index == 0:                                     # Keep the deprecated diagnostic usable without re-enabling the legacy renderer.
+			_update_3d_diagnostic()                                                                  # Sync its camera to player one's current state.
+		return                                                                                    # Do not redraw hidden legacy environment sprites, slot labels, or perspective guides every frame.
 	if is_transitioning:                                                                       # Keep captured transition frames visible when a transition is playing.
 		_position_player()                                                                        # Keep the player sprite registered over the transition frame.
 	elif _is_forward_view() or _is_strafe_view():                                               # Compose either authored translation camera over its matching standalone floor frame.
@@ -1243,13 +1277,14 @@ func _render_bound_player_context() -> void:                                    
 	_update_perspective_extents_overlay()                                                       # Keep the actor-position diagnostics available for cardinal and diagonal views.
 	_update_view_slot_debug_overlay()                                                         # Redraw the blue player-view slot audit labels for this camera orientation.
 	_update_debug_map_overlay()                                                               # Redraw this player's top-down map with the shared maze and both players.
+	var legacy_render_elapsed_us := Time.get_ticks_usec() - legacy_render_started_us            # Record all retained legacy work, including its debug-map redraw.
 	# The runtime coordinate compositor is deliberately called while this exact
 	# player context is bound.  It therefore uses the same cell, facing, movement
 	# stage, environment layer, and opponent placement as the view it replaces.
-	if active_player_index < coordinate_renderers.size():
-		var coordinate_renderer := coordinate_renderers[active_player_index]
-		if is_instance_valid(coordinate_renderer) and coordinate_renderer.has_method("render_bound_player_context"):
-			coordinate_renderer.render_bound_player_context(get_process_delta_time())
+	if coordinate_renderer != null:                                                           # Legacy rendering remains available only when no replacement renderer was resolved above.
+		if coordinate_renderer.has_method("record_legacy_render_time"):                         # Preserve timing support for any future hybrid renderer mode.
+			coordinate_renderer.record_legacy_render_time(legacy_render_elapsed_us)                 # Report the full legacy render time before the optional replacement pass.
+		coordinate_renderer.render_bound_player_context(get_process_delta_time())                 # Render the optional replacement pass over the legacy scene.
 	if enable_3d_diagnostic and active_player_index == 0:                                     # Keep deprecated 3D diagnostics tied to player one only.
 		_update_3d_diagnostic()                                                                  # Sync the deprecated 3D diagnostic to player one's state.
 
@@ -2012,6 +2047,13 @@ func _setup_debug_map_overlay() -> void:                                        
 	debug_map_overlay.name = "DebugTopDownMap"                                                 # Name the overlay node so it is easy to find in the scene tree.
 	debug_map_overlay.z_index = 100                                                            # Draw the debug map above status and playfield art.
 	canvas_layer.add_child(debug_map_overlay)                                                  # Attach the debug map to the UI canvas layer.
+	debug_map_static_layer = Node2D.new()                                                      # Keep maze guides and wall edges in a retained layer that only changes when the maze changes.
+	debug_map_static_layer.name = "StaticMaze"                                                 # Give the retained source-of-truth geometry an inspectable scene-tree name.
+	debug_map_static_layer.set_meta("map_static_dirty", true)                                 # Force the first map update to build this layer.
+	debug_map_overlay.add_child(debug_map_static_layer)                                        # Place the static layer behind all live player and cone indicators.
+	debug_map_dynamic_layer = Node2D.new()                                                     # Keep moving indicators and optional diagnostics isolated from the retained maze layer.
+	debug_map_dynamic_layer.name = "DynamicIndicators"                                         # Give the rebuilt live diagnostic layer an inspectable scene-tree name.
+	debug_map_overlay.add_child(debug_map_dynamic_layer)                                       # Draw dynamic content after the static maze layer.
 	_update_debug_map_overlay()                                                                # Draw the first version immediately after setup.
 
 
@@ -2025,35 +2067,37 @@ func _update_debug_map_overlay() -> void:                                       
 	if not show_top_down_source_overlay or not is_shared_match_map:                            # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
 		return                                                                                    # Return without drawing the map.
 
-	for child in debug_map_overlay.get_children():                                             # Remove previous line and marker nodes before redrawing.
-		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip nodes already queued by an earlier redraw.
-			debug_map_overlay.remove_child(child)                                                  # Detach it now so same-frame player-map redraws cannot overlap labels.
-			child.queue_free()                                                                       # Queue the previous debug primitive for safe end-of-frame cleanup.
-	_add_debug_panel_background()                                                             # Draw the dark 160x120 panel behind the source-of-truth map.
-
-	var open_color := Color(0.2, 0.45, 0.55, 0.55)                                             # Define the color for non-blocking cell guide lines.
-	var wall_color := Color(1.0, 1.0, 1.0, 0.95)                                               # Define the color for blocking wall edges.
+	if not is_instance_valid(debug_map_static_layer) or not is_instance_valid(debug_map_dynamic_layer): # Recover safely if an older scene tree lacks the retained-map children.
+		return                                                                                    # The next normal setup will recreate the top-down map layers.
+	if bool(debug_map_static_layer.get_meta("map_static_dirty", true)):                       # Rebuild maze geometry only after setup or a map reroll.
+		_clear_debug_map_layer(debug_map_static_layer)                                            # Remove the old retained maze primitives before replacing them.
+		debug_map_draw_layer = debug_map_static_layer                                             # Route the following panel/grid primitives into the retained layer.
+		_add_debug_panel_background()                                                             # Draw the dark 160x120 panel behind the source-of-truth map.
+		var open_color := Color(0.2, 0.45, 0.55, 0.55)                                            # Define the color for non-blocking cell guide lines.
+		var wall_color := Color(1.0, 1.0, 1.0, 0.95)                                              # Define the color for blocking wall edges.
+		for y in range(MAP_HEIGHT):                                                               # Draw every maze row exactly once per map layout.
+			for x in range(MAP_WIDTH):                                                              # Draw every maze column exactly once per map layout.
+				var cell := Vector2i(x, y)                                                           # Build the map cell coordinate for this maze cell.
+				var top_left := _debug_map_cell_top_left(cell)                                       # Convert the map cell to overlay pixel coordinates.
+				var top_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, 0.0)                        # Compute the top-right corner of the cell.
+				var bottom_left := top_left + Vector2(0.0, DEBUG_MAP_CELL_SIZE)                      # Compute the bottom-left corner of the cell.
+				var bottom_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, DEBUG_MAP_CELL_SIZE)     # Compute the bottom-right corner of the cell.
+				_add_debug_line(top_left, top_right, open_color, 1.0)                                # Draw the north guide edge for this cell.
+				_add_debug_line(top_right, bottom_right, open_color, 1.0)                            # Draw the east guide edge for this cell.
+				_add_debug_line(bottom_left, bottom_right, open_color, 1.0)                          # Draw the south guide edge for this cell.
+				_add_debug_line(top_left, bottom_left, open_color, 1.0)                              # Draw the west guide edge for this cell.
+				if _has_wall_edge(cell, Vector2i(0, -1)):                                            # Check whether the north edge is blocked by a thin wall.
+					_add_debug_line(top_left, top_right, wall_color, 3.0)                             # Draw the north wall edge as a thick line.
+				if _has_wall_edge(cell, Vector2i(1, 0)):                                             # Check whether the east edge is blocked by a thin wall.
+					_add_debug_line(top_right, bottom_right, wall_color, 3.0)                         # Draw the east wall edge as a thick line.
+				if _has_wall_edge(cell, Vector2i(0, 1)):                                             # Check whether the south edge is blocked by a thin wall.
+					_add_debug_line(bottom_left, bottom_right, wall_color, 3.0)                       # Draw the south wall edge as a thick line.
+				if _has_wall_edge(cell, Vector2i(-1, 0)):                                            # Check whether the west edge is blocked by a thin wall.
+					_add_debug_line(top_left, bottom_left, wall_color, 3.0)                           # Draw the west wall edge as a thick line.
+		debug_map_static_layer.set_meta("map_static_dirty", false)                              # Retain this expensive geometry until a new maze is generated.
+	_clear_debug_map_layer(debug_map_dynamic_layer)                                            # Replace only the small set of moving indicators and enabled diagnostics.
+	debug_map_draw_layer = debug_map_dynamic_layer                                              # Route all remaining helper-created primitives into the dynamic layer.
 	var player_color := Color(1.0, 0.22, 0.22, 0.98) if active_player_index == 0 else Color(0.2, 0.5, 1.0, 0.98) # Show P1 red and P2 blue on the shared match map.
-
-	for y in range(MAP_HEIGHT):                                                               # Draw every row in the generated 4x4 maze.
-		for x in range(MAP_WIDTH):                                                              # Draw every column in the generated 4x4 maze.
-			var cell := Vector2i(x, y)                                                              # Build the map cell coordinate for this maze cell.
-			var top_left := _debug_map_cell_top_left(cell)                                         # Convert the map cell to overlay pixel coordinates.
-			var top_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, 0.0)                          # Compute the top-right corner of the cell.
-			var bottom_left := top_left + Vector2(0.0, DEBUG_MAP_CELL_SIZE)                        # Compute the bottom-left corner of the cell.
-			var bottom_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, DEBUG_MAP_CELL_SIZE)       # Compute the bottom-right corner of the cell.
-			_add_debug_line(top_left, top_right, open_color, 1.0)                                  # Draw the north guide edge for this cell.
-			_add_debug_line(top_right, bottom_right, open_color, 1.0)                              # Draw the east guide edge for this cell.
-			_add_debug_line(bottom_left, bottom_right, open_color, 1.0)                            # Draw the south guide edge for this cell.
-			_add_debug_line(top_left, bottom_left, open_color, 1.0)                                # Draw the west guide edge for this cell.
-			if _has_wall_edge(cell, Vector2i(0, -1)):                                              # Check whether the north edge is blocked by a thin wall.
-				_add_debug_line(top_left, top_right, wall_color, 3.0)                                 # Draw the north wall edge as a thick line.
-			if _has_wall_edge(cell, Vector2i(1, 0)):                                               # Check whether the east edge is blocked by a thin wall.
-				_add_debug_line(top_right, bottom_right, wall_color, 3.0)                             # Draw the east wall edge as a thick line.
-			if _has_wall_edge(cell, Vector2i(0, 1)):                                               # Check whether the south edge is blocked by a thin wall.
-				_add_debug_line(bottom_left, bottom_right, wall_color, 3.0)                           # Draw the south wall edge as a thick line.
-			if _has_wall_edge(cell, Vector2i(-1, 0)):                                              # Check whether the west edge is blocked by a thin wall.
-				_add_debug_line(top_left, bottom_left, wall_color, 3.0)                                # Draw the west wall edge as a thick line.
 
 	var home_center := _debug_map_cell_center(grid_position)                                    # Convert the current cell center into an overlay reference position.
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
@@ -2070,6 +2114,23 @@ func _update_debug_map_overlay() -> void:                                       
 	_add_debug_arrow_head(facing_end, _view_forward_vector(), player_color)                     # Draw the player facing arrow head.
 	_add_debug_player_marker(player_center, player_color)                                      # Draw the player position marker.
 	_add_debug_other_player_markers()                                                          # Draw the other local player on this player's top-down map.
+
+
+
+# _clear_debug_map_layer: Removes only one retained/debug layer's generated primitives.
+func _clear_debug_map_layer(layer: Node2D) -> void:
+	for child in layer.get_children():                                                         # Remove the previous primitives while retaining the layer node itself.
+		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip children already queued by an earlier redraw.
+			layer.remove_child(child)                                                               # Detach this primitive before it can overlap replacement geometry.
+			child.queue_free()                                                                     # Release the obsolete primitive safely at the end of this frame.
+
+
+
+# _debug_map_draw_parent: Selects the active retained or dynamic layer for map helper primitives.
+func _debug_map_draw_parent() -> Node2D:
+	if is_instance_valid(debug_map_draw_layer):                                                # Use an explicitly selected layer while rebuilding static or live geometry.
+		return debug_map_draw_layer                                                              # Return the current helper target.
+	return debug_map_overlay                                                                   # Fall back to the root only during early setup compatibility paths.
 
 
 
@@ -2142,7 +2203,7 @@ func _add_debug_view_cone_for_basis(origin: Vector2, forward: Vector2, cone_colo
 	cone.polygon = PackedVector2Array([origin, far_left, far_right])                          # Define the triangle from camera origin to far left/right limits.
 	cone.color = cone_color                                                                   # Tint the cone fill without hiding the wall map.
 	cone.z_index = -1                                                                         # Draw the cone above the panel background but below wall highlights.
-	debug_map_overlay.add_child(cone)                                                         # Add the cone fill to the top-down overlay.
+	_debug_map_draw_parent().add_child(cone)                                                   # Add the cone fill to the active retained or dynamic top-down-map layer.
 	_add_debug_line(origin, far_left, cone_line_color, 1.0)                                   # Draw the left cone boundary line.
 	_add_debug_line(origin, far_right, cone_line_color, 1.0)                                  # Draw the right cone boundary line.
 	_add_debug_line(origin, far_center, cone_line_color, 1.0)                                 # Draw the center sightline for camera-facing reference.
@@ -2209,7 +2270,7 @@ func _add_debug_raycast_hit_marker(position: Vector2, color: Color, radius := 1.
 		position + Vector2(-radius, 0.0),                                                         # Add the left point.
 	])                                                                                         # Close the marker polygon point list.
 	marker.color = color                                                                       # Apply the requested marker color.
-	debug_map_overlay.add_child(marker)                                                        # Add the marker to the debug map overlay.
+	_debug_map_draw_parent().add_child(marker)                                                 # Add the marker to the active retained or dynamic top-down-map layer.
 
 
 
@@ -2224,7 +2285,7 @@ func _add_debug_turn_45_sample_marker(position: Vector2, color: Color) -> void: 
 		position + Vector2(-radius, radius),                                                      # Add the bottom-left sample marker corner.
 	])                                                                                         # Close the sample marker polygon point list.
 	marker.color = color                                                                       # Apply the requested sample marker color.
-	debug_map_overlay.add_child(marker)                                                        # Add the marker to the debug map overlay.
+	_debug_map_draw_parent().add_child(marker)                                                 # Add the marker to the active retained or dynamic top-down-map layer.
 
 
 
@@ -2515,7 +2576,7 @@ func _add_debug_wall_slot_label(position: Vector2, wall_id: int, color: Color) -
 	label.add_theme_constant_override("shadow_offset_y", 1)                                   # Offset the label shadow one pixel down.
 	label.scale = Vector2(0.32, 0.32)                                                         # Keep the debug label compact inside the 160x120 map panel.
 	label.position = position + Vector2(-4.0, -4.0)                                           # Center the small label around the requested point.
-	debug_map_overlay.add_child(label)                                                        # Add the wall-slot label to the top-down overlay.
+	_debug_map_draw_parent().add_child(label)                                                  # Add the wall-slot label to the active retained or dynamic top-down-map layer.
 
 
 
@@ -2545,7 +2606,7 @@ func _add_debug_panel_background() -> void:                                     
 	])                                                                                          # Close the panel polygon point list.
 	background.color = Color(0.04, 0.05, 0.06, 0.92)                                           # Fill the panel with a dark diagnostic background.
 	background.z_index = -10                                                                    # Keep the background behind the map lines and markers.
-	debug_map_overlay.add_child(background)                                                     # Add the background to the map panel.
+	_debug_map_draw_parent().add_child(background)                                              # Add the background to the active retained or dynamic top-down-map layer.
 
 
 
@@ -2556,7 +2617,7 @@ func _add_debug_line(start: Vector2, end: Vector2, color: Color, width: float) -
 	line.width = width                                                                          # Set the line thickness.
 	line.default_color = color                                                                  # Set the line color.
 	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                    # Keep debug lines crisp at pixel-art scale.
-	debug_map_overlay.add_child(line)                                                          # Add the line to the overlay node.
+	_debug_map_draw_parent().add_child(line)                                                   # Add the line to the active retained or dynamic top-down-map layer.
 
 
 
@@ -2571,7 +2632,7 @@ func _add_debug_player_marker(center: Vector2, color: Color) -> void:           
 		center + Vector2(-half_size, half_size),                                                   # Add the bottom-left marker corner.
 	])                                                                                          # Close the marker polygon point list.
 	marker.color = color                                                                        # Color the player marker.
-	debug_map_overlay.add_child(marker)                                                         # Add the player marker to the overlay.
+	_debug_map_draw_parent().add_child(marker)                                                  # Add the player marker to the active retained or dynamic top-down-map layer.
 
 
 
@@ -2608,7 +2669,7 @@ func _add_debug_arrow_head(tip: Vector2, direction: Vector2, color: Color) -> vo
 		tip - forward * length - side * width,                                                       # Place the other rear corner of the arrow head.
 	])                                                                                           # Close the arrow polygon point list.
 	arrow.color = color                                                                          # Color the arrow head.
-	debug_map_overlay.add_child(arrow)                                                           # Add the arrow head to the overlay.
+	_debug_map_draw_parent().add_child(arrow)                                                    # Add the arrow head to the active retained or dynamic top-down-map layer.
 
 
 
@@ -4635,6 +4696,9 @@ func _position_opponent_sprite() -> void:                                       
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
+	if not _world_actor_has_clear_line_of_sight(target_world):                                  # Do not let the high-z opponent sprite draw through any physical maze edge.
+		opponent_sprite.visible = false                                                           # Hide the opponent when the first solid edge sits between this camera and their body.
+		return                                                                                    # Return before the sprite can be placed above the runtime wall canvas.
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
@@ -4855,6 +4919,23 @@ func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin
 	if depth <= -0.05 - side_margin or depth > DEBUG_VIEW_CONE_DEPTH + 0.75 + side_margin:     # Reject actors only once their body is behind or beyond the useful straight-view art.
 		return false                                                                              # Report the opponent as not visible.
 	return true                                                                               # Let projected sprite/viewport overlap decide lateral edge visibility.
+
+
+
+# _world_actor_has_clear_line_of_sight: Uses the same physical thin-wall map as movement and runtime wall visibility.
+func _world_actor_has_clear_line_of_sight(target_world: Vector2) -> bool:
+	var origin := _camera_grid_origin()                                                        # Start from the same fixed cell camera origin used by the player-view cone.
+	var to_target := target_world - origin                                                     # Measure the world-space segment from camera to opponent.
+	var target_distance := to_target.length()                                                  # Keep the exact body-center distance for nearest-wall comparison.
+	if target_distance <= 0.025:                                                               # A player occupying the camera point cannot be blocked by an intervening edge.
+		return true                                                                               # Keep this degenerate near-camera case visible.
+	var ray_direction := to_target / target_distance                                           # Normalize the camera-to-opponent line for segment intersection.
+	var body_clearance := 0.08                                                                 # Stop an edge touching the body boundary from falsely hiding a player standing flush to it.
+	for edge in _all_physical_wall_edges():                                                    # Test the direct sight line against the identical thin-wall geometry used for collision.
+		var hit_distance := _ray_segment_hit_distance(origin, ray_direction, Vector2(edge["a"]), Vector2(edge["b"])) # Find the first point where this line meets each physical wall edge.
+		if hit_distance >= 0.0 and hit_distance < target_distance - body_clearance:              # Any edge strictly before the opponent blocks the whole sprite.
+			return false                                                                           # Prevent the actor's high render layer from leaking through that wall.
+	return true                                                                                # No intervening wall segment blocks the opponent's body center.
 
 
 
@@ -5696,6 +5777,7 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 func _regenerate_runtime_map() -> void:                                                     # Declare this function.
 	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
 	was_regenerate_map_pressed = true                                                          # Keep the regenerate key from firing again until released.
+	_mark_debug_map_static_layers_dirty()                                                      # Make every local map rebuild its retained maze walls after the topology changes.
 	if TEMP_GRID_AUDIT:                                                                        # Keep R scoped to the single-player 9x9 audit map.
 		if TEMP_RANDOM_GRID_AUDIT:                                                               # Generate another enclosed, connected random map for wall-render testing.
 			_build_random_maze_wall_edges()                                                           # Preserve the generator's closed exterior boundary.
@@ -5710,6 +5792,15 @@ func _regenerate_runtime_map() -> void:                                         
 	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset both local players into opposite corners of the new shared map.
 	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.
 	_update_status()                                                                           # Update the status text for the new map state.
+
+
+
+# _mark_debug_map_static_layers_dirty: Invalidates retained map geometry for every local view after a maze reroll.
+func _mark_debug_map_static_layers_dirty() -> void:
+	for view in player_views:                                                                  # Visit every currently-created local view bundle.
+		var static_layer: Variant = view.get("debug_map_static_layer", null)                    # Read that view's retained maze-grid layer if it has been initialized without inferring a Variant as a hard type.
+		if static_layer is Node2D and is_instance_valid(static_layer):                           # Ignore views that have not reached top-down-map setup yet.
+			static_layer.set_meta("map_static_dirty", true)                                       # Rebuild this map's static maze geometry on its next visible draw.
 
 
 

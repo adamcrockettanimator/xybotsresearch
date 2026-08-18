@@ -1,0 +1,36 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://ukvwfpd2x001"]
+
+[ext_resource type="Texture2D" uid="uid://cwjuopdktwabl" path="res://assets/Effects/Shot_E.png" id="1_dgd4t"]
+[ext_resource type="Texture2D" uid="uid://dg5yw16rb1g1q" path="res://assets/Effects/ShotExplosion/Shot_explosion_1.png" id="2_0apbb"]
+[ext_resource type="Texture2D" uid="uid://mnvhuwjsffvv" path="res://assets/Effects/ShotExplosion/Shot_explosion_2.png" id="3_ttvkh"]
+[ext_resource type="Texture2D" uid="uid://dilb14a712ll4" path="res://assets/Effects/Shot_N.png" id="4_6bwuh"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_dgd4t")
+}],
+"loop": 1,
+"name": &"Shot_E",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_0apbb")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_ttvkh")
+}],
+"loop": 1,
+"name": &"Shot_Explosion",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("4_6bwuh")
+}],
+"loop": 1,
+"name": &"Shot_N",
+"speed": 5.0
+}]

@@ -4,6 +4,8 @@
 # wall texture through projective quads derived from the live grid camera basis.
 extends Node
 
+@export var target_player_index := 0
+
 const VIEW_SIZE := Vector2(160.0, 120.0)
 const WALL_LAYER1_PATH := "res://assets/Environment/Wall_Layer1.png"
 const WALL_LAYER2_PATH := "res://assets/Environment/Wall_layer2.png"
@@ -55,6 +57,8 @@ const WALL_HEIGHT := 2.0 / 3.0
 const TEMPLATE_CAMERA_REAR_OFFSET := 0.49
 const FOV_RATIO := 0.70
 const DIAGONAL_FRAME_SECONDS := 0.18
+const PROFILE_LOG_PATH := "user://coordinate_runtime_profile.csv"
+const PROFILE_LOG_INTERVAL_USEC := 1_000_000
 
 var controller: Node
 var runtime_floor_layer: Node2D
@@ -93,8 +97,10 @@ var master_texture: Texture2D
 var debug_wall_texture_index := -1
 var runtime_master_wall_texture_index := -1
 var active_wall_texture_label := "StripeTest"
-var active_floor_texture_label := "DirtRoad1"
-var floor_texture_index := 0
+var active_floor_texture_label := "WoodFloor2"
+# Start the experiment with the wood floor selected; M still cycles through the
+# full diagnostic floor list without rebuilding the maze or wall layout.
+var floor_texture_index := 4
 var last_wall_entries: Array[Dictionary] = []
 var wall_mip_images: Array[Image] = []
 var wall_layer1_mip_images: Array[Image] = []
@@ -119,6 +125,30 @@ var diagonal_forward_active := false
 var diagonal_forward_cell := Vector2i(-999, -999)
 var diagonal_forward_source_cell := Vector2i(-999, -999)
 var diagonal_forward_target_cell := Vector2i(-999, -999)
+var initialized := false
+
+# Rolling development profiler.  The renderer intentionally records timings in
+# microseconds because this experiment's costly work happens in short bursts
+# whenever a pose changes, rather than as one uniform GPU draw call.
+var profile_pending_legacy_us := 0
+var profile_floor_raster_us := 0
+var profile_ceiling_raster_us := 0
+var profile_wall_raster_us := 0
+var profile_upload_us := 0
+var profile_background_us := 0
+var profile_rebuild_us := 0
+var profile_window_start_us := 0
+var profile_sample_count := 0
+var profile_total_sum_us := 0
+var profile_legacy_sum_us := 0
+var profile_background_sum_us := 0
+var profile_floor_sum_us := 0
+var profile_ceiling_sum_us := 0
+var profile_wall_sum_us := 0
+var profile_upload_sum_us := 0
+var profile_rebuild_sum_us := 0
+var profile_total_peak_us := 0
+var profile_rebuild_peak_us := 0
 
 func _ready() -> void:
 	call_deferred("_initialize")
@@ -128,13 +158,15 @@ func _initialize() -> void:
 	if controller == null:
 		push_error("Coordinate-frame renderer requires the existing controller as its parent.")
 		return
-	if controller.player_views.size() > 1:
-		# This first gameplay milestone deliberately returns to the established
-		# sprite renderer for both local screens. The experimental coordinate
-		# compositor is currently single-view, so leaving it active would make
-		# only one player own the runtime wall layer.
-		queue_free()
+	if target_player_index < 0 or target_player_index >= controller.player_views.size():
+		push_error("Coordinate-frame renderer was attached before player %d exists." % target_player_index)
 		return
+	if target_player_index == 0:
+		_reset_profile_log()
+	# All construction below deliberately uses the controller's currently-bound
+	# environment globals.  Bind only our assigned local view, then restore P1
+	# afterwards; normal per-frame drawing is performed by the controller hook.
+	controller._bind_player_context(target_player_index)
 	master_texture = load(MASTER_WALL_PATH)
 	_preload_coordinate_templates()
 	controller.render_wall_art = false
@@ -222,19 +254,33 @@ func _initialize() -> void:
 	# sole on-screen readout.
 	status = Label.new()
 	status.visible = false
-	runtime_status = Label.new()
-	runtime_status.position = Vector2(12, 78)
-	runtime_status.add_theme_font_size_override("font_size", 14)
-	runtime_status.add_theme_color_override("font_color", Color.WHITE)
-	runtime_status.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
-	runtime_status.add_theme_constant_override("outline_size", 3)
-	controller.canvas_layer.add_child(runtime_status)
-	_setup_parallax_tuner()
+	# Keep one shared status and tuning panel, anchored by player one.  Creating
+	# those UI controls for player two would duplicate them over the shared map.
+	if target_player_index == 0:
+		runtime_status = Label.new()
+		runtime_status.position = Vector2(12, 78)
+		runtime_status.add_theme_font_size_override("font_size", 14)
+		runtime_status.add_theme_color_override("font_color", Color.WHITE)
+		runtime_status.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0))
+		runtime_status.add_theme_constant_override("outline_size", 3)
+		controller.canvas_layer.add_child(runtime_status)
+		_setup_parallax_tuner()
+	initialized = true
 	_rebuild()
+	controller._bind_player_context(0)
 
 func _process(delta: float) -> void:
-	if controller == null:
+	# Rendering is driven by the controller's per-player pass below.  That avoids
+	# a child renderer rebinding the other player's legacy globals after a frame.
+	pass
+
+
+# render_bound_player_context: Rebuild this compositor only while the controller
+# has the matching player state and environment layer bound.
+func render_bound_player_context(delta: float) -> void:
+	if not initialized or controller == null or int(controller.active_player_index) != target_player_index:
 		return
+	var frame_started_us := Time.get_ticks_usec()
 	_hide_legacy_environment()
 	_update_diagonal_forward_animation(delta)
 	# Enforce debug visibility every frame: old queued debug nodes cannot remain
@@ -246,12 +292,87 @@ func _process(delta: float) -> void:
 	# Coordinate poses can change while the controller remains in the same cell
 	# and facing (especially during a mobile diagonal run), so refresh this
 	# independent background every frame rather than waiting for wall geometry.
+	var background_started_us := Time.get_ticks_usec()
 	_update_coordinate_background()
+	profile_background_us = Time.get_ticks_usec() - background_started_us
 	var signature := _render_signature()
+	profile_floor_raster_us = 0
+	profile_ceiling_raster_us = 0
+	profile_wall_raster_us = 0
+	profile_upload_us = 0
+	profile_rebuild_us = 0
 	if signature != last_signature:
 		_rebuild()
+	_profile_record_frame(Time.get_ticks_usec() - frame_started_us)
+
+
+# record_legacy_render_time: Called by the controller after its original
+# sprite/debug render pass, before this coordinate compositor replaces it.
+func record_legacy_render_time(elapsed_us: int) -> void:
+	profile_pending_legacy_us = maxi(0, elapsed_us)
+
+
+# _reset_profile_log: Starts a fresh, easily inspectable CSV for the current run.
+func _reset_profile_log() -> void:
+	var file := FileAccess.open(PROFILE_LOG_PATH, FileAccess.WRITE)
+	if file == null:
+		push_warning("Could not create coordinate runtime profile log: %s" % ProjectSettings.globalize_path(PROFILE_LOG_PATH))
+		return
+	file.store_line("elapsed_s,player,samples,avg_total_ms,peak_total_ms,avg_legacy_ms,avg_background_ms,avg_floor_ms,avg_ceiling_ms,avg_wall_ms,avg_upload_ms,avg_rebuild_ms,peak_rebuild_ms")
+	file.close()
+	print("Coordinate runtime profile log: %s" % ProjectSettings.globalize_path(PROFILE_LOG_PATH))
+
+
+# _profile_record_frame: Adds one renderer frame to a one-second rolling sample.
+func _profile_record_frame(total_us: int) -> void:
+	var now_us := Time.get_ticks_usec()
+	if profile_window_start_us == 0:
+		profile_window_start_us = now_us
+	profile_sample_count += 1
+	profile_total_sum_us += total_us
+	profile_legacy_sum_us += profile_pending_legacy_us
+	profile_background_sum_us += profile_background_us
+	profile_floor_sum_us += profile_floor_raster_us
+	profile_ceiling_sum_us += profile_ceiling_raster_us
+	profile_wall_sum_us += profile_wall_raster_us
+	profile_upload_sum_us += profile_upload_us
+	profile_rebuild_sum_us += profile_rebuild_us
+	profile_total_peak_us = maxi(profile_total_peak_us, total_us)
+	profile_rebuild_peak_us = maxi(profile_rebuild_peak_us, profile_rebuild_us)
+	if now_us - profile_window_start_us < PROFILE_LOG_INTERVAL_USEC:
+		return
+	_append_profile_sample(float(now_us - profile_window_start_us) / 1_000_000.0)
+	profile_window_start_us = now_us
+	profile_sample_count = 0
+	profile_total_sum_us = 0
+	profile_legacy_sum_us = 0
+	profile_background_sum_us = 0
+	profile_floor_sum_us = 0
+	profile_ceiling_sum_us = 0
+	profile_wall_sum_us = 0
+	profile_upload_sum_us = 0
+	profile_rebuild_sum_us = 0
+	profile_total_peak_us = 0
+	profile_rebuild_peak_us = 0
+
+
+# _append_profile_sample: Writes averages and spikes so quiet and moving poses are both diagnosable.
+func _append_profile_sample(elapsed_seconds: float) -> void:
+	if profile_sample_count <= 0:
+		return
+	var divisor := float(profile_sample_count) * 1000.0
+	var file := FileAccess.open(PROFILE_LOG_PATH, FileAccess.READ_WRITE)
+	if file == null:
+		return
+	file.seek_end()
+	file.store_line("%.3f,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f" % [elapsed_seconds, target_player_index + 1, profile_sample_count, profile_total_sum_us / divisor, float(profile_total_peak_us) / 1000.0, profile_legacy_sum_us / divisor, profile_background_sum_us / divisor, profile_floor_sum_us / divisor, profile_ceiling_sum_us / divisor, profile_wall_sum_us / divisor, profile_upload_sum_us / divisor, profile_rebuild_sum_us / divisor, float(profile_rebuild_peak_us) / 1000.0])
+	file.close()
 
 func _input(event: InputEvent) -> void:
+	# The two local compositors receive the same input event.  Player one owns the
+	# shared diagnostic controls so a single press cannot toggle each layer twice.
+	if target_player_index != 0:
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_T:
 			show_runtime_walls = not show_runtime_walls
@@ -296,6 +417,7 @@ func _input(event: InputEvent) -> void:
 func _rebuild() -> void:
 	if runtime_wall_layer == null or runtime_floor_layer == null or runtime_ceiling_layer == null:
 		return
+	var rebuild_started_us := Time.get_ticks_usec()
 	last_signature = _render_signature()
 	var entries: Array[Dictionary] = _visible_wall_entries()
 	last_wall_entries = entries
@@ -308,6 +430,7 @@ func _rebuild() -> void:
 	_update_projection_point_debug()
 	runtime_wall_layer.visible = show_runtime_walls
 	_refresh_runtime_status(accepted_count)
+	profile_rebuild_us = Time.get_ticks_usec() - rebuild_started_us
 
 func _cycle_debug_wall_texture() -> void:
 	# Deliberately do not call _rebuild(): the current map/raycast wall layout
@@ -611,18 +734,24 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 	var displayed_texture_label := "Wall_Layer1+Layer2" if wall_parallax_enabled and layer_mode_available else active_wall_texture_label
 	var ceiling_layers_available := ceiling_layer1_image != null and ceiling_layer2_image != null
 	var status_text := "Coord %s | %d walls | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  P:%s  C:%s  L:%s  O:%s" % [_pose_key(), visible_wall_count, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if parallax_tuner_open else "OFF"]
-	status.text = status_text
-	runtime_status.text = status_text
+	if is_instance_valid(status):
+		status.text = status_text
+	if is_instance_valid(runtime_status):
+		runtime_status.text = status_text
 
 func _rebuild_runtime_wall_surfaces(entries: Array[Dictionary]) -> int:
 	if wall_render_image == null or wall_render_texture == null or wall_source_image == null:
 		return 0
+	var raster_started_us := Time.get_ticks_usec()
 	wall_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	# Entries are far-to-near, so nearer opaque texels naturally occlude farther
 	# wall texels without requiring a separate depth buffer in this small test.
 	for entry in entries:
 		_rasterize_wall_entry(entry)
+	profile_wall_raster_us = Time.get_ticks_usec() - raster_started_us
+	var upload_started_us := Time.get_ticks_usec()
 	wall_render_texture.update(wall_render_image)
+	profile_upload_us += Time.get_ticks_usec() - upload_started_us
 	return entries.size()
 
 
@@ -697,10 +826,14 @@ func _quad_bounds(quad: PackedVector2Array) -> Rect2:
 func _rebuild_runtime_floor_surfaces(entries: Array[Dictionary]) -> int:
 	if floor_render_image == null or floor_render_texture == null or floor_source_image == null:
 		return 0
+	var raster_started_us := Time.get_ticks_usec()
 	floor_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	for entry in entries:
 		_rasterize_floor_cell(entry)
+	profile_floor_raster_us = Time.get_ticks_usec() - raster_started_us
+	var upload_started_us := Time.get_ticks_usec()
 	floor_render_texture.update(floor_render_image)
+	profile_upload_us += Time.get_ticks_usec() - upload_started_us
 	return entries.size()
 
 
@@ -791,10 +924,14 @@ func _visible_ceiling_cells() -> Array[Dictionary]:
 func _rebuild_runtime_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 	if ceiling_render_image == null or ceiling_render_texture == null or ceiling_layer1_image == null:
 		return 0
+	var raster_started_us := Time.get_ticks_usec()
 	ceiling_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	for entry in entries:
 		_rasterize_ceiling_cell(entry)
+	profile_ceiling_raster_us = Time.get_ticks_usec() - raster_started_us
+	var upload_started_us := Time.get_ticks_usec()
 	ceiling_render_texture.update(ceiling_render_image)
+	profile_upload_us += Time.get_ticks_usec() - upload_started_us
 	return entries.size()
 
 

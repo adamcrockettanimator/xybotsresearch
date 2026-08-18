@@ -1,0 +1,26 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://dd83y45q7nutt"]
+
+[ext_resource type="Texture2D" uid="uid://buwwbf7whhbg7" path="res://assets/Items/EnergyPod/EnergyPod_01.png" id="1_3sw7h"]
+[ext_resource type="Texture2D" uid="uid://lrq3ntafxbgb" path="res://assets/Items/EnergyPod/EnergyPod_02.png" id="2_1y5n1"]
+[ext_resource type="Texture2D" uid="uid://cana6hmaj680m" path="res://assets/Items/EnergyPod/EnergyPod_03.png" id="3_glnhr"]
+[ext_resource type="Texture2D" uid="uid://g3ncgerjxylp" path="res://assets/Items/EnergyPod/EnergyPod_04.png" id="4_xejtt"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_3sw7h")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_1y5n1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_glnhr")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_xejtt")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 5.0
+}]

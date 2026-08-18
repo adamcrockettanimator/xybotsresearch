@@ -1,0 +1,14 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://ykw4phn70vq4"]
+
+[ext_resource type="Texture2D" uid="uid://xx6j1wqqr43v" path="res://assets/Items/Key/Key.png" id="1_xf407"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_xf407")
+}],
+"loop": 1,
+"name": &"Key",
+"speed": 5.0
+}]

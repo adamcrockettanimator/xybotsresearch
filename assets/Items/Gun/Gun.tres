@@ -1,0 +1,14 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://7pi05fdh6qai"]
+
+[ext_resource type="Texture2D" uid="uid://b1jhuj2bq08yg" path="res://assets/Items/Gun/Gun.png" id="1_q4vr6"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_q4vr6")
+}],
+"loop": 1,
+"name": &"Gun",
+"speed": 5.0
+}]
