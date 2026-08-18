@@ -24,8 +24,8 @@ const STRAFE_LEFT_WALL_CONTACT_X := 0.0                                         
 const STRAFE_RIGHT_WALL_CONTACT_X := 1.0                                                    # Set the right tile-edge contact; camera clipping trims any body pixels beyond the frame.
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
-const MAP_WIDTH := 5                                                                        # Use a compact combat maze so both players encounter each other quickly.
-const MAP_HEIGHT := 5                                                                       # Keep the shared combat map square and compact.
+const MAP_WIDTH := 6                                                                        # Add one long-distance combat cell so the runtime depth treatment can be tested beyond the old compact arena.
+const MAP_HEIGHT := 6                                                                       # Keep the shared combat map square while exposing the renderer's deepest useful range.
 const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
 const TEMP_RANDOM_GRID_AUDIT := false                                                       # Keep the temporary one-player slot audit off while local multiplayer gameplay is active.
 const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
@@ -67,12 +67,16 @@ const PERSPECTIVE_CELL_EXTENTS := [                                             
 	{"near_depth": 0.96, "far_depth": 1.96, "near_left_x": 18.0, "near_right_x": 141.0, "far_left_x": 40.0, "far_right_x": 119.0, "near_feet_y": 94.0, "far_feet_y": 72.0, "near_actor_height": 43.0, "far_actor_height": 30.0}, # One square away: measured from the yellow floor-zone guide in floor zones.png.
 	{"near_depth": 1.96, "far_depth": 2.96, "near_left_x": 42.0, "near_right_x": 117.0, "far_left_x": 56.0, "far_right_x": 103.0, "near_feet_y": 70.0, "far_feet_y": 56.0, "near_actor_height": 30.0, "far_actor_height": 21.0}, # Two squares away: measured from the green floor-zone guide in floor zones.png.
 	{"near_depth": 2.96, "far_depth": 3.96, "near_left_x": 58.0, "near_right_x": 101.0, "far_left_x": 64.0, "far_right_x": 95.0, "near_feet_y": 54.0, "far_feet_y": 48.0, "near_actor_height": 21.0, "far_actor_height": 14.0}, # Three squares away: measured from the blue floor-zone guide in floor zones.png.
+	{"near_depth": 3.96, "far_depth": 4.96, "near_left_x": 64.0, "near_right_x": 95.0, "far_left_x": 68.0, "far_right_x": 91.0, "near_feet_y": 48.0, "far_feet_y": 45.0, "near_actor_height": 14.0, "far_actor_height": 10.0}, # Four squares away: controlled continuation toward the Blender camera's horizon for the extended combat test.
+	{"near_depth": 4.96, "far_depth": 5.50, "near_left_x": 68.0, "near_right_x": 91.0, "far_left_x": 70.0, "far_right_x": 89.0, "near_feet_y": 45.0, "far_feet_y": 43.0, "near_actor_height": 10.0, "far_actor_height": 7.0}, # Sixth map cell is the final, intentionally very dark runtime-visible band before the renderer's 5.5 depth clip.
 ]                                                                                             # End the measured per-square perspective calibration table.
 const SIDE_PERSPECTIVE_CELL_EXTENTS := [                                                     # Store measured right-side opponent-entry bands from floor zones side.png; left side mirrors these values.
 	{"near_depth": 0.04, "far_depth": 0.96, "near_inner_x": 159.0, "far_inner_x": 145.0, "near_feet_y": 110.0, "far_feet_y": 96.0}, # Current side square: measured from the red right-side zone.
 	{"near_depth": 0.96, "far_depth": 1.96, "near_inner_x": 159.0, "far_inner_x": 121.0, "near_feet_y": 94.0, "far_feet_y": 72.0}, # One square away side entry: measured from the yellow right-side zone.
 	{"near_depth": 1.96, "far_depth": 2.96, "near_inner_x": 159.0, "far_inner_x": 105.0, "near_feet_y": 70.0, "far_feet_y": 56.0}, # Two squares away side entry: measured from the green right-side zone.
 	{"near_depth": 2.96, "far_depth": 3.96, "near_inner_x": 159.0, "far_inner_x": 95.0, "near_feet_y": 54.0, "far_feet_y": 46.0}, # Three squares away side entry: measured from the cyan right-side zone.
+	{"near_depth": 3.96, "far_depth": 4.96, "near_inner_x": 95.0, "far_inner_x": 87.0, "near_feet_y": 46.0, "far_feet_y": 44.0}, # Four squares away: controlled horizon continuation for long-range side entries.
+	{"near_depth": 4.96, "far_depth": 5.50, "near_inner_x": 87.0, "far_inner_x": 83.0, "near_feet_y": 44.0, "far_feet_y": 43.0}, # Final deep band: keep the side-entry handoff aligned with the renderer's 5.5-depth clip.
 ]                                                                                             # End the side-entry perspective calibration table.
 const WALL_EDGE_N := 0                                                                      # Define a fixed value used by the movement, rendering, or asset-loading system.
 const WALL_EDGE_E := 1                                                                      # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -120,6 +124,7 @@ const SHOT_EXPLOSION_2_TEXTURE := preload("res://assets/Effects/ShotExplosion/Sh
 const HIT_FRONT_TEXTURE := preload("res://assets/frames/Hit/Hit_Front.png")                 # Use the authored head-on hit pose.
 const HIT_LEFT_TEXTURE := preload("res://assets/frames/Hit/Hit_Left.png")                   # Use the authored left-side hit pose.
 const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")                 # Use the authored right-side hit pose.
+const WORLD_SPRITE_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_lod.gdshader") # Apply the same coarse GPU pixel language and depth bands to every projected world sprite.
 const COIN_TEXTURE := preload("res://assets/Items/Coin/Coin_02.png")                        # Use the front-facing authored coin frame for the compact HUD icon.
 const COIN_TEXTURES := [                                                                      # Cycle the authored coin frames so world pickups visibly spin.
 	preload("res://assets/Items/Coin/Coin_01.png"),
@@ -134,7 +139,7 @@ const DEBUG_MAP_CELL_SIZE := 16.0                                               
 const DEBUG_MAP_PANEL_SIZE := Vector2(160.0, 160.0)                                        # Give the 9x9 source grid a square panel beside the player view.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(8.0, 8.0)                                      # Center the temporary 9x9 grid inside its 160x160 side panel.
 const CARDINAL_SLOT_GUIDE_MAP_SCALE := 1.0                                                   # Keep authored guide coordinates in their native maze-cell scale; they may extend beyond the panel.
-const DEBUG_VIEW_CONE_DEPTH := 4.0                                                           # Draw the diagnostic view cone out to the farthest straight wall slot depth.
+const DEBUG_VIEW_CONE_DEPTH := 5.5                                                           # Match the coordinate renderer's farthest usable depth so actors do not vanish before the sixth-cell test band.
 const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Match the top-down cone width from the Wall_Grid reference image.
 const CAMERA_REAR_OFFSET := 0.46                                                             # Place the cell-locked camera just in front of the rear wall for the current facing.
 const LOCAL_TILE_WORLD_HALF_EXTENT := 0.5                                                    # Convert one normalized in-tile offset into one full square half-width in world-grid units.
@@ -143,13 +148,13 @@ const LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                     
 const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                                  # Keep the local feet slightly inside the front edge of the projected floor-zone polygon.
 const CHARACTER_NEAREST_LAYER := 96                                                          # Set the closest character draw layer; this is only z-order, not perspective math.
 const LOCAL_CHARACTER_LAYER := 96                                                            # Draw the local body above wall art; the camera clipper handles frame-edge cropping.
-const CHARACTER_LAYER_BY_DEPTH := [96, 74, 56, 32]                                           # Keep actors in front of same-depth side walls but behind nearer wall rows.
+const CHARACTER_LAYER_BY_DEPTH := [96, 74, 56, 32, 24, 16]                                  # Keep actors in front of same-depth side walls through the renderer's two extended distance bands.
 const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
 const LOCAL_REAR_CAMERA_SCALE_BOOST := 0.20                                                   # Enlarge the local body near the camera after cropping hides the lower frame.
 const DEBUG_WALL_LABELS_ENABLED := false                                                    # Hide renderer-selected wall labels while the blue slot-grid audit is being checked.
 const VISIBILITY_RAY_COUNT := 91                                                            # Cast enough rays across the view fan to discover side and front wall edges.
 const VISIBILITY_RAY_HALF_ANGLE_DEGREES := rad_to_deg(atan(DEBUG_VIEW_CONE_HALF_WIDTH / DEBUG_VIEW_CONE_DEPTH)) # Match ray casting to the Wall_Grid cone shape.
-const VISIBILITY_MAX_DISTANCE := 5.2                                                        # Limit ray tests to the straight-view art depth.
+const VISIBILITY_MAX_DISTANCE := 5.5                                                        # Match the runtime renderer's final visible depth band.
 const SLOT_GRID_DEBUG_LABEL_COLOR := Color(0.05, 0.45, 1.0, 1.0)                            # Use blue for the independent slot-number audit labels.
 const SLOT_GRID_DEBUG_WALL_COLOR := Color(0.05, 0.55, 1.0, 0.95)                             # Use bright blue for slot guide lines whose source-map edge is currently blocked.
 const SLOT_GRID_DEBUG_OPEN_COLOR := Color(0.05, 0.45, 1.0, 0.32)                             # Use faint blue for slot guide lines whose source-map edge is currently open.
@@ -736,8 +741,9 @@ var was_next_round_pressed := false                                             
 var match_minimap_overlay: Node2D                                                              # Store the minimalist map currently bound to one player's HUD canvas.
 var match_minimap_static_layer: Node2D                                                         # Retain thin white maze edges until the topology changes.
 var match_minimap_dynamic_layer: Node2D                                                        # Rebuild only the two player arrows every frame.
-const MATCH_MINIMAP_SIZE := 104.0                                                              # Keep the shared maze readable without obscuring the full camera view.
+const MATCH_MINIMAP_SIZE := 132.0                                                              # Keep the shared maze readable in the upper-right without taking over either play screen.
 const MATCH_MINIMAP_MARGIN := 10.0                                                             # Leave a small safe inset from the upper-right screen edge.
+var pixel_hud_font: SystemFont                                                                  # Share one un-antialiased system font across every gameplay readout.
 var next_combat_visual_id := 1                                                                  # Give shared shots and impacts stable keys inside each split-screen view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
@@ -754,6 +760,11 @@ const SLOT_GRAPH_TUNER_PATH := "res://slot_graph_tuner.json"                    
 # _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
 func _ready() -> void:                                                                      # Declare this function.
 	_ensure_input_actions()                                                                    # Register local input actions before the first input polling frame.
+	pixel_hud_font = SystemFont.new()                                                          # Build a lightweight native font resource for crisp, arcade-style UI text.
+	pixel_hud_font.font_names = PackedStringArray(["Consolas", "Courier New"])              # Prefer a compact monospaced face so counters do not shift as values change.
+	pixel_hud_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE                            # Render hard pixel edges instead of soft vector-font smoothing.
+	pixel_hud_font.multichannel_signed_distance_field = false                                  # Disable MSDF smoothing for the same deliberately aliased presentation.
+	status_label.add_theme_font_override("font", pixel_hud_font)                             # Keep even the legacy diagnostic readout consistent when it is temporarily shown.
 	if TEMP_EMPTY_GRID_AUDIT:                                                                  # Use the isolated wall-free slot-guide test surface when explicitly requested.
 		_build_empty_grid_audit_wall_edges()                                                       # Build an empty 5x5 map with no physical wall edges.
 	elif TEMP_RANDOM_GRID_AUDIT:                                                               # Exercise the renderer and debug overlay against a populated test maze.
@@ -804,6 +815,11 @@ func _setup_debug_menu() -> void:
 	debug_menu_panel.custom_minimum_size = Vector2(268.0, 0.0)                                # Keep labels readable without covering the entire game window.
 	debug_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP                                  # Prevent mouse clicks on the menu from passing to the playfield.
 	debug_menu_panel.visible = false                                                           # Start closed so the prototype view stays uncluttered.
+	var pixel_theme := Theme.new()                                                             # Keep diagnostic controls as crisp as the retro game HUD.
+	pixel_theme.set_font("font", "Label", pixel_hud_font)                                  # Disable smoothing on the menu header and hint.
+	pixel_theme.set_font("font", "Button", pixel_hud_font)                                 # Disable smoothing on the JSON-save button.
+	pixel_theme.set_font("font", "CheckBox", pixel_hud_font)                               # Disable smoothing on all debug toggles.
+	debug_menu_panel.theme = pixel_theme                                                       # Apply the one local theme without changing Godot's editor UI.
 	canvas_layer.add_child(debug_menu_panel)                                                   # Put the menu on the same UI layer as the status text and source maps.
 
 	var content := VBoxContainer.new()                                                         # Stack the title, option rows, and usage hint vertically.
@@ -986,8 +1002,12 @@ func _setup_local_multiplayer() -> void:                                        
 	var player_two_window := Window.new()                                                        # Create an actual native window for player two rather than another panel in player one's window.
 	player_two_window.name = "PlayerTwoWindow"                                                  # Keep the second display identifiable in the remote scene tree.
 	player_two_window.title = "XybotsResearch — Player 2"                                      # Make the second monitor unmistakable during local playtests.
-	player_two_window.size = player_one_window.size                                              # Match the player-one game resolution before fullscreen scaling.
-	player_two_window.unresizable = true                                                         # Preserve the nearest-neighbour source-pixel framing in the test window.
+	player_two_window.visible = false                                                            # Keep it undisplayed until native-mode setup and its deferred root attachment finish.
+	player_two_window.size = Vector2i(960, 720)                                                  # Match the 4:3 source view at an exact 6x pixel scale before either player resizes it.
+	player_two_window.unresizable = false                                                        # Make the second display resizable from its first visible frame.
+	player_two_window.borderless = false                                                         # Keep the ordinary Windows title bar so the window can be dragged.
+	player_two_window.extend_to_title = false                                                    # Leave the resize border and title-bar hit area to the operating system.
+	player_two_window.force_native = true                                                        # Bypass the editor's embedded-subwindow mode so Windows can send this screen to monitor two.
 	get_tree().root.call_deferred("add_child", player_two_window)                               # Wait until scene setup completes; root rejects a native-window child during _ready itself.
 	call_deferred("_activate_player_two_window", player_one_window, player_two_window)          # Configure monitors only after the new Window is actually inside the scene tree.
 	player_two_window.close_requested.connect(func() -> void: get_tree().quit())                # Closing either player display ends this local two-player test cleanly.
@@ -1019,16 +1039,18 @@ func _setup_local_multiplayer() -> void:                                        
 
 
 
-# _activate_player_two_window: Places both native local-play windows after Godot accepts the second Window node.
+# _activate_player_two_window: Opens two ordinary OS windows that players can drag and resize onto any monitor.
 func _activate_player_two_window(player_one_window: Window, player_two_window: Window) -> void:
-	var screen_count := DisplayServer.get_screen_count()                                         # Prefer a true two-monitor presentation whenever a second display is available.
+	var screen_count := DisplayServer.get_screen_count()                                         # Use a second display only as the initial placement convenience.
+	if not player_one_window.is_embedded():                                                      # Native game windows can be freely resized by the operating system.
+		player_one_window.mode = Window.MODE_WINDOWED                                               # Never force player one into fullscreen.
+		player_one_window.unresizable = false                                                       # Let the user resize player one's window as desired.
+	player_two_window.mode = Window.MODE_WINDOWED                                                # Keep player two in a normal movable, resizable OS window as well.
+	player_two_window.unresizable = false                                                        # Do not lock player two's window size.
 	if screen_count > 1:
-		player_one_window.current_screen = 0                                                       # Keep player one on the primary display.
-		player_one_window.mode = Window.MODE_FULLSCREEN                                            # Use all of player one's monitor for the requested larger playtest view.
-		player_two_window.current_screen = 1                                                       # Send player two to the second display.
-		player_two_window.mode = Window.MODE_FULLSCREEN                                            # Give player two an equally large dedicated view.
+		player_two_window.current_screen = 1                                                       # Initially place player two on the second monitor when one exists.
 	else:
-		player_two_window.position = Vector2i(48, 48)                                             # Keep a usable overlapping-window fallback on one-monitor machines.
+		player_two_window.position = player_one_window.position + Vector2i(56, 56)                # Offset the second window so both are reachable on one monitor.
 	player_two_window.visible = true                                                             # Explicitly surface the deferred native window after it joins the tree.
 
 
@@ -1332,6 +1354,7 @@ func _setup_combat_hud() -> void:
 		combat_respawn_blackouts.append(blackout)                                                 # Retain it for per-frame layout and visibility updates.
 		var respawn_label := Label.new()                                                          # Create a simple per-view message without changing the camera renderer.
 		respawn_label.name = "CombatRespawnP%d" % (player_index + 1)                             # Keep it easy to identify in the remote scene tree.
+		respawn_label.add_theme_font_override("font", pixel_hud_font)                           # Keep the countdown hard-edged at every display scale.
 		respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER                          # Center the short message over the affected player's playfield.
 		respawn_label.add_theme_font_size_override("font_size", 36)                              # Make the short numeric countdown unmistakable at split-screen scale.
 		respawn_label.add_theme_color_override("font_color", Color(1.0, 0.12, 0.08, 1.0))        # Use the requested clear arcade-red countdown color.
@@ -1354,6 +1377,7 @@ func _setup_combat_hud() -> void:
 		combat_coin_icons.append(coin_icon)                                                     # Retain it for per-frame placement.
 		var coin_label := Label.new()                                                            # Create the matching collected/total readout.
 		coin_label.name = "CombatCoinScoreP%d" % (player_index + 1)                            # Keep the UI easy to inspect in the remote scene tree.
+		coin_label.add_theme_font_override("font", pixel_hud_font)                             # Keep score digits deliberately aliased.
 		coin_label.add_theme_font_size_override("font_size", 11)                               # Stay legible without crowding the screen.
 		coin_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.22, 1.0))        # Give the objective a clear gold arcade color.
 		coin_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep numbers readable over bright floors.
@@ -1375,6 +1399,7 @@ func _setup_combat_hud() -> void:
 		combat_ammo_icons.append(ammo_icon)                                                     # Retain it for per-frame display.
 		var ammo_label := Label.new()                                                            # Create the temporary rapid-fire round counter.
 		ammo_label.name = "CombatAmmoP%d" % (player_index + 1)                                  # Keep the temporary UI identifiable in the scene tree.
+		ammo_label.add_theme_font_override("font", pixel_hud_font)                             # Keep ammunition digits deliberately aliased.
 		ammo_label.add_theme_font_size_override("font_size", 11)                               # Match the compact coin-score lettering.
 		ammo_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.72, 1.0))        # Use a pale brass color that reads as ammunition.
 		ammo_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep counter readable over every floor texture.
@@ -1391,6 +1416,7 @@ func _setup_combat_hud() -> void:
 		var hud_layer: CanvasLayer = player_views[player_index].get("hud_layer", canvas_layer)  # Read this screen's dedicated HUD root.
 		var timer_label := Label.new()                                                            # Create a compact top-center shared clock.
 		timer_label.name = "CombatRoundTimerP%d" % (player_index + 1)
+		timer_label.add_theme_font_override("font", pixel_hud_font)                            # Keep the timer crisp instead of vector-smoothed.
 		timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		timer_label.add_theme_font_size_override("font_size", 18)
 		timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.28, 1.0))
@@ -1404,6 +1430,7 @@ func _setup_combat_hud() -> void:
 		combat_round_timer_labels.append(timer_label)
 		var result_label := Label.new()                                                           # Create the frozen center-screen winner prompt.
 		result_label.name = "CombatRoundResultP%d" % (player_index + 1)
+		result_label.add_theme_font_override("font", pixel_hud_font)                           # Keep the result banner crisp on either monitor.
 		result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		result_label.add_theme_font_size_override("font_size", 32)
 		result_label.add_theme_color_override("font_color", Color(1.0, 0.24, 0.16, 1.0))
@@ -1428,8 +1455,8 @@ func _update_combat_hud() -> void:
 		var view := player_views[player_index]                                                     # Read the matching split-screen viewport bundle.
 		var viewport_node: Node2D = view.get("maze_viewport", null)                              # Use the same display position and scale as the camera image.
 		if viewport_node != null:
-			meter.position = viewport_node.position + Vector2(5.0, VIEWPORT_SIZE.y * viewport_node.scale.y - 8.0 * viewport_node.scale.y) # Keep the smaller meter comfortably inside the lower-left of its camera.
-			meter.scale = viewport_node.scale * 0.5                                                   # Make the ten-hit hatch bar half the previous on-screen size.
+			meter.position = viewport_node.position + Vector2(5.0, VIEWPORT_SIZE.y * viewport_node.scale.y - 8.0 * viewport_node.scale.y) # Keep the compact meter comfortably inside the lower-left of its camera.
+			meter.scale = viewport_node.scale                                                         # Use the same integer camera scale so the hatch edges stay pixel-sharp.
 		var state := player_states[player_index]                                                   # Read current combat data.
 		meter.set_health(int(state.get("health", PLAYER_MAX_HEALTH)), PLAYER_MAX_HEALTH)          # Redraw the requested ten-hatch health value.
 		if viewport_node != null and player_index < combat_coin_icons.size() and player_index < combat_coin_labels.size(): # Position the lower-right objective UI in the same camera rectangle.
@@ -1745,6 +1772,51 @@ func _combat_sprite(key: String) -> Sprite2D:
 	return node                                                                                 # Return the cached visual node.
 
 
+# _runtime_world_sprite_light: Matches the runtime wall/floor depth bands so distant actors and pickups recede with the environment.
+func _runtime_world_sprite_light(view_depth: float) -> float:
+	if view_depth < 1.35:
+		return 1.0
+	if view_depth < 2.5:
+		return 0.78
+	if view_depth < 3.8:
+		return 0.56
+	if view_depth < 4.8:
+		return 0.36
+	if view_depth < 5.2:
+		return 0.22
+	return 0.10
+
+
+# _runtime_world_sprite_texel_stride: Selects one whole-pixel source scale from the same minifying footprint logic used by the runtime wall shader.
+func _runtime_world_sprite_texel_stride(sprite_scale: float) -> float:
+	var footprint := maxf(1.0, 1.0 / maxf(sprite_scale, 0.001))                               # Estimate how many source texels collapse into one logical screen pixel.
+	var lod: float = floor(log(footprint) / log(2.0))                                           # Snap that footprint to a whole power-of-two mip-like step.
+	return clampf(pow(2.0, lod), 1.0, 8.0)                                                     # Keep authored sprites legible while still visibly coarsening at depth.
+
+
+# _apply_runtime_world_sprite_style: Gives a world-projected sprite its own GPU material so view-specific depth and scale never leak between the two players' cameras.
+func _apply_runtime_world_sprite_style(sprite: Node2D, view_depth: float, sprite_scale: float) -> void:
+	if sprite == null:
+		return
+	var material := sprite.material as ShaderMaterial                                          # Reuse this sprite's material without sharing per-view uniforms.
+	if material == null or material.shader != WORLD_SPRITE_LOD_SHADER:
+		material = ShaderMaterial.new()
+		material.shader = WORLD_SPRITE_LOD_SHADER
+		sprite.material = material
+	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(sprite_scale)) # Quantize the source sample grid like the runtime walls.
+	material.set_shader_parameter("depth_light", _runtime_world_sprite_light(view_depth))       # Apply the same discrete depth darkness bands as walls and floors.
+	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
+
+
+# _clear_runtime_world_sprite_style: Keeps the local player camera-relative body at its authored brightness and source pixel resolution.
+func _clear_runtime_world_sprite_style(sprite: CanvasItem) -> void:
+	if sprite == null:
+		return
+	var material := sprite.material as ShaderMaterial
+	if material != null and material.shader == WORLD_SPRITE_LOD_SHADER:
+		sprite.material = null
+
+
 # _hide_unused_combat_sprites: Keeps cached sprite nodes but hides any that were not used this frame.
 func _hide_unused_combat_sprites(used_keys: Dictionary) -> void:
 	var view := player_views[active_player_index]                                              # Read the active camera view.
@@ -1790,6 +1862,7 @@ func _update_combat_view() -> void:
 		var start_scale := clampf(spawn_height / 40.0, 0.28, 1.0)                                 # Read the sprite size at the muzzle.
 		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
 		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
+		_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Keep the projectile's pixels and darkness in the same depth language as walls.
 		sprite.z_index = int(projection["z_index"])                                              # Let the world-projected bullet sit behind its firing character rather than overlaying the body.
 		sprite.visible = true                                                                      # Reveal this valid projectile.
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
@@ -1803,6 +1876,7 @@ func _update_combat_view() -> void:
 		sprite.texture = SHOT_EXPLOSION_1_TEXTURE if float(impact["timer"]) > IMPACT_DURATION * 0.5 else SHOT_EXPLOSION_2_TEXTURE # Flip through authored two-frame impact art.
 		sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - float(projection["actor_height"]) * 0.48) # Center effect at visible impact height.
 		sprite.scale = Vector2.ONE * clampf(float(projection["actor_height"]) / 34.0, 0.35, 1.2) # Keep close impacts readable.
+		_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Quantize impact pixels and apply its shared depth band.
 		sprite.z_index = int(projection["z_index"]) + 3                                         # Put impact on top of its struck surface.
 		sprite.visible = true                                                                      # Reveal active explosion.
 		used[key] = true                                                                           # Preserve this effect node.
@@ -1821,6 +1895,7 @@ func _update_combat_view() -> void:
 		if player_index == active_player_index:                                                   # Local player already has a correct self projection.
 			sprite.position = player_sprite.position                                                  # Reuse their visible feet registration.
 			sprite.scale = player_sprite.scale                                                        # Reuse their body scale.
+			_clear_runtime_world_sprite_style(sprite)                                                 # Keep the camera-relative hit body fully bright and at authored pixel resolution.
 			sprite.z_index = player_sprite.z_index + 3                                               # Keep reaction above nearby environment art.
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
@@ -1831,6 +1906,7 @@ func _update_combat_view() -> void:
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
+			_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Match the opponent's shared world raster treatment.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
@@ -1850,6 +1926,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.texture = texture                                                                    # Use the authored coin or gun pixel art.
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
+	_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Coarsen and darken world pickups with the same fixed depth bands.
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
@@ -2855,7 +2932,7 @@ func _layout_viewport() -> void:                                                
 			var view: Dictionary = player_views[player_index]
 			var player_window: Window = view.get("player_window", get_window())                    # Read the actual primary or player-two window.
 			var window_size := Vector2(player_window.size)
-			var camera_scale := minf((window_size.x - 24.0) / VIEWPORT_SIZE.x, (window_size.y - 24.0) / VIEWPORT_SIZE.y) # Preserve the low-resolution camera aspect while making it as large as the display permits.
+			var camera_scale := maxf(1.0, floorf(minf(window_size.x / VIEWPORT_SIZE.x, window_size.y / VIEWPORT_SIZE.y))) # Use every available 4:3 source pixel while retaining an integer scale and crisp art.
 			var view_node: Node2D = view.get("maze_viewport", null)
 			if view_node != null:
 				view_node.scale = Vector2.ONE * camera_scale
@@ -2864,9 +2941,10 @@ func _layout_viewport() -> void:                                                
 			if legacy_map != null:
 				legacy_map.visible = false                                                           # Never show the old blue-grid/source-map overlay during a match.
 			var minimap: Node2D = view.get("match_minimap_overlay", null)
-			if minimap != null:
+			if minimap != null and view_node != null:
 				minimap.scale = Vector2.ONE
-				minimap.position = Vector2(window_size.x - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN) # Keep the small vector-only map in the requested upper-right corner.
+				var camera_bounds := Rect2(view_node.position, VIEWPORT_SIZE * camera_scale)          # Use the actual displayed camera frame rather than the surrounding letterbox/window.
+				minimap.position = camera_bounds.position + Vector2(camera_bounds.size.x - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN) # Keep the map in the camera's upper-right corner, over the play view.
 		if diagnostic_3d_display != null:
 			diagnostic_3d_display.visible = false                                                  # Keep abandoned diagnostics out of both player windows.
 		return                                                                                    # Skip the former single-window shared-map/split-screen layout.
@@ -2909,6 +2987,14 @@ func _setup_match_minimap_overlay() -> void:
 	match_minimap_overlay.name = "MatchMinimap"                                                # Keep the replacement map easy to locate in the scene tree.
 	match_minimap_overlay.z_index = 300                                                        # Keep it above the player camera while remaining below end-round text.
 	canvas_layer.add_child(match_minimap_overlay)                                               # Attach it to this player's native HUD canvas.
+	var map_backing := ColorRect.new()                                                          # Add a translucent field so white topology remains readable over every scene texture.
+	map_backing.name = "Backdrop"                                                              # Keep the readability layer easy to identify in the scene tree.
+	map_backing.position = Vector2.ZERO                                                        # Cover the map from its local upper-left corner.
+	map_backing.size = Vector2(MATCH_MINIMAP_SIZE, MATCH_MINIMAP_SIZE)                         # Match the compact square map footprint exactly.
+	map_backing.color = Color(0.12, 0.12, 0.12, 0.5)                                           # Use the requested 50% transparent charcoal gray.
+	map_backing.mouse_filter = Control.MOUSE_FILTER_IGNORE                                     # Never let the HUD backing intercept game input.
+	map_backing.z_index = -1                                                                   # Draw the backing behind walls and player arrows.
+	match_minimap_overlay.add_child(map_backing)                                               # Put the backdrop under the rest of the map artwork.
 	match_minimap_static_layer = Node2D.new()                                                  # Retain white wall lines until a new maze is generated.
 	match_minimap_static_layer.name = "Walls"                                                  # Make the only static map element self-explanatory.
 	match_minimap_static_layer.set_meta("map_static_dirty", true)                             # Request the initial thin-line build.
@@ -2951,13 +3037,13 @@ func _update_match_minimap_overlay() -> void:
 				var bottom_left := _match_minimap_point(Vector2(cell + Vector2i(0, 1)))
 				var bottom_right := _match_minimap_point(Vector2(cell + Vector2i(1, 1)))
 				if _has_wall_edge(cell, Vector2i(0, -1)):
-					_add_match_minimap_line(match_minimap_static_layer, top_left, top_right, wall_color)
+					_add_match_minimap_line(match_minimap_static_layer, top_left, top_right, wall_color, 2.0)
 				if _has_wall_edge(cell, Vector2i(-1, 0)):
-					_add_match_minimap_line(match_minimap_static_layer, top_left, bottom_left, wall_color)
+					_add_match_minimap_line(match_minimap_static_layer, top_left, bottom_left, wall_color, 2.0)
 				if y == MAP_HEIGHT - 1 and _has_wall_edge(cell, Vector2i(0, 1)):
-					_add_match_minimap_line(match_minimap_static_layer, bottom_left, bottom_right, wall_color)
+					_add_match_minimap_line(match_minimap_static_layer, bottom_left, bottom_right, wall_color, 2.0)
 				if x == MAP_WIDTH - 1 and _has_wall_edge(cell, Vector2i(1, 0)):
-					_add_match_minimap_line(match_minimap_static_layer, top_right, bottom_right, wall_color)
+					_add_match_minimap_line(match_minimap_static_layer, top_right, bottom_right, wall_color, 2.0)
 		match_minimap_static_layer.set_meta("map_static_dirty", false)                          # Retain the maze geometry until its topology changes.
 	_clear_debug_map_layer(match_minimap_dynamic_layer)                                        # Replace just the two player arrows each frame.
 	for player_index in range(player_states.size()):
@@ -2967,7 +3053,7 @@ func _update_match_minimap_overlay() -> void:
 		var right := Vector2(-forward.y, forward.x)                                               # Derive a perpendicular arrow base without needing a camera cone.
 		var color := Color(1.0, 0.20, 0.20, 1.0) if player_index == 0 else Color(0.20, 0.48, 1.0, 1.0) # Keep P1 red and P2 blue.
 		var arrow := Polygon2D.new()                                                              # Use one tiny filled triangle rather than any view frustum artwork.
-		arrow.polygon = PackedVector2Array([center + forward * 5.5, center - forward * 3.0 + right * 3.0, center - forward * 3.0 - right * 3.0])
+		arrow.polygon = PackedVector2Array([center + forward * 7.0, center - forward * 4.0 + right * 4.0, center - forward * 4.0 - right * 4.0]) # Use bolder player arrows that remain legible at a glance.
 		arrow.color = color                                                                       # Apply the player's identifying color.
 		match_minimap_dynamic_layer.add_child(arrow)                                              # Draw it over the white wall network.
 
@@ -4848,6 +4934,16 @@ func _camera_grid_origin() -> Vector2:                                          
 	return _camera_grid_origin_for_forward(_view_forward_vector())                            # Return the rear-biased camera point for the current cardinal or halfway view.
 
 
+# _runtime_camera_origin_for_visibility: Centralizes actor projection/culling on the same live camera pose used by runtime walls.
+func _runtime_camera_origin_for_visibility() -> Vector2:
+	var coordinate_renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")
+	if coordinate_renderer != null and coordinate_renderer.has_method("runtime_camera_origin_for_current_pose"):
+		var runtime_origin: Variant = coordinate_renderer.call("runtime_camera_origin_for_current_pose")
+		if runtime_origin is Vector2:
+			return runtime_origin
+	return _camera_grid_origin()
+
+
 
 # _camera_grid_origin_for_forward: Returns the fixed camera origin for a supplied world-grid forward vector.
 func _camera_grid_origin_for_forward(forward: Vector2) -> Vector2:                         # Declare this function.
@@ -5610,6 +5706,7 @@ func _position_player() -> void:                                                
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the measured feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
+	_clear_runtime_world_sprite_style(player_sprite)                                            # The local body is camera-relative, so it never receives world-distance darkness or coarse sampling.
 	player_sprite.z_index = LOCAL_CHARACTER_LAYER                                              # Keep the local body above wall art; the clipped viewport trims anything outside the camera frame.
 
 
@@ -5681,6 +5778,7 @@ func _position_opponent_sprite() -> void:                                       
 	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
+	_apply_runtime_world_sprite_style(opponent_sprite, float(projection.get("view_depth", 0.0)), sprite_scale) # Share the runtime scene's coarse sampling and distance darkness.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
 
@@ -5726,12 +5824,7 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
 func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:         # Declare this function.
-	var coordinate_renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")              # Read the optional coordinate-frame runtime renderer on this experimental branch.
-	var origin := _camera_grid_origin()                                                        # Keep the legacy camera origin as the safe fallback.
-	if coordinate_renderer != null and coordinate_renderer.has_method("runtime_camera_origin_for_current_pose"): # Share the runtime wall camera when it is available.
-		var runtime_origin: Variant = coordinate_renderer.call("runtime_camera_origin_for_current_pose") # Query dynamically so the base controller remains independent of this experimental renderer class.
-		if runtime_origin is Vector2:
-			origin = runtime_origin                                                                 # Advance the opponent at exactly the same staged camera position as the walls.
+	var origin := _runtime_camera_origin_for_visibility()                                      # Use the identical staged camera origin used for renderer visibility and actor culling.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact live heading used by the coordinate walls, including NE/NW halfway poses.
 	var right := Vector2(-forward.y, forward.x).normalized()                                   # Derive camera-right from that same live heading so opponent screen projection cannot lag behind a turn.
 	var relative := target_world - origin                                                      # Measure the opponent relative to this player's camera.
@@ -5759,7 +5852,7 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 	var screen_y := feet_y - actor_height * 0.5                                                 # Keep a legacy centered y value for debugging; final sprite registration uses feet_y.
 	var character_layer := _character_layer_for_view_depth(view_depth)                         # Use wall-depth buckets so same-depth side walls do not erase visible actors.
 	var corridor_width := maxf(float(corridor["right_x"]) - float(corridor["left_x"]), 1.0)    # Measure how many screen pixels represent one visible tile width at this depth.
-	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "scale_view_depth": scale_view_depth, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, and character layer.
+	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "scale_view_depth": scale_view_depth, "view_depth": view_depth, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, physical depth, and character layer.
 
 
 
@@ -5893,7 +5986,7 @@ func _projected_sprite_overlaps_viewport(screen_x: float, screen_y: float, sprit
 
 # _world_actor_overlaps_current_camera_fan: Checks whether an actor body overlaps this player's camera fan.
 func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin: float) -> bool: # Declare this function.
-	var origin := _camera_grid_origin()                                                        # Use the same rear-biased camera point as wall visibility.
+	var origin := _runtime_camera_origin_for_visibility()                                      # Use the runtime renderer's exact rear-biased/interpolated camera point.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact visible camera heading, including temporary diagonal poses.
 	var right := Vector2(-forward.y, forward.x).normalized()                                   # Build the matching camera-right axis for the live fan test.
 	var relative := target_world - origin                                                      # Measure the target relative to the camera.
@@ -5907,7 +6000,7 @@ func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin
 
 # _world_actor_has_clear_line_of_sight: Uses the same physical thin-wall map as movement and runtime wall visibility.
 func _world_actor_has_clear_line_of_sight(target_world: Vector2) -> bool:
-	var origin := _camera_grid_origin()                                                        # Start from the same fixed cell camera origin used by the player-view cone.
+	var origin := _runtime_camera_origin_for_visibility()                                      # Start from the exact runtime camera point used by wall visibility.
 	var to_target := target_world - origin                                                     # Measure the world-space segment from camera to opponent.
 	var target_distance := to_target.length()                                                  # Keep the exact body-center distance for nearest-wall comparison.
 	if target_distance <= 0.025:                                                               # A player occupying the camera point cannot be blocked by an intervening edge.

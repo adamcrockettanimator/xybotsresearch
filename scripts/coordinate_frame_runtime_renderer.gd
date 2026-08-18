@@ -55,6 +55,12 @@ const HORIZON_Y := 31.5
 ## marker frames instead of merely looking broadly similar.
 const VIRTUAL_CAMERA_HEIGHT := 0.5
 const WALL_HEIGHT := 2.0 / 3.0
+## Floor and wall quads meet at fractional logical-pixel coordinates.  Let the
+## floor own one extra output pixel at every cell edge, then let the opaque wall
+## pass draw over it.  This prevents a black, uncovered staircase from leaking
+## through along the baseboard when the two independent projectors round their
+## shared edge differently.
+const FLOOR_EDGE_OVERDRAW_PIXELS := 2
 const TEMPLATE_CAMERA_REAR_OFFSET := 0.49
 const FOV_RATIO := 0.70
 # Keep each captured diagonal frame on the same brisk cadence as the three
@@ -989,10 +995,10 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 	if quad.size() != 4:
 		return
 	var bounds := _quad_bounds(quad)
-	var min_x := clampi(floori(bounds.position.x), 0, int(VIEW_SIZE.x) - 1)
-	var min_y := clampi(floori(bounds.position.y), 0, int(VIEW_SIZE.y) - 1)
-	var max_x := clampi(ceili(bounds.end.x), 0, int(VIEW_SIZE.x) - 1)
-	var max_y := clampi(ceili(bounds.end.y), 0, int(VIEW_SIZE.y) - 1)
+	var min_x := clampi(floori(bounds.position.x) - FLOOR_EDGE_OVERDRAW_PIXELS, 0, int(VIEW_SIZE.x) - 1)
+	var min_y := clampi(floori(bounds.position.y) - FLOOR_EDGE_OVERDRAW_PIXELS, 0, int(VIEW_SIZE.y) - 1)
+	var max_x := clampi(ceili(bounds.end.x) + FLOOR_EDGE_OVERDRAW_PIXELS, 0, int(VIEW_SIZE.x) - 1)
+	var max_y := clampi(ceili(bounds.end.y) + FLOOR_EDGE_OVERDRAW_PIXELS, 0, int(VIEW_SIZE.y) - 1)
 	var cell: Vector2i = entry["cell"]
 	var origin: Vector2 = entry["origin"]
 	var forward: Vector2 = entry["forward"]
@@ -1008,12 +1014,13 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 			var side := (float(x) - VIEW_SIZE.x * 0.5) * depth / FOCAL_LENGTH
 			var world := origin + right * side + forward * depth
 			var uv := world - Vector2(cell)
-			# Keep one exact cell owner per screen pixel.  This is also what makes
-			# the near/offscreen player cell render correctly rather than requiring
-			# four visible red control dots.
-			if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
+			# Expand ownership by the world-space width of one logical screen pixel.
+			# Sampling the clamped edge texel fills fractional shared borders below
+			# the GPU wall pass, while the wall itself remains the visible owner.
+			var edge_margin := clampf(depth / FOCAL_LENGTH * float(FLOOR_EDGE_OVERDRAW_PIXELS + 1), 0.002, 0.05)
+			if uv.x < -edge_margin or uv.x > 1.0 + edge_margin or uv.y < -edge_margin or uv.y > 1.0 + edge_margin:
 				continue
-			var color := _sample_image_nearest(floor_source_image, uv)
+			var color := _sample_image_nearest(floor_source_image, uv.clamp(Vector2.ZERO, Vector2.ONE))
 			var light := _depth_light(depth)
 			color.r *= light
 			color.g *= light
@@ -1361,11 +1368,21 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	var right: Vector2 = controller._view_right_vector().normalized()
 	var camera_origin := _runtime_camera_origin(forward, right)
 	var result: Array[Dictionary] = []
-	# Reuse the controller's first-hit ray fan.  The old direct wall_edges walk
-	# projected every physical edge in the cone, including walls hidden behind
-	# nearer walls; that is why the green geometry could look perspectively right
-	# while disagreeing with the playable top-down map.
-	var physical_edges: Array = controller._visible_physical_wall_edges_for_basis(camera_origin, forward, right)
+	# The first-hit ray fan is still useful for ordinary visibility, but it can
+	# miss a wall that only enters through the extreme left or right edge between
+	# two rays.  That produced the black wedges at the screen borders.  Start with
+	# those ray-visible edges, then supplement them with every authoritative map
+	# edge that geometrically intersects the same frustum.  They are drawn
+	# far-to-near below, so nearer opaque wall bases still provide occlusion.
+	var edges_by_key := {}
+	for ray_visible_edge in controller._visible_physical_wall_edges_for_basis(camera_origin, forward, right):
+		edges_by_key[String(ray_visible_edge["key"])] = ray_visible_edge
+	for physical_edge in controller._all_physical_wall_edges():
+		var first_candidate := _to_view(Vector2(physical_edge["a"]), camera_origin, forward, right)
+		var second_candidate := _to_view(Vector2(physical_edge["b"]), camera_origin, forward, right)
+		if _segment_intersects_view_frustum(first_candidate, second_candidate):
+			edges_by_key[String(physical_edge["key"])] = physical_edge
+	var physical_edges: Array = edges_by_key.values()
 	for edge in physical_edges:
 		# Keep the source wall's complete physical endpoints.  A ray-visible span
 		# may tell us that only half this wall is exposed, but shortening the quad
@@ -1385,8 +1402,15 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"depth": average_depth,
 			"light": _depth_light(average_depth),
 		})
+	# Retain the nearest useful walls if the full physical set exceeds the GPU
+	# budget, then put that retained set back into far-to-near order for Canvas
+	# compositing.  The previous one-step far-to-near sort accidentally kept the
+	# farthest entries first whenever the map grew past MAX_WALLS.
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) < float(b["depth"]))
+	if result.size() > MAX_WALLS:
+		result = result.slice(0, MAX_WALLS)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
-	return result.slice(0, MAX_WALLS)
+	return result
 
 func _wall_edge_points(cell: Vector2i, edge: int) -> Array[Vector2]:
 	match edge:
@@ -1400,11 +1424,48 @@ func _to_view(point: Vector2, origin: Vector2, forward: Vector2, right: Vector2)
 	return Vector2(relative.dot(right), relative.dot(forward))
 
 func _edge_can_be_seen(first: Vector2, second: Vector2) -> bool:
-	var samples := [first, second, (first + second) * 0.5]
-	for sample in samples:
-		if sample.y > NEAR_CLIP and sample.y < MAX_DEPTH and absf(sample.x / sample.y) < FOV_RATIO:
-			return true
-	return false
+	# Do not test only the endpoints and midpoint here.  A wall can cross the
+	# camera frustum while all three of those samples lie outside it (most often
+	# when a near side wall continues off either screen edge).  That old shortcut
+	# incorrectly discarded the entire quad, leaving the black wedges reported at
+	# the edges of the view.  Clip the *segment* against the view cone instead;
+	# the full-frame GPU wall sprite then clips its projected quad naturally to
+	# the actual screen without changing its perspective or UV mapping.
+	return _segment_intersects_view_frustum(first, second)
+
+
+# _segment_intersects_view_frustum: Liang-Barsky-style interval clipping for a
+# world-space wall edge against the finite 2D camera cone.  The local view axes
+# are X = camera side and Y = camera depth.
+func _segment_intersects_view_frustum(first: Vector2, second: Vector2) -> bool:
+	var direction := second - first
+	var interval_start := 0.0
+	var interval_end := 1.0
+	# Every entry is the half-plane normal.dot(point) <= limit.  Together they
+	# form the near plane, distance cap, and the left/right sides of the cone.
+	var half_planes := [
+		{"normal": Vector2(0.0, -1.0), "limit": -NEAR_CLIP},
+		{"normal": Vector2(0.0, 1.0), "limit": MAX_DEPTH},
+		{"normal": Vector2(1.0, -FOV_RATIO), "limit": 0.0},
+		{"normal": Vector2(-1.0, -FOV_RATIO), "limit": 0.0},
+	]
+	for plane in half_planes:
+		var normal: Vector2 = plane["normal"]
+		var limit: float = plane["limit"]
+		var origin_value := normal.dot(first)
+		var slope := normal.dot(direction)
+		if absf(slope) < 0.000001:
+			if origin_value > limit:
+				return false
+			continue
+		var crossing := (limit - origin_value) / slope
+		if slope > 0.0:
+			interval_end = minf(interval_end, crossing)
+		else:
+			interval_start = maxf(interval_start, crossing)
+		if interval_start > interval_end:
+			return false
+	return interval_end >= 0.0 and interval_start <= 1.0
 
 func _project_wall_quad(first: Vector2, second: Vector2) -> PackedVector2Array:
 	# Vertex order follows the source wall texture: top-left, top-right,
@@ -1468,11 +1529,13 @@ func runtime_camera_origin_for_current_pose() -> Vector2:
 	return _runtime_camera_origin(forward, right)
 
 func _depth_light(depth: float) -> float:
-	# Four deliberate bands retain the older discrete arcade value ramp.
+	# Deep extra bands make the extended sixth-cell combat test visibly recede before the 5.5 depth clip.
 	if depth < 1.35: return 1.0
 	if depth < 2.5: return 0.78
 	if depth < 3.8: return 0.56
-	return 0.36
+	if depth < 4.8: return 0.36
+	if depth < 5.2: return 0.22
+	return 0.10
 
 func _inverse_homography(p00: Vector2, p10: Vector2, p11: Vector2, p01: Vector2) -> Array[Vector3]:
 	var dx1 := p10.x - p11.x
