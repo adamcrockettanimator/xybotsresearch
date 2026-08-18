@@ -24,8 +24,8 @@ const STRAFE_LEFT_WALL_CONTACT_X := 0.0                                         
 const STRAFE_RIGHT_WALL_CONTACT_X := 1.0                                                    # Set the right tile-edge contact; camera clipping trims any body pixels beyond the frame.
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
-const MAP_WIDTH := 9                                                                        # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
-const MAP_HEIGHT := 9                                                                       # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
+const MAP_WIDTH := 5                                                                        # Use a compact combat maze so both players encounter each other quickly.
+const MAP_HEIGHT := 5                                                                       # Keep the shared combat map square and compact.
 const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
 const TEMP_RANDOM_GRID_AUDIT := false                                                       # Keep the temporary one-player slot audit off while local multiplayer gameplay is active.
 const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
@@ -100,11 +100,19 @@ const ACTION_FIRE := "xybots_fire"                                              
 const ACTION_P2_FIRE := "xybots_p2_fire"                                                     # Name the player-two pistol fire action.
 const PLAYER_MAX_HEALTH := 10                                                                  # Start every player with ten visible health hatches.
 const PISTOL_FIRE_INTERVAL := 0.32                                                            # Keep the infinite-ammo pistol deliberate rather than machine-gun fast.
+const MACHINE_GUN_FIRE_INTERVAL := 0.12                                                       # Keep the pickup clearly faster than the pistol without making it a blur.
+const MACHINE_GUN_AMMO := 100                                                                 # Give the temporary pickup the requested one hundred rapid-fire rounds.
+const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
+const COIN_PICKUP_RADIUS := 0.32                                                              # Let a player collect a center-of-cell coin without requiring exact pixel contact.
+const DEFAULT_COMBAT_ROUND_SECONDS := 5.0 * 60.0                                              # Run the first objective round for the requested five minutes.
 const PROJECTILE_SPEED := 6.0                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.7                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PROJECTILE_PLAYER_RADIUS := 0.18                                                        # Treat a shot passing close to a player center as a hit.
 const IMPACT_DURATION := 0.22                                                                 # Keep the two authored explosion frames on screen briefly.
 const HIT_REACTION_DURATION := 0.20                                                           # Keep the one-frame hit pose readable without freezing movement.
+const DEATH_FALL_SECONDS := 0.70                                                              # Let the nine-frame death animation read clearly before the respawn countdown begins.
+const DEATH_COUNTDOWN_SECONDS := 3.0                                                         # Hold the defeated player down long enough to show 3, 2, 1.
+const DEATH_RESPAWN_SECONDS := 0.70                                                          # Play the same authored death frames backwards when the player returns.
 const SHOT_N_TEXTURE := preload("res://assets/Effects/Shot_N.png")                          # Use the authored distance-facing pistol shot sprite.
 const SHOT_E_TEXTURE := preload("res://assets/Effects/Shot_E.png")                          # Use the authored side-on pistol shot sprite.
 const SHOT_EXPLOSION_1_TEXTURE := preload("res://assets/Effects/ShotExplosion/Shot_explosion_1.png") # Use the first authored impact frame.
@@ -112,6 +120,14 @@ const SHOT_EXPLOSION_2_TEXTURE := preload("res://assets/Effects/ShotExplosion/Sh
 const HIT_FRONT_TEXTURE := preload("res://assets/frames/Hit/Hit_Front.png")                 # Use the authored head-on hit pose.
 const HIT_LEFT_TEXTURE := preload("res://assets/frames/Hit/Hit_Left.png")                   # Use the authored left-side hit pose.
 const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")                 # Use the authored right-side hit pose.
+const COIN_TEXTURE := preload("res://assets/Items/Coin/Coin_02.png")                        # Use the front-facing authored coin frame for the compact HUD icon.
+const COIN_TEXTURES := [                                                                      # Cycle the authored coin frames so world pickups visibly spin.
+	preload("res://assets/Items/Coin/Coin_01.png"),
+	preload("res://assets/Items/Coin/Coin_02.png"),
+	preload("res://assets/Items/Coin/Coin_03.png"),
+	preload("res://assets/Items/Coin/Coin_04.png"),
+]
+const GUN_TEXTURE := preload("res://assets/Items/Gun/Gun.png")                              # Use the authored machine-gun pickup art in world space and HUD.
 const XBOX_STICK_DEADZONE := 0.22                                                            # Ignore small Xbox-stick drift around its physical center.
 const XBOX_TURN_THRESHOLD := 0.62                                                            # Require a deliberate right-stick push before issuing one turn input.
 const DEBUG_MAP_CELL_SIZE := 16.0                                                           # Fit the temporary 9x9 diagnostic grid inside its own side panel.
@@ -593,6 +609,8 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
+@export var walk_through_walls_cheat := false                                                # Let a deliberate debug cheat bypass only player movement collision, including the outer map boundary.
+@export_range(0.0, 900.0, 1.0, "or_greater") var combat_round_duration_seconds := DEFAULT_COMBAT_ROUND_SECONDS # Let the inspector use zero for an infinite test round or tune the normal five-minute match length.
 
 @export_group("3D Diagnostic Camera")                                                       # Group the editable 3D diagnostic camera controls in the Godot inspector.
 @export_range(45.0, 110.0, 1.0) var diagnostic_3d_camera_fov := 78.0                         # Let the user tune the 3D diagnostic camera field of view.
@@ -696,6 +714,30 @@ var coordinate_renderers: Array[Node] = []                                      
 var active_projectiles: Array[Dictionary] = []                                                # Store shared-world pistol shots until they hit a wall, player, or lifetime limit.
 var active_impacts: Array[Dictionary] = []                                                    # Store short-lived wall/player impact flashes in shared world space.
 var combat_health_bars: Array[Node2D] = []                                                    # Store one visible health meter for each split-screen player.
+var combat_respawn_blackouts: Array[ColorRect] = []                                           # Store one full-view blackout panel for each defeated player's own camera.
+var combat_respawn_labels: Array[Label] = []                                                  # Store one readable death/countdown label for each local view.
+var combat_coin_labels: Array[Label] = []                                                     # Store one per-player score readout inside the lower-right of each view.
+var combat_coin_icons: Array[TextureRect] = []                                                # Store one authored coin icon beside each score readout.
+var combat_ammo_labels: Array[Label] = []                                                     # Store the temporary rapid-fire ammo counter for each local view.
+var combat_ammo_icons: Array[TextureRect] = []                                                # Store the gun icon only while its player is armed.
+var world_coins: Array[Dictionary] = []                                                       # Keep uncollected map and dropped coins in shared world coordinates.
+var machine_gun_pickup: Dictionary = {}                                                       # Keep the one active machine-gun pickup in shared world coordinates.
+var machine_gun_respawn_timer := 0.0                                                          # Count down only while no contested machine-gun pickup exists.
+var combat_total_coin_value := 0                                                              # Preserve the round's original coin total for score labels even after drops.
+var combat_round_time_remaining := DEFAULT_COMBAT_ROUND_SECONDS                               # Count down shared match time independently of either player's camera.
+var combat_round_complete := false                                                            # Freeze score changes after the clock reaches zero while allowing post-round movement and shooting.
+var combat_round_result := ""                                                                 # Store the final winner/draw announcement exactly once.
+var combat_round_timer_label: Label                                                           # Show the running round clock in the upper-right without covering either player view.
+var combat_round_result_label: Label                                                          # Show the frozen winner announcement only after the timer expires.
+var combat_round_timer_labels: Array[Label] = []                                              # Keep one top-center match clock in each player's native window.
+var combat_round_result_labels: Array[Label] = []                                             # Keep one center-screen winner prompt in each player's native window.
+var player_windows: Array[Window] = []                                                        # Store the native game window that owns each local player's full-screen view.
+var was_next_round_pressed := false                                                            # Latch X so a held key starts one new round rather than repeatedly rerolling it.
+var match_minimap_overlay: Node2D                                                              # Store the minimalist map currently bound to one player's HUD canvas.
+var match_minimap_static_layer: Node2D                                                         # Retain thin white maze edges until the topology changes.
+var match_minimap_dynamic_layer: Node2D                                                        # Rebuild only the two player arrows every frame.
+const MATCH_MINIMAP_SIZE := 104.0                                                              # Keep the shared maze readable without obscuring the full camera view.
+const MATCH_MINIMAP_MARGIN := 10.0                                                             # Leave a small safe inset from the upper-right screen edge.
 var next_combat_visual_id := 1                                                                  # Give shared shots and impacts stable keys inside each split-screen view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
@@ -729,6 +771,7 @@ func _ready() -> void:                                                          
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
+	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
 	_setup_debug_menu()                                                                        # Create the shared on-screen menu for toggling diagnostic overlays.
 	_load_slot_graph_tuner_overrides()                                                         # Restore saved slot-vector adjustments before the first render.
@@ -777,6 +820,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
 	_add_debug_menu_check(content, "slot_grid", "Slot Grid (F2)")                           # Add the existing F2 quick-toggle as a menu option.
 	_add_debug_menu_check(content, "render_walls", "Render Walls")                          # Let floor/grid tuning run without opaque wall art covering the player view.
+	_add_debug_menu_check(content, "walk_through_walls", "Walk Through Walls (Cheat)")      # Allow deliberate out-of-bounds coordinate exploration without changing projectile or visibility collision.
 	_add_debug_menu_check(content, "selected_slots", "Selected Slots")                       # Add the selected-wall comparison overlay toggle.
 	_add_debug_menu_check(content, "manual_forward", "Manual Forward")                      # Hold Fwd frames until the player deliberately presses forward again.
 	_add_debug_menu_check(content, "manual_strafe", "Manual Strafe")                        # Hold side-camera frames until the player deliberately presses sideways again.
@@ -834,6 +878,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_slot_grid_debug                                                            # Return the blue wall-slot audit overlay state.
 		"render_walls":
 			return render_wall_art                                                                 # Return whether transparent wall overlays are currently visible.
+		"walk_through_walls":
+			return walk_through_walls_cheat                                                        # Return whether only player movement is intentionally allowed through map walls.
 		"selected_slots":
 			return show_selected_wall_slot_debug                                                   # Return the renderer-selection comparison overlay state.
 		"manual_forward":
@@ -877,6 +923,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_slot_grid_debug = enabled                                                         # Show or hide the blue numbered wall-slot audit grid.
 		"render_walls":
 			render_wall_art = enabled                                                              # Hide/reveal only rendered wall overlays; map walls and collision remain active.
+		"walk_through_walls":
+			walk_through_walls_cheat = enabled                                                     # Keep the cheat scoped to player navigation; projectiles and renderer visibility still respect walls.
 		"selected_slots":
 			show_selected_wall_slot_debug = enabled                                                # Show or hide renderer-selected wall-slot highlights.
 		"manual_forward":
@@ -932,11 +980,26 @@ func _setup_local_multiplayer() -> void:                                        
 		player_states = [_make_player_state(0, Vector2i(4, 4), 0)]                               # Place one player at the center of the empty 9x9 grid, facing north.
 		_bind_player_context(0)                                                                   # Bind the sole test player into the legacy renderer globals.
 		return                                                                                    # Skip creating player two's view and opponent sprites.
+	status_label.visible = false                                                                  # The separate player windows use focused HUD elements instead of the old shared debug readout.
+	var player_one_window := get_window()                                                        # Treat the existing game window as player one's native display.
+	player_windows = [player_one_window]                                                         # Retain player one's host before creating the second display.
+	var player_two_window := Window.new()                                                        # Create an actual native window for player two rather than another panel in player one's window.
+	player_two_window.name = "PlayerTwoWindow"                                                  # Keep the second display identifiable in the remote scene tree.
+	player_two_window.title = "XybotsResearch — Player 2"                                      # Make the second monitor unmistakable during local playtests.
+	player_two_window.size = player_one_window.size                                              # Match the player-one game resolution before fullscreen scaling.
+	player_two_window.unresizable = true                                                         # Preserve the nearest-neighbour source-pixel framing in the test window.
+	get_tree().root.call_deferred("add_child", player_two_window)                               # Wait until scene setup completes; root rejects a native-window child during _ready itself.
+	call_deferred("_activate_player_two_window", player_one_window, player_two_window)          # Configure monitors only after the new Window is actually inside the scene tree.
+	player_two_window.close_requested.connect(func() -> void: get_tree().quit())                # Closing either player display ends this local two-player test cleanly.
+	player_windows.append(player_two_window)                                                     # Retain the native player-two window for layout and HUD placement.
 	var player_one_opponent := _create_character_sprite("OpponentSprite")                       # Create player one's sprite used for seeing player two.
 	maze_content.add_child(player_one_opponent)                                                 # Put the opponent sprite into player one's clipped camera content.
 	var player_two_viewport := Node2D.new()                                                     # Create a second cropped playfield container for player two.
 	player_two_viewport.name = "MazeViewportP2"                                                 # Name the player-two view for scene-tree inspection.
-	add_child(player_two_viewport)                                                              # Attach player two's screen to the main scene.
+	player_two_window.add_child(player_two_viewport)                                             # Attach player two's camera to its own native game window.
+	var player_two_hud := CanvasLayer.new()                                                      # Give player two a dedicated HUD canvas inside their native window.
+	player_two_hud.name = "PlayerTwoHud"                                                       # Keep the second display's UI easy to inspect.
+	player_two_window.add_child(player_two_hud)                                                  # Draw player-two HUD elements above their own camera only.
 	var player_two_content := _ensure_viewport_clipper(player_two_viewport)                     # Give player two the same 160x120 camera clipper.
 	var player_two_playfield := Sprite2D.new()                                                   # Create player two's transition-frame sprite.
 	player_two_playfield.name = "Playfield"                                                     # Match player one's child naming convention.
@@ -948,11 +1011,25 @@ func _setup_local_multiplayer() -> void:                                        
 	var player_two_opponent := _create_character_sprite("OpponentSprite")                       # Create player two's sprite used for seeing player one.
 	player_two_content.add_child(player_two_opponent)                                           # Add player two's opponent sprite to the clipped camera content.
 	player_views = [                                                                            # Store view-node bundles for each local player.
-		{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": player_one_opponent}, # Store player one's existing view nodes.
-		{"maze_viewport": player_two_viewport, "maze_content": player_two_content, "playfield": player_two_playfield, "player_sprite": player_two_sprite, "opponent_sprite": player_two_opponent}, # Store player two's new view nodes.
+		{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": player_one_opponent, "hud_layer": canvas_layer, "player_window": player_one_window}, # Store player one's existing view nodes.
+		{"maze_viewport": player_two_viewport, "maze_content": player_two_content, "playfield": player_two_playfield, "player_sprite": player_two_sprite, "opponent_sprite": player_two_opponent, "hud_layer": player_two_hud, "player_window": player_two_window}, # Store player two's native-window nodes.
 	]                                                                                           # Close the local-player view list.
 	player_states = _make_start_player_states()                                                 # Create initial player-state records for both local players.
 	_bind_player_context(0)                                                                     # Bind player one back into the legacy globals after setup.
+
+
+
+# _activate_player_two_window: Places both native local-play windows after Godot accepts the second Window node.
+func _activate_player_two_window(player_one_window: Window, player_two_window: Window) -> void:
+	var screen_count := DisplayServer.get_screen_count()                                         # Prefer a true two-monitor presentation whenever a second display is available.
+	if screen_count > 1:
+		player_one_window.current_screen = 0                                                       # Keep player one on the primary display.
+		player_one_window.mode = Window.MODE_FULLSCREEN                                            # Use all of player one's monitor for the requested larger playtest view.
+		player_two_window.current_screen = 1                                                       # Send player two to the second display.
+		player_two_window.mode = Window.MODE_FULLSCREEN                                            # Give player two an equally large dedicated view.
+	else:
+		player_two_window.position = Vector2i(48, 48)                                             # Keep a usable overlapping-window fallback on one-monitor machines.
+	player_two_window.visible = true                                                             # Explicitly surface the deferred native window after it joins the tree.
 
 
 
@@ -1032,9 +1109,16 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"was_left_turn_pressed": false,                                                            # Store this player's left-turn one-shot latch.
 		"was_right_turn_pressed": false,                                                           # Store this player's right-turn one-shot latch.
 		"health": PLAYER_MAX_HEALTH,                                                               # Store the current combat health shown by the hatch meter.
+		"coins": 0,                                                                                # Track this player's collected objective coins across deaths and respawns.
+		"machine_gun_ammo": 0,                                                                     # Keep zero for the normal infinite-ammo pistol; positive values arm rapid fire.
 		"fire_cooldown": 0.0,                                                                      # Store time remaining before this player can fire again.
 		"hit_timer": 0.0,                                                                          # Store the brief authored hit-pose duration.
 		"hit_reaction": "front",                                                                  # Store the front/left/right hit art selected by projectile direction.
+		"is_dying": false,                                                                         # Keep movement, fire, and further damage disabled during the visible respawn sequence.
+		"death_phase": "",                                                                        # Store fall, countdown, or reverse-respawn playback state.
+		"death_timer": 0.0,                                                                        # Store elapsed time inside the active death phase.
+		"death_respawn_cell": start_cell,                                                          # Retain the chosen safe cell while the old body finishes falling.
+		"death_respawn_facing": start_facing,                                                      # Retain the inward-facing camera direction for the returning body.
 	}                                                                                           # Close the player-state dictionary.
 
 
@@ -1050,20 +1134,180 @@ func _setup_all_player_renderers() -> void:                                     
 		_setup_perspective_extents_overlay()                                                      # Build this player's projected-square debug overlay.
 		_setup_view_slot_overlay()                                                                # Build this player's blue slot-number audit overlay.
 		_setup_debug_map_overlay()                                                                # Build this player's independent top-down source map.
+		_setup_match_minimap_overlay()                                                            # Build the clean shared maze map used in this player's native window.
 		_store_bound_view_nodes(player_index)                                                     # Save the renderer nodes back into the player's view bundle.
 		_save_player_context(player_index)                                                        # Save any state touched during renderer setup.
 	_bind_player_context(0)                                                                     # Leave player one bound after setup for editor inspection.
 
 
 
+# _setup_combat_collectibles: Creates the shared round objective after player and map state both exist.
+func _setup_combat_collectibles() -> void:
+	_reset_combat_collectibles()                                                               # Start the first round with exactly one coin in every map cell.
+
+
+# _reset_combat_collectibles: Rebuilds every map coin and places one machine gun away from the spawn corners.
+func _reset_combat_collectibles() -> void:
+	world_coins.clear()                                                                        # Remove old map/dropped coins before rebuilding the round objective.
+	_reset_combat_round()                                                                     # Restart the shared match clock and clear any prior frozen result with the new map.
+	combat_total_coin_value = MAP_WIDTH * MAP_HEIGHT                                          # Keep the original map total stable for both players' score readouts.
+	for y in range(MAP_HEIGHT):                                                                # Visit every walkable maze cell exactly once.
+		for x in range(MAP_WIDTH):                                                              # Place the single objective coin at the center of this cell.
+			world_coins.append({"id": next_combat_visual_id, "position": Vector2(float(x) + 0.5, float(y) + 0.5), "value": 1}) # Store world-space pickup data independent of either camera.
+			next_combat_visual_id += 1                                                            # Reserve a stable visual cache key for the coin.
+	machine_gun_pickup = {}                                                                   # Clear any pickup held by the old map before choosing a fresh contested location.
+	machine_gun_respawn_timer = 0.0                                                          # Allow the first pickup to appear immediately.
+	_spawn_machine_gun_pickup()                                                              # Place the pickup away from the starting players when possible.
+
+
+# _reset_combat_round: Re-arms the shared clock whenever a new map/coin layout begins.
+func _reset_combat_round() -> void:
+	combat_round_time_remaining = maxf(combat_round_duration_seconds, 0.0)                  # Treat zero as an intentional infinite-time test round.
+	combat_round_complete = false                                                            # Allow score collection again on the new round.
+	combat_round_result = ""                                                                 # Hide the previous winner message until this round actually ends.
+
+
+# _advance_combat_round: Runs the shared round timer and freezes only objective scoring when time expires.
+func _advance_combat_round(delta: float) -> void:
+	if combat_round_complete or combat_round_duration_seconds <= 0.0:                       # Keep finished and explicitly infinite rounds stable.
+		return
+	combat_round_time_remaining = maxf(combat_round_time_remaining - delta, 0.0)            # Count down in real time rather than from either camera's animation state.
+	if combat_round_time_remaining <= 0.0:
+		combat_round_complete = true                                                           # Freeze coin collection, not movement or combat, at the end horn.
+		var player_one_score := int(player_states[0].get("coins", 0)) if player_states.size() > 0 else 0
+		var player_two_score := int(player_states[1].get("coins", 0)) if player_states.size() > 1 else 0
+		if player_one_score == player_two_score:
+			combat_round_result = "DRAW!"                                                       # Make tied final scores unambiguous.
+		else:
+			combat_round_result = "PLAYER %d WINS!" % (1 if player_one_score > player_two_score else 2) # Preserve the requested highest-coin winner rule.
+
+
+# _spawn_machine_gun_pickup: Places the one contested pickup in a random non-occupied maze cell.
+func _spawn_machine_gun_pickup() -> void:
+	var candidates: Array[Vector2i] = []                                                     # Build eligible cell choices rather than assuming a particular maze layout.
+	for y in range(MAP_HEIGHT):                                                               # Check every cell because all maze cells are traversable.
+		for x in range(MAP_WIDTH):                                                             # Add non-occupied cells to the spawn pool.
+			var cell := Vector2i(x, y)                                                          # Keep the integer cell so player spawn tests are exact.
+			var occupied := false                                                               # Avoid placing the pickup directly beneath a living player.
+			for state in player_states:
+				if cell == state.get("grid_position", Vector2i(-99, -99)):
+					occupied = true
+					break
+			if not occupied:
+				candidates.append(cell)
+	if candidates.is_empty():                                                                 # Keep a safe fallback for an unusually tiny diagnostic map.
+		return
+	var chosen: Vector2i = candidates[randi() % candidates.size()]                           # Let each new pickup contest a different area of the maze.
+	machine_gun_pickup = {"id": next_combat_visual_id, "position": Vector2(float(chosen.x) + 0.5, float(chosen.y) + 0.5), "ammo": MACHINE_GUN_AMMO} # Keep the pickup and its remaining magazine in shared world coordinates.
+	next_combat_visual_id += 1                                                                # Reserve its visual cache key.
+	machine_gun_respawn_timer = 0.0                                                          # Stop the absent-pickup timer once the gun is visible.
+
+
+# _collect_combat_pickups: Resolves coins and the one machine gun after both players have moved for this frame.
+func _collect_combat_pickups(delta: float) -> void:
+	var remaining_coins: Array[Dictionary] = []                                               # Rebuild the list so collected coins disappear atomically.
+	for coin in world_coins:
+		var collected_by := -1                                                                 # Let at most one player receive this coin.
+		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                       # Read the camera-independent world location.
+		if not combat_round_complete:                                                           # Leave unclaimed coins in place after the clock so final scores cannot change.
+			for player_index in range(player_states.size()):                                   # Test both living local players against the shared pickup.
+				var state := player_states[player_index]
+				if bool(state.get("is_dying", false)):
+					continue
+				if player_index == 1 and not player_two_joined:
+					continue
+				if _player_state_world_position(state).distance_to(coin_position) <= COIN_PICKUP_RADIUS:
+					collected_by = player_index
+					break
+		if collected_by >= 0:
+			var collector := player_states[collected_by]
+			collector["coins"] = int(collector.get("coins", 0)) + int(coin.get("value", 1))
+			player_states[collected_by] = collector
+		else:
+			remaining_coins.append(coin)
+	world_coins = remaining_coins                                                            # Keep only still-uncollected objective or dropped coins.
+	if not machine_gun_pickup.is_empty():                                                    # Test the active pickup only while it exists in the world.
+		var pickup_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)
+		for player_index in range(player_states.size()):
+			var state := player_states[player_index]
+			if bool(state.get("is_dying", false)) or (player_index == 1 and not player_two_joined):
+				continue
+			if _player_state_world_position(state).distance_to(pickup_position) <= COIN_PICKUP_RADIUS:
+				state["machine_gun_ammo"] = int(machine_gun_pickup.get("ammo", MACHINE_GUN_AMMO)) # Preserve a dropped gun's remaining rounds rather than refilling it.
+				player_states[player_index] = state
+				machine_gun_pickup = {}                                                           # Consume the shared map pickup.
+				machine_gun_respawn_timer = 0.0                                                   # A held gun does not start a duplicate-world-pickup timer.
+				break
+	else:
+		if _machine_gun_is_held():                                                           # Keep exactly one contested weapon while either player still has rounds.
+			machine_gun_respawn_timer = 0.0
+		else:
+			machine_gun_respawn_timer = maxf(machine_gun_respawn_timer - delta, 0.0)          # Count down only after the last magazine has been spent.
+		if not _machine_gun_is_held() and machine_gun_respawn_timer <= 0.0:
+			_spawn_machine_gun_pickup()                                                          # Return one gun to the map for the next contest.
+
+
+# _machine_gun_is_held: Keeps the shared pickup from duplicating while either living player retains ammunition.
+func _machine_gun_is_held() -> bool:
+	for state in player_states:
+		if int(state.get("machine_gun_ammo", 0)) > 0:
+			return true
+	return false
+
+
+# _drop_coins_for_defeat: Drops a small random amount of the defeated player's already-collected score.
+func _drop_coins_for_defeat(player_index: int) -> void:
+	if combat_round_complete:                                                                  # Keep the declared result frozen even though players may keep fighting after time expires.
+		return
+	var state := player_states[player_index]                                                   # Read score and physical location before the death sequence freezes it.
+	var held := int(state.get("coins", 0))                                                    # Never create new score; dropped coins are transferred score only.
+	var maximum_drop := mini(3, held)                                                         # Allow the final one coin to drop too, while keeping a large stash from vanishing all at once.
+	if maximum_drop <= 0:
+		return
+	var drop_count := 1 + (randi() % maximum_drop)                                            # Drop a small, intentionally unpredictable amount.
+	state["coins"] = held - drop_count                                                       # Remove transferred score from the defeated player immediately.
+	player_states[player_index] = state                                                       # Save before creating world pickups.
+	var origin := _player_state_world_position(state)                                         # Drop around the exact physical body rather than only the cell center.
+	for drop_index in range(drop_count):
+		var angle := randf() * TAU                                                            # Spread the tiny pickups around the defeat point.
+		var offset := Vector2(cos(angle), sin(angle)) * (0.08 + randf() * 0.10)
+		var position := origin + offset
+		position.x = clampf(position.x, 0.08, float(MAP_WIDTH) - 0.08)                          # Keep dropped coins inside the playable map boundary.
+		position.y = clampf(position.y, 0.08, float(MAP_HEIGHT) - 0.08)
+		world_coins.append({"id": next_combat_visual_id, "position": position, "value": 1})
+		next_combat_visual_id += 1
+
+
+# _drop_machine_gun_for_defeat: Returns the existing weapon to the map at the defeated player's actual location with its remaining magazine intact.
+func _drop_machine_gun_for_defeat(player_index: int) -> void:
+	var state := player_states[player_index]
+	var remaining_rounds := int(state.get("machine_gun_ammo", 0))
+	if remaining_rounds <= 0:
+		return
+	var drop_position := _player_state_world_position(state)
+	state["machine_gun_ammo"] = 0
+	player_states[player_index] = state
+	machine_gun_pickup = {"id": next_combat_visual_id, "position": drop_position, "ammo": remaining_rounds}
+	next_combat_visual_id += 1
+	machine_gun_respawn_timer = 0.0
+
+
+
 # _setup_combat_hud: Adds a compact health meter below each player view without changing the renderer hierarchy.
 func _setup_combat_hud() -> void:
 	combat_health_bars.clear()                                                                  # Rebuild the small HUD set only once during scene setup.
+	combat_respawn_blackouts.clear()                                                            # Rebuild the matching per-view blackout panels during scene setup.
+	combat_respawn_labels.clear()                                                               # Rebuild the corresponding readable death/countdown labels.
+	combat_coin_labels.clear()                                                                  # Rebuild the score labels with the other view-specific combat UI.
+	combat_coin_icons.clear()                                                                   # Rebuild the score icons with the other view-specific combat UI.
+	combat_ammo_labels.clear()                                                                  # Rebuild the machine-gun readouts with the other view-specific combat UI.
+	combat_ammo_icons.clear()                                                                   # Rebuild the matching gun icons with the other view-specific combat UI.
 	for player_index in range(player_views.size()):                                             # Create one meter per local player.
 		var view := player_views[player_index]                                                     # Read the already-created clipped player view.
+		var hud_layer: CanvasLayer = view.get("hud_layer", canvas_layer)                          # Put each player's HUD into their own native window.
 		var combat_layer := Node2D.new()                                                          # Keep transient projectile and hit sprites separate from walls and actors.
 		combat_layer.name = "CombatVisuals"                                                       # Make the layer obvious in the remote scene tree.
-		combat_layer.z_index = 120                                                                 # Draw combat effects above environment artwork after their own visibility checks.
+		combat_layer.z_index = 0                                                                   # Let each effect's own depth layer place it behind or ahead of actors and walls.
 		combat_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                           # Preserve the authored pixel edges.
 		var content: Node2D = view.get("maze_content", null)                                    # Read this camera's clipped content root.
 		if content != null:
@@ -1075,8 +1319,102 @@ func _setup_combat_hud() -> void:
 		meter.name = "CombatHealthP%d" % (player_index + 1)                                      # Name the node for scene-tree inspection.
 		meter.player_index = player_index                                                         # Label the meter with its owning player.
 		meter.z_index = 200                                                                       # Keep the HUD above all camera content.
-		canvas_layer.add_child(meter)                                                             # Put it on the existing global UI layer.
+		hud_layer.add_child(meter)                                                                # Put it on this player's own UI layer.
 		combat_health_bars.append(meter)                                                         # Retain it for per-frame updates and layout.
+		var blackout := ColorRect.new()                                                           # Create a solid cover for this player's own camera during the respawn count.
+		blackout.name = "CombatRespawnBlackoutP%d" % (player_index + 1)                          # Keep it identifiable in the remote scene tree.
+		blackout.color = Color.BLACK                                                              # Make the unavailable player's whole playfield unambiguously black.
+		blackout.size = VIEWPORT_SIZE                                                             # Match the source camera crop exactly before split-screen scaling.
+		blackout.mouse_filter = Control.MOUSE_FILTER_IGNORE                                       # Never steal game or debug-menu mouse input.
+		blackout.z_index = 210                                                                    # Cover the view and health meter but remain below the countdown numeral.
+		blackout.visible = false                                                                  # Keep ordinary active play unobscured.
+		hud_layer.add_child(blackout)                                                             # Draw over only the matching camera rectangle through per-frame placement.
+		combat_respawn_blackouts.append(blackout)                                                 # Retain it for per-frame layout and visibility updates.
+		var respawn_label := Label.new()                                                          # Create a simple per-view message without changing the camera renderer.
+		respawn_label.name = "CombatRespawnP%d" % (player_index + 1)                             # Keep it easy to identify in the remote scene tree.
+		respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER                          # Center the short message over the affected player's playfield.
+		respawn_label.add_theme_font_size_override("font_size", 36)                              # Make the short numeric countdown unmistakable at split-screen scale.
+		respawn_label.add_theme_color_override("font_color", Color(1.0, 0.12, 0.08, 1.0))        # Use the requested clear arcade-red countdown color.
+		respawn_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 1.0))  # Preserve readability over the maze art.
+		respawn_label.add_theme_constant_override("shadow_offset_x", 1)                          # Offset the shadow by one source pixel horizontally.
+		respawn_label.add_theme_constant_override("shadow_offset_y", 1)                          # Offset the shadow by one source pixel vertically.
+		respawn_label.size = Vector2(VIEWPORT_SIZE.x, 48.0)                                      # Give the large one-character countdown enough source-pixel height.
+		respawn_label.z_index = 220                                                              # Draw over actors and all combat effects.
+		respawn_label.visible = false                                                            # Hide it until a player actually dies.
+		hud_layer.add_child(respawn_label)                                                       # Place it on this player's UI layer above the clipped view.
+		combat_respawn_labels.append(respawn_label)                                              # Retain it for per-frame updates and layout.
+		var coin_icon := TextureRect.new()                                                       # Create a compact authored coin marker for this view's lower-right score.
+		coin_icon.name = "CombatCoinIconP%d" % (player_index + 1)                              # Keep the UI easy to inspect in the remote scene tree.
+		coin_icon.texture = COIN_TEXTURE                                                         # Use the requested front-facing coin frame.
+		coin_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE                                  # Let the explicit source-pixel size control the icon.
+		coin_icon.size = Vector2(5.0, 5.0)                                                       # Keep the objective indicator at roughly half its former size.
+		coin_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE                                    # Never interfere with the debug menu.
+		coin_icon.z_index = 200                                                                 # Draw above the playfield like the health hatches.
+		hud_layer.add_child(coin_icon)                                                          # Add the score icon to this player's UI layer.
+		combat_coin_icons.append(coin_icon)                                                     # Retain it for per-frame placement.
+		var coin_label := Label.new()                                                            # Create the matching collected/total readout.
+		coin_label.name = "CombatCoinScoreP%d" % (player_index + 1)                            # Keep the UI easy to inspect in the remote scene tree.
+		coin_label.add_theme_font_size_override("font_size", 11)                               # Stay legible without crowding the screen.
+		coin_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.22, 1.0))        # Give the objective a clear gold arcade color.
+		coin_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep numbers readable over bright floors.
+		coin_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
+		coin_label.add_theme_constant_override("shadow_offset_y", 1)                           # Use a small one-pixel outline-like shadow.
+		coin_label.mouse_filter = Control.MOUSE_FILTER_IGNORE                                   # Never interfere with the debug menu.
+		coin_label.z_index = 200                                                                # Draw with the other combat UI.
+		hud_layer.add_child(coin_label)                                                         # Add the numeric score beside its icon.
+		combat_coin_labels.append(coin_label)                                                   # Retain it for per-frame text and placement.
+		var ammo_icon := TextureRect.new()                                                       # Create the temporary pickup icon for the bottom-center ammo counter.
+		ammo_icon.name = "CombatAmmoIconP%d" % (player_index + 1)                              # Keep the temporary readout identifiable in the scene tree.
+		ammo_icon.texture = GUN_TEXTURE                                                          # Use the authored machine-gun pickup sprite as the icon.
+		ammo_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE                                  # Use its explicit compact source-pixel rectangle.
+		ammo_icon.size = Vector2(7.0, 5.0)                                                       # Keep the temporary gun marker at roughly half its former size.
+		ammo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE                                    # Never interfere with the debug menu.
+		ammo_icon.z_index = 200                                                                 # Draw with other HUD controls.
+		ammo_icon.visible = false                                                               # Hide until this player has the temporary weapon.
+		hud_layer.add_child(ammo_icon)                                                          # Add it to this player's UI layer.
+		combat_ammo_icons.append(ammo_icon)                                                     # Retain it for per-frame display.
+		var ammo_label := Label.new()                                                            # Create the temporary rapid-fire round counter.
+		ammo_label.name = "CombatAmmoP%d" % (player_index + 1)                                  # Keep the temporary UI identifiable in the scene tree.
+		ammo_label.add_theme_font_size_override("font_size", 11)                               # Match the compact coin-score lettering.
+		ammo_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.72, 1.0))        # Use a pale brass color that reads as ammunition.
+		ammo_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep counter readable over every floor texture.
+		ammo_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
+		ammo_label.add_theme_constant_override("shadow_offset_y", 1)                           # Use a small one-pixel outline-like shadow.
+		ammo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE                                   # Never interfere with the debug menu.
+		ammo_label.z_index = 200                                                                # Draw with the other combat UI.
+		ammo_label.visible = false                                                              # Hide for the normal infinite-ammo pistol.
+		hud_layer.add_child(ammo_label)                                                         # Add the counter beside the gun icon.
+		combat_ammo_labels.append(ammo_label)                                                   # Retain it for per-frame text and placement.
+	combat_round_timer_labels.clear()                                                          # Rebuild one centered clock for each native player window.
+	combat_round_result_labels.clear()                                                         # Rebuild one centered result prompt for each native player window.
+	for player_index in range(player_views.size()):
+		var hud_layer: CanvasLayer = player_views[player_index].get("hud_layer", canvas_layer)  # Read this screen's dedicated HUD root.
+		var timer_label := Label.new()                                                            # Create a compact top-center shared clock.
+		timer_label.name = "CombatRoundTimerP%d" % (player_index + 1)
+		timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		timer_label.add_theme_font_size_override("font_size", 18)
+		timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.28, 1.0))
+		timer_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		timer_label.add_theme_constant_override("shadow_offset_x", 1)
+		timer_label.add_theme_constant_override("shadow_offset_y", 1)
+		timer_label.size = Vector2(146.0, 26.0)
+		timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		timer_label.z_index = 350
+		hud_layer.add_child(timer_label)
+		combat_round_timer_labels.append(timer_label)
+		var result_label := Label.new()                                                           # Create the frozen center-screen winner prompt.
+		result_label.name = "CombatRoundResultP%d" % (player_index + 1)
+		result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		result_label.add_theme_font_size_override("font_size", 32)
+		result_label.add_theme_color_override("font_color", Color(1.0, 0.24, 0.16, 1.0))
+		result_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		result_label.add_theme_constant_override("shadow_offset_x", 2)
+		result_label.add_theme_constant_override("shadow_offset_y", 2)
+		result_label.size = Vector2(360.0, 52.0)
+		result_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		result_label.z_index = 351
+		hud_layer.add_child(result_label)
+		combat_round_result_labels.append(result_label)
 	_update_combat_hud()                                                                        # Draw the initial full-health meters immediately.
 
 
@@ -1090,10 +1428,67 @@ func _update_combat_hud() -> void:
 		var view := player_views[player_index]                                                     # Read the matching split-screen viewport bundle.
 		var viewport_node: Node2D = view.get("maze_viewport", null)                              # Use the same display position and scale as the camera image.
 		if viewport_node != null:
-			meter.position = viewport_node.position + Vector2(5.0, VIEWPORT_SIZE.y * viewport_node.scale.y - 16.0) # Sit inside the lower-left of that player's visible image.
-			meter.scale = viewport_node.scale                                                         # Keep the source-pixel UI scale aligned with the camera image.
+			meter.position = viewport_node.position + Vector2(5.0, VIEWPORT_SIZE.y * viewport_node.scale.y - 8.0 * viewport_node.scale.y) # Keep the smaller meter comfortably inside the lower-left of its camera.
+			meter.scale = viewport_node.scale * 0.5                                                   # Make the ten-hit hatch bar half the previous on-screen size.
 		var state := player_states[player_index]                                                   # Read current combat data.
 		meter.set_health(int(state.get("health", PLAYER_MAX_HEALTH)), PLAYER_MAX_HEALTH)          # Redraw the requested ten-hatch health value.
+		if viewport_node != null and player_index < combat_coin_icons.size() and player_index < combat_coin_labels.size(): # Position the lower-right objective UI in the same camera rectangle.
+			var coin_icon := combat_coin_icons[player_index]
+			var coin_label := combat_coin_labels[player_index]
+			if is_instance_valid(coin_icon) and is_instance_valid(coin_label):
+				coin_icon.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 30.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 8.0) * viewport_node.scale.y)
+				coin_icon.scale = viewport_node.scale
+				coin_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 24.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
+				coin_label.scale = viewport_node.scale
+				coin_label.text = "%d/%d" % [int(state.get("coins", 0)), combat_total_coin_value]
+		if viewport_node != null and player_index < combat_ammo_icons.size() and player_index < combat_ammo_labels.size(): # Position the pickup counter at the lower center only while armed.
+			var ammo_icon := combat_ammo_icons[player_index]
+			var ammo_label := combat_ammo_labels[player_index]
+			var rounds := int(state.get("machine_gun_ammo", 0))
+			if is_instance_valid(ammo_icon) and is_instance_valid(ammo_label):
+				ammo_icon.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x * 0.5 - 13.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 8.0) * viewport_node.scale.y)
+				ammo_icon.scale = viewport_node.scale
+				ammo_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x * 0.5 - 5.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
+				ammo_label.scale = viewport_node.scale
+				ammo_label.text = str(rounds)
+				ammo_icon.visible = rounds > 0
+				ammo_label.visible = rounds > 0
+		var dying := bool(state.get("is_dying", false))                                           # Read whether this player is in the staged death sequence.
+		var death_phase := String(state.get("death_phase", ""))                                  # Read the visible death stage once for both blackout and label.
+		if player_index < combat_respawn_blackouts.size():                                        # Position this local player's camera-sized blackout panel.
+			var blackout := combat_respawn_blackouts[player_index]                                    # Read the retained panel.
+			if is_instance_valid(blackout) and viewport_node != null:
+				blackout.position = viewport_node.position                                                # Align its top-left with this split-screen playfield.
+				blackout.scale = viewport_node.scale                                                      # Match the playfield's exact nearest-neighbor scale.
+				blackout.visible = dying and death_phase == "countdown"                                  # Black out only after forward Death finishes and before reverse Death begins.
+		if player_index < combat_respawn_labels.size():                                           # Update this camera's visible death/countdown message too.
+			var respawn_label := combat_respawn_labels[player_index]                                # Read the matching retained UI label.
+			if is_instance_valid(respawn_label):                                                    # Avoid errors if the scene tree is rebuilt in the editor.
+				if viewport_node != null:
+					respawn_label.position = viewport_node.position + Vector2(0.0, 28.0 * viewport_node.scale.y) # Center the large countdown below the playfield's top edge.
+					respawn_label.scale = viewport_node.scale                                           # Match the camera's exact nearest-neighbor scale.
+				respawn_label.visible = dying and death_phase == "countdown"                            # Show only the requested bare 3/2/1 interval.
+				if respawn_label.visible:
+					var seconds_left := maxi(1, ceili(DEATH_COUNTDOWN_SECONDS - float(state.get("death_timer", 0.0)))) # Display 3, then 2, then 1.
+					respawn_label.text = str(seconds_left)                                                  # Keep the presentation to the single large number.
+	for player_index in range(player_views.size()):                                             # Lay the shared round UI out independently in each player's native window.
+		var player_window: Window = player_views[player_index].get("player_window", get_window()) # Resolve this player's actual display surface.
+		var window_size := Vector2(player_window.size)                                            # Use the native window dimensions rather than the root viewport's old split-screen area.
+		if player_index < combat_round_timer_labels.size():                                      # Update this window's timer even while its player is dead or waiting.
+			var timer_label := combat_round_timer_labels[player_index]
+			if is_instance_valid(timer_label):
+				timer_label.position = Vector2((window_size.x - timer_label.size.x) * 0.5, 8.0)      # Keep the clock cleanly centered at the top.
+				if combat_round_duration_seconds <= 0.0:
+					timer_label.text = "TIME ∞"
+				else:
+					var displayed_seconds := maxi(0, ceili(combat_round_time_remaining))
+					timer_label.text = "TIME %d:%02d" % [displayed_seconds / 60, displayed_seconds % 60]
+		if player_index < combat_round_result_labels.size():                                     # Show the same frozen result on both independent player displays.
+			var result_label := combat_round_result_labels[player_index]
+			if is_instance_valid(result_label):
+				result_label.position = Vector2((window_size.x - result_label.size.x) * 0.5, (window_size.y - result_label.size.y) * 0.5) # Center the end-of-round message in the play screen.
+				result_label.text = "%s\nPRESS X TO PLAY AGAIN" % combat_round_result if not combat_round_result.is_empty() else ""
+				result_label.visible = not combat_round_result.is_empty()
 
 
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
@@ -1107,8 +1502,12 @@ func _is_player_fire_pressed_for(player_index: int) -> bool:
 
 # _process_combat: Advances shared-world projectiles after movement and resolves all hits deterministically.
 func _process_combat(delta: float) -> void:
+	_advance_combat_round(delta)                                                               # Advance the one shared match clock before any pickup collection can change its score.
 	for player_index in range(player_states.size()):                                            # Cool each active player and read their fire control.
 		var state := player_states[player_index]                                                   # Work from the saved shared state.
+		if bool(state.get("is_dying", false)):                                                   # Keep a defeated player frozen, untargetable, and unable to fire.
+			player_states[player_index] = _advance_combat_death_state(state, delta)                 # Advance fall -> countdown -> reverse-respawn once per shared frame.
+			continue                                                                                   # Do not process weapon cooldowns or input while this body is unavailable.
 		state["fire_cooldown"] = maxf(float(state.get("fire_cooldown", 0.0)) - delta, 0.0)       # Let the deliberate pistol cadence recover.
 		state["hit_timer"] = maxf(float(state.get("hit_timer", 0.0)) - delta, 0.0)               # Let the temporary hit art expire.
 		player_states[player_index] = state                                                       # Save timing before potentially firing.
@@ -1116,6 +1515,7 @@ func _process_combat(delta: float) -> void:
 			continue                                                                                   # Wait until a person joins P2.
 		if float(state["fire_cooldown"]) <= 0.0 and _is_player_fire_pressed_for(player_index):  # Spawn one shot only when the pistol is ready.
 			_spawn_pistol_shot(player_index)                                                         # Create a shot using the player's actual current world heading.
+	_collect_combat_pickups(delta)                                                              # Pick up coins and the contested gun after all players have finished moving.
 	var remaining_shots: Array[Dictionary] = []                                                 # Rebuild the active list so consumed shots disappear cleanly.
 	for shot in active_projectiles:                                                             # Advance every live projectile once per shared frame.
 		var lifetime := float(shot.get("lifetime", 0.0)) - delta                                # Decrease its maximum travel lifetime.
@@ -1150,14 +1550,29 @@ func _process_combat(delta: float) -> void:
 	_update_combat_hud()                                                                        # Refresh health fills and their split-screen placement.
 
 
-# _spawn_pistol_shot: Creates one infinite-ammo pistol bullet from the real player world position.
+# _spawn_pistol_shot: Creates one infinite-ammo pistol bullet from a point just ahead of the real player gun.
 func _spawn_pistol_shot(player_index: int) -> void:
 	var state := player_states[player_index]                                                    # Read the completed movement state.
 	var direction := _view_forward_vector_for_state(state).normalized()                         # Shoot directly along the visible camera/player aim heading.
-	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": _player_state_world_position(state) + direction * 0.18, "direction": direction, "lifetime": PROJECTILE_LIFETIME} # Start just ahead of the firing body.
+	var origin := _player_state_world_position(state) + direction * 0.34                         # Start beyond the firing body so collision and the first visual frame both read as a gun muzzle shot.
+	var maximum_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME                               # Determine a stable visual end point for the complete projectile lifetime.
+	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
+	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance) # Include a player already directly in this firing lane.
+	var visual_distance := wall_distance                                                           # Prefer the wall endpoint unless a body is closer.
+	if not player_hit.is_empty() and float(player_hit.get("distance", maximum_distance)) < visual_distance:
+		visual_distance = float(player_hit["distance"])                                            # End at the nearer target body.
+	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "visual_target_position": origin + direction * visual_distance, "visual_total_distance": maxf(visual_distance, 0.001), "direction": direction, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair so the rendered shot travels in a single straight line.
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
-	state["fire_cooldown"] = PISTOL_FIRE_INTERVAL                                               # Start the pistol's deliberate refire delay.
+	var machine_gun_rounds := int(state.get("machine_gun_ammo", 0))                            # Read the optional temporary weapon state once at fire time.
+	if machine_gun_rounds > 0:                                                                  # Consume rapid-fire rounds only while the pickup remains armed.
+		var remaining_rounds := machine_gun_rounds - 1                                            # Spend one round while retaining the exact amount for a later dropped pickup.
+		state["machine_gun_ammo"] = remaining_rounds
+		state["fire_cooldown"] = MACHINE_GUN_FIRE_INTERVAL                                       # Apply the faster machine-gun cadence without altering damage.
+		if remaining_rounds <= 0:
+			machine_gun_respawn_timer = MACHINE_GUN_RESPAWN_SECONDS                                # Respawn a fresh contested gun only after the current magazine is exhausted.
+	else:
+		state["fire_cooldown"] = PISTOL_FIRE_INTERVAL                                            # Keep the regular pistol infinite-ammo and deliberately slower.
 	player_states[player_index] = state                                                        # Save the armed cooldown.
 
 
@@ -1192,6 +1607,8 @@ func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vect
 	for player_index in range(player_states.size()):                                           # Check each currently active local player.
 		if player_index == owner or (player_index == 1 and not player_two_joined):               # Never hit the shooter or an unjoined P2.
 			continue                                                                                   # Skip this candidate.
+		if bool(player_states[player_index].get("is_dying", false)):                            # Do not let stray bullets repeatedly hit a fallen or respawning body.
+			continue                                                                                   # The player becomes targetable again only after the reverse Death animation finishes.
 		var distance := _ray_circle_hit_distance(origin, direction, _player_state_world_position(player_states[player_index]), PROJECTILE_PLAYER_RADIUS) # Test the compact player body circle.
 		if distance >= 0.0 and distance <= maximum_distance and distance < nearest_distance:     # Retain only a nearer valid body hit.
 			nearest_distance = distance                                                               # Store the collision distance.
@@ -1220,9 +1637,11 @@ func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index
 	next_combat_visual_id += 1                                                                  # Reserve a stable visual key.
 
 
-# _apply_projectile_hit: Damages one player, chooses authored hit side art, and respawns at zero health.
+# _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
 func _apply_projectile_hit(player_index: int, shot_direction: Vector2) -> void:
 	var state := player_states[player_index]                                                    # Read the target's current state.
+	if bool(state.get("is_dying", false)):                                                     # Ignore stray simultaneous bullets once this player is already down.
+		return                                                                                    # Keep one death sequence and one countdown per defeat.
 	var target_forward := _view_forward_vector_for_state(state).normalized()                   # Use target facing to choose front/side impact art.
 	var target_right := Vector2(-target_forward.y, target_forward.x).normalized()              # Build target-local right.
 	var incoming := -shot_direction                                                             # The impact direction points from bullet toward target.
@@ -1232,12 +1651,29 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2) -> void:
 	state["hit_timer"] = HIT_REACTION_DURATION                                                 # Hold that pose long enough to read.
 	state["health"] = maxi(int(state.get("health", PLAYER_MAX_HEALTH)) - 1, 0)                # Remove one hatch.
 	player_states[player_index] = state                                                        # Save the immediate hit result.
-	if int(state["health"]) <= 0:                                                             # Respawn immediately in this first playable combat slice.
-		_respawn_combat_player(player_index)                                                       # Restore full health away from the opponent.
+	if int(state["health"]) <= 0:                                                             # Begin an explicit fall, three-second count, and reverse-animation respawn.
+		_begin_combat_death(player_index)                                                          # Choose a safe corner now while preserving the fallen body at its old location.
 
 
-# _respawn_combat_player: Restores a defeated player in the corner farthest from their opponent.
-func _respawn_combat_player(player_index: int) -> void:
+# _begin_combat_death: Stores a safe respawn destination while leaving the defeated body visible at its old location.
+func _begin_combat_death(player_index: int) -> void:
+	_drop_coins_for_defeat(player_index)                                                        # Transfer a small random share of this player's score into collectable world coins.
+	_drop_machine_gun_for_defeat(player_index)                                                  # Return an equipped machine gun to this exact defeat point with its remaining rounds.
+	var state := player_states[player_index]                                                    # Preserve this player's visible position until the countdown completes.
+	var respawn := _combat_respawn_destination(player_index)                                   # Select a far corner from the other living player.
+	state["is_dying"] = true                                                                   # Freeze input, shooting, and further damage immediately.
+	state["death_phase"] = "fall"                                                            # Start the authored Death frames from first to last.
+	state["death_timer"] = 0.0                                                                # Begin the fall animation at frame zero.
+	state["death_respawn_cell"] = respawn["cell"]                                            # Remember the future map cell without moving there yet.
+	state["death_respawn_facing"] = respawn["facing"]                                       # Remember its inward-facing camera direction.
+	state["character_is_moving"] = false                                                      # Stop normal locomotion before the death pose takes over.
+	state["fire_cooldown"] = 0.0                                                              # Ensure no held trigger survives into the respawn moment.
+	state["hit_timer"] = 0.0                                                                  # Let the explicit Death frames replace the one-frame hit reaction.
+	player_states[player_index] = state                                                        # Save the staged sequence.
+
+
+# _combat_respawn_destination: Finds the furthest map corner and inward-facing camera angle for one player.
+func _combat_respawn_destination(player_index: int) -> Dictionary:
 	var opponent_index := 1 - player_index                                                      # This milestone has exactly two local players.
 	var opponent_cell: Vector2i = player_states[opponent_index].get("grid_position", Vector2i.ZERO) # Read the other player's location.
 	var corners := [Vector2i(0, 0), Vector2i(MAP_WIDTH - 1, 0), Vector2i(0, MAP_HEIGHT - 1), Vector2i(MAP_WIDTH - 1, MAP_HEIGHT - 1)] # Consider all safe map corners.
@@ -1249,7 +1685,46 @@ func _respawn_combat_player(player_index: int) -> void:
 			best_distance = distance                                                                  # Retain the farther corner.
 			best_corner = corner                                                                     # Retain its cell.
 	var respawn_facing := 0 if best_corner.y == MAP_HEIGHT - 1 else 2                          # Point inward from the top/bottom respawn row.
-	player_states[player_index] = _make_player_state(player_index, best_corner, respawn_facing) # Reset health and movement state at the chosen safe corner.
+	return {"cell": best_corner, "facing": respawn_facing}                                   # Return only destination data so the old death body can remain in place.
+
+
+# _advance_combat_death_state: Runs Death forward, holds the 3/2/1 countdown, then plays the same frames backwards at the new spawn.
+func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
+	var phase := String(state.get("death_phase", "fall"))                                    # Read the current staged respawn phase.
+	var timer := float(state.get("death_timer", 0.0)) + delta                                 # Advance its elapsed time exactly once per frame.
+	if phase == "fall" and timer >= DEATH_FALL_SECONDS:                                       # Let the complete death animation finish before counting down.
+		phase = "countdown"                                                                      # Hold the final Death frame at the old location.
+		timer = 0.0                                                                                # Start the three-second count exactly at three.
+	elif phase == "countdown" and timer >= DEATH_COUNTDOWN_SECONDS:                          # After 3, 2, 1, relocate the still-fallen sprite.
+		phase = "respawn"                                                                        # Begin playing Death backwards at the chosen safe corner.
+		timer = 0.0                                                                                # Start the reverse animation on its fully fallen pose.
+		state["grid_position"] = state.get("death_respawn_cell", state.get("grid_position", Vector2i.ZERO)) # Move only after the countdown is complete.
+		state["local_floor_position"] = HOME_LOCAL_FLOOR_POSITION                               # Restore the normal in-cell resting point.
+		state["facing"] = int(state.get("death_respawn_facing", 0))                            # Restore the intended inward-facing camera.
+		state["turn_45_direction"] = 0                                                          # Clear any old turn interpolation data.
+		state["turn_step"] = 0                                                                   # Clear any old turn interpolation data.
+		state["forward_step"] = 0                                                                # Clear any old forward interpolation data.
+		state["strafe_step"] = 0                                                                 # Clear any old strafe interpolation data.
+		state["is_transitioning"] = false                                                        # Do not carry a transition from the death location to the respawn.
+		state["is_turn_passthrough"] = false                                                     # Do not carry a turn frame into the respawn.
+		state["active_sequence"] = []                                                            # Clear captured sequence playback.
+		state["active_sequence_name"] = "idle"                                                  # Return to an ordinary stable camera state.
+		state["phase_index"] = 0                                                                 # Reset the captured-frame index.
+		state["phase_timer"] = 0.0                                                               # Reset the captured-frame timer.
+		state["pending_grid_delta"] = Vector2i.ZERO                                              # Clear pending cell movement from the old location.
+		state["last_blocked_direction"] = ""                                                    # Clear stale blocked-edge debug text.
+		state["world_run_dir"] = _direction_string_for_facing(int(state["facing"]))            # Face the restored actor consistently in other players' views.
+		state["world_aim_dir"] = _direction_string_for_facing(int(state["facing"]))            # Face the restored actor consistently in other players' views.
+	elif phase == "respawn" and timer >= DEATH_RESPAWN_SECONDS:                               # Finish the reverse Death animation.
+		state["is_dying"] = false                                                                # Return player control and vulnerability only after the body is visibly back.
+		state["death_phase"] = ""                                                               # Clear the staged-respawn marker.
+		state["death_timer"] = 0.0                                                               # Reset timer for the next defeat.
+		state["health"] = PLAYER_MAX_HEALTH                                                      # Refill the ten hatch health meter on completed respawn.
+		state["last_animation"] = &""                                                          # Force the normal idle animation to restart cleanly next frame.
+		return state                                                                               # Do not overwrite the cleared phase below.
+	state["death_phase"] = phase                                                              # Save the current or newly entered phase.
+	state["death_timer"] = timer                                                              # Save elapsed time for rendering and HUD countdown text.
+	return state                                                                                # Return the updated serializable combat state.
 
 
 # _combat_sprite: Returns one cached nearest-neighbor Sprite2D inside the bound player's combat layer.
@@ -1283,6 +1758,13 @@ func _hide_unused_combat_sprites(used_keys: Dictionary) -> void:
 # _update_combat_view: Projects shots, impact flashes, and temporary hit sprites through the same camera model as opponents.
 func _update_combat_view() -> void:
 	var used: Dictionary = {}                                                                   # Track which cached sprites are active in this camera this frame.
+	var coin_frame := int(Time.get_ticks_msec() / 120) % COIN_TEXTURES.size()                  # Advance all world coins together through their authored spin frames.
+	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
+		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
+		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), COIN_TEXTURES[coin_frame], coin_position, used, 0.16, 0.5) # Keep spinning coins at roughly half their former world size.
+	if not machine_gun_pickup.is_empty():                                                       # Draw the contested rapid-fire pickup only while it remains unclaimed.
+		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared Vector2 directly instead of reconstructing it from a Variant.
+		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), GUN_TEXTURE, gun_position, used, 0.10) # Keep the pickup at a readable floor-level height.
 	for shot in active_projectiles:                                                             # Render every shared projectile from this camera.
 		var world_position: Vector2 = shot["position"]                                           # Read shared-world shot position.
 		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10) or not _world_actor_has_clear_line_of_sight(world_position): # Cull shots using the exact map walls.
@@ -1292,9 +1774,23 @@ func _update_combat_view() -> void:
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the shot sprite.
 		var side := absf((world_position - _camera_grid_origin()).dot(_view_right_vector()))      # Pick the side shot only for strongly oblique travel.
 		sprite.texture = SHOT_E_TEXTURE if side > 0.7 else SHOT_N_TEXTURE                         # Use the two authored shot styles.
-		sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - float(projection["actor_height"]) * 0.55) # Place the projectile around gun height.
-		sprite.scale = Vector2.ONE * clampf(float(projection["actor_height"]) / 40.0, 0.28, 1.0) # Scale from the same depth cue as actors.
-		sprite.z_index = int(projection["z_index"]) + 2                                         # Keep the moving bullet above its hit wall.
+		var spawn_world: Vector2 = shot.get("spawn_position", world_position)                   # Recover the immutable muzzle origin saved at fire time.
+		var target_world: Vector2 = shot.get("visual_target_position", world_position)          # Recover the immutable visual endpoint saved at fire time.
+		var spawn_projection := _opponent_projection_from_current_camera(spawn_world)             # Project the start once through this viewer's current camera.
+		var target_projection := _opponent_projection_from_current_camera(target_world)           # Project the corresponding collision/range endpoint through the same camera.
+		var spawn_height := float(spawn_projection["actor_height"])                              # Use the start depth for a screen-space gun point.
+		var target_height := float(target_projection["actor_height"])                            # Use endpoint depth for the naturally shrinking terminal sprite.
+		var muzzle_position := Vector2(float(spawn_projection["screen_x"]), float(spawn_projection["feet_y"]) - spawn_height * 0.72) # Put the first point at the raised gun/crosshair rather than the chest.
+		if int(shot["owner"]) == active_player_index:                                            # The bound player's sprite is always camera-facing, so its gun sits slightly screen-right.
+			muzzle_position.x += spawn_height * 0.13                                                 # Register the path's first point with the visible self-player gun/crosshair.
+		var target_position := Vector2(float(target_projection["screen_x"]), float(target_projection["feet_y"]) - target_height * 0.72) # Build the matching terminal point at the same gun-height convention.
+		var traveled_distance := world_position.distance_to(spawn_world)                          # Measure actual world distance traveled so frame-rate does not affect the visual rate.
+		var travel_fraction := clampf(traveled_distance / maxf(float(shot.get("visual_total_distance", traveled_distance)), 0.001), 0.0, 1.0) # Convert physical travel into one normalized fixed path fraction.
+		sprite.position = muzzle_position.lerp(target_position, travel_fraction)                  # Keep every displayed bullet position on the one straight muzzle-to-target screen line.
+		var start_scale := clampf(spawn_height / 40.0, 0.28, 1.0)                                 # Read the sprite size at the muzzle.
+		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
+		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
+		sprite.z_index = int(projection["z_index"])                                              # Let the world-projected bullet sit behind its firing character rather than overlaying the body.
 		sprite.visible = true                                                                      # Reveal this valid projectile.
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
 	for impact in active_impacts:                                                               # Render each short explosion similarly.
@@ -1310,7 +1806,7 @@ func _update_combat_view() -> void:
 		sprite.z_index = int(projection["z_index"]) + 3                                         # Put impact on top of its struck surface.
 		sprite.visible = true                                                                      # Reveal active explosion.
 		used[key] = true                                                                           # Preserve this effect node.
-	for player_index in range(player_states.size()):                                           # Overlay a one-frame hit pose on either visible body.
+	for player_index in range(player_states.size()):                                           # Replace the body briefly with a one-frame hit pose in either visible view.
 		var state := player_states[player_index]                                                   # Read the player's latest hit state.
 		if float(state.get("hit_timer", 0.0)) <= 0.0:                                            # Skip normal unhurt players.
 			continue                                                                                   # Leave ordinary sprite rendering intact.
@@ -1325,7 +1821,8 @@ func _update_combat_view() -> void:
 		if player_index == active_player_index:                                                   # Local player already has a correct self projection.
 			sprite.position = player_sprite.position                                                  # Reuse their visible feet registration.
 			sprite.scale = player_sprite.scale                                                        # Reuse their body scale.
-			sprite.z_index = player_sprite.z_index + 3                                               # Draw reaction over local body.
+			sprite.z_index = player_sprite.z_index + 3                                               # Keep reaction above nearby environment art.
+			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
 			var target_world := _player_state_world_position(state)                                  # Project the opposing hit body into this view.
 			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18) or not _world_actor_has_clear_line_of_sight(target_world):
@@ -1335,9 +1832,27 @@ func _update_combat_view() -> void:
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
+			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
 		used[key] = true                                                                           # Preserve the sprite.
 	_hide_unused_combat_sprites(used)                                                          # Hide stale bullets, impacts, and hit art.
+
+
+# _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
+func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0) -> void:
+	if not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position): # Keep collectibles inside the actual current camera fan and behind physical walls.
+		return                                                                                    # Let stale-node hiding remove a pickup from this view.
+	var projection := _opponent_projection_from_current_camera(world_position)                  # Reuse the stable world-to-view projection shared with opponents.
+	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
+	if actor_height <= 0.0:
+		return                                                                                    # Avoid degenerate or behind-camera projections.
+	var sprite := _combat_sprite(key)                                                          # Fetch/create this pickup's per-view cached sprite.
+	sprite.texture = texture                                                                    # Use the authored coin or gun pixel art.
+	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
+	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
+	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
+	sprite.visible = true                                                                       # Reveal the projected pickup.
+	used[key] = true                                                                            # Preserve it through cached-node cleanup.
 
 
 
@@ -1355,6 +1870,9 @@ func _store_bound_view_nodes(player_index: int) -> void:                        
 	view["debug_map_overlay"] = debug_map_overlay                                              # Store this player's top-down debug map overlay.
 	view["debug_map_static_layer"] = debug_map_static_layer                                   # Store this player's retained maze-grid layer.
 	view["debug_map_dynamic_layer"] = debug_map_dynamic_layer                                 # Store this player's live marker/cone layer.
+	view["match_minimap_overlay"] = match_minimap_overlay                                     # Store this player's clean UI map root.
+	view["match_minimap_static_layer"] = match_minimap_static_layer                           # Store its retained wall lines.
+	view["match_minimap_dynamic_layer"] = match_minimap_dynamic_layer                         # Store its live arrows.
 	player_views[player_index] = view                                                          # Write the updated view bundle back into the array.
 
 
@@ -1378,6 +1896,10 @@ func _bind_player_context(player_index: int) -> void:                           
 	debug_map_static_layer = view.get("debug_map_static_layer", debug_map_static_layer)        # Bind this player's retained maze-grid overlay layer.
 	debug_map_dynamic_layer = view.get("debug_map_dynamic_layer", debug_map_dynamic_layer)     # Bind this player's live map-marker overlay layer.
 	debug_map_overlay = view.get("debug_map_overlay", debug_map_overlay)                       # Bind this player's top-down source map.
+	canvas_layer = view.get("hud_layer", canvas_layer)                                         # Route player-specific UI into the native window currently being rendered.
+	match_minimap_overlay = view.get("match_minimap_overlay", match_minimap_overlay)           # Bind this player's clean UI map root.
+	match_minimap_static_layer = view.get("match_minimap_static_layer", match_minimap_static_layer) # Bind its retained wall geometry.
+	match_minimap_dynamic_layer = view.get("match_minimap_dynamic_layer", match_minimap_dynamic_layer) # Bind its live arrows.
 	if player_index >= player_states.size():                                                   # Skip state loading if setup has not created states yet.
 		return                                                                                    # Return with only view nodes bound.
 	var state: Dictionary = player_states[player_index]                                        # Read this player's movement-state bundle.
@@ -1472,6 +1994,10 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 
 # _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
+	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)): # Let the explicit death sequence own the body and camera while down.
+		character_is_moving = false                                                               # Prevent normal locomotion from competing with the authored Death frames.
+		_play_combat_death_animation(player_sprite, player_states[active_player_index])           # Display Death forward, hold, or backwards according to this shared state.
+		return                                                                                    # Ignore all player input and normal movement until the respawn is complete.
 	if active_player_index == 1 and not player_two_joined:                                    # Keep the second character at its spawn until a person joins this local match.
 		character_is_moving = false                                                               # Ensure the waiting player remains visually idle in both viewpoints.
 		_play_best_animation(false)                                                               # Play the normal idle pose while waiting for a controller.
@@ -1632,6 +2158,7 @@ func _apply_wall_art_debug_visibility() -> void:
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
+	var next_round_pressed := _read_next_round()                                               # Latch the global replay key even while the round remains active.
 	if _read_toggle_debug_menu():                                                              # Check for a one-shot request to open or close the debug menu.
 		_toggle_debug_menu()                                                                     # Change panel visibility without changing any diagnostic state.
 		return                                                                                   # Keep the menu hotkey from also advancing gameplay this frame.
@@ -1644,6 +2171,9 @@ func _process(delta: float) -> void:                                            
 	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
+	if combat_round_complete and next_round_pressed:                                           # Let either local player restart only after the result was frozen.
+		_regenerate_runtime_map()                                                                 # Start a fresh scored round with the normal randomized map and pickups.
+		return                                                                                    # Keep the replay key from also moving a player this frame.
 	_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
 	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
@@ -2320,6 +2850,26 @@ func _layout_viewport() -> void:                                                
 			audit_camera.scale = Vector2.ONE * audit_scale                                             # Match the source-grid scaling.
 			audit_camera.position = audit_origin + Vector2(0.0, (DEBUG_MAP_PANEL_SIZE.y - VIEWPORT_SIZE.y) * 0.5 * audit_scale) # Align the camera at the map's vertical center.
 		return                                                                                    # Skip the normal two-player, two-row layout.
+	if player_views.size() > 1 and player_windows.size() > 1:                                  # Give each local player a full camera in its own native window.
+		for player_index in range(player_views.size()):                                           # Position the player camera and minimalist map on that player's own display.
+			var view: Dictionary = player_views[player_index]
+			var player_window: Window = view.get("player_window", get_window())                    # Read the actual primary or player-two window.
+			var window_size := Vector2(player_window.size)
+			var camera_scale := minf((window_size.x - 24.0) / VIEWPORT_SIZE.x, (window_size.y - 24.0) / VIEWPORT_SIZE.y) # Preserve the low-resolution camera aspect while making it as large as the display permits.
+			var view_node: Node2D = view.get("maze_viewport", null)
+			if view_node != null:
+				view_node.scale = Vector2.ONE * camera_scale
+				view_node.position = (window_size - VIEWPORT_SIZE * camera_scale) * 0.5              # Center the full player camera in its own window.
+			var legacy_map: Node2D = view.get("debug_map_overlay", null)
+			if legacy_map != null:
+				legacy_map.visible = false                                                           # Never show the old blue-grid/source-map overlay during a match.
+			var minimap: Node2D = view.get("match_minimap_overlay", null)
+			if minimap != null:
+				minimap.scale = Vector2.ONE
+				minimap.position = Vector2(window_size.x - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN) # Keep the small vector-only map in the requested upper-right corner.
+		if diagnostic_3d_display != null:
+			diagnostic_3d_display.visible = false                                                  # Keep abandoned diagnostics out of both player windows.
+		return                                                                                    # Skip the former single-window shared-map/split-screen layout.
 	var available_size := Vector2(viewport_size.x, maxf(viewport_size.y - status_margin, VIEWPORT_SIZE.y)) # Compute the window area available below the status label.
 	var map_display_height := minf(360.0, available_size.y * 0.38)                            # Keep the shared map prominent without starving the two playfields of vertical space.
 	var remaining_view_height := maxf(VIEWPORT_SIZE.y, available_size.y - map_display_height - SIDE_BY_SIDE_GUTTER) # Reserve the lower row for the two player cameras.
@@ -2353,6 +2903,75 @@ func _layout_viewport() -> void:                                                
 
 
 
+# _setup_match_minimap_overlay: Creates a restrained shared maze map for one player's own HUD.
+func _setup_match_minimap_overlay() -> void:
+	match_minimap_overlay = Node2D.new()                                                       # Create a compact UI-space map root.
+	match_minimap_overlay.name = "MatchMinimap"                                                # Keep the replacement map easy to locate in the scene tree.
+	match_minimap_overlay.z_index = 300                                                        # Keep it above the player camera while remaining below end-round text.
+	canvas_layer.add_child(match_minimap_overlay)                                               # Attach it to this player's native HUD canvas.
+	match_minimap_static_layer = Node2D.new()                                                  # Retain white wall lines until a new maze is generated.
+	match_minimap_static_layer.name = "Walls"                                                  # Make the only static map element self-explanatory.
+	match_minimap_static_layer.set_meta("map_static_dirty", true)                             # Request the initial thin-line build.
+	match_minimap_overlay.add_child(match_minimap_static_layer)                                # Draw walls below the player arrows.
+	match_minimap_dynamic_layer = Node2D.new()                                                 # Rebuild only the two tiny player arrows every frame.
+	match_minimap_dynamic_layer.name = "Players"                                              # Make the moving component easy to inspect.
+	match_minimap_overlay.add_child(match_minimap_dynamic_layer)                               # Draw player positions over the walls.
+
+
+# _match_minimap_point: Converts a shared grid point into the minimalist map's local coordinates.
+func _match_minimap_point(world_point: Vector2) -> Vector2:
+	var inset := 5.0                                                                           # Keep the outer maze border comfortably inside the transparent map bounds.
+	var usable_size := MATCH_MINIMAP_SIZE - inset * 2.0                                        # Reserve equal margins on all sides.
+	var scale := usable_size / float(maxi(MAP_WIDTH, MAP_HEIGHT))                              # Keep non-square maps undistorted.
+	return Vector2(inset, inset) + world_point * scale                                         # Return the map-local source-of-truth position.
+
+
+# _add_match_minimap_line: Adds one antialiased-free one-pixel wall segment to an explicit layer.
+func _add_match_minimap_line(parent: Node2D, start: Vector2, end: Vector2, color: Color, width := 1.0) -> void:
+	var line := Line2D.new()                                                                   # Use a native line node so all wall edges remain crisp.
+	line.points = PackedVector2Array([start, end])                                             # Define exactly one shared-world wall edge.
+	line.width = width                                                                         # Keep the requested minimalist thinness.
+	line.default_color = color                                                                 # Apply the caller's neutral wall or player color.
+	line.antialiased = false                                                                    # Preserve the intentional pixel-art presentation.
+	parent.add_child(line)                                                                      # Retain it until the wall topology changes.
+
+
+# _update_match_minimap_overlay: Rebuilds thin walls only when needed and keeps two orientation arrows current.
+func _update_match_minimap_overlay() -> void:
+	if not is_instance_valid(match_minimap_overlay) or not is_instance_valid(match_minimap_static_layer) or not is_instance_valid(match_minimap_dynamic_layer):
+		return                                                                                    # Avoid drawing during early scene-tree setup.
+	if bool(match_minimap_static_layer.get_meta("map_static_dirty", true)):
+		_clear_debug_map_layer(match_minimap_static_layer)                                        # Remove only old white wall lines before a map reroll rebuild.
+		var wall_color := Color(0.94, 0.94, 0.94, 0.96)                                           # Use thin, nearly-white walls with no grid guides.
+		for y in range(MAP_HEIGHT):
+			for x in range(MAP_WIDTH):
+				var cell := Vector2i(x, y)                                                            # Evaluate each maze cell's unique top and left wall edges.
+				var top_left := _match_minimap_point(Vector2(cell))
+				var top_right := _match_minimap_point(Vector2(cell + Vector2i(1, 0)))
+				var bottom_left := _match_minimap_point(Vector2(cell + Vector2i(0, 1)))
+				var bottom_right := _match_minimap_point(Vector2(cell + Vector2i(1, 1)))
+				if _has_wall_edge(cell, Vector2i(0, -1)):
+					_add_match_minimap_line(match_minimap_static_layer, top_left, top_right, wall_color)
+				if _has_wall_edge(cell, Vector2i(-1, 0)):
+					_add_match_minimap_line(match_minimap_static_layer, top_left, bottom_left, wall_color)
+				if y == MAP_HEIGHT - 1 and _has_wall_edge(cell, Vector2i(0, 1)):
+					_add_match_minimap_line(match_minimap_static_layer, bottom_left, bottom_right, wall_color)
+				if x == MAP_WIDTH - 1 and _has_wall_edge(cell, Vector2i(1, 0)):
+					_add_match_minimap_line(match_minimap_static_layer, top_right, bottom_right, wall_color)
+		match_minimap_static_layer.set_meta("map_static_dirty", false)                          # Retain the maze geometry until its topology changes.
+	_clear_debug_map_layer(match_minimap_dynamic_layer)                                        # Replace just the two player arrows each frame.
+	for player_index in range(player_states.size()):
+		var state := player_states[player_index]                                                  # Read the player's true shared-world position and current view direction.
+		var center := _match_minimap_point(_player_state_world_position(state))                   # Convert that position into compact map coordinates.
+		var forward := _view_forward_vector_for_state(state).normalized()                         # Use the actual cardinal/diagonal camera orientation for the arrow.
+		var right := Vector2(-forward.y, forward.x)                                               # Derive a perpendicular arrow base without needing a camera cone.
+		var color := Color(1.0, 0.20, 0.20, 1.0) if player_index == 0 else Color(0.20, 0.48, 1.0, 1.0) # Keep P1 red and P2 blue.
+		var arrow := Polygon2D.new()                                                              # Use one tiny filled triangle rather than any view frustum artwork.
+		arrow.polygon = PackedVector2Array([center + forward * 5.5, center - forward * 3.0 + right * 3.0, center - forward * 3.0 - right * 3.0])
+		arrow.color = color                                                                       # Apply the player's identifying color.
+		match_minimap_dynamic_layer.add_child(arrow)                                              # Draw it over the white wall network.
+
+
 # _setup_debug_map_overlay: Creates a runtime top-down map overlay for comparing map state to the rendered wall view.
 func _setup_debug_map_overlay() -> void:                                                     # Declare this function.
 	debug_map_overlay = Node2D.new()                                                           # Create the parent node for the top-down map lines and arrow.
@@ -2374,6 +2993,10 @@ func _setup_debug_map_overlay() -> void:                                        
 func _update_debug_map_overlay() -> void:                                                    # Declare this function.
 	if debug_map_overlay == null:                                                              # Skip drawing if the overlay has not been created yet.
 		return                                                                                    # Return without drawing the map.
+	if not TEMP_GRID_AUDIT:                                                                     # The match uses the compact clean minimap instead of the old diagnostic source-map panel.
+		debug_map_overlay.visible = false                                                         # Never reveal blue guides, cones, or slot labels during normal local play.
+		_update_match_minimap_overlay()                                                          # Keep the map replacement synchronized with movement and orientation.
+		return                                                                                    # Skip all legacy diagnostic geometry.
 	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the single shared map above both views.
 	debug_map_overlay.visible = show_top_down_source_overlay and is_shared_match_map           # Keep P2's private overlay hidden instead of allowing its redraw to reveal a duplicate map.
 	if not show_top_down_source_overlay or not is_shared_match_map:                            # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
@@ -2426,6 +3049,19 @@ func _update_debug_map_overlay() -> void:                                       
 	_add_debug_arrow_head(facing_end, _view_forward_vector(), player_color)                     # Draw the player facing arrow head.
 	_add_debug_player_marker(player_center, player_color)                                      # Draw the player position marker.
 	_add_debug_other_player_markers()                                                          # Draw the other local player on this player's top-down map.
+	# Keep collectibles off the top-down map so both players genuinely have to hunt for them.
+
+
+# _add_debug_combat_pickup_markers: Shows collectible objective state on the shared top-down source map.
+func _add_debug_combat_pickup_markers() -> void:
+	for coin in world_coins:                                                                    # Mark every remaining world or dropped coin in gold.
+		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared world pickup coordinate directly.
+		var marker_center := _debug_map_world_position(coin_position)                            # Convert the shared world pickup coordinate into the map overlay.
+		_add_debug_player_marker(marker_center, Color(1.0, 0.86, 0.08, 0.95))                   # Reuse the cheap retained square primitive at a clearly distinct color.
+	if not machine_gun_pickup.is_empty():                                                       # Mark the contested weapon only while it has not been collected.
+		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared world pickup coordinate directly.
+		var gun_center := _debug_map_world_position(gun_position)                                # Convert its shared world coordinate into map overlay pixels.
+		_add_debug_player_marker(gun_center, Color(0.95, 0.34, 0.10, 0.98))                     # Use orange-red so the gun is distinguishable from P1/P2/coins.
 
 
 
@@ -4679,6 +5315,15 @@ func _read_regenerate_map() -> bool:                                            
 
 
 
+# _read_next_round: Returns true once for the end-of-round replay key.
+func _read_next_round() -> bool:
+	var replay_pressed := _is_key_down(KEY_X)                                                 # Reserve X for the explicit post-round replay prompt.
+	var replay_just_pressed := replay_pressed and not was_next_round_pressed                  # Ignore a held key so a new round cannot immediately retrigger.
+	was_next_round_pressed = replay_pressed                                                    # Store the current state for the next process frame.
+	return replay_just_pressed                                                                 # Return the one-shot replay request.
+
+
+
 # _read_toggle_slot_grid_debug: Returns true once when the blue slot-grid audit hotkey is pressed.
 func _read_toggle_slot_grid_debug() -> bool:                                                # Declare this function.
 	var slot_grid_pressed := Input.is_action_pressed(ACTION_TOGGLE_SLOT_GRID_DEBUG) or _is_key_down(KEY_F2) # Read the current slot-grid toggle key state.
@@ -4767,7 +5412,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 	local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the physical offset back into local art-space registration.
 
 	if physical_movement.y > 0.0 and tile_offset.y >= 1.0:                                     # Handle crossing or blocking at the camera-forward physical edge.
-		if _can_cross_edge(grid_position, _facing_vector()):                                      # Check whether the forward tile edge is open.
+		if _can_player_cross_edge(grid_position, _facing_vector()):                               # Check whether the forward tile edge is open or the deliberate player cheat is active.
 			tile_offset.y = 1.0                                                                       # Hold the physical offset at the forward edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local forward edge.
 			_try_cross_tile("forward", _facing_vector(), "front")                                    # Start the forward tile-crossing transition.
@@ -4777,7 +5422,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the forward wall contact.
 			last_blocked_direction = "front"                                                         # Report the blocked front edge in the debug status.
 	elif physical_movement.y < 0.0 and tile_offset.y <= -1.0:                                  # Handle crossing or blocking at the camera-back physical edge.
-		if _can_cross_edge(grid_position, -_facing_vector()):                                     # Check whether the backward tile edge is open.
+		if _can_player_cross_edge(grid_position, -_facing_vector()):                              # Check whether the backward tile edge is open or the deliberate player cheat is active.
 			tile_offset.y = -1.0                                                                      # Hold the physical offset at the back edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local back edge.
 			_try_cross_tile("backward", -_facing_vector(), "back")                                   # Start the backward tile-crossing transition.
@@ -4787,7 +5432,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the back wall contact.
 			last_blocked_direction = "back"                                                          # Report the blocked back edge in the debug status.
 	elif physical_movement.x < 0.0 and tile_offset.x <= -1.0:                                  # Handle crossing or blocking at the camera-left physical edge.
-		if _can_cross_edge(grid_position, _left_vector()):                                        # Check whether the camera-left tile edge is open.
+		if _can_player_cross_edge(grid_position, _left_vector()):                                 # Check whether the camera-left tile edge is open or the deliberate player cheat is active.
 			tile_offset.x = -1.0                                                                      # Hold the physical offset at the left edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local left edge.
 			_try_cross_tile("strafe_left", _left_vector(), "left")                                   # Start the left strafe tile-crossing transition.
@@ -4797,7 +5442,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the left wall contact.
 			last_blocked_direction = "left"                                                          # Report the blocked left edge in the debug status.
 	elif physical_movement.x > 0.0 and tile_offset.x >= 1.0:                                   # Handle crossing or blocking at the camera-right physical edge.
-		if _can_cross_edge(grid_position, -_left_vector()):                                       # Check whether the camera-right tile edge is open.
+		if _can_player_cross_edge(grid_position, -_left_vector()):                                # Check whether the camera-right tile edge is open or the deliberate player cheat is active.
 			tile_offset.x = 1.0                                                                       # Hold the physical offset at the right edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local right edge.
 			_try_cross_tile("strafe_right", -_left_vector(), "right")                                # Start the right strafe tile-crossing transition.
@@ -4816,7 +5461,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 # _move_inside_tile_diagonal: Moves through the world using the active 45-degree camera axes and real grid-edge collision.
 func _move_inside_tile_diagonal(movement: Vector2, delta: float) -> void:                   # Declare this function.
 	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into camera-right/camera-forward movement.
-	var world_position := _current_player_world_position()                                     # Start from the same world point shown by the top-down diagnostic map.
+	var world_position := _constrain_player_world_position_to_camera_cell(_current_player_world_position()) # Diagonal local axes form a diamond, so keep ordinary movement inside the source-map cell rather than allowing a side push to leak into a wall.
 	var world_delta := (_view_right_vector() * physical_movement.x + _view_forward_vector() * physical_movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta # Convert the visible diagonal input into world-grid travel.
 	last_blocked_direction = ""                                                               # Clear stale feedback before applying this frame's collision checks.
 	if _try_move_diagonal_corner_direct(world_position, world_delta):                          # Let a genuine diagonal crossing land in its diagonal cell without briefly visiting a side-adjacent camera cell.
@@ -4851,7 +5496,7 @@ func _try_move_diagonal_corner_direct(world_position: Vector2, world_delta: Vect
 	var other_coordinate := candidate.y if crosses_x else candidate.x                          # Measure the un-crossed coordinate against that companion edge.
 	if absf(other_coordinate - other_boundary) > DIAGONAL_CORNER_GRACE:                        # Only forgive a few pixels of numerical/input skew, never a deliberate side-cell move.
 		return false                                                                              # Let normal side crossing take over once the movement is no longer a true corner crossing.
-	if not _can_cross_edge(source_cell, pending_edge) or not _can_cross_diagonal_corner(source_cell, x_edge, y_edge): # Do not hold a side overrun when no legal diagonal route exists.
+	if not _can_player_cross_edge(source_cell, pending_edge) or not _can_cross_diagonal_corner(source_cell, x_edge, y_edge): # Do not hold a side overrun when no legal diagonal route exists.
 		return false                                                                              # Preserve standard collision and sliding around blocked corners.
 	_set_player_world_position_in_camera_cell(candidate, source_cell)                          # Keep the camera on the source diagonal cell while the second axis reaches its boundary.
 	return true                                                                                 # Skip the independent sweeps that would otherwise flash the side-adjacent cell.
@@ -4860,8 +5505,8 @@ func _try_move_diagonal_corner_direct(world_position: Vector2, world_delta: Vect
 
 # _can_cross_diagonal_corner: Accepts a diagonal destination only when at least one orthogonal two-edge route is open.
 func _can_cross_diagonal_corner(source_cell: Vector2i, x_edge: Vector2i, y_edge: Vector2i) -> bool:
-	var x_then_y := _can_cross_edge(source_cell, x_edge) and _can_cross_edge(source_cell + x_edge, y_edge) # Test the route that enters the horizontal neighbor first.
-	var y_then_x := _can_cross_edge(source_cell, y_edge) and _can_cross_edge(source_cell + y_edge, x_edge) # Test the route that enters the vertical neighbor first.
+	var x_then_y := _can_player_cross_edge(source_cell, x_edge) and _can_player_cross_edge(source_cell + x_edge, y_edge) # Test the route that enters the horizontal neighbor first.
+	var y_then_x := _can_player_cross_edge(source_cell, y_edge) and _can_player_cross_edge(source_cell + y_edge, x_edge) # Test the route that enters the vertical neighbor first.
 	return x_then_y or y_then_x                                                                # Permit the diagonal only when a real non-tunneling route exists.
 
 
@@ -4884,7 +5529,7 @@ func _move_diagonal_world_axis(world_position: Vector2, distance: float, positiv
 	if current_index == candidate_index:                                                       # Keep free movement that stays inside the current cell.
 		return candidate                                                                          # No grid edge was crossed.
 	var crossing_delta := positive_delta if distance > 0.0 else -positive_delta                # Choose the cardinal source-map edge being crossed.
-	if _can_cross_edge(current_cell, crossing_delta):                                          # Allow movement through an open edge into the neighboring grid cell.
+	if _can_player_cross_edge(current_cell, crossing_delta):                                   # Allow movement through an open edge or the deliberate player cheat into the neighboring grid cell.
 		return candidate                                                                          # The following axis sweep will use the new cell when necessary.
 	var boundary := float(current_index + 1) if distance > 0.0 else float(current_index)       # Locate the blocked east/south or west/north cell edge.
 	var safe_axis := boundary - 0.0001 if distance > 0.0 else boundary + 0.0001                # Stay just inside the current cell so its ownership remains stable.
@@ -4902,6 +5547,15 @@ func _current_player_world_position() -> Vector2:                               
 	var tile_offset := _local_position_to_tile_offset(local_floor_position)                    # Convert art-space local position into signed right/forward coordinates.
 	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Anchor the player at the center of their current source-map cell.
 	return cell_center + _view_right_vector() * tile_offset.x * LOCAL_TILE_WORLD_HALF_EXTENT + _view_forward_vector() * tile_offset.y * LOCAL_TILE_WORLD_HALF_EXTENT # Rotate the offset through the exact visible camera basis.
+
+
+
+# _constrain_player_world_position_to_camera_cell: Keeps ordinary diagonal local motion inside the actual source-map cell that owns its camera.
+func _constrain_player_world_position_to_camera_cell(world_position: Vector2) -> Vector2:
+	if walk_through_walls_cheat:                                                               # Keep the exploratory cheat completely unrestricted, including beyond the map border.
+		return world_position                                                                     # Do not alter the intentionally out-of-bounds player point.
+	const CELL_EDGE_EPSILON := 0.0001                                                          # Retain a stable floori ownership while allowing the player to touch a blocked edge visually.
+	return Vector2(clampf(world_position.x, float(grid_position.x) + CELL_EDGE_EPSILON, float(grid_position.x + 1) - CELL_EDGE_EPSILON), clampf(world_position.y, float(grid_position.y) + CELL_EDGE_EPSILON, float(grid_position.y + 1) - CELL_EDGE_EPSILON)) # Clip the 45-degree local diamond against the physical cell rectangle before it can leak through a diagonal side wall.
 
 
 
@@ -4924,7 +5578,7 @@ func _set_player_world_position_in_camera_cell(world_position: Vector2, camera_c
 
 # _try_cross_tile: Attempts to cross a map edge, starting the matching transition if the thin wall map allows it.
 func _try_cross_tile(sequence_name: String, grid_delta: Vector2i, blocked_label: String) -> void: # Declare this function.
-	if _can_cross_edge(grid_position, grid_delta):                                             # Run the following block only when this condition is true.
+	if _can_player_cross_edge(grid_position, grid_delta):                                      # Run the following block only when this condition is true.
 		pending_grid_delta = grid_delta                                                           # Compute and store this value for the current step.
 		last_blocked_direction = ""                                                               # Compute and store this value for the current step.
 		if (sequence_name == "forward" or sequence_name == "backward") and not _is_turn_45_view(): # Use authored Fwd art only for cardinal forward/backward crossings.
@@ -4941,6 +5595,9 @@ func _try_cross_tile(sequence_name: String, grid_delta: Vector2i, blocked_label:
 
 # _position_player: Projects the player local tile position into the 160x120 perspective floor trapezoid.
 func _position_player() -> void:                                                            # Declare this function.
+	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)) and String(player_states[active_player_index].get("death_phase", "")) == "countdown": # Let the blackout own this local view between the two authored Death passes.
+		player_sprite.visible = false                                                             # Prevent later positioning code from restoring the fallen last frame.
+		return                                                                                    # Do not update or redraw the body until reverse Death starts at respawn.
 	player_sprite.visible = true                                                              # Restore the local actor after temporary 45-degree validation views hide it.
 	var display_local_position := _translation_display_local_position()                         # Let the actor travel smoothly through authored forward or side camera frames without changing collision or the source-map graph.
 	var depth := clampf(display_local_position.y, 0.0, 1.0)                                    # Project the visual actor from its interpolated Fwd depth or its ordinary live depth.
@@ -4948,7 +5605,8 @@ func _position_player() -> void:                                                
 	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Clamp only the rendered feet anchor inside the visible floor polygon.
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured character height for this depth.
-	var sprite_scale := actor_height / _sprite_body_height_to_foot(player_sprite)               # Scale the visible body span, not transparent frame padding, to the measured study.
+	var source_body_height := _standard_actor_body_height() if player_sprite.animation == &"Death" else _sprite_body_height_to_foot(player_sprite) # Keep the authored death sheet at normal body scale despite its unusual visible bounds.
+	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the measured feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
@@ -4998,13 +5656,17 @@ func _position_opponent_sprite() -> void:                                       
 	if other_state.is_empty():                                                                 # Hide the sprite if there is no other player.
 		opponent_sprite.visible = false                                                           # Hide the opponent sprite.
 		return                                                                                    # Return without projecting anything.
+	if bool(other_state.get("is_dying", false)) and String(other_state.get("death_phase", "")) == "countdown": # Do not allow later opponent placement to restore a completed dead frame.
+		opponent_sprite.visible = false                                                           # Remove the dead body entirely from the surviving player's view too.
+		return                                                                                    # Wait for the reverse Death sequence to begin at the new spawn.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
 	var projection := _opponent_projection_from_current_camera(target_world)                    # Project the opponent through the current player's camera model.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
-	var sprite_scale := actor_height / _sprite_body_height_to_foot(opponent_sprite)             # Scale the opponent by visible body span so animation frame padding cannot change size.
+	var source_body_height := _standard_actor_body_height() if opponent_sprite.animation == &"Death" else _sprite_body_height_to_foot(opponent_sprite) # Keep death frames from inflating in an opponent camera too.
+	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
@@ -5064,7 +5726,12 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
 func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:         # Declare this function.
-	var origin := _camera_grid_origin()                                                        # Read this player's fixed camera origin.
+	var coordinate_renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")              # Read the optional coordinate-frame runtime renderer on this experimental branch.
+	var origin := _camera_grid_origin()                                                        # Keep the legacy camera origin as the safe fallback.
+	if coordinate_renderer != null and coordinate_renderer.has_method("runtime_camera_origin_for_current_pose"): # Share the runtime wall camera when it is available.
+		var runtime_origin: Variant = coordinate_renderer.call("runtime_camera_origin_for_current_pose") # Query dynamically so the base controller remains independent of this experimental renderer class.
+		if runtime_origin is Vector2:
+			origin = runtime_origin                                                                 # Advance the opponent at exactly the same staged camera position as the walls.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact live heading used by the coordinate walls, including NE/NW halfway poses.
 	var right := Vector2(-forward.y, forward.x).normalized()                                   # Derive camera-right from that same live heading so opponent screen projection cannot lag behind a turn.
 	var relative := target_world - origin                                                      # Measure the opponent relative to this player's camera.
@@ -5308,6 +5975,13 @@ func _sprite_body_height_to_foot(sprite: AnimatedSprite2D) -> float:            
 
 
 
+# _standard_actor_body_height: Uses the idle body span as a stable perspective reference for special sheets such as Death.
+func _standard_actor_body_height() -> float:
+	var texture := load(PLAYER_IDLE_TEXTURE) as Texture2D                                      # Ask Godot's resource cache for the ordinary standing sprite.
+	return _texture_body_height_to_foot(texture) if texture != null else 41.0                  # Keep Death frames at normal player scale even when their alpha bounds are unusually small.
+
+
+
 # _sprite_texture_height: Returns one sprite's current frame height with a safe fallback.
 func _sprite_texture_height(sprite: AnimatedSprite2D) -> float:                             # Declare this function.
 	if sprite == null or sprite.sprite_frames == null:                                        # Handle missing sprite resources defensively.
@@ -5460,10 +6134,34 @@ func _view_relative_dir(world_direction: String, viewer_facing: int) -> String: 
 
 
 
+# _play_combat_death_animation: Scrubs the authored nine-frame Death animation forward, holds it, or plays it backwards without relying on timing signals.
+func _play_combat_death_animation(sprite: AnimatedSprite2D, state: Dictionary) -> void:
+	if sprite == null or sprite.sprite_frames == null or not sprite.sprite_frames.has_animation(&"Death"): # Leave a safe fallback if the asset set is incomplete.
+		return                                                                                    # Do not interrupt normal drawing in that unlikely case.
+	var phase := String(state.get("death_phase", "fall"))                                    # Read the staged playback state.
+	if phase == "countdown":                                                                  # The forward death frames have finished during this three-second pause.
+		sprite.visible = false                                                                     # Remove the last death frame entirely until reverse playback begins at respawn.
+		return                                                                                    # Do not leave the fallen body held on screen.
+	sprite.visible = true                                                                      # Show only the forward fall and backward respawn portions.
+	var progress := 1.0                                                                         # Default to the fully fallen final frame during the countdown.
+	if phase == "fall":                                                                        # Play the authored animation forward when killed.
+		progress = clampf(float(state.get("death_timer", 0.0)) / DEATH_FALL_SECONDS, 0.0, 1.0) # Convert elapsed seconds into a normalized frame position.
+	elif phase == "respawn":                                                                   # Reverse the same frames once the player has been moved to the safe cell.
+		progress = 1.0 - clampf(float(state.get("death_timer", 0.0)) / DEATH_RESPAWN_SECONDS, 0.0, 1.0) # Convert elapsed seconds into backwards frame playback.
+	var frame_total := maxi(sprite.sprite_frames.get_frame_count(&"Death"), 1)                # Read the exact authored frame count rather than hard-coding nine.
+	var death_frame := clampi(roundi(progress * float(frame_total - 1)), 0, frame_total - 1)   # Pick the nearest source frame for stable low-frame-rate arcade playback.
+	sprite.animation = &"Death"                                                                # Select Death directly so the frame uses the right SpriteFrames resource.
+	sprite.frame = death_frame                                                                   # Show the phase's exact frame without relying on animation time.
+	sprite.pause()                                                                              # Stop AnimatedSprite2D from advancing independently of shared combat state.
+
+
 # _apply_opponent_animation: Plays the other player's full view-relative run/aim set when visible in this screen.
 func _apply_opponent_animation(other_state: Dictionary) -> void:                           # Declare this function.
 	if opponent_sprite.sprite_frames == null:                                                  # Skip animation if the opponent sprite has no SpriteFrames resource.
 		return                                                                                    # Return without changing animation.
+	if bool(other_state.get("is_dying", false)):                                               # Render the same visible death stage in the other player's camera.
+		_play_combat_death_animation(opponent_sprite, other_state)                                # Keep both viewpoints synchronized to the shared respawn timer.
+		return                                                                                    # Do not let normal run/aim selection overwrite the Death frame.
 	var moving := bool(other_state.get("character_is_moving", false))                          # Read whether the opponent is actively running.
 	var other_facing := int(other_state.get("facing", 0))                                      # Read the opponent's camera/aim facing for fallbacks.
 	var other_world_run := String(other_state.get("world_run_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world run direction.
@@ -5640,7 +6338,7 @@ func _request_half_turn_or_transition(sequence_name: String, half_turn_direction
 
 # _enter_turn_45: Starts a view-relative turn at the 22-degree interpolation view without changing the committed cardinal facing.
 func _enter_turn_45(half_turn_direction: int) -> void:                                     # Declare this function.
-	var preserved_world_position := _current_player_world_position()                           # Capture the player's physical map point before changing the camera basis.
+	var preserved_world_position := _constrain_player_world_position_to_camera_cell(_current_player_world_position()) # Capture the player's physical map point inside its owning cell before changing the camera basis.
 	turn_45_direction = -1 if half_turn_direction < 0 else 1                                  # Store whether this halfway view is between cardinal-left or cardinal-right.
 	turn_step = 1                                                                              # Begin at the 22-degree interpolation stage.
 	active_sequence_name = TURN_STAGE_SEQUENCE_NAMES[_active_turn_visual_stage()]              # Label the visible 22-degree interpolation frame, including reversed turns.
@@ -5658,7 +6356,7 @@ func _enter_turn_45(half_turn_direction: int) -> void:                          
 
 # _process_turn_45_input: Leaves a stable diagonal view through the appropriate 22 or 66-degree passthrough frame.
 func _process_turn_45_input(turn_direction: int) -> void:                                  # Declare this function.
-	var preserved_world_position := _current_player_world_position()                           # Keep the player fixed on the source map while committing or cancelling this camera rotation.
+	var preserved_world_position := _constrain_player_world_position_to_camera_cell(_current_player_world_position()) # Keep the player fixed inside the source-map cell while committing or cancelling this camera rotation.
 	if turn_direction == 0:                                                                    # Stay on the halfway view when no twist key was just pressed.
 		return                                                                                    # Return without changing the halfway-turn state.
 	if turn_direction == turn_45_direction:                                                    # Continue through 66 toward the next cardinal orientation.
@@ -5690,7 +6388,7 @@ func _advance_turn_passthrough(delta: float, manual_step: bool = false) -> void:
 		if turn_passthrough_timer < TURN_PASSTHROUGH_SECONDS:                                   # Keep the authored 22/66 art on screen for its full duration.
 			return                                                                                 # Wait until the frame has completed.
 	var target := turn_passthrough_target                                                     # Preserve the destination before clearing transient state.
-	var preserved_world_position := _current_player_world_position()                          # Capture the physical player point before changing the camera basis.
+	var preserved_world_position := _constrain_player_world_position_to_camera_cell(_current_player_world_position()) # Capture a legal physical player point before changing the camera basis.
 	is_turn_passthrough = false                                                               # Resume ordinary input after this function reaches a stable orientation.
 	turn_passthrough_timer = 0.0                                                              # Clear elapsed interpolation time for the next turn.
 	turn_passthrough_target = ""                                                              # Clear the completed destination marker.
@@ -5717,7 +6415,7 @@ func _advance_turn_passthrough(delta: float, manual_step: bool = false) -> void:
 
 # _finish_snap_transition: Applies a movement or turn result immediately and redraws the stable view.
 func _finish_snap_transition(sequence_name: String) -> void:                                # Declare this function.
-	var preserved_world_position := _current_player_world_position()                           # Capture the pre-turn physical point before any facing basis is changed.
+	var preserved_world_position := _constrain_player_world_position_to_camera_cell(_current_player_world_position()) # Capture the pre-turn point inside its owning cell before any facing basis is changed.
 	is_transitioning = false                                                                   # Ensure the controller stays in stable/input mode.
 	is_turn_passthrough = false                                                               # Ensure a completed cardinal snap cannot leave a stale camera interpolation active.
 	turn_passthrough_timer = 0.0                                                              # Clear any previous 22/66 interpolation time.
@@ -6108,6 +6806,7 @@ func _regenerate_runtime_map() -> void:                                         
 		return                                                                                    # Skip the normal two-player random-maze reset.
 	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
 	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset both local players into opposite corners of the new shared map.
+	_reset_combat_collectibles()                                                               # Replace every objective coin and the contested gun for the newly generated maze.
 	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.
 	_update_status()                                                                           # Update the status text for the new map state.
 
@@ -6119,6 +6818,9 @@ func _mark_debug_map_static_layers_dirty() -> void:
 		var static_layer: Variant = view.get("debug_map_static_layer", null)                    # Read that view's retained maze-grid layer if it has been initialized without inferring a Variant as a hard type.
 		if static_layer is Node2D and is_instance_valid(static_layer):                           # Ignore views that have not reached top-down-map setup yet.
 			static_layer.set_meta("map_static_dirty", true)                                       # Rebuild this map's static maze geometry on its next visible draw.
+		var minimap_layer: Variant = view.get("match_minimap_static_layer", null)                # Read the compact retained wall layer for this same player.
+		if minimap_layer is Node2D and is_instance_valid(minimap_layer):                          # Ignore maps that are still being constructed.
+			minimap_layer.set_meta("map_static_dirty", true)                                      # Rebuild minimalist white edges after the topology changes.
 
 
 
@@ -6231,6 +6933,14 @@ func _can_cross_edge(from_cell: Vector2i, delta: Vector2i) -> bool:             
 		return false                                                                              # Return this computed result to the caller.
 	var to_cell := from_cell + delta                                                           # Store mutable runtime state for assets, rendering, movement, or debug output.
 	return _is_open_cell(from_cell) and _is_open_cell(to_cell) and not _has_wall_edge(from_cell, delta) # Return this computed result to the caller.
+
+
+
+# _can_player_cross_edge: Leaves world visibility and projectile collision authoritative while optionally allowing only player exploration through walls.
+func _can_player_cross_edge(from_cell: Vector2i, delta: Vector2i) -> bool:
+	if walk_through_walls_cheat:                                                               # The F3 cheat is intentionally broader than ordinary map traversal, including the outer border.
+		return delta != Vector2i.ZERO                                                            # Reject only a zero-length request that could not produce movement.
+	return _can_cross_edge(from_cell, delta)                                                   # Keep standard movement tied to the same thin-wall source map as rendering and projectile collision.
 
 
 

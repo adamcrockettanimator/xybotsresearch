@@ -94,6 +94,7 @@ var gpu_wall_shader: Shader
 var gpu_wall_dummy_texture: ImageTexture
 var gpu_wall_sprites: Array[Sprite2D] = []
 var gpu_wall_materials: Array[ShaderMaterial] = []
+var runtime_black_backdrop: ColorRect
 var coordinate_background: Sprite2D
 var status: Label
 var runtime_status: Label
@@ -177,6 +178,8 @@ func _initialize() -> void:
 		return
 	if target_player_index == 0:
 		_reset_profile_log()
+	show_quad_outlines = false
+	show_projection_points = false
 	# All construction below deliberately uses the controller's currently-bound
 	# environment globals.  Bind only our assigned local view, then restore P1
 	# afterwards; normal per-frame drawing is performed by the controller hook.
@@ -197,6 +200,18 @@ func _initialize() -> void:
 		if child is CanvasItem:
 			legacy_environment_nodes.append(child)
 			child.visible = false
+	# The coordinate template previously supplied black wherever its transparent
+	# pixels showed through. Stable in-map poses hide that template, so retain an
+	# explicit black plate behind the runtime surfaces rather than exposing the
+	# editor-grey clear colour in distant or intentionally empty areas.
+	runtime_black_backdrop = ColorRect.new()
+	runtime_black_backdrop.name = "CoordinateFrameBlackBackdrop"
+	runtime_black_backdrop.position = Vector2.ZERO
+	runtime_black_backdrop.size = VIEW_SIZE
+	runtime_black_backdrop.color = Color.BLACK
+	runtime_black_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	runtime_black_backdrop.z_index = -1
+	controller.environment_layer.add_child(runtime_black_backdrop)
 	coordinate_background = Sprite2D.new()
 	coordinate_background.name = "CoordinateFrameBackground"
 	coordinate_background.centered = false
@@ -1410,6 +1425,18 @@ func _runtime_camera_origin(forward: Vector2, right: Vector2) -> Vector2:
 		return (source_center.lerp(target_center, _diagonal_forward_fraction())) - forward * TEMPLATE_CAMERA_REAR_OFFSET
 	return origin
 
+
+# runtime_camera_origin_for_current_pose: exposes the exact camera point used
+# by runtime walls, floors, and ceilings. Character projection uses this during
+# authored translation stages so opponents advance with the same camera instead
+# of staying at the source-cell position until the final snap.
+func runtime_camera_origin_for_current_pose() -> Vector2:
+	if controller == null:
+		return Vector2.ZERO
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	return _runtime_camera_origin(forward, right)
+
 func _depth_light(depth: float) -> float:
 	# Four deliberate bands retain the older discrete arcade value ramp.
 	if depth < 1.35: return 1.0
@@ -1567,7 +1594,8 @@ func _update_coordinate_background() -> void:
 	if texture != null:
 		coordinate_background.texture = texture
 	coordinate_background.flip_h = bool(frame["flip_h"])
-	coordinate_background.visible = coordinate_background.texture != null
+	var player_is_inside_playable_map: bool = controller != null and controller._is_open_cell(controller.grid_position)
+	coordinate_background.visible = coordinate_background.texture != null and not player_is_inside_playable_map
 
 func _hide_legacy_environment() -> void:
 	for item in legacy_environment_nodes:
