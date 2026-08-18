@@ -57,7 +57,10 @@ const VIRTUAL_CAMERA_HEIGHT := 0.5
 const WALL_HEIGHT := 2.0 / 3.0
 const TEMPLATE_CAMERA_REAR_OFFSET := 0.49
 const FOV_RATIO := 0.70
-const DIAGONAL_FRAME_SECONDS := 0.18
+# Keep each captured diagonal frame on the same brisk cadence as the three
+# authored lateral strafe stages (0.075 s each), rather than making a diagonal
+# crossing more than twice as slow simply because its capture lives here.
+const DIAGONAL_FRAME_SECONDS := 0.075
 const PROFILE_LOG_PATH := "user://coordinate_runtime_profile.csv"
 const PROFILE_LOG_INTERVAL_USEC := 1_000_000
 
@@ -134,6 +137,8 @@ var diagonal_forward_active := false
 var diagonal_forward_cell := Vector2i(-999, -999)
 var diagonal_forward_source_cell := Vector2i(-999, -999)
 var diagonal_forward_target_cell := Vector2i(-999, -999)
+var diagonal_transition_kind := "" # "forward" is a diagonal cell crossing; "east" is either adjacent cardinal crossing from a diagonal view.
+var diagonal_transition_flip_h := false # Mirror the authored NE-to-east frames for the other adjacent cardinal side.
 var initialized := false
 
 # Rolling development profiler.  The renderer intentionally records timings in
@@ -1471,9 +1476,9 @@ func _coordinate_frame_for_current_pose() -> Dictionary:
 	if int(controller.forward_step) == 2:
 		return {"path": TEMPLATE_ROOT + ("coord_ne_forward_half.png" if diagonal else "coord_n_forward_half.png"), "flip_h": false}
 	if diagonal:
-		var diagonal_forward_frame := _diagonal_forward_frame_name()
-		if not diagonal_forward_frame.is_empty():
-			return {"path": TEMPLATE_ROOT + diagonal_forward_frame, "flip_h": false}
+		var diagonal_transition_frame := _diagonal_transition_frame_name()
+		if not diagonal_transition_frame.is_empty():
+			return {"path": TEMPLATE_ROOT + diagonal_transition_frame, "flip_h": diagonal_transition_flip_h}
 	if int(controller.strafe_step) != 0:
 		flip_h = String(controller.strafe_transition_name) == "strafe_left"
 		var stage_name: String = ["", "quarter", "half", "three_quarter"][int(controller.strafe_step)]
@@ -1481,19 +1486,21 @@ func _coordinate_frame_for_current_pose() -> Dictionary:
 		return {"path": TEMPLATE_ROOT + prefix + stage_name + ".png", "flip_h": flip_h}
 	return {"path": TEMPLATE_ROOT + ("coord_ne_stable.png" if diagonal else "coord_n_stable.png"), "flip_h": false}
 
-func _diagonal_forward_frame_name() -> String:
-	# The existing diagonal controller crosses a cell continuously, with no
-	# forward_step state.  This experiment supplies the matching visual stages
-	# from a small clock that starts on a diagonal-forward input and resets when
-	# the world cell changes.
+func _diagonal_transition_frame_name() -> String:
+	# Diagonal movement crosses real grid edges continuously, so the controller
+	# has no authored phase state to select a coordinate frame.  Watch one actual
+	# cell change and use the Blender capture that matches its path.  The NE-east
+	# set is mirrored for NE-north (and, after the camera-basis rotation, for the
+	# equivalent adjacent-cardinal move from every other diagonal view).
 	if not diagonal_forward_active:
 		return ""
+	var prefix := "coord_ne_forward_" if diagonal_transition_kind == "forward" else "coord_ne_east_"
 	if diagonal_forward_clock < DIAGONAL_FRAME_SECONDS:
-		return "coord_ne_forward_quarter.png"
+		return prefix + "quarter.png"
 	if diagonal_forward_clock < DIAGONAL_FRAME_SECONDS * 2.0:
-		return "coord_ne_forward_half.png"
+		return prefix + "half.png"
 	if diagonal_forward_clock < DIAGONAL_FRAME_SECONDS * 3.0:
-		return "coord_ne_forward_three_quarter.png"
+		return prefix + "three_quarter.png"
 	return ""
 
 func _diagonal_forward_fraction() -> float:
@@ -1510,29 +1517,45 @@ func _update_diagonal_forward_animation(delta: float) -> void:
 	if not diagonal:
 		diagonal_forward_clock = 0.0
 		diagonal_forward_active = false
+		diagonal_transition_kind = ""
+		diagonal_transition_flip_h = false
 		diagonal_forward_cell = controller.grid_position
 		return
 	if diagonal_forward_cell.x < -900:
 		diagonal_forward_cell = controller.grid_position
 		return
-	# A diagonal forward sequence belongs to one actual diagonal cell crossing,
-	# not to the duration of a held stick.  The old looping clock restarted these
-	# three images over and over while the character ran inside a cell.
+	# A captured transition belongs to one actual diagonal-view cell crossing,
+	# never the duration of a held stick.  This covers both a true diagonal move
+	# and the previously missing single-cardinal move to either side of a diagonal
+	# view (for example NE -> E and NE -> N).
 	var crossed_cells: Vector2i = controller.grid_position - diagonal_forward_cell
 	if abs(crossed_cells.x) == 1 and abs(crossed_cells.y) == 1:
 		diagonal_forward_source_cell = diagonal_forward_cell
 		diagonal_forward_target_cell = controller.grid_position
 		diagonal_forward_clock = 0.0
 		diagonal_forward_active = true
+		diagonal_transition_kind = "forward"
+		diagonal_transition_flip_h = false
 		diagonal_forward_cell = controller.grid_position
 	elif crossed_cells != Vector2i.ZERO:
-		# Cardinal slides while looking diagonally do not use the NE-forward frames.
+		# The Blender NE-east capture supplies one adjacent cardinal path.  Its
+		# mirror supplies the other: classify the world edge using the active
+		# camera-right vector instead of hard-coding N/E, so all four diagonals use
+		# the same authored image pair correctly.
+		diagonal_forward_source_cell = diagonal_forward_cell
+		diagonal_forward_target_cell = controller.grid_position
+		diagonal_forward_clock = 0.0
+		diagonal_forward_active = true
+		diagonal_transition_kind = "east"
+		diagonal_transition_flip_h = Vector2(crossed_cells).dot(controller._view_right_vector()) < 0.0
 		diagonal_forward_cell = controller.grid_position
 	if diagonal_forward_active:
 		diagonal_forward_clock += delta
 		if diagonal_forward_clock >= DIAGONAL_FRAME_SECONDS * 3.0:
 			diagonal_forward_active = false
 			diagonal_forward_clock = 0.0
+			diagonal_transition_kind = ""
+			diagonal_transition_flip_h = false
 
 func _update_coordinate_background() -> void:
 	var frame := _coordinate_frame_for_current_pose()
@@ -1652,4 +1675,4 @@ func _red_control_points(texture: Texture2D) -> Array[Vector2]:
 	return result
 
 func _render_signature() -> String:
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, controller.wall_edges.hash()]
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash()]
