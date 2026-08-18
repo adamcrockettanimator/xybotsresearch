@@ -92,6 +92,9 @@ var wall_layer1_texture: Texture2D
 var wall_layer2_texture: Texture2D
 var gpu_wall_shader: Shader
 var gpu_wall_dummy_texture: ImageTexture
+var gpu_wall_base_mip_texture: Texture2D
+var gpu_wall_layer1_mip_texture: Texture2D
+var gpu_wall_layer2_mip_texture: Texture2D
 var gpu_wall_sprites: Array[Sprite2D] = []
 var gpu_wall_materials: Array[ShaderMaterial] = []
 var runtime_black_backdrop: ColorRect
@@ -117,7 +120,10 @@ var last_wall_entries: Array[Dictionary] = []
 var wall_mip_images: Array[Image] = []
 var wall_layer1_mip_images: Array[Image] = []
 var wall_layer2_mip_images: Array[Image] = []
-var integer_uv_scale_snap_enabled := false
+# Keep the default wall pass on the same native-pixel, quantized sampling path
+# as the floor and ceiling passes.  The GPU renderer now selects discrete mip
+# levels itself; CPU is retained only for the optional EWA comparison pass.
+var integer_uv_scale_snap_enabled := true
 var wall_ewa_filter_enabled := false
 var wall_parallax_enabled := true
 var gpu_wall_renderer_enabled := true
@@ -252,10 +258,9 @@ func _initialize() -> void:
 	ceiling_art_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	runtime_ceiling_layer.add_child(ceiling_art_sprite)
 	controller.environment_layer.add_child(runtime_ceiling_layer)
-	# The wall pass is deliberately CPU-rasterized at the native 160x120 template
-	# resolution.  That makes the projective mapping deterministic on this GPU,
-	# retains the deliberately coarse pixel sampling, and avoids the D3D12 canvas
-	# shader failure from the previous fullscreen-polygon experiment.
+	# Walls are GPU projective quads.  Their shader reconstructs UVs per pixel,
+	# chooses a discrete mip level for the deliberate coarse sampling, and keeps
+	# the two authored wall layers available for parallax without CPU rasterizing.
 	runtime_wall_layer = Node2D.new()
 	runtime_wall_layer.name = "CoordinateFrameHomographyWalls"
 	runtime_wall_layer.z_index = 8
@@ -266,6 +271,7 @@ func _initialize() -> void:
 	_load_runtime_wall_layers()
 	active_wall_texture_label = "Wall_Layer1 + Layer2"
 	_rebuild_wall_mip_chain()
+	_rebuild_gpu_wall_sampling_textures()
 	wall_render_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
 	wall_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	wall_render_texture = ImageTexture.create_from_image(wall_render_image)
@@ -529,6 +535,7 @@ func _set_wall_source_texture(path: String) -> void:
 	_set_height_texture_for_color_path(path)
 	active_wall_texture_label = path.get_file().get_basename()
 	_rebuild_wall_mip_chain()
+	_rebuild_gpu_wall_sampling_textures()
 	_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_refresh_runtime_status(last_wall_entries.size())
 
@@ -556,6 +563,7 @@ func _load_runtime_wall_layers() -> void:
 		return
 	wall_layer1_mip_images = _build_mip_chain(wall_layer1_image)
 	wall_layer2_mip_images = _build_mip_chain(wall_layer2_image)
+	_rebuild_gpu_wall_sampling_textures()
 
 
 # _initialize_gpu_wall_renderer: Builds a shared 160×120 carrier texture and
@@ -571,13 +579,13 @@ func _initialize_gpu_wall_renderer() -> void:
 	var carrier := Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
 	carrier.fill(Color.WHITE)
 	gpu_wall_dummy_texture = ImageTexture.create_from_image(carrier)
+	_rebuild_gpu_wall_sampling_textures()
 
 
-# _can_use_gpu_wall_renderer: The custom CPU filtering experiments deliberately
-# stay on their proven CPU implementation.  Normal nearest/layered rendering
-# goes through the GPU projective pass.
+# _can_use_gpu_wall_renderer: Integer UV snapping is now a GPU shader option.
+# Only the optional multi-tap EWA experiment uses the CPU fallback for now.
 func _can_use_gpu_wall_renderer() -> bool:
-	return gpu_wall_renderer_enabled and gpu_wall_shader != null and gpu_wall_dummy_texture != null and not integer_uv_scale_snap_enabled and not wall_ewa_filter_enabled
+	return gpu_wall_renderer_enabled and gpu_wall_shader != null and gpu_wall_dummy_texture != null and not wall_ewa_filter_enabled
 
 
 # _set_gpu_wall_sprites_visible: Avoids destroying working GPU materials when a
@@ -630,11 +638,13 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row1", inverse[1])
 		material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("wall_light", float(entry["light"]))
-		material.set_shader_parameter("base_texture", wall_source_texture)
+		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_wall_base_mip_texture != null
+		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips else wall_source_texture)
 		material.set_shader_parameter("base_texture_size", Vector2(wall_source_image.get_width(), wall_source_image.get_height()))
+		material.set_shader_parameter("use_integer_uv_scale_snap", use_gpu_mips)
 		material.set_shader_parameter("use_layer_parallax", use_layers)
-		material.set_shader_parameter("layer1_texture", wall_layer1_texture if wall_layer1_texture != null else wall_source_texture)
-		material.set_shader_parameter("layer2_texture", wall_layer2_texture if wall_layer2_texture != null else wall_source_texture)
+		material.set_shader_parameter("layer1_texture", gpu_wall_layer1_mip_texture if use_gpu_mips and gpu_wall_layer1_mip_texture != null else (wall_layer1_texture if wall_layer1_texture != null else wall_source_texture))
+		material.set_shader_parameter("layer2_texture", gpu_wall_layer2_mip_texture if use_gpu_mips and gpu_wall_layer2_mip_texture != null else (wall_layer2_texture if wall_layer2_texture != null else wall_source_texture))
 		material.set_shader_parameter("layer_texture_size", Vector2(wall_layer1_image.get_width(), wall_layer1_image.get_height()) if wall_layer1_image != null else Vector2(wall_source_image.get_width(), wall_source_image.get_height()))
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
@@ -1299,6 +1309,26 @@ func _mip_level_for_footprint(footprint: float, mip_chain: Array[Image]) -> int:
 # averaging full-resolution texels every output pixel.
 func _rebuild_wall_mip_chain() -> void:
 	wall_mip_images = _build_mip_chain(wall_source_image)
+
+
+# _rebuild_gpu_wall_sampling_textures: Creates GPU resources with native
+# mipmaps.  Each visible wall shares these three textures; no per-wall image
+# allocation or CPU rasterization happens during regular gameplay.
+func _rebuild_gpu_wall_sampling_textures() -> void:
+	gpu_wall_base_mip_texture = _create_mipmapped_texture(wall_source_image)
+	gpu_wall_layer1_mip_texture = _create_mipmapped_texture(wall_layer1_image)
+	gpu_wall_layer2_mip_texture = _create_mipmapped_texture(wall_layer2_image)
+
+
+func _create_mipmapped_texture(source_image: Image) -> Texture2D:
+	if source_image == null:
+		return null
+	var mipmapped := source_image.duplicate()
+	var mip_error: int = mipmapped.generate_mipmaps()
+	if mip_error != OK:
+		push_warning("Could not generate GPU wall mipmaps; using base texture sampling.")
+		return ImageTexture.create_from_image(source_image)
+	return ImageTexture.create_from_image(mipmapped)
 
 
 func _build_mip_chain(source_image: Image) -> Array[Image]:
