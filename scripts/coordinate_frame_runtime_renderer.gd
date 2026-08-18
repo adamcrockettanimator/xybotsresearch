@@ -7,6 +7,8 @@ extends Node
 const VIEW_SIZE := Vector2(160.0, 120.0)
 const WALL_LAYER1_PATH := "res://assets/Environment/Wall_Layer1.png"
 const WALL_LAYER2_PATH := "res://assets/Environment/Wall_layer2.png"
+const CEILING_LAYER1_PATH := "res://assets/Environment/ceiling_layer1.png"
+const CEILING_LAYER2_PATH := "res://assets/Environment/ceiling_layer2.png"
 const MASTER_WALL_PATH := WALL_LAYER1_PATH
 const RUNTIME_MASTER_WALL_MAIN_PATH := "res://assets/Environment/Runtime_Master_Wall_Main.png"
 const RUNTIME_MASTER_WALL_MAIN_HEIGHT_PATH := "res://assets/Environment/Runtime_Master_Wall_Main_height.png"
@@ -21,6 +23,14 @@ const RUNTIME_MASTER_WALL_TEXTURE_PATHS := [
 	"res://assets/Environment/Runtime_Master_Wall_Main.png",
 	"res://assets/Environment/Runtime_Master_Wall_Concrete.png",
 	"res://assets/Environment/Runtime_Master_Wall_Wood.png",
+]
+const RUNTIME_FLOOR_TEXTURE_PATHS := [
+	"res://assets/Environment/DirtRoad1.png",
+	"res://assets/Environment/DirtRoad2.png",
+	"res://assets/Environment/DirtRoad3.png",
+	"res://assets/Environment/WoodFloor.png",
+	"res://assets/Environment/WoodFloor2.png",
+	"res://assets/Environment/SimpleWood.png",
 ]
 const SHADER_PATH := "res://scripts/coordinate_frame_homography.gdshader"
 const SINGLE_WALL_SHADER_PATH := "res://scripts/coordinate_frame_single_homography.gdshader"
@@ -47,6 +57,20 @@ const FOV_RATIO := 0.70
 const DIAGONAL_FRAME_SECONDS := 0.18
 
 var controller: Node
+var runtime_floor_layer: Node2D
+var floor_art_sprite: Sprite2D
+var floor_render_image: Image
+var floor_render_texture: ImageTexture
+var floor_source_image: Image
+var floor_mip_images: Array[Image] = []
+var runtime_ceiling_layer: Node2D
+var ceiling_art_sprite: Sprite2D
+var ceiling_render_image: Image
+var ceiling_render_texture: ImageTexture
+var ceiling_layer1_image: Image
+var ceiling_layer2_image: Image
+var ceiling_layer1_mip_images: Array[Image] = []
+var ceiling_layer2_mip_images: Array[Image] = []
 var runtime_wall_layer: Node2D
 var wall_art_sprite: Sprite2D
 var wall_render_image: Image
@@ -59,6 +83,7 @@ var coordinate_background: Sprite2D
 var status: Label
 var runtime_status: Label
 var parallax_tuner_panel: PanelContainer
+var parallax_tuner_canvas_layer: CanvasLayer
 var parallax_tuner_open := false
 var last_signature := ""
 var show_runtime_walls := true
@@ -68,6 +93,8 @@ var master_texture: Texture2D
 var debug_wall_texture_index := -1
 var runtime_master_wall_texture_index := -1
 var active_wall_texture_label := "StripeTest"
+var active_floor_texture_label := "DirtRoad1"
+var floor_texture_index := 0
 var last_wall_entries: Array[Dictionary] = []
 var wall_mip_images: Array[Image] = []
 var wall_layer1_mip_images: Array[Image] = []
@@ -80,6 +107,11 @@ var parallax_side_multiplier := 1.0
 var parallax_vertical_multiplier := 1.0
 var layer_movement_balance := 1.0
 var layer_uv_edge_clamp_enabled := true
+var ceiling_parallax_enabled := true
+var ceiling_parallax_max_texels := 4.0
+var ceiling_parallax_side_multiplier := 1.0
+var ceiling_parallax_depth_multiplier := 1.0
+var ceiling_layer_movement_balance := 1.0
 var template_textures: Dictionary = {}
 var legacy_environment_nodes: Array[CanvasItem] = []
 var diagonal_forward_clock := 0.0
@@ -95,6 +127,13 @@ func _initialize() -> void:
 	controller = get_parent()
 	if controller == null:
 		push_error("Coordinate-frame renderer requires the existing controller as its parent.")
+		return
+	if controller.player_views.size() > 1:
+		# This first gameplay milestone deliberately returns to the established
+		# sprite renderer for both local screens. The experimental coordinate
+		# compositor is currently single-view, so leaving it active would make
+		# only one player own the runtime wall layer.
+		queue_free()
 		return
 	master_texture = load(MASTER_WALL_PATH)
 	_preload_coordinate_templates()
@@ -118,6 +157,40 @@ func _initialize() -> void:
 	coordinate_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	coordinate_background.z_index = 0
 	controller.environment_layer.add_child(coordinate_background)
+	# Floors use the same derived camera basis as the walls, but render beneath
+	# them.  This is deliberately a separate native-resolution image so cycling
+	# a floor texture never rebuilds the maze or invalidates wall visibility.
+	runtime_floor_layer = Node2D.new()
+	runtime_floor_layer.name = "CoordinateFrameHomographyFloors"
+	runtime_floor_layer.z_index = 1
+	_load_floor_source_texture(String(RUNTIME_FLOOR_TEXTURE_PATHS[floor_texture_index]))
+	floor_render_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
+	floor_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
+	floor_render_texture = ImageTexture.create_from_image(floor_render_image)
+	floor_art_sprite = Sprite2D.new()
+	floor_art_sprite.name = "CoordinateFrameFloorArt"
+	floor_art_sprite.centered = false
+	floor_art_sprite.texture = floor_render_texture
+	floor_art_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	runtime_floor_layer.add_child(floor_art_sprite)
+	controller.environment_layer.add_child(runtime_floor_layer)
+	# Like walls, the ceiling is an authored opaque base plus a transparent
+	# foreground surface.  It remains a separate pass because its projection is
+	# a horizontal plane rather than a vertical wall quad.
+	runtime_ceiling_layer = Node2D.new()
+	runtime_ceiling_layer.name = "CoordinateFrameHomographyCeilings"
+	runtime_ceiling_layer.z_index = 2
+	_load_runtime_ceiling_layers()
+	ceiling_render_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
+	ceiling_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
+	ceiling_render_texture = ImageTexture.create_from_image(ceiling_render_image)
+	ceiling_art_sprite = Sprite2D.new()
+	ceiling_art_sprite.name = "CoordinateFrameCeilingArt"
+	ceiling_art_sprite.centered = false
+	ceiling_art_sprite.texture = ceiling_render_texture
+	ceiling_art_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	runtime_ceiling_layer.add_child(ceiling_art_sprite)
+	controller.environment_layer.add_child(runtime_ceiling_layer)
 	# The wall pass is deliberately CPU-rasterized at the native 160x120 template
 	# resolution.  That makes the projective mapping deterministic on this GPU,
 	# retains the deliberately coarse pixel sampling, and avoids the D3D12 canvas
@@ -198,6 +271,9 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_K:
 			_cycle_runtime_master_wall_texture()
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_M:
+			_cycle_floor_texture()
+			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_H:
 			set_integer_uv_scale_snap_enabled(not integer_uv_scale_snap_enabled)
 			get_viewport().set_input_as_handled()
@@ -207,6 +283,9 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_P:
 			set_wall_parallax_enabled(not wall_parallax_enabled)
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_C:
+			set_ceiling_parallax_enabled(not ceiling_parallax_enabled)
+			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_L:
 			set_layer_uv_edge_clamp_enabled(not layer_uv_edge_clamp_enabled)
 			get_viewport().set_input_as_handled()
@@ -215,13 +294,15 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _rebuild() -> void:
-	if runtime_wall_layer == null:
+	if runtime_wall_layer == null or runtime_floor_layer == null or runtime_ceiling_layer == null:
 		return
 	last_signature = _render_signature()
 	var entries: Array[Dictionary] = _visible_wall_entries()
 	last_wall_entries = entries
 	var accepted_count := entries.size()
 	_update_coordinate_background()
+	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
+	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
 	_rebuild_runtime_wall_surfaces(entries)
 	_update_debug_outlines(entries)
 	_update_projection_point_debug()
@@ -242,6 +323,30 @@ func _cycle_debug_wall_texture() -> void:
 func _cycle_runtime_master_wall_texture() -> void:
 	runtime_master_wall_texture_index = (runtime_master_wall_texture_index + 1) % RUNTIME_MASTER_WALL_TEXTURE_PATHS.size()
 	_set_wall_source_texture(String(RUNTIME_MASTER_WALL_TEXTURE_PATHS[runtime_master_wall_texture_index]))
+
+
+# _cycle_floor_texture: Change only the source bitmap used by the live floor
+# pass.  The projected cells, player, camera pose, and wall layout all remain
+# exactly where they are, making the dirt/wood comparison immediate.
+func _cycle_floor_texture() -> void:
+	floor_texture_index = (floor_texture_index + 1) % RUNTIME_FLOOR_TEXTURE_PATHS.size()
+	_load_floor_source_texture(String(RUNTIME_FLOOR_TEXTURE_PATHS[floor_texture_index]))
+	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
+	_refresh_runtime_status(last_wall_entries.size())
+
+
+func _load_floor_source_texture(path: String) -> void:
+	var texture := load(path) as Texture2D
+	if texture == null:
+		push_error("Could not load runtime floor texture: %s" % path)
+		return
+	var image := texture.get_image()
+	if image == null:
+		push_error("Could not read runtime floor texture: %s" % path)
+		return
+	floor_source_image = image
+	floor_mip_images = _build_mip_chain(floor_source_image)
+	active_floor_texture_label = path.get_file().get_basename()
 
 
 # _set_wall_source_texture: Loads one master texture and immediately resamples
@@ -290,6 +395,32 @@ func _load_runtime_wall_layers() -> void:
 	wall_layer2_mip_images = _build_mip_chain(wall_layer2_image)
 
 
+# _load_runtime_ceiling_layers: Read the independently-authored ceiling base
+# and transparent foreground once.  Their shared dimensions are important: the
+# two images use the same ceiling-cell UV coordinates before their adjustable
+# view-dependent offset is applied.
+func _load_runtime_ceiling_layers() -> void:
+	ceiling_layer1_image = null
+	ceiling_layer2_image = null
+	var layer1_texture := load(CEILING_LAYER1_PATH) as Texture2D
+	var layer2_texture := load(CEILING_LAYER2_PATH) as Texture2D
+	if layer1_texture == null or layer2_texture == null:
+		push_error("Could not load runtime ceiling layer textures.")
+		return
+	ceiling_layer1_image = layer1_texture.get_image()
+	ceiling_layer2_image = layer2_texture.get_image()
+	if ceiling_layer1_image == null or ceiling_layer2_image == null:
+		push_error("Could not read runtime ceiling layer textures.")
+		return
+	if ceiling_layer1_image.get_size() != ceiling_layer2_image.get_size():
+		push_error("Runtime ceiling layers must share the same dimensions.")
+		ceiling_layer1_image = null
+		ceiling_layer2_image = null
+		return
+	ceiling_layer1_mip_images = _build_mip_chain(ceiling_layer1_image)
+	ceiling_layer2_mip_images = _build_mip_chain(ceiling_layer2_image)
+
+
 # _set_height_texture_for_color_path: Height data belongs to one specific
 # authored color texture.  Other test textures intentionally stay flat so the
 # stripe/mip experiments remain isolated and comparable.
@@ -336,6 +467,14 @@ func set_wall_parallax_enabled(enabled: bool) -> void:
 	_refresh_runtime_status(last_wall_entries.size())
 
 
+# set_ceiling_parallax_enabled: Retain the base ceiling texture but turn its
+# independent transparent relief layer on/off for direct comparison.
+func set_ceiling_parallax_enabled(enabled: bool) -> void:
+	ceiling_parallax_enabled = enabled
+	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
+	_refresh_runtime_status(last_wall_entries.size())
+
+
 # set_layer_uv_edge_clamp_enabled: Extends an offset layer's outermost texel
 # when its UV shift exits the source rectangle.  Unlike tiling, this never
 # repeats windows or trim; it only prevents transparent fringe gaps at a wall.
@@ -353,29 +492,62 @@ func _setup_parallax_tuner() -> void:
 		return
 	if parallax_tuner_panel != null:
 		return
+	# The map and its debug drawing share the normal CanvasLayer and can paint
+	# over ordinary Controls.  Keep this temporary live-tuning UI in a dedicated
+	# higher CanvasLayer so it remains readable while the map is visible.
+	parallax_tuner_canvas_layer = CanvasLayer.new()
+	parallax_tuner_canvas_layer.name = "RuntimeLayerParallaxCanvas"
+	parallax_tuner_canvas_layer.layer = 100
+	controller.add_child(parallax_tuner_canvas_layer)
 	parallax_tuner_panel = PanelContainer.new()
-	parallax_tuner_panel.name = "RuntimeWallParallaxTuner"
-	parallax_tuner_panel.position = Vector2(292.0, 104.0)
+	parallax_tuner_panel.name = "RuntimeLayerParallaxTuner"
+	# Keep the live material controls out of the 160×120 player view; the
+	# top-down map is the appropriate temporary overlay surface for tuning.
+	parallax_tuner_panel.position = Vector2(860.0, 104.0)
 	parallax_tuner_panel.custom_minimum_size = Vector2(270.0, 0.0)
 	parallax_tuner_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	parallax_tuner_panel.z_index = 1000
+	parallax_tuner_panel.z_as_relative = false
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.025, 0.035, 0.055, 0.96)
+	panel_style.border_color = Color(0.18, 0.82, 0.96, 0.95)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(3)
+	panel_style.content_margin_left = 10.0
+	panel_style.content_margin_right = 10.0
+	panel_style.content_margin_top = 8.0
+	panel_style.content_margin_bottom = 8.0
+	parallax_tuner_panel.add_theme_stylebox_override("panel", panel_style)
+	parallax_tuner_panel.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0, 1.0))
 	parallax_tuner_panel.visible = false
-	controller.canvas_layer.add_child(parallax_tuner_panel)
+	parallax_tuner_canvas_layer.add_child(parallax_tuner_panel)
 	var section := VBoxContainer.new()
 	section.add_theme_constant_override("separation", 3)
 	parallax_tuner_panel.add_child(section)
 	var heading := Label.new()
-	heading.text = "RUNTIME WALL LAYERS  [O closes]"
+	heading.text = "RUNTIME LAYERS  [O closes]"
 	heading.add_theme_font_size_override("font_size", 14)
+	heading.add_theme_color_override("font_color", Color(0.30, 0.92, 1.0, 1.0))
 	section.add_child(heading)
 	var hint := Label.new()
 	hint.text = "Layer 1 base + transparent Layer 2 • live tuning"
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color(0.88, 0.92, 0.98, 1.0))
 	section.add_child(hint)
 	_add_parallax_tuning_slider(section, "Layer separation", "depth", 0.0, 16.0, 0.25, parallax_max_texels, "px")
 	_add_parallax_tuning_slider(section, "Movement balance", "balance", -1.0, 1.0, 0.05, layer_movement_balance, "")
 	_add_parallax_tuning_slider(section, "Side response", "side", -2.0, 2.0, 0.05, parallax_side_multiplier, "x")
 	_add_parallax_tuning_slider(section, "Vertical response", "vertical", -2.0, 2.0, 0.05, parallax_vertical_multiplier, "x")
+	var ceiling_heading := Label.new()
+	ceiling_heading.text = "CEILING LAYERS  [C toggles]"
+	ceiling_heading.add_theme_font_size_override("font_size", 13)
+	ceiling_heading.add_theme_color_override("font_color", Color(0.30, 0.92, 1.0, 1.0))
+	section.add_child(ceiling_heading)
+	_add_parallax_tuning_slider(section, "Ceiling separation", "ceiling_depth", 0.0, 16.0, 0.25, ceiling_parallax_max_texels, "px")
+	_add_parallax_tuning_slider(section, "Ceiling movement balance", "ceiling_balance", -1.0, 1.0, 0.05, ceiling_layer_movement_balance, "")
+	_add_parallax_tuning_slider(section, "Ceiling side response", "ceiling_side", -2.0, 2.0, 0.05, ceiling_parallax_side_multiplier, "x")
+	_add_parallax_tuning_slider(section, "Ceiling depth response", "ceiling_forward", -2.0, 2.0, 0.05, ceiling_parallax_depth_multiplier, "x")
 
 
 func _toggle_parallax_tuner() -> void:
@@ -392,6 +564,7 @@ func _toggle_parallax_tuner() -> void:
 func _add_parallax_tuning_slider(parent: VBoxContainer, title: String, key: String, minimum: float, maximum: float, step: float, initial: float, suffix: String) -> void:
 	var value_label := Label.new()
 	value_label.add_theme_font_size_override("font_size", 12)
+	value_label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0, 1.0))
 	parent.add_child(value_label)
 	var slider := HSlider.new()
 	slider.min_value = minimum
@@ -399,7 +572,7 @@ func _add_parallax_tuning_slider(parent: VBoxContainer, title: String, key: Stri
 	slider.step = step
 	slider.value = initial
 	slider.custom_minimum_size = Vector2(250.0, 18.0)
-	slider.tooltip_text = "Live runtime-wall parallax tuning"
+	slider.tooltip_text = "Live runtime-layer parallax tuning"
 	parent.add_child(slider)
 	_update_parallax_slider_label(value_label, title, initial, suffix)
 	slider.value_changed.connect(func(value: float) -> void:
@@ -409,7 +582,7 @@ func _add_parallax_tuning_slider(parent: VBoxContainer, title: String, key: Stri
 
 
 func _update_parallax_slider_label(label: Label, title: String, value: float, suffix: String) -> void:
-	if title == "Movement balance":
+	if title == "Movement balance" or title == "Ceiling movement balance":
 		var balance_name := "Layer 1 moves" if value <= -0.99 else "Layer 2 moves" if value >= 0.99 else "split opposite"
 		label.text = "Movement balance: %.2f (%s)" % [value, balance_name]
 		return
@@ -423,13 +596,21 @@ func _set_parallax_tuning_value(key: String, value: float) -> void:
 		"side": parallax_side_multiplier = value
 		"vertical": parallax_vertical_multiplier = value
 		"balance": layer_movement_balance = value
-	_rebuild_runtime_wall_surfaces(last_wall_entries)
+		"ceiling_depth": ceiling_parallax_max_texels = value
+		"ceiling_side": ceiling_parallax_side_multiplier = value
+		"ceiling_forward": ceiling_parallax_depth_multiplier = value
+		"ceiling_balance": ceiling_layer_movement_balance = value
+	if key.begins_with("ceiling_"):
+		_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
+	else:
+		_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_refresh_runtime_status(last_wall_entries.size())
 
 func _refresh_runtime_status(visible_wall_count: int) -> void:
 	var layer_mode_available := wall_layer1_image != null and wall_layer2_image != null
 	var displayed_texture_label := "Wall_Layer1+Layer2" if wall_parallax_enabled and layer_mode_available else active_wall_texture_label
-	var status_text := "Coord %s | %d walls | Tex:%s [G/K] | T:%s Y:%s U:%s | H:%s J:%s P:%s L:%s O:%s" % [_pose_key(), visible_wall_count, displayed_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if parallax_tuner_open else "OFF"]
+	var ceiling_layers_available := ceiling_layer1_image != null and ceiling_layer2_image != null
+	var status_text := "Coord %s | %d walls | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  P:%s  C:%s  L:%s  O:%s" % [_pose_key(), visible_wall_count, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if parallax_tuner_open else "OFF"]
 	status.text = status_text
 	runtime_status.text = status_text
 
@@ -443,6 +624,244 @@ func _rebuild_runtime_wall_surfaces(entries: Array[Dictionary]) -> int:
 		_rasterize_wall_entry(entry)
 	wall_render_texture.update(wall_render_image)
 	return entries.size()
+
+
+# _visible_floor_cells: Produces one projected quad per real maze cell using
+# the exact same camera origin and yaw basis as _visible_wall_entries.  The
+# authored red dots are therefore a diagnostic of this data, not a fragile
+# requirement: cells touching the player or screen boundary remain valid even
+# when their corner dots lie offscreen or behind a nearer wall.
+func _visible_floor_cells() -> Array[Dictionary]:
+	if controller == null:
+		return []
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var camera_origin := _runtime_camera_origin(forward, right)
+	var result: Array[Dictionary] = []
+	for y in range(int(controller.MAP_HEIGHT)):
+		for x in range(int(controller.MAP_WIDTH)):
+			var cell := Vector2i(x, y)
+			var world_corners := [
+				Vector2(cell.x, cell.y),
+				Vector2(cell.x + 1, cell.y),
+				Vector2(cell.x + 1, cell.y + 1),
+				Vector2(cell.x, cell.y + 1),
+			]
+			var local_corners: Array[Vector2] = []
+			var quad := PackedVector2Array()
+			var nearest_depth := INF
+			var farthest_depth := -INF
+			for corner in world_corners:
+				var local := _to_view(corner, camera_origin, forward, right)
+				local_corners.append(local)
+				nearest_depth = minf(nearest_depth, local.y)
+				farthest_depth = maxf(farthest_depth, local.y)
+				quad.append(_project_view_point(local, 0.0))
+			# A cell wholly behind the level camera cannot contribute.  Do retain
+			# cells that cross the near plane: their visible part is reconstructed
+			# analytically in _rasterize_floor_cell instead of being dropped because
+			# two authored dots are outside the frame.
+			if farthest_depth <= 0.0 or nearest_depth >= MAX_DEPTH:
+				continue
+			var bounds := _quad_bounds(quad)
+			if not bounds.intersects(Rect2(Vector2.ZERO, VIEW_SIZE)):
+				continue
+			result.append({
+				"cell": cell,
+				"quad": quad,
+				"origin": camera_origin,
+				"forward": forward,
+				"right": right,
+				"depth": clampf((maxf(nearest_depth, NEAR_CLIP) + maxf(farthest_depth, NEAR_CLIP)) * 0.5, NEAR_CLIP, MAX_DEPTH),
+			})
+	# Far-to-near retains predictable ownership at shared cell borders.
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
+	return result
+
+
+func _quad_bounds(quad: PackedVector2Array) -> Rect2:
+	if quad.is_empty():
+		return Rect2()
+	var minimum := quad[0]
+	var maximum := quad[0]
+	for point in quad:
+		minimum = minimum.min(point)
+		maximum = maximum.max(point)
+	return Rect2(minimum, maximum - minimum)
+
+
+# _rebuild_runtime_floor_surfaces: Rasterizes the independent floor texture
+# below the wall pass.  Its inverse mapping is the floor-plane form of the
+# same homography used for a four-corner floor quad: screen pixels are returned
+# to the world plane, then sampled from the owning cell's complete texture.
+func _rebuild_runtime_floor_surfaces(entries: Array[Dictionary]) -> int:
+	if floor_render_image == null or floor_render_texture == null or floor_source_image == null:
+		return 0
+	floor_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
+	for entry in entries:
+		_rasterize_floor_cell(entry)
+	floor_render_texture.update(floor_render_image)
+	return entries.size()
+
+
+func _rasterize_floor_cell(entry: Dictionary) -> void:
+	var quad: PackedVector2Array = entry["quad"]
+	if quad.size() != 4:
+		return
+	var bounds := _quad_bounds(quad)
+	var min_x := clampi(floori(bounds.position.x), 0, int(VIEW_SIZE.x) - 1)
+	var min_y := clampi(floori(bounds.position.y), 0, int(VIEW_SIZE.y) - 1)
+	var max_x := clampi(ceili(bounds.end.x), 0, int(VIEW_SIZE.x) - 1)
+	var max_y := clampi(ceili(bounds.end.y), 0, int(VIEW_SIZE.y) - 1)
+	var cell: Vector2i = entry["cell"]
+	var origin: Vector2 = entry["origin"]
+	var forward: Vector2 = entry["forward"]
+	var right: Vector2 = entry["right"]
+	for y in range(min_y, max_y + 1):
+		var vertical_screen_delta := float(y) - HORIZON_Y
+		if vertical_screen_delta <= 0.0001:
+			continue
+		var depth := VIRTUAL_CAMERA_HEIGHT * FOCAL_LENGTH / vertical_screen_delta
+		if depth <= 0.0 or depth > MAX_DEPTH:
+			continue
+		for x in range(min_x, max_x + 1):
+			var side := (float(x) - VIEW_SIZE.x * 0.5) * depth / FOCAL_LENGTH
+			var world := origin + right * side + forward * depth
+			var uv := world - Vector2(cell)
+			# Keep one exact cell owner per screen pixel.  This is also what makes
+			# the near/offscreen player cell render correctly rather than requiring
+			# four visible red control dots.
+			if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
+				continue
+			var color := _sample_image_nearest(floor_source_image, uv)
+			var light := _depth_light(depth)
+			color.r *= light
+			color.g *= light
+			color.b *= light
+			floor_render_image.set_pixel(x, y, color)
+
+
+# _visible_ceiling_cells: Ceiling cells share the grid x/y footprint of their
+# floor partners but use WALL_HEIGHT in the same two-point projection.  This is
+# why a ceiling polygon lands on the Blender-derived upper wireframe without
+# needing every upper red dot to remain visible.
+func _visible_ceiling_cells() -> Array[Dictionary]:
+	if controller == null:
+		return []
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var camera_origin := _runtime_camera_origin(forward, right)
+	var result: Array[Dictionary] = []
+	for y in range(int(controller.MAP_HEIGHT)):
+		for x in range(int(controller.MAP_WIDTH)):
+			var cell := Vector2i(x, y)
+			var world_corners := [
+				Vector2(cell.x, cell.y),
+				Vector2(cell.x + 1, cell.y),
+				Vector2(cell.x + 1, cell.y + 1),
+				Vector2(cell.x, cell.y + 1),
+			]
+			var quad := PackedVector2Array()
+			var nearest_depth := INF
+			var farthest_depth := -INF
+			for corner in world_corners:
+				var local := _to_view(corner, camera_origin, forward, right)
+				nearest_depth = minf(nearest_depth, local.y)
+				farthest_depth = maxf(farthest_depth, local.y)
+				quad.append(_project_view_point(local, WALL_HEIGHT))
+			if farthest_depth <= 0.0 or nearest_depth >= MAX_DEPTH:
+				continue
+			if not _quad_bounds(quad).intersects(Rect2(Vector2.ZERO, VIEW_SIZE)):
+				continue
+			result.append({
+				"cell": cell,
+				"quad": quad,
+				"origin": camera_origin,
+				"forward": forward,
+				"right": right,
+				"depth": clampf((maxf(nearest_depth, NEAR_CLIP) + maxf(farthest_depth, NEAR_CLIP)) * 0.5, NEAR_CLIP, MAX_DEPTH),
+			})
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
+	return result
+
+
+# _rebuild_runtime_ceiling_surfaces: Reconstructs an upper horizontal plane at
+# native resolution.  Wall/floor ordering is explicit: background → floor →
+# ceiling → vertical walls → player/debug.
+func _rebuild_runtime_ceiling_surfaces(entries: Array[Dictionary]) -> int:
+	if ceiling_render_image == null or ceiling_render_texture == null or ceiling_layer1_image == null:
+		return 0
+	ceiling_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
+	for entry in entries:
+		_rasterize_ceiling_cell(entry)
+	ceiling_render_texture.update(ceiling_render_image)
+	return entries.size()
+
+
+func _rasterize_ceiling_cell(entry: Dictionary) -> void:
+	var quad: PackedVector2Array = entry["quad"]
+	if quad.size() != 4:
+		return
+	var bounds := _quad_bounds(quad)
+	var min_x := clampi(floori(bounds.position.x), 0, int(VIEW_SIZE.x) - 1)
+	var min_y := clampi(floori(bounds.position.y), 0, int(VIEW_SIZE.y) - 1)
+	var max_x := clampi(ceili(bounds.end.x), 0, int(VIEW_SIZE.x) - 1)
+	var max_y := clampi(ceili(bounds.end.y), 0, int(VIEW_SIZE.y) - 1)
+	var cell: Vector2i = entry["cell"]
+	var origin: Vector2 = entry["origin"]
+	var forward: Vector2 = entry["forward"]
+	var right: Vector2 = entry["right"]
+	var layer_offset := _ceiling_parallax_uv_offset(cell, origin, forward, right)
+	var layer1_weight := (ceiling_layer_movement_balance - 1.0) * 0.5
+	var layer2_weight := (ceiling_layer_movement_balance + 1.0) * 0.5
+	var height_delta := VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT
+	for y in range(min_y, max_y + 1):
+		var vertical_screen_delta := float(y) - HORIZON_Y
+		if absf(vertical_screen_delta) <= 0.0001:
+			continue
+		var depth := height_delta * FOCAL_LENGTH / vertical_screen_delta
+		if depth <= 0.0 or depth > MAX_DEPTH:
+			continue
+		for x in range(min_x, max_x + 1):
+			var side := (float(x) - VIEW_SIZE.x * 0.5) * depth / FOCAL_LENGTH
+			var world := origin + right * side + forward * depth
+			var uv := world - Vector2(cell)
+			if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
+				continue
+			var color := _sample_ceiling_layers(uv, layer_offset, layer1_weight, layer2_weight)
+			if color.a <= 0.0:
+				continue
+			var light := _depth_light(depth)
+			color.r *= light
+			color.g *= light
+			color.b *= light
+			ceiling_render_image.set_pixel(x, y, color)
+
+
+func _sample_ceiling_layers(uv: Vector2, layer_offset: Vector2, layer1_weight: float, layer2_weight: float) -> Color:
+	if ceiling_layer1_image == null:
+		return Color.TRANSPARENT
+	if not ceiling_parallax_enabled or ceiling_layer2_image == null:
+		return _sample_image_nearest(ceiling_layer1_image, uv)
+	var bottom_uv := (uv + layer_offset * layer1_weight).clamp(Vector2.ZERO, Vector2.ONE)
+	var top_uv := (uv + layer_offset * layer2_weight).clamp(Vector2.ZERO, Vector2.ONE)
+	var bottom := _sample_image_nearest(ceiling_layer1_image, bottom_uv)
+	var top := _sample_image_nearest(ceiling_layer2_image, top_uv)
+	return _alpha_over(bottom, top)
+
+
+# _ceiling_parallax_uv_offset: On a horizontal plane the meaningful obliqueness
+# is the direction from the camera's floor footprint toward this cell.  The
+# side and forward responses are independently exposed in the O panel.
+func _ceiling_parallax_uv_offset(cell: Vector2i, origin: Vector2, forward: Vector2, right: Vector2) -> Vector2:
+	if ceiling_layer1_image == null:
+		return Vector2.ZERO
+	var center_local := _to_view(Vector2(cell) + Vector2(0.5, 0.5), origin, forward, right)
+	var view_distance := maxf(center_local.length(), NEAR_CLIP)
+	return Vector2(
+		center_local.x / view_distance * ceiling_parallax_side_multiplier * ceiling_parallax_max_texels / float(ceiling_layer1_image.get_width()),
+		center_local.y / view_distance * ceiling_parallax_depth_multiplier * ceiling_parallax_max_texels / float(ceiling_layer1_image.get_height())
+	)
 
 func _rasterize_wall_entry(entry: Dictionary) -> void:
 	var quad: PackedVector2Array = entry["quad"]
