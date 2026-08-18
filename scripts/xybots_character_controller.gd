@@ -27,7 +27,7 @@ const BACKWARD_WALL_CONTACT_Y := 0.84                                           
 const MAP_WIDTH := 9                                                                        # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
 const MAP_HEIGHT := 9                                                                       # Temporarily use a 9x9 thin-wall test grid for the slot-diagram audit.
 const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
-const TEMP_RANDOM_GRID_AUDIT := true                                                        # Use a mixed open/blocked 9x9 maze to check tuned local projections against real wall selection.
+const TEMP_RANDOM_GRID_AUDIT := false                                                       # Keep the temporary one-player slot audit off while local multiplayer gameplay is active.
 const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
 const MAP_EXTRA_OPENING_CHANCE := 0.18                                                      # Add a few loops after maze carving so the interior is not a strict tree.
 
@@ -555,7 +555,7 @@ const TURN_45_OCCLUSION_BRANCHES := [                                           
 	[16, 14, 10, 6],                                                                           # Describe the outer-right branch from closest to farthest.
 ]                                                                                           # Close the 45-degree occlusion branch table.
 
-const AUDIT_START_ENABLED := true                                                           # Force the current startup into the slot-grid correction frame while this diagnostic pass is active.
+const AUDIT_START_ENABLED := false                                                          # Start both players in ordinary opposite-corner gameplay spawns rather than a pinned audit frame.
 const AUDIT_P1_CELL := Vector2i(0, MAP_HEIGHT - 1)                                          # Match the left guide panel's player-one source-map cell.
 const AUDIT_P1_FACING := 0                                                                   # Point player one north before applying the temporary 45-degree turn.
 const AUDIT_P1_TURN_45_DIRECTION := 1                                                       # Stop player one on the NE halfway-turn audit view.
@@ -668,6 +668,7 @@ var was_right_turn_pressed := false                                             
 var was_regenerate_map_pressed := false                                                      # Track previous-frame map-regenerate input so it fires once per key press.
 var was_slot_grid_debug_pressed := false                                                     # Track previous-frame slot-grid toggle input so it fires once per key press.
 var was_debug_menu_pressed := false                                                          # Track previous-frame debug-menu input so it opens or closes once per key press.
+var player_two_joined := false                                                               # Keep player two idle until their controller or keyboard deliberately joins this local match.
 var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
 var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
 var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
@@ -691,8 +692,8 @@ func _ready() -> void:                                                          
 		_build_empty_grid_audit_wall_edges()                                                       # Build an empty 5x5 map with no physical wall edges.
 	elif TEMP_RANDOM_GRID_AUDIT:                                                               # Exercise the renderer and debug overlay against a populated test maze.
 		_build_random_maze_wall_edges()                                                             # Build a connected 9x9 maze while preserving its closed outer boundary.
-	else:                                                                                      # Preserve the saved reference maze outside this temporary audit mode.
-		_build_fixed_reference_maze_wall_edges()                                                   # Load the current fixed 4x4 thin-wall test maze before rendering.
+	else:                                                                                      # Build the normal shared gameplay maze outside the temporary audit modes.
+		_build_random_maze_wall_edges()                                                            # Generate the full 9x9 connected maze used by both local players.
 	_load_phase_textures()                                                                     # Call a helper function as part of the current controller step.
 	_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
 	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
@@ -759,6 +760,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "coordinate_integer_snap", "Integer UV Snap (H)")       # Quantize runtime-wall texture footprint without moving its projected quad.
 	_add_debug_menu_check(content, "coordinate_wall_ewa", "Wall EWA Filter (J)")           # Use mip-assisted anisotropic samples along each projected wall's compressed UV axis.
 	_add_debug_menu_check(content, "coordinate_wall_parallax", "Wall Layers (P)")           # Toggle Layer 1/Layer 2 view-dependent separation on the runtime wall pass.
+	_add_debug_menu_check(content, "coordinate_ceiling_parallax", "Ceiling Layers (C)")     # Toggle the independent two-layer ceiling pass without changing its projected geometry.
 	_add_debug_menu_check(content, "coordinate_layer_edge_clamp", "Layer Edge Clamp (L)")    # Extend offset wall-layer edge texels instead of opening transparent UV seams.
 	var save_tuner := Button.new()                                                             # Provide an explicit, reversible save action.
 	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
@@ -826,6 +828,9 @@ func _debug_option_value(option_key: String) -> bool:
 		"coordinate_wall_parallax":
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Read the optional depth-map experiment state when this branch is active.
 			return bool(renderer.wall_parallax_enabled) and renderer.wall_layer1_image != null and renderer.wall_layer2_image != null if renderer != null else false # Only show checked when both authored runtime wall layers are available.
+		"coordinate_ceiling_parallax":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Read the optional two-layer ceiling experiment state.
+			return bool(renderer.ceiling_parallax_enabled) and renderer.ceiling_layer1_image != null and renderer.ceiling_layer2_image != null if renderer != null else false # Only show checked when both authored ceiling layers are available.
 		"coordinate_layer_edge_clamp":
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Read the independent UV-fringe cleanup mode.
 			return bool(renderer.layer_uv_edge_clamp_enabled) if renderer != null else false
@@ -870,6 +875,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the runtime wall depth-map experiment without affecting legacy walls.
 			if renderer != null and renderer.has_method("set_wall_parallax_enabled"):
 				renderer.set_wall_parallax_enabled(enabled)                                          # Switch relief mapping while preserving the current layout and source texture.
+		"coordinate_ceiling_parallax":
+			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the independent ceiling layer experiment without affecting legacy walls.
+			if renderer != null and renderer.has_method("set_ceiling_parallax_enabled"):
+				renderer.set_ceiling_parallax_enabled(enabled)                                       # Switch ceiling Layer 2 relief while preserving its mapped cells.
 		"coordinate_layer_edge_clamp":
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the runtime wall layer pass without affecting legacy walls.
 			if renderer != null and renderer.has_method("set_layer_uv_edge_clamp_enabled"):
@@ -1145,6 +1154,10 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 
 # _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
+	if active_player_index == 1 and not player_two_joined:                                    # Keep the second character at its spawn until a person joins this local match.
+		character_is_moving = false                                                               # Ensure the waiting player remains visually idle in both viewpoints.
+		_play_best_animation(false)                                                               # Play the normal idle pose while waiting for a controller.
+		return                                                                                    # Do not read player-two movement until the join condition has been met.
 	var manual_forward_step_just_pressed := _read_manual_forward_step_input() if manual_forward_step_enabled else false # Sample every enabled frame so a held stick cannot skip stages.
 	var manual_strafe_step_just_pressed := _read_manual_strafe_step_input() if manual_strafe_step_enabled else false # Sample every enabled frame so a held stick cannot skip side stages.
 	var manual_turn_step_direction := _read_turn() if manual_turn_step_enabled else 0         # Sample a fresh Q/E or right-stick turn only when turn-stage inspection is enabled.
@@ -1269,6 +1282,7 @@ func _process(delta: float) -> void:                                            
 	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
+	_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
 	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
 		_process_player_context(delta)                                                           # Run one player's input, movement, turn, and animation logic.
@@ -1943,23 +1957,30 @@ func _layout_viewport() -> void:                                                
 			audit_camera.scale = Vector2.ONE * audit_scale                                             # Match the source-grid scaling.
 			audit_camera.position = audit_origin + Vector2(0.0, (DEBUG_MAP_PANEL_SIZE.y - VIEWPORT_SIZE.y) * 0.5 * audit_scale) # Align the camera at the map's vertical center.
 		return                                                                                    # Skip the normal two-player, two-row layout.
-	var combined_size := Vector2(VIEWPORT_SIZE.x * 2.0 + SIDE_BY_SIDE_GUTTER, VIEWPORT_SIZE.y * 2.0 + SIDE_BY_SIDE_GUTTER) # Build a two-column, two-row source-pixel layout.
 	var available_size := Vector2(viewport_size.x, maxf(viewport_size.y - status_margin, VIEWPORT_SIZE.y)) # Compute the window area available below the status label.
-	var view_scale := minf(available_size.x / combined_size.x, available_size.y / combined_size.y) # Scale the full four-panel layout uniformly.
-	var scaled_size := combined_size * view_scale                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
-	var layout_origin := Vector2((viewport_size.x - scaled_size.x) * 0.5, status_margin + (available_size.y - scaled_size.y) * 0.5) # Center the four panels below status.
-	for player_index in range(player_views.size()):                                           # Layout each local player's top map and bottom playfield.
+	var map_display_height := minf(360.0, available_size.y * 0.38)                            # Keep the shared map prominent without starving the two playfields of vertical space.
+	var remaining_view_height := maxf(VIEWPORT_SIZE.y, available_size.y - map_display_height - SIDE_BY_SIDE_GUTTER) # Reserve the lower row for the two player cameras.
+	var view_scale := minf(available_size.x / (VIEWPORT_SIZE.x * 2.0 + SIDE_BY_SIDE_GUTTER), remaining_view_height / VIEWPORT_SIZE.y) # Scale the side-by-side player cameras as large as the window permits.
+	var map_scale := map_display_height / DEBUG_MAP_PANEL_SIZE.y                              # Scale the shared top-down map independently so the playfields can remain large.
+	var playfield_row_width := (VIEWPORT_SIZE.x * 2.0 + SIDE_BY_SIDE_GUTTER) * view_scale      # Measure the final two-player row for centering.
+	var layout_height := map_display_height + SIDE_BY_SIDE_GUTTER + VIEWPORT_SIZE.y * view_scale # Measure the full shared-map plus player-view layout.
+	var layout_origin := Vector2((viewport_size.x - playfield_row_width) * 0.5, status_margin + (available_size.y - layout_height) * 0.5) # Center the two-player presentation below status text.
+	var shared_map: Node2D = player_views[0].get("debug_map_overlay", null) if not player_views.is_empty() else null # Reuse player one's map because it already draws both player markers.
+	if shared_map != null:                                                                     # Position the one shared source-of-truth map above both player views.
+		shared_map.visible = show_top_down_source_overlay                                          # Preserve the existing map visibility toggle.
+		shared_map.scale = Vector2.ONE * map_scale                                                # Use its independent display scale.
+		shared_map.position = Vector2((viewport_size.x - DEBUG_MAP_PANEL_SIZE.x * map_scale) * 0.5, layout_origin.y) # Center the shared map above the two playfields.
+	for player_index in range(player_views.size()):                                           # Layout each local player's lower playfield.
 		var view: Dictionary = player_views[player_index]                                        # Read this player's view bundle.
 		var column_x := layout_origin.x + float(player_index) * (VIEWPORT_SIZE.x + SIDE_BY_SIDE_GUTTER) * view_scale # Compute the panel column x coordinate.
 		var map_node: Node2D = view.get("debug_map_overlay", null)                               # Read this player's top-down map node.
 		var view_node: Node2D = view.get("maze_viewport", null)                                  # Read this player's playfield node.
 		if map_node != null:                                                                      # Layout this player's debug map if it exists.
-			map_node.visible = show_top_down_source_overlay                                         # Apply the map visibility toggle.
-			map_node.scale = Vector2.ONE * view_scale                                               # Match the source-pixel scale of the playfield.
-			map_node.position = Vector2(column_x, layout_origin.y)                                  # Place this player's map in the top row.
+			if player_index != 0:                                                                   # Hide duplicate player-two map geometry; player one's shared map includes both markers.
+				map_node.visible = false                                                              # Keep the top row uncluttered and truly shared.
 		if view_node != null:                                                                     # Layout this player's playfield if it exists.
 			view_node.scale = Vector2.ONE * view_scale                                               # Match the source-pixel scale of the map.
-			view_node.position = Vector2(column_x, layout_origin.y + (VIEWPORT_SIZE.y + SIDE_BY_SIDE_GUTTER) * view_scale) # Place this player's view in the bottom row.
+			view_node.position = Vector2(column_x, layout_origin.y + map_display_height + SIDE_BY_SIDE_GUTTER) # Place both local playfields under the shared map.
 	if enable_3d_diagnostic and diagnostic_3d_display != null:                                 # Only layout the 3D view after it has been created and enabled.
 		diagnostic_3d_display.scale = Vector2.ONE * view_scale                                    # Scale the 3D viewport texture at the same pixel size as the 2D view.
 		diagnostic_3d_display.position = layout_origin                                            # Keep the deprecated 3D panel parked on top of the first map when enabled.
@@ -1983,8 +2004,9 @@ func _setup_debug_map_overlay() -> void:                                        
 func _update_debug_map_overlay() -> void:                                                    # Declare this function.
 	if debug_map_overlay == null:                                                              # Skip drawing if the overlay has not been created yet.
 		return                                                                                    # Return without drawing the map.
-	debug_map_overlay.visible = show_top_down_source_overlay                                   # Apply the inspector/debug toggle before doing any drawing work.
-	if not show_top_down_source_overlay:                                                       # Avoid rebuilding hidden debug primitives when the overlay is off.
+	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the single shared map above both views.
+	debug_map_overlay.visible = show_top_down_source_overlay and is_shared_match_map           # Keep P2's private overlay hidden instead of allowing its redraw to reveal a duplicate map.
+	if not show_top_down_source_overlay or not is_shared_match_map:                            # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
 		return                                                                                    # Return without drawing the map.
 
 	for child in debug_map_overlay.get_children():                                             # Remove previous line and marker nodes before redrawing.
@@ -1995,7 +2017,7 @@ func _update_debug_map_overlay() -> void:                                       
 
 	var open_color := Color(0.2, 0.45, 0.55, 0.55)                                             # Define the color for non-blocking cell guide lines.
 	var wall_color := Color(1.0, 1.0, 1.0, 0.95)                                               # Define the color for blocking wall edges.
-	var player_color := Color(0.0, 0.95, 1.0, 0.95)                                           # Define the color for the player marker and facing arrow.
+	var player_color := Color(1.0, 0.22, 0.22, 0.98) if active_player_index == 0 else Color(0.2, 0.5, 1.0, 0.98) # Show P1 red and P2 blue on the shared match map.
 
 	for y in range(MAP_HEIGHT):                                                               # Draw every row in the generated 4x4 maze.
 		for x in range(MAP_WIDTH):                                                              # Draw every column in the generated 4x4 maze.
@@ -2507,7 +2529,7 @@ func _add_debug_player_marker(center: Vector2, color: Color) -> void:           
 
 # _add_debug_other_player_markers: Draws the non-bound local player on the currently bound player's source map.
 func _add_debug_other_player_markers() -> void:                                             # Declare this function.
-	var other_color := Color(1.0, 0.0, 0.85, 0.9)                                             # Use magenta so the opponent marker differs from the cyan self marker.
+	var other_color := Color(0.2, 0.5, 1.0, 0.98) if active_player_index == 0 else Color(1.0, 0.22, 0.22, 0.98) # Keep player identities consistent: P1 red and P2 blue.
 	for player_index in range(player_states.size()):                                          # Check every known local player.
 		if player_index == active_player_index:                                                  # Skip the player whose map is currently being drawn.
 			continue                                                                                 # Continue to the next player state.
@@ -4125,18 +4147,18 @@ func _is_key_down(keycode: int) -> bool:                                        
 
 
 
-# _primary_xbox_joypad_id: Returns the first connected controller so one plugged-in Xbox pad drives player one.
-func _primary_xbox_joypad_id() -> int:                                                      # Declare this function.
+# _xbox_joypad_id_for_player: Assigns the first two connected pads deterministically to player one and player two.
+func _xbox_joypad_id_for_player(player_index: int = active_player_index) -> int:            # Declare this function.
 	var connected_joypads := Input.get_connected_joypads()                                    # Ask Godot for the currently available gamepad device ids.
-	if connected_joypads.is_empty():                                                          # Keep keyboard controls fully usable when no controller is connected.
+	if player_index < 0 or player_index >= connected_joypads.size():                          # Keep keyboard controls usable when this player has no assigned pad.
 		return -1                                                                               # Report that there is no gamepad to read.
-	return int(connected_joypads[0])                                                          # Use the first connected pad as player one's controller.
+	return int(connected_joypads[player_index])                                                # Bind controller one to P1 and controller two to P2.
 
 
 
-# _xbox_left_stick: Reads the primary Xbox pad's movement stick as screen-local X/right and Y/down input.
+# _xbox_left_stick: Reads the currently bound player's Xbox movement stick as screen-local X/right and Y/down input.
 func _xbox_left_stick() -> Vector2:                                                         # Declare this function.
-	var device_id := _primary_xbox_joypad_id()                                                 # Find the controller that should drive player one.
+	var device_id := _xbox_joypad_id_for_player()                                              # Find the controller assigned to the currently bound local player.
 	if device_id < 0:                                                                          # Return neutral input when no controller is attached.
 		return Vector2.ZERO                                                                      # Keep keyboard-only use unchanged.
 	var stick := Vector2(Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X), Input.get_joy_axis(device_id, JOY_AXIS_LEFT_Y)) # Read the standard Xbox left-stick axes.
@@ -4146,9 +4168,9 @@ func _xbox_left_stick() -> Vector2:                                             
 
 
 
-# _xbox_right_stick_turn: Converts a deliberate right-stick horizontal push into the existing one-shot turn direction.
+# _xbox_right_stick_turn: Converts a deliberate right-stick horizontal push into the bound player's one-shot turn direction.
 func _xbox_right_stick_turn() -> int:                                                       # Declare this function.
-	var device_id := _primary_xbox_joypad_id()                                                 # Find the controller that should drive player one.
+	var device_id := _xbox_joypad_id_for_player()                                              # Find the controller assigned to the currently bound local player.
 	if device_id < 0:                                                                          # Return no turn when no controller is attached.
 		return 0                                                                                 # Keep keyboard-only use unchanged.
 	var horizontal := Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_X)                         # Read the standard Xbox right-stick horizontal axis.
@@ -4210,7 +4232,7 @@ func _is_player_turn_right_pressed() -> bool:                                   
 
 # _read_turn: Reads Q/E or arrow-key turning input and returns the requested turn direction.
 func _read_turn() -> int:                                                                   # Declare this function.
-	var xbox_turn := _xbox_right_stick_turn() if active_player_index == 0 else 0               # Let player one's right stick use the same turn latch as Q/E.
+	var xbox_turn := _xbox_right_stick_turn()                                                  # Let either assigned controller's right stick use the same turn latch as its keyboard bindings.
 	var left_pressed := _is_player_turn_left_pressed() or xbox_turn < 0                        # Read the current left-turn key or controller state for the bound player.
 	var right_pressed := _is_player_turn_right_pressed() or xbox_turn > 0                      # Read the current right-turn key or controller state for the bound player.
 	var left_just_pressed := left_pressed and not was_left_turn_pressed                        # Detect the first frame of a left-turn key press.
@@ -4255,8 +4277,7 @@ func _read_toggle_debug_menu() -> bool:
 # _read_movement: Reads WASD or arrow movement input and returns a normalized local movement vector.
 func _read_movement() -> Vector2:                                                           # Declare this function.
 	var movement := Vector2.ZERO                                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
-	if active_player_index == 0:                                                               # Reserve the first connected Xbox controller for player one.
-		movement += _xbox_left_stick()                                                            # Add analog left-stick travel in the same screen-local axes as WASD.
+	movement += _xbox_left_stick()                                                             # Add this player's analog left-stick travel in the same screen-local axes as keyboard input.
 	if _is_player_move_left_pressed():                                                         # Read the bound player's local strafe-left input.
 		movement.x -= 1.0                                                                         # Continue the controller logic for this section.
 	if _is_player_move_right_pressed():                                                        # Read the bound player's local strafe-right input.
@@ -4268,15 +4289,30 @@ func _read_movement() -> Vector2:                                               
 	return movement.limit_length(1.0)                                                          # Preserve analog stick strength while keeping keyboard diagonals at normal speed.
 
 
+# _update_player_two_join_state: Lets controller two claim P2 by Start, either stick, or any existing numpad movement key.
+func _update_player_two_join_state() -> void:
+	if player_two_joined:                                                                      # Keep the ownership decision stable for the rest of the round.
+		return                                                                                   # Do not repeatedly evaluate join input after P2 is active.
+	var device_id := _xbox_joypad_id_for_player(1)                                             # Read only the second connected pad for player-two ownership.
+	var controller_join := false                                                               # Start with no controller join request.
+	if device_id >= 0:                                                                         # Check hardware input only when a second pad is connected.
+		var move_stick := Vector2(Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X), Input.get_joy_axis(device_id, JOY_AXIS_LEFT_Y)) # Read the P2 movement stick directly before context binding.
+		var turn_stick_x := Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_X)                      # Read P2's turn stick as another intentional join gesture.
+		controller_join = Input.is_joy_button_pressed(device_id, JOY_BUTTON_START) or move_stick.length() >= XBOX_STICK_DEADZONE or absf(turn_stick_x) >= XBOX_TURN_THRESHOLD # Let Start or a deliberate stick push join P2.
+	var keyboard_join := Input.is_action_pressed(ACTION_P2_MOVE_LEFT) or Input.is_action_pressed(ACTION_P2_MOVE_RIGHT) or Input.is_action_pressed(ACTION_P2_MOVE_FORWARD) or Input.is_action_pressed(ACTION_P2_MOVE_BACKWARD) or Input.is_action_pressed(ACTION_P2_TURN_LEFT) or Input.is_action_pressed(ACTION_P2_TURN_RIGHT) or _is_key_down(KEY_KP_4) or _is_key_down(KEY_KP_5) or _is_key_down(KEY_KP_6) or _is_key_down(KEY_KP_7) or _is_key_down(KEY_KP_8) or _is_key_down(KEY_KP_9) # Preserve the numpad fallback as a join action.
+	if controller_join or keyboard_join:                                                       # Claim player two on the first deliberate second-player input.
+		player_two_joined = true                                                                # Activate controller two / numpad input for P2.
+		_update_status()                                                                         # Replace the join prompt immediately.
+
+
 
 # _read_manual_forward_step_input: Returns one forward input edge from W/numpad 8 or the Xbox left stick.
 func _read_manual_forward_step_input() -> bool:
 	var forward_pressed := _is_player_move_forward_pressed()                                  # Let keyboard forward use the same diagnostic behavior as the controller.
 	var backward_pressed := _is_player_move_backward_pressed()                                # Let keyboard backward advance a reverse Fwd sequence.
-	if active_player_index == 0:                                                               # Player one may also use the connected Xbox left stick.
-		var stick := _xbox_left_stick()                                                           # Read the same camera-local vector used by ordinary movement.
-		forward_pressed = forward_pressed or (stick.y <= -XBOX_STICK_DEADZONE and absf(stick.y) > absf(stick.x)) # Require an intentional predominantly-forward push.
-		backward_pressed = backward_pressed or (stick.y >= XBOX_STICK_DEADZONE and absf(stick.y) > absf(stick.x)) # Require an intentional predominantly-backward push.
+	var stick := _xbox_left_stick()                                                            # Read the same camera-local vector used by ordinary movement.
+	forward_pressed = forward_pressed or (stick.y <= -XBOX_STICK_DEADZONE and absf(stick.y) > absf(stick.x)) # Require an intentional predominantly-forward push.
+	backward_pressed = backward_pressed or (stick.y >= XBOX_STICK_DEADZONE and absf(stick.y) > absf(stick.x)) # Require an intentional predominantly-backward push.
 	var desired_pressed := backward_pressed if forward_step != 0 and forward_transition_name == "backward" else forward_pressed # Match the held frame to its travel direction.
 	var vertical_pressed := forward_pressed or backward_pressed                                # Latch either travel direction so the initial crossing press cannot skip its first frame.
 	var just_pressed := desired_pressed and not was_manual_forward_step_pressed                # Advance only after the stick/key was released and pushed again.
@@ -4289,10 +4325,9 @@ func _read_manual_forward_step_input() -> bool:
 func _read_manual_strafe_step_input() -> bool:
 	var left_pressed := _is_player_move_left_pressed()                                         # Let keyboard local-left use the same diagnostic behavior as the controller.
 	var right_pressed := _is_player_move_right_pressed()                                       # Let keyboard local-right use the same diagnostic behavior as the controller.
-	if active_player_index == 0:                                                               # Player one may also use the connected Xbox left stick.
-		var stick := _xbox_left_stick()                                                          # Read the same camera-local vector used by ordinary movement.
-		left_pressed = left_pressed or (stick.x <= -XBOX_STICK_DEADZONE and absf(stick.x) > absf(stick.y)) # Require an intentional predominantly-left push.
-		right_pressed = right_pressed or (stick.x >= XBOX_STICK_DEADZONE and absf(stick.x) > absf(stick.y)) # Require an intentional predominantly-right push.
+	var stick := _xbox_left_stick()                                                            # Read the same camera-local vector used by ordinary movement.
+	left_pressed = left_pressed or (stick.x <= -XBOX_STICK_DEADZONE and absf(stick.x) > absf(stick.y)) # Require an intentional predominantly-left push.
+	right_pressed = right_pressed or (stick.x >= XBOX_STICK_DEADZONE and absf(stick.x) > absf(stick.y)) # Require an intentional predominantly-right push.
 	var desired_pressed := left_pressed if strafe_transition_name == "strafe_left" else right_pressed # Match the held frame to its travel direction.
 	var lateral_pressed := left_pressed or right_pressed                                        # Latch either lateral direction so the crossing push cannot skip its first frame.
 	var just_pressed := desired_pressed and not was_manual_strafe_step_pressed                 # Advance only after the key/stick was released and pushed again.
@@ -5827,7 +5862,10 @@ func _update_status() -> void:                                                  
 		elif bool(state.get("is_transitioning", false)):                                        # Show captured phase progress when this player is transitioning.
 			phase_text = "%s phase %d" % [String(state.get("active_sequence_name", "idle")), int(state.get("phase_index", 0)) + 1] # Format the transition status.
 		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s" % [player_index + 1, phase_text, state_facing_name, state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else ""]) # Add this player status line.
-	status_label.text = "%s\n%s\nP1: WASD move, Q/E turn. P2: numpad 8/5/4/6 move, numpad 7/9 twist. R rerolls map. F2 slot grid. F3 %s debug menu." % [lines[0] if lines.size() > 0 else "P1 missing", lines[1] if lines.size() > 1 else "P2 missing", "closes" if debug_menu_open else "opens"] # Update the on-screen debug status label.
+	var player_two_line := lines[1] if lines.size() > 1 else "P2 missing"                    # Preserve the second state line when both local players exist.
+	if not player_two_joined:                                                                  # Explain exactly how a second person enters the match before the later AI fallback milestone.
+		player_two_line = "P2 waiting — controller 2: Start or move stick; keyboard: numpad input." # Keep the unjoined player readable without allowing accidental movement.
+	status_label.text = "%s\n%s\nP1: controller 1 / WASD + Q/E. P2: controller 2 / numpad. R rerolls map. F2 slot grid. F3 %s debug menu." % [lines[0] if lines.size() > 0 else "P1 missing", player_two_line, "closes" if debug_menu_open else "opens"] # Update the on-screen debug status label.
 
 
 
