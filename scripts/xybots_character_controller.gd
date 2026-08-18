@@ -673,6 +673,7 @@ var held_keycodes := {}                                                         
 var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
 var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
 var player_views: Array[Dictionary] = []                                                     # Store per-player playfield, map, wall, and sprite node references.
+var coordinate_renderers: Array[Node] = []                                                    # Store one optional Blender-coordinate compositor for each local player view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_open := false                                                                 # Track whether the debug-menu panel is currently visible.
@@ -1242,6 +1243,13 @@ func _render_bound_player_context() -> void:                                    
 	_update_perspective_extents_overlay()                                                       # Keep the actor-position diagnostics available for cardinal and diagonal views.
 	_update_view_slot_debug_overlay()                                                         # Redraw the blue player-view slot audit labels for this camera orientation.
 	_update_debug_map_overlay()                                                               # Redraw this player's top-down map with the shared maze and both players.
+	# The runtime coordinate compositor is deliberately called while this exact
+	# player context is bound.  It therefore uses the same cell, facing, movement
+	# stage, environment layer, and opponent placement as the view it replaces.
+	if active_player_index < coordinate_renderers.size():
+		var coordinate_renderer := coordinate_renderers[active_player_index]
+		if is_instance_valid(coordinate_renderer) and coordinate_renderer.has_method("render_bound_player_context"):
+			coordinate_renderer.render_bound_player_context(get_process_delta_time())
 	if enable_3d_diagnostic and active_player_index == 0:                                     # Keep deprecated 3D diagnostics tied to player one only.
 		_update_3d_diagnostic()                                                                  # Sync the deprecated 3D diagnostic to player one's state.
 
@@ -1255,6 +1263,14 @@ func _render_all_player_views() -> void:                                        
 		_render_bound_player_context()                                                           # Redraw that player's view and map.
 		_save_player_context(player_index)                                                       # Store any renderer-updated debug ids.
 	_bind_player_context(0)                                                                    # Leave player one bound after the all-player redraw.
+
+
+# register_coordinate_renderer: Lets the coordinate-frame entry scene attach one
+# independent compositor to each already-created local player view.
+func register_coordinate_renderer(player_index: int, renderer: Node) -> void:
+	while coordinate_renderers.size() <= player_index:
+		coordinate_renderers.append(null)
+	coordinate_renderers[player_index] = renderer
 
 
 # _apply_wall_art_debug_visibility: Hides only selected transparent wall layers while preserving the floor, source graph, raycasts, and collisions.
@@ -2043,6 +2059,7 @@ func _update_debug_map_overlay() -> void:                                       
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
 	var camera_center := _debug_map_world_position(_camera_grid_origin())                        # Convert the actual visibility-camera origin into overlay coordinates.
 	_add_debug_view_cone(camera_center)                                                         # Draw the camera/view cone from the same backed-up origin used by ray casting.
+	_add_debug_other_player_view_cones()                                                        # Draw each other joined player's camera cone on this shared source-of-truth map.
 	_add_debug_all_wall_slot_numbers()                                                         # Draw the independent blue slot-number audit on every local slot candidate.
 	_add_debug_raycast_rays()                                                                   # Draw sampled raycast lines and first-hit points so visibility can be inspected.
 	_add_debug_visible_wall_slots()                                                            # Highlight the wall slots selected by the renderer on the source map.
@@ -2092,10 +2109,32 @@ func _debug_map_player_position() -> Vector2:                                   
 
 # _add_debug_view_cone: Draws the cell-locked camera cone on top of the source-of-truth map.
 func _add_debug_view_cone(origin: Vector2) -> void:                                        # Declare this function.
-	var cone_color := Color(0.0, 0.75, 1.0, 0.22)                                            # Use translucent cyan for the cone fill.
-	var cone_line_color := Color(0.0, 0.95, 1.0, 0.75)                                       # Use brighter cyan for the cone boundary lines.
-	var forward := _view_forward_vector()                                                     # Convert the current visible camera-facing direction to overlay space.
-	var left := _view_left_vector()                                                           # Convert the current visible camera-left direction to overlay space.
+	_add_debug_view_cone_for_basis(origin, _view_forward_vector(), Color(0.0, 0.75, 1.0, 0.22), Color(0.0, 0.95, 1.0, 0.75)) # Draw the active player's cyan cone.
+
+
+
+# _add_debug_other_player_view_cones: Draws a separate blue camera cone for every joined, non-bound player on the shared map.
+func _add_debug_other_player_view_cones() -> void:
+	for player_index in range(player_states.size()):
+		if player_index == active_player_index:                                                 # The bound player already has the standard cyan cone.
+			continue
+		if player_index == 1 and not player_two_joined:                                         # Do not show a ghost P2 cone before Player 2 has joined.
+			continue
+		var other_state := _effective_player_state(player_index)                                # Read the most recent state saved for this player.
+		if other_state.is_empty():                                                              # Stay safe if that player's state was not initialized.
+			continue
+		var other_forward := _view_forward_vector_for_state(other_state).normalized()          # Use that player's own visible direction, including 22/45/66 turns.
+		var other_origin := _debug_map_world_position(_camera_grid_origin_for_state(other_state)) # Convert that player's rear-biased camera anchor into map space.
+		_add_debug_view_cone_for_basis(other_origin, other_forward, Color(0.12, 0.35, 1.0, 0.20), Color(0.18, 0.55, 1.0, 0.95)) # Draw P2 in blue.
+
+
+
+# _add_debug_view_cone_for_basis: Draws one cone from an explicit map-space camera basis.
+func _add_debug_view_cone_for_basis(origin: Vector2, forward: Vector2, cone_color: Color, cone_line_color: Color) -> void:
+	if forward.length_squared() <= 0.0001:                                                    # Avoid invalid geometry if a state has no direction yet.
+		return
+	forward = forward.normalized()                                                            # Ensure view-cone dimensions remain consistent at diagonal headings.
+	var left := Vector2(forward.y, -forward.x).normalized()                                  # Derive camera-left in world/map space from this explicit forward vector.
 	var far_center := origin + forward * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_DEPTH)        # Compute the center of the far end of the view cone.
 	var far_left := far_center + left * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_HALF_WIDTH)    # Compute the left boundary point at the far end of the cone.
 	var far_right := far_center - left * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_HALF_WIDTH)   # Compute the right boundary point at the far end of the cone.
@@ -2107,6 +2146,15 @@ func _add_debug_view_cone(origin: Vector2) -> void:                             
 	_add_debug_line(origin, far_left, cone_line_color, 1.0)                                   # Draw the left cone boundary line.
 	_add_debug_line(origin, far_right, cone_line_color, 1.0)                                  # Draw the right cone boundary line.
 	_add_debug_line(origin, far_center, cone_line_color, 1.0)                                 # Draw the center sightline for camera-facing reference.
+
+
+
+# _camera_grid_origin_for_state: Returns a saved player's rear-biased camera point for the shared-map cone.
+func _camera_grid_origin_for_state(state: Dictionary) -> Vector2:
+	var state_cell: Vector2i = state.get("grid_position", Vector2i.ZERO)                    # Read the saved player's current cell.
+	var forward := _view_forward_vector_for_state(state).normalized()                         # Use the saved visible camera heading rather than the currently bound player's heading.
+	var cell_center := Vector2(float(state_cell.x) + 0.5, float(state_cell.y) + 0.5)          # Rebuild the fixed rotation point at the middle of that cell.
+	return cell_center - forward * CAMERA_REAR_OFFSET                                         # Match the normal renderer's rear-biased camera placement.
 
 
 
