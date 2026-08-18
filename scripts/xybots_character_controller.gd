@@ -4751,8 +4751,8 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
 func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:         # Declare this function.
 	var origin := _camera_grid_origin()                                                        # Read this player's fixed camera origin.
-	var forward := Vector2(_facing_vector()).normalized()                                      # Read this player's camera-forward vector.
-	var right := Vector2(-_left_vector()).normalized()                                         # Read this player's camera-right vector.
+	var forward := _view_forward_vector().normalized()                                         # Use the exact live heading used by the coordinate walls, including NE/NW halfway poses.
+	var right := Vector2(-forward.y, forward.x).normalized()                                   # Derive camera-right from that same live heading so opponent screen projection cannot lag behind a turn.
 	var relative := target_world - origin                                                      # Measure the opponent relative to this player's camera.
 	var view_depth := maxf(relative.dot(forward), 0.0)                                         # Compute the actor depth in the same top-down camera space as walls.
 	var view_side := relative.dot(right)                                                       # Compute the actor side offset in the same top-down camera space as walls.
@@ -4913,12 +4913,14 @@ func _projected_sprite_overlaps_viewport(screen_x: float, screen_y: float, sprit
 # _world_actor_overlaps_current_camera_fan: Checks whether an actor body overlaps this player's camera fan.
 func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin: float) -> bool: # Declare this function.
 	var origin := _camera_grid_origin()                                                        # Use the same rear-biased camera point as wall visibility.
-	var forward := Vector2(_facing_vector()).normalized()                                      # Use the current player's camera-forward vector.
+	var forward := _view_forward_vector().normalized()                                         # Use the exact visible camera heading, including temporary diagonal poses.
+	var right := Vector2(-forward.y, forward.x).normalized()                                   # Build the matching camera-right axis for the live fan test.
 	var relative := target_world - origin                                                      # Measure the target relative to the camera.
 	var depth := relative.dot(forward)                                                         # Compute target depth along camera-forward.
 	if depth <= -0.05 - side_margin or depth > DEBUG_VIEW_CONE_DEPTH + 0.75 + side_margin:     # Reject actors only once their body is behind or beyond the useful straight-view art.
 		return false                                                                              # Report the opponent as not visible.
-	return true                                                                               # Let projected sprite/viewport overlap decide lateral edge visibility.
+	var side := absf(relative.dot(right))                                                       # Measure the actor's distance from the center of the currently visible fan.
+	return side <= _camera_fan_half_width_at_depth(maxf(depth, 0.0)) + side_margin             # Reject actors that have already left this camera's real left/right field of view.
 
 
 

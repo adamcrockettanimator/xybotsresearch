@@ -36,6 +36,7 @@ const RUNTIME_FLOOR_TEXTURE_PATHS := [
 ]
 const SHADER_PATH := "res://scripts/coordinate_frame_homography.gdshader"
 const SINGLE_WALL_SHADER_PATH := "res://scripts/coordinate_frame_single_homography.gdshader"
+const GPU_WALL_SHADER_PATH := "res://scripts/coordinate_frame_gpu_wall_homography.gdshader"
 const TEMPLATE_ROOT := "res://assets/CoordinateFrames/"
 # The canvas shader needs three vec4 rows per wall.  A 96-wall allocation can
 # exceed the portable fragment-uniform budget and silently leave the layer
@@ -80,9 +81,16 @@ var wall_art_sprite: Sprite2D
 var wall_render_image: Image
 var wall_render_texture: ImageTexture
 var wall_source_image: Image
+var wall_source_texture: Texture2D
 var wall_height_image: Image
 var wall_layer1_image: Image
 var wall_layer2_image: Image
+var wall_layer1_texture: Texture2D
+var wall_layer2_texture: Texture2D
+var gpu_wall_shader: Shader
+var gpu_wall_dummy_texture: ImageTexture
+var gpu_wall_sprites: Array[Sprite2D] = []
+var gpu_wall_materials: Array[ShaderMaterial] = []
 var coordinate_background: Sprite2D
 var status: Label
 var runtime_status: Label
@@ -108,6 +116,7 @@ var wall_layer2_mip_images: Array[Image] = []
 var integer_uv_scale_snap_enabled := false
 var wall_ewa_filter_enabled := false
 var wall_parallax_enabled := true
+var gpu_wall_renderer_enabled := true
 var parallax_max_texels := 4.0
 var parallax_side_multiplier := 1.0
 var parallax_vertical_multiplier := 1.0
@@ -232,6 +241,7 @@ func _initialize() -> void:
 	runtime_wall_layer.z_index = 8
 	# Runtime_Master_Wall is already the exact 128x88 master canvas.  The older
 	# source sat inside a 160x120 authored sprite sheet and needed cropping.
+	wall_source_texture = master_texture
 	wall_source_image = master_texture.get_image()
 	_load_runtime_wall_layers()
 	active_wall_texture_label = "Wall_Layer1 + Layer2"
@@ -246,6 +256,7 @@ func _initialize() -> void:
 	wall_art_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	wall_art_sprite.z_index = 0
 	runtime_wall_layer.add_child(wall_art_sprite)
+	_initialize_gpu_wall_renderer()
 	controller.environment_layer.add_child(runtime_wall_layer)
 
 	# The previous in-playfield caption was being scaled with the 160×120 view,
@@ -413,6 +424,14 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_O:
 			_toggle_parallax_tuner()
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_V:
+			# Keep a live CPU fallback available while the GPU path is being
+			# evaluated.  This is also useful for comparing the two projective
+			# renderers without rerolling the map or moving either player.
+			gpu_wall_renderer_enabled = not gpu_wall_renderer_enabled
+			_rebuild_runtime_wall_surfaces(last_wall_entries)
+			_refresh_runtime_status(last_wall_entries.size())
+			get_viewport().set_input_as_handled()
 
 func _rebuild() -> void:
 	if runtime_wall_layer == null or runtime_floor_layer == null or runtime_ceiling_layer == null:
@@ -485,6 +504,7 @@ func _set_wall_source_texture(path: String) -> void:
 		push_error("Could not read runtime wall texture: %s" % path)
 		return
 	master_texture = next_texture
+	wall_source_texture = next_texture
 	wall_source_image = next_image
 	_set_height_texture_for_color_path(path)
 	active_wall_texture_label = path.get_file().get_basename()
@@ -499,13 +519,13 @@ func _set_wall_source_texture(path: String) -> void:
 func _load_runtime_wall_layers() -> void:
 	wall_layer1_image = null
 	wall_layer2_image = null
-	var layer1_texture := load(WALL_LAYER1_PATH) as Texture2D
-	var layer2_texture := load(WALL_LAYER2_PATH) as Texture2D
-	if layer1_texture == null or layer2_texture == null:
+	wall_layer1_texture = load(WALL_LAYER1_PATH) as Texture2D
+	wall_layer2_texture = load(WALL_LAYER2_PATH) as Texture2D
+	if wall_layer1_texture == null or wall_layer2_texture == null:
 		push_error("Could not load runtime wall layer textures.")
 		return
-	wall_layer1_image = layer1_texture.get_image()
-	wall_layer2_image = layer2_texture.get_image()
+	wall_layer1_image = wall_layer1_texture.get_image()
+	wall_layer2_image = wall_layer2_texture.get_image()
 	if wall_layer1_image == null or wall_layer2_image == null:
 		push_error("Could not read runtime wall layer textures.")
 		return
@@ -516,6 +536,92 @@ func _load_runtime_wall_layers() -> void:
 		return
 	wall_layer1_mip_images = _build_mip_chain(wall_layer1_image)
 	wall_layer2_mip_images = _build_mip_chain(wall_layer2_image)
+
+
+# _initialize_gpu_wall_renderer: Builds a shared 160×120 carrier texture and
+# loads the per-wall shader.  The carrier is only geometry; every actual wall
+# texel comes from a shader uniform, so the master source texture remains loaded
+# once and is shared by all visible projected walls.
+func _initialize_gpu_wall_renderer() -> void:
+	gpu_wall_shader = load(GPU_WALL_SHADER_PATH) as Shader
+	if gpu_wall_shader == null:
+		gpu_wall_renderer_enabled = false
+		push_warning("GPU wall shader unavailable; using CPU wall rasterizer.")
+		return
+	var carrier := Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
+	carrier.fill(Color.WHITE)
+	gpu_wall_dummy_texture = ImageTexture.create_from_image(carrier)
+
+
+# _can_use_gpu_wall_renderer: The custom CPU filtering experiments deliberately
+# stay on their proven CPU implementation.  Normal nearest/layered rendering
+# goes through the GPU projective pass.
+func _can_use_gpu_wall_renderer() -> bool:
+	return gpu_wall_renderer_enabled and gpu_wall_shader != null and gpu_wall_dummy_texture != null and not integer_uv_scale_snap_enabled and not wall_ewa_filter_enabled
+
+
+# _set_gpu_wall_sprites_visible: Avoids destroying working GPU materials when a
+# diagnostic filter requests the CPU fallback; they can be reused immediately.
+func _set_gpu_wall_sprites_visible(visible: bool) -> void:
+	for sprite in gpu_wall_sprites:
+		if is_instance_valid(sprite):
+			sprite.visible = visible
+
+
+# _rebuild_gpu_wall_surfaces: Converts the existing accepted wall entries into
+# one full-frame GPU canvas item each.  Far-to-near sibling ordering matches the
+# CPU compositor's draw order, while each shader discards pixels outside its own
+# homography, preserving wall occlusion without a CPU pixel loop.
+func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
+	if not _can_use_gpu_wall_renderer():
+		return 0
+	while gpu_wall_sprites.size() < entries.size():
+		var sprite := Sprite2D.new()
+		sprite.name = "GpuProjectedWall%02d" % gpu_wall_sprites.size()
+		sprite.centered = false
+		sprite.texture = gpu_wall_dummy_texture
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var material := ShaderMaterial.new()
+		material.shader = gpu_wall_shader
+		sprite.material = material
+		runtime_wall_layer.add_child(sprite)
+		gpu_wall_sprites.append(sprite)
+		gpu_wall_materials.append(material)
+	for index in range(gpu_wall_sprites.size()):
+		var sprite := gpu_wall_sprites[index]
+		if not is_instance_valid(sprite):
+			continue
+		var is_active := index < entries.size()
+		sprite.visible = is_active
+		if not is_active:
+			continue
+		var entry := entries[index]
+		var quad: PackedVector2Array = entry["quad"]
+		var inverse := _inverse_homography(quad[0], quad[1], quad[2], quad[3])
+		if inverse.size() != 3:
+			sprite.visible = false
+			continue
+		var material := gpu_wall_materials[index]
+		var use_layers := wall_parallax_enabled and wall_layer1_texture != null and wall_layer2_texture != null
+		var layer_offset := _layer_parallax_uv_offset(entry) if use_layers else Vector2.ZERO
+		var layer1_weight := (layer_movement_balance - 1.0) * 0.5
+		var layer2_weight := (layer_movement_balance + 1.0) * 0.5
+		material.set_shader_parameter("inverse_row0", inverse[0])
+		material.set_shader_parameter("inverse_row1", inverse[1])
+		material.set_shader_parameter("inverse_row2", inverse[2])
+		material.set_shader_parameter("wall_light", float(entry["light"]))
+		material.set_shader_parameter("base_texture", wall_source_texture)
+		material.set_shader_parameter("base_texture_size", Vector2(wall_source_image.get_width(), wall_source_image.get_height()))
+		material.set_shader_parameter("use_layer_parallax", use_layers)
+		material.set_shader_parameter("layer1_texture", wall_layer1_texture if wall_layer1_texture != null else wall_source_texture)
+		material.set_shader_parameter("layer2_texture", wall_layer2_texture if wall_layer2_texture != null else wall_source_texture)
+		material.set_shader_parameter("layer_texture_size", Vector2(wall_layer1_image.get_width(), wall_layer1_image.get_height()) if wall_layer1_image != null else Vector2(wall_source_image.get_width(), wall_source_image.get_height()))
+		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
+		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
+		material.set_shader_parameter("clamp_layer_edges", layer_uv_edge_clamp_enabled)
+		sprite.z_index = index
+	wall_art_sprite.visible = false
+	return entries.size()
 
 
 # _load_runtime_ceiling_layers: Read the independently-authored ceiling base
@@ -733,7 +839,8 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 	var layer_mode_available := wall_layer1_image != null and wall_layer2_image != null
 	var displayed_texture_label := "Wall_Layer1+Layer2" if wall_parallax_enabled and layer_mode_available else active_wall_texture_label
 	var ceiling_layers_available := ceiling_layer1_image != null and ceiling_layer2_image != null
-	var status_text := "Coord %s | %d walls | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  P:%s  C:%s  L:%s  O:%s" % [_pose_key(), visible_wall_count, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if parallax_tuner_open else "OFF"]
+	var render_backend := "GPU" if _can_use_gpu_wall_renderer() else "CPU"
+	var status_text := "Coord %s | %d walls | %s | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  P:%s  C:%s  L:%s  O:%s  V:%s" % [_pose_key(), visible_wall_count, render_backend, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if parallax_tuner_open else "OFF", "ON" if gpu_wall_renderer_enabled else "OFF"]
 	if is_instance_valid(status):
 		status.text = status_text
 	if is_instance_valid(runtime_status):
@@ -742,6 +849,16 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 func _rebuild_runtime_wall_surfaces(entries: Array[Dictionary]) -> int:
 	if wall_render_image == null or wall_render_texture == null or wall_source_image == null:
 		return 0
+	if _can_use_gpu_wall_renderer():
+		var gpu_started_us := Time.get_ticks_usec()
+		var gpu_count := _rebuild_gpu_wall_surfaces(entries)
+		# The visible raster work is now asynchronous GPU work.  Keep timing the
+		# small uniform/sprite update so the CSV can show the CPU saving directly.
+		profile_wall_raster_us = Time.get_ticks_usec() - gpu_started_us
+		profile_upload_us = 0
+		return gpu_count
+	_set_gpu_wall_sprites_visible(false)
+	wall_art_sprite.visible = true
 	var raster_started_us := Time.get_ticks_usec()
 	wall_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	# Entries are far-to-near, so nearer opaque texels naturally occlude farther
@@ -1200,6 +1317,10 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	# while disagreeing with the playable top-down map.
 	var physical_edges: Array = controller._visible_physical_wall_edges_for_basis(camera_origin, forward, right)
 	for edge in physical_edges:
+		# Keep the source wall's complete physical endpoints.  A ray-visible span
+		# may tell us that only half this wall is exposed, but shortening the quad
+		# here incorrectly remaps the *entire* master texture into that half.  The
+		# Canvas viewport naturally clips the projected offscreen portion instead.
 		var first_local := _to_view(Vector2(edge["a"]), camera_origin, forward, right)
 		var second_local := _to_view(Vector2(edge["b"]), camera_origin, forward, right)
 		if not _edge_can_be_seen(first_local, second_local):
