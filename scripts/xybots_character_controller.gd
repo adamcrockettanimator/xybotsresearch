@@ -1862,7 +1862,7 @@ func _update_combat_view() -> void:
 		var start_scale := clampf(spawn_height / 40.0, 0.28, 1.0)                                 # Read the sprite size at the muzzle.
 		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
 		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
-		_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Keep the projectile's pixels and darkness in the same depth language as walls.
+		_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Keep the projectile's pixels and darkness in the same actor-calibrated depth language.
 		sprite.z_index = int(projection["z_index"])                                              # Let the world-projected bullet sit behind its firing character rather than overlaying the body.
 		sprite.visible = true                                                                      # Reveal this valid projectile.
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
@@ -1876,7 +1876,7 @@ func _update_combat_view() -> void:
 		sprite.texture = SHOT_EXPLOSION_1_TEXTURE if float(impact["timer"]) > IMPACT_DURATION * 0.5 else SHOT_EXPLOSION_2_TEXTURE # Flip through authored two-frame impact art.
 		sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - float(projection["actor_height"]) * 0.48) # Center effect at visible impact height.
 		sprite.scale = Vector2.ONE * clampf(float(projection["actor_height"]) / 34.0, 0.35, 1.2) # Keep close impacts readable.
-		_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Quantize impact pixels and apply its shared depth band.
+		_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Quantize impact pixels and apply its shared depth band.
 		sprite.z_index = int(projection["z_index"]) + 3                                         # Put impact on top of its struck surface.
 		sprite.visible = true                                                                      # Reveal active explosion.
 		used[key] = true                                                                           # Preserve this effect node.
@@ -1906,7 +1906,7 @@ func _update_combat_view() -> void:
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
-			_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Match the opponent's shared world raster treatment.
+			_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Match the opponent's shared world raster treatment.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
@@ -1926,7 +1926,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.texture = texture                                                                    # Use the authored coin or gun pixel art.
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
-	_apply_runtime_world_sprite_style(sprite, float(projection.get("view_depth", 0.0)), sprite.scale.x) # Coarsen and darken world pickups with the same fixed depth bands.
+	_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Coarsen and darken world pickups with the same fixed depth bands.
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
@@ -4936,7 +4936,13 @@ func _camera_grid_origin() -> Vector2:                                          
 
 # _runtime_camera_origin_for_visibility: Centralizes actor projection/culling on the same live camera pose used by runtime walls.
 func _runtime_camera_origin_for_visibility() -> Vector2:
-	var coordinate_renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")
+	var coordinate_renderer: Node = null
+	if active_player_index >= 0 and active_player_index < coordinate_renderers.size():
+		var candidate_renderer := coordinate_renderers[active_player_index]
+		if is_instance_valid(candidate_renderer):
+			coordinate_renderer = candidate_renderer
+	if coordinate_renderer == null:
+		coordinate_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
 	if coordinate_renderer != null and coordinate_renderer.has_method("runtime_camera_origin_for_current_pose"):
 		var runtime_origin: Variant = coordinate_renderer.call("runtime_camera_origin_for_current_pose")
 		if runtime_origin is Vector2:
@@ -5778,7 +5784,7 @@ func _position_opponent_sprite() -> void:                                       
 	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
-	_apply_runtime_world_sprite_style(opponent_sprite, float(projection.get("view_depth", 0.0)), sprite_scale) # Share the runtime scene's coarse sampling and distance darkness.
+	_apply_runtime_world_sprite_style(opponent_sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite_scale) # Share the actor-calibrated coarse sampling and distance darkness.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
 
@@ -5824,6 +5830,32 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
 func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:         # Declare this function.
+	# The coordinate compositor owns the live in-between camera pose.  Use its
+	# exact wall/floor projection for every remote world object so actors,
+	# pickups, bullets, and impacts travel continuously with a transition rather
+	# than remaining in the old sampled-corridor pose until it completes.
+	var coordinate_renderer: Node = null
+	if active_player_index >= 0 and active_player_index < coordinate_renderers.size():
+		var candidate_renderer := coordinate_renderers[active_player_index]
+		if is_instance_valid(candidate_renderer) and candidate_renderer.has_method("runtime_project_world_point_for_current_pose"):
+			coordinate_renderer = candidate_renderer
+	if coordinate_renderer == null:
+		var fallback_renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")
+		if fallback_renderer != null and fallback_renderer.has_method("runtime_project_world_point_for_current_pose"):
+			coordinate_renderer = fallback_renderer
+	if coordinate_renderer != null:
+		var runtime_projection: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", target_world)
+		if runtime_projection is Dictionary and bool(runtime_projection.get("visible", false)):
+			var runtime_depth := float(runtime_projection.get("view_depth", 0.0))
+			var visual_depth := float(runtime_projection.get("visual_depth", runtime_depth))
+			var runtime_result: Dictionary = runtime_projection.duplicate()
+			# Both the remote body's position and size come from the live coordinate
+			# renderer.  Keeping size out of the legacy slot-graph sample table avoids
+			# discontinuous giant/tiny pops as the two players cross near a cell edge.
+			runtime_result["scale_view_depth"] = float(runtime_result.get("actor_scale_depth", runtime_depth))
+			runtime_result["style_depth"] = visual_depth
+			runtime_result["z_index"] = _character_layer_for_view_depth(runtime_depth)
+			return runtime_result
 	var origin := _runtime_camera_origin_for_visibility()                                      # Use the identical staged camera origin used for renderer visibility and actor culling.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact live heading used by the coordinate walls, including NE/NW halfway poses.
 	var right := Vector2(-forward.y, forward.x).normalized()                                   # Derive camera-right from that same live heading so opponent screen projection cannot lag behind a turn.

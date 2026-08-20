@@ -62,6 +62,14 @@ const WALL_HEIGHT := 2.0 / 3.0
 ## shared edge differently.
 const FLOOR_EDGE_OVERDRAW_PIXELS := 2
 const TEMPLATE_CAMERA_REAR_OFFSET := 0.49
+# World-projected actors are intentionally shorter than a wall.  This value was
+# calibrated against the old corridor sprite sizes at useful mid-range depths,
+# but is now evaluated by the same perspective equation as the environment.
+const WORLD_ACTOR_HEIGHT := 0.40
+# Remote actors can approach the physical camera plane while remaining beside
+# the local body.  Use this protected display depth for both their feet and
+# their height so they do not sink downward, shrink, or disappear while two
+# players cross the same cell boundary.
 const FOV_RATIO := 0.70
 # Keep each captured diagonal frame on the same brisk cadence as the three
 # authored lateral strafe stages (0.075 s each), rather than making a diagonal
@@ -1527,6 +1535,53 @@ func runtime_camera_origin_for_current_pose() -> Vector2:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
 	return _runtime_camera_origin(forward, right)
+
+
+# runtime_project_world_point_for_current_pose: a shared bridge for players,
+# pickups, projectiles, and impacts.  Its camera pose is exactly the pose used
+# by the wall, floor, and ceiling quads for all authored transition frames.
+func runtime_project_world_point_for_current_pose(world_position: Vector2, object_height := WORLD_ACTOR_HEIGHT) -> Dictionary:
+	if controller == null:
+		return {"visible": false}
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var origin := _runtime_camera_origin(forward, right)
+	var local := _to_view(world_position, origin, forward, right)
+	var raw_depth := local.y
+	# Keep the actor in the same forward-facing display volume as the local
+	# player.  A body genuinely behind the camera should still be discarded.
+	if raw_depth <= NEAR_CLIP:
+		return {"visible": false, "view_depth": raw_depth, "view_side": local.x}
+	# Project the body's screen location from its true world depth. Keep a nearby
+	# opponent at the local actor's scale, then compress only its scale depth so
+	# backing up one cell reads as a gradual size decrease rather than a sudden
+	# perspective collapse. Feet remain at their actual projected world position.
+	# Feet and height must use one unmodified camera-space depth.  Using a
+	# separate softened scale depth made an actor change size differently from
+	# its ground position as it crossed a cell boundary.
+	var actor_scale_depth := raw_depth
+	var feet := _project_view_point(local, 0.0)
+	var head := _project_view_point(local, object_height)
+	var visual_depth := maxf(raw_depth - TEMPLATE_CAMERA_REAR_OFFSET, 0.0)
+	# Use a single continuous world-space scale curve for remote actors.  The
+	# old slot renderer's measured size bands do not share this camera's origin
+	# and caused a remote player to jump from oversized to undersized at a turn.
+	var actor_height := maxf(absf(feet.y - head.y), 1.0)
+	return {
+		"visible": raw_depth <= MAX_DEPTH + 0.75,
+		"screen_x": feet.x,
+		"feet_y": feet.y,
+		"screen_y": (feet.y + head.y) * 0.5,
+		"actor_height": actor_height,
+		"actor_scale_depth": actor_scale_depth,
+		"view_depth": raw_depth,
+		"visual_depth": visual_depth,
+		"view_side": local.x,
+		"corridor_width": maxf(FOCAL_LENGTH / raw_depth, 1.0),
+		"camera_origin": origin,
+		"forward": forward,
+		"right": right,
+	}
 
 func _depth_light(depth: float) -> float:
 	# Deep extra bands make the extended sixth-cell combat test visibly recede before the 5.5 depth clip.
