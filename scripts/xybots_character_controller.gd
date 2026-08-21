@@ -125,6 +125,7 @@ const HIT_FRONT_TEXTURE := preload("res://assets/frames/Hit/Hit_Front.png")     
 const HIT_LEFT_TEXTURE := preload("res://assets/frames/Hit/Hit_Left.png")                   # Use the authored left-side hit pose.
 const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")                 # Use the authored right-side hit pose.
 const WORLD_SPRITE_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_lod.gdshader") # Apply the same coarse GPU pixel language and depth bands to every projected world sprite.
+const WORLD_SPRITE_TEAM2_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_team2_lod.gdshader") # Use the explicit green/orange Team 2 costume variant.
 const COIN_TEXTURE := preload("res://assets/Items/Coin/Coin_02.png")                        # Use the front-facing authored coin frame for the compact HUD icon.
 const COIN_TEXTURES := [                                                                      # Cycle the authored coin frames so world pickups visibly spin.
 	preload("res://assets/Items/Coin/Coin_01.png"),
@@ -146,6 +147,7 @@ const LOCAL_TILE_WORLD_HALF_EXTENT := 0.5                                       
 const SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                                # Keep the self-view body scale sampled from visible S0 space, not the camera-plane crop edge.
 const LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                                  # Keep the local feet anchor inside the projected floor-zone polygon.
 const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                                  # Keep the local feet slightly inside the front edge of the projected floor-zone polygon.
+const NEAREST_ACTOR_LOD_HEIGHT := 48.0                                                       # Match the coordinate renderer's protected largest actor LOD; heads should sit near the center of the 120-pixel view, not crowd the ceiling.
 const CHARACTER_NEAREST_LAYER := 96                                                          # Set the closest character draw layer; this is only z-order, not perspective math.
 const LOCAL_CHARACTER_LAYER := 96                                                            # Draw the local body above wall art; the camera clipper handles frame-edge cropping.
 const CHARACTER_LAYER_BY_DEPTH := [96, 74, 56, 32, 24, 16]                                  # Keep actors in front of same-depth side walls through the renderer's two extended distance bands.
@@ -1012,7 +1014,9 @@ func _setup_local_multiplayer() -> void:                                        
 	call_deferred("_activate_player_two_window", player_one_window, player_two_window)          # Configure monitors only after the new Window is actually inside the scene tree.
 	player_two_window.close_requested.connect(func() -> void: get_tree().quit())                # Closing either player display ends this local two-player test cleanly.
 	player_windows.append(player_two_window)                                                     # Retain the native player-two window for layout and HUD placement.
+	player_sprite.set_meta("team_index", 0)                                                    # Persist Team 1 ownership on the scene-authored player sprite.
 	var player_one_opponent := _create_character_sprite("OpponentSprite")                       # Create player one's sprite used for seeing player two.
+	player_one_opponent.set_meta("team_index", 1)                                              # This view's opponent is always the Team 2 character.
 	maze_content.add_child(player_one_opponent)                                                 # Put the opponent sprite into player one's clipped camera content.
 	var player_two_viewport := Node2D.new()                                                     # Create a second cropped playfield container for player two.
 	player_two_viewport.name = "MazeViewportP2"                                                 # Name the player-two view for scene-tree inspection.
@@ -1027,8 +1031,10 @@ func _setup_local_multiplayer() -> void:                                        
 	player_two_playfield.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                     # Preserve the cropped pixel art.
 	player_two_content.add_child(player_two_playfield)                                          # Add the playfield to player two's clipped camera content.
 	var player_two_sprite := _create_character_sprite("PlayerSprite")                           # Create player two's own character sprite.
+	player_two_sprite.set_meta("team_index", 1)                                                # Persist Team 2 ownership independently of whichever view is currently bound.
 	player_two_content.add_child(player_two_sprite)                                             # Add player two's self sprite to the clipped camera content.
 	var player_two_opponent := _create_character_sprite("OpponentSprite")                       # Create player two's sprite used for seeing player one.
+	player_two_opponent.set_meta("team_index", 0)                                              # This view's opponent is always the Team 1 character.
 	player_two_content.add_child(player_two_opponent)                                           # Add player two's opponent sprite to the clipped camera content.
 	player_views = [                                                                            # Store view-node bundles for each local player.
 		{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": player_one_opponent, "hud_layer": canvas_layer, "player_window": player_one_window}, # Store player one's existing view nodes.
@@ -1772,39 +1778,26 @@ func _combat_sprite(key: String) -> Sprite2D:
 	return node                                                                                 # Return the cached visual node.
 
 
-# _runtime_world_sprite_light: Matches the runtime wall/floor depth bands so distant actors and pickups recede with the environment.
-func _runtime_world_sprite_light(view_depth: float) -> float:
-	if view_depth < 1.35:
-		return 1.0
-	if view_depth < 2.5:
-		return 0.78
-	if view_depth < 3.8:
-		return 0.56
-	if view_depth < 4.8:
-		return 0.36
-	if view_depth < 5.2:
-		return 0.22
-	return 0.10
-
-
-# _runtime_world_sprite_texel_stride: Selects one whole-pixel source scale from the same minifying footprint logic used by the runtime wall shader.
+# _runtime_world_sprite_texel_stride: Groups enough source texels that each
+# resulting world-sprite block spans at least one logical output pixel.
 func _runtime_world_sprite_texel_stride(sprite_scale: float) -> float:
-	var footprint := maxf(1.0, 1.0 / maxf(sprite_scale, 0.001))                               # Estimate how many source texels collapse into one logical screen pixel.
-	var lod: float = floor(log(footprint) / log(2.0))                                           # Snap that footprint to a whole power-of-two mip-like step.
-	return clampf(pow(2.0, lod), 1.0, 8.0)                                                     # Keep authored sprites legible while still visibly coarsening at depth.
+	var footprint := maxf(1.0, 1.0 / maxf(sprite_scale, 0.001))                               # Estimate how many source texels would otherwise collapse into one logical screen pixel.
+	return clampf(ceilf(footprint), 1.0, 8.0)                                                   # Use a whole source-texel block large enough to prevent sub-pixel character detail.
 
 
-# _apply_runtime_world_sprite_style: Gives a world-projected sprite its own GPU material so view-specific depth and scale never leak between the two players' cameras.
-func _apply_runtime_world_sprite_style(sprite: Node2D, view_depth: float, sprite_scale: float) -> void:
+# _apply_runtime_world_sprite_style: Gives a world-projected sprite its own GPU material, with no object distance darkening.
+func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0) -> void:
 	if sprite == null:
 		return
+	var resolved_team_index := int(sprite.get_meta("team_index", team_index))                 # Prefer the sprite's persistent owner over the transient active camera binding.
+	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER # Pick an immutable team shader rather than a fragile per-instance palette uniform.
 	var material := sprite.material as ShaderMaterial                                          # Reuse this sprite's material without sharing per-view uniforms.
-	if material == null or material.shader != WORLD_SPRITE_LOD_SHADER:
+	if material == null or material.shader != expected_shader:
 		material = ShaderMaterial.new()
-		material.shader = WORLD_SPRITE_LOD_SHADER
+		material.shader = expected_shader
 		sprite.material = material
+	sprite.self_modulate = Color.WHITE                                                       # Ensure prior per-sprite tinting cannot make world objects dark after distance lighting was removed.
 	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(sprite_scale)) # Quantize the source sample grid like the runtime walls.
-	material.set_shader_parameter("depth_light", _runtime_world_sprite_light(view_depth))       # Apply the same discrete depth darkness bands as walls and floors.
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
 
 
@@ -1862,7 +1855,7 @@ func _update_combat_view() -> void:
 		var start_scale := clampf(spawn_height / 40.0, 0.28, 1.0)                                 # Read the sprite size at the muzzle.
 		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
 		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
-		_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Keep the projectile's pixels and darkness in the same actor-calibrated depth language.
+		_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Keep projectile sampling on the logical pixel grid without distance darkening.
 		sprite.z_index = int(projection["z_index"])                                              # Let the world-projected bullet sit behind its firing character rather than overlaying the body.
 		sprite.visible = true                                                                      # Reveal this valid projectile.
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
@@ -1876,7 +1869,7 @@ func _update_combat_view() -> void:
 		sprite.texture = SHOT_EXPLOSION_1_TEXTURE if float(impact["timer"]) > IMPACT_DURATION * 0.5 else SHOT_EXPLOSION_2_TEXTURE # Flip through authored two-frame impact art.
 		sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - float(projection["actor_height"]) * 0.48) # Center effect at visible impact height.
 		sprite.scale = Vector2.ONE * clampf(float(projection["actor_height"]) / 34.0, 0.35, 1.2) # Keep close impacts readable.
-		_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Quantize impact pixels and apply its shared depth band.
+		_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Quantize impact pixels without distance darkening.
 		sprite.z_index = int(projection["z_index"]) + 3                                         # Put impact on top of its struck surface.
 		sprite.visible = true                                                                      # Reveal active explosion.
 		used[key] = true                                                                           # Preserve this effect node.
@@ -1895,7 +1888,7 @@ func _update_combat_view() -> void:
 		if player_index == active_player_index:                                                   # Local player already has a correct self projection.
 			sprite.position = player_sprite.position                                                  # Reuse their visible feet registration.
 			sprite.scale = player_sprite.scale                                                        # Reuse their body scale.
-			_clear_runtime_world_sprite_style(sprite)                                                 # Keep the camera-relative hit body fully bright and at authored pixel resolution.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, player_index)                    # Keep the hit body on its owning player's team palette without distance darkening.
 			sprite.z_index = player_sprite.z_index + 3                                               # Keep reaction above nearby environment art.
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
@@ -1906,7 +1899,7 @@ func _update_combat_view() -> void:
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
-			_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Match the opponent's shared world raster treatment.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, player_index) # Match the opponent's team palette and pixel-grid treatment without distance darkening.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
@@ -1926,7 +1919,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.texture = texture                                                                    # Use the authored coin or gun pixel art.
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
-	_apply_runtime_world_sprite_style(sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite.scale.x) # Coarsen and darken world pickups with the same fixed depth bands.
+	_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Coarsen world pickups without distance darkening.
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
@@ -5706,13 +5699,13 @@ func _position_player() -> void:                                                
 	var projection := _self_actor_projection_at_local_depth(depth)                              # Sample self-view feet from the true local position and scale from visible S0 space.
 	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Clamp only the rendered feet anchor inside the visible floor polygon.
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
-	var actor_height := float(projection["actor_height"])                                      # Read the measured character height for this depth.
+	var actor_height := NEAREST_ACTOR_LOD_HEIGHT                                               # The local actor always occupies the nearest camera cell, so use the same protected largest LOD as a same-cell opponent.
 	var source_body_height := _standard_actor_body_height() if player_sprite.animation == &"Death" else _sprite_body_height_to_foot(player_sprite) # Keep the authored death sheet at normal body scale despite its unusual visible bounds.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the measured feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
-	_clear_runtime_world_sprite_style(player_sprite)                                            # The local body is camera-relative, so it never receives world-distance darkness or coarse sampling.
+	_apply_runtime_world_sprite_style(player_sprite, sprite_scale, active_player_index)         # Use this player's authored or Team 2 palette without distance darkening.
 	player_sprite.z_index = LOCAL_CHARACTER_LAYER                                              # Keep the local body above wall art; the clipped viewport trims anything outside the camera frame.
 
 
@@ -5784,7 +5777,7 @@ func _position_opponent_sprite() -> void:                                       
 	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
-	_apply_runtime_world_sprite_style(opponent_sprite, float(projection.get("style_depth", projection.get("view_depth", 0.0))), sprite_scale) # Share the actor-calibrated coarse sampling and distance darkness.
+	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0))) # Keep the opponent on its own team palette and logical pixel grid without distance darkening.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
 
@@ -5847,13 +5840,10 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 		var runtime_projection: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", target_world)
 		if runtime_projection is Dictionary and bool(runtime_projection.get("visible", false)):
 			var runtime_depth := float(runtime_projection.get("view_depth", 0.0))
-			var visual_depth := float(runtime_projection.get("visual_depth", runtime_depth))
 			var runtime_result: Dictionary = runtime_projection.duplicate()
-			# Both the remote body's position and size come from the live coordinate
-			# renderer.  Keeping size out of the legacy slot-graph sample table avoids
-			# discontinuous giant/tiny pops as the two players cross near a cell edge.
-			runtime_result["scale_view_depth"] = float(runtime_result.get("actor_scale_depth", runtime_depth))
-			runtime_result["style_depth"] = visual_depth
+			# Both the remote body's position and stepped size come from the live
+			# coordinate renderer, so its camera pose remains authoritative.
+			runtime_result["scale_view_depth"] = runtime_depth
 			runtime_result["z_index"] = _character_layer_for_view_depth(runtime_depth)
 			return runtime_result
 	var origin := _runtime_camera_origin_for_visibility()                                      # Use the identical staged camera origin used for renderer visibility and actor culling.
@@ -5920,11 +5910,9 @@ func _corridor_projection_at_view_depth(view_depth: float) -> Dictionary:       
 func _self_actor_projection_at_local_depth(local_depth: float) -> Dictionary:              # Declare this function.
 	var feet_view_depth := _clamped_self_feet_view_depth(_view_depth_for_local_floor_depth(local_depth)) # Convert the real local position into camera-space depth while keeping rendered feet inside S0.
 	var feet_projection := _corridor_projection_at_view_depth(feet_view_depth)                # Sample the true projected floor location where the player's feet stand.
-	var scale_view_depth := maxf(feet_view_depth, SELF_MIN_ACTOR_SCALE_VIEW_DEPTH)            # Keep self body scale from collapsing to the near-camera edge sample.
-	var scale_projection := _corridor_projection_at_view_depth(scale_view_depth)              # Sample the visible S0 scale row used for the local body height.
 	var projection := feet_projection.duplicate()                                             # Start from the true feet projection so X and feet Y stay in the real square.
-	projection["actor_height"] = float(scale_projection["actor_height"])                      # Replace only actor height with the visible-body scale sample.
-	projection["scale_view_depth"] = scale_view_depth                                         # Expose the self scale depth for debugging if needed.
+	projection["actor_height"] = NEAREST_ACTOR_LOD_HEIGHT                                    # The local body is in the protected nearest cell: never interpolate its scale inside that cell.
+	projection["scale_view_depth"] = SELF_MIN_ACTOR_SCALE_VIEW_DEPTH                         # Retain a stable diagnostic value for callers that inspect self scale depth.
 	return projection                                                                         # Return the combined self-view projection.
 
 
@@ -6023,7 +6011,7 @@ func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin
 	var right := Vector2(-forward.y, forward.x).normalized()                                   # Build the matching camera-right axis for the live fan test.
 	var relative := target_world - origin                                                      # Measure the target relative to the camera.
 	var depth := relative.dot(forward)                                                         # Compute target depth along camera-forward.
-	if depth <= -0.05 - side_margin or depth > DEBUG_VIEW_CONE_DEPTH + 0.75 + side_margin:     # Reject actors only once their body is behind or beyond the useful straight-view art.
+	if depth <= -CAMERA_REAR_OFFSET - side_margin or depth > DEBUG_VIEW_CONE_DEPTH + 0.75 + side_margin: # Keep a same-cell body visible behind the rear-biased camera origin, but reject genuinely rearward actors.
 		return false                                                                              # Report the opponent as not visible.
 	var side := absf(relative.dot(right))                                                       # Measure the actor's distance from the center of the currently visible fan.
 	return side <= _camera_fan_half_width_at_depth(maxf(depth, 0.0)) + side_margin             # Reject actors that have already left this camera's real left/right field of view.

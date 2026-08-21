@@ -65,11 +65,17 @@ const TEMPLATE_CAMERA_REAR_OFFSET := 0.49
 # World-projected actors are intentionally shorter than a wall.  This value was
 # calibrated against the old corridor sprite sizes at useful mid-range depths,
 # but is now evaluated by the same perspective equation as the environment.
-const WORLD_ACTOR_HEIGHT := 0.40
-# Remote actors can approach the physical camera plane while remaining beside
-# the local body.  Use this protected display depth for both their feet and
-# their height so they do not sink downward, shrink, or disappear while two
-# players cross the same cell boundary.
+const WORLD_ACTOR_HEIGHT := 0.36
+# Character height comes directly from the camera perspective, except that the
+# current camera square is capped at this largest safe display height. This
+# prevents same-cell blowups without introducing visible LOD-size jumps.
+const WORLD_ACTOR_NEAREST_CELL_DEPTH := 0.96
+const WORLD_ACTOR_LOD_MAX_HEIGHT := 48.0
+# A player can physically stand slightly behind the rear-biased camera origin
+# while still sharing its current cell. Keep that close body visible and draw
+# it from the protected nearest-cell display depth instead of clipping it.
+const WORLD_ACTOR_NEAR_VISIBILITY_DEPTH := -TEMPLATE_CAMERA_REAR_OFFSET
+const WORLD_ACTOR_PROTECTED_DISPLAY_DEPTH := 0.72
 const FOV_RATIO := 0.70
 # Keep each captured diagonal frame on the same brisk cadence as the three
 # authored lateral strafe stages (0.075 s each), rather than making a diagonal
@@ -1550,30 +1556,23 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 	var raw_depth := local.y
 	# Keep the actor in the same forward-facing display volume as the local
 	# player.  A body genuinely behind the camera should still be discarded.
-	if raw_depth <= NEAR_CLIP:
+	if raw_depth <= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH:
 		return {"visible": false, "view_depth": raw_depth, "view_side": local.x}
-	# Project the body's screen location from its true world depth. Keep a nearby
-	# opponent at the local actor's scale, then compress only its scale depth so
-	# backing up one cell reads as a gradual size decrease rather than a sudden
-	# perspective collapse. Feet remain at their actual projected world position.
-	# Feet and height must use one unmodified camera-space depth.  Using a
-	# separate softened scale depth made an actor change size differently from
-	# its ground position as it crossed a cell boundary.
-	var actor_scale_depth := raw_depth
-	var feet := _project_view_point(local, 0.0)
-	var head := _project_view_point(local, object_height)
+	# Project feet from the exact live pose. The protected near depth puts a
+	# same-cell opponent on the same rear-wall floor line as the local player.
+	var display_local := Vector2(local.x, maxf(raw_depth, WORLD_ACTOR_PROTECTED_DISPLAY_DEPTH))
+	var feet := _project_view_point(display_local, 0.0)
+	var head := _project_view_point(display_local, object_height)
 	var visual_depth := maxf(raw_depth - TEMPLATE_CAMERA_REAR_OFFSET, 0.0)
-	# Use a single continuous world-space scale curve for remote actors.  The
-	# old slot renderer's measured size bands do not share this camera's origin
-	# and caused a remote player to jump from oversized to undersized at a turn.
-	var actor_height := maxf(absf(feet.y - head.y), 1.0)
+	var continuous_actor_height := maxf(absf(feet.y - head.y), 1.0)
+	var actor_height := WORLD_ACTOR_LOD_MAX_HEIGHT if raw_depth <= WORLD_ACTOR_NEAREST_CELL_DEPTH else continuous_actor_height
 	return {
-		"visible": raw_depth <= MAX_DEPTH + 0.75,
+		"visible": raw_depth >= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH and raw_depth <= MAX_DEPTH + 0.75,
 		"screen_x": feet.x,
 		"feet_y": feet.y,
 		"screen_y": (feet.y + head.y) * 0.5,
 		"actor_height": actor_height,
-		"actor_scale_depth": actor_scale_depth,
+		"continuous_actor_height": continuous_actor_height,
 		"view_depth": raw_depth,
 		"visual_depth": visual_depth,
 		"view_side": local.x,
@@ -1582,6 +1581,7 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 		"forward": forward,
 		"right": right,
 	}
+
 
 func _depth_light(depth: float) -> float:
 	# Deep extra bands make the extended sixth-cell combat test visibly recede before the 5.5 depth clip.
