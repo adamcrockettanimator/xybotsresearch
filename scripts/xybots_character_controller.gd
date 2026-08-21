@@ -108,7 +108,11 @@ const MACHINE_GUN_FIRE_INTERVAL := 0.12                                         
 const MACHINE_GUN_AMMO := 100                                                                 # Give the temporary pickup the requested one hundred rapid-fire rounds.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const COIN_PICKUP_RADIUS := 0.32                                                              # Let a player collect a center-of-cell coin without requiring exact pixel contact.
-const DEFAULT_COMBAT_ROUND_SECONDS := 5.0 * 60.0                                              # Run the first objective round for the requested five minutes.
+const DEFAULT_COMBAT_ROUND_SECONDS := 3.0 * 60.0                                              # Deathmatch defaults to a three-minute round.
+const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
+const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
+const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
+const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0)
 const PROJECTILE_SPEED := 6.0                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.7                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PROJECTILE_PLAYER_RADIUS := 0.18                                                        # Treat a shot passing close to a player center as a hit.
@@ -712,7 +716,20 @@ var was_right_turn_pressed := false                                             
 var was_regenerate_map_pressed := false                                                      # Track previous-frame map-regenerate input so it fires once per key press.
 var was_slot_grid_debug_pressed := false                                                     # Track previous-frame slot-grid toggle input so it fires once per key press.
 var was_debug_menu_pressed := false                                                          # Track previous-frame debug-menu input so it opens or closes once per key press.
-var player_two_joined := false                                                               # Keep player two idle until their controller or keyboard deliberately joins this local match.
+var player_two_joined := false                                                               # Legacy compatibility mirror for Player 2.
+var player_joined := [false, false, false, false]
+var match_started := false
+var match_paused := false
+var scoreboard_visible := false
+var player_join_overlays: Array[ColorRect] = []
+var player_join_labels: Array[Label] = []
+var player_name_labels: Array[Label] = []
+var team_score_labels: Array[Label] = []
+var scoreboard_labels: Array[Label] = []
+var options_overlay: ColorRect
+var options_label: Label
+var was_options_pressed := false
+var was_scoreboard_pressed := false
 var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
 var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
 var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
@@ -786,6 +803,7 @@ func _ready() -> void:                                                          
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
 	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
+	_setup_deathmatch_overlays()
 	_setup_debug_menu()                                                                        # Create the shared on-screen menu for toggling diagnostic overlays.
 	_load_slot_graph_tuner_overrides()                                                         # Restore saved slot-vector adjustments before the first render.
 	if enable_3d_diagnostic:                                                                   # Only create the deprecated 3D diagnostic when explicitly requested.
@@ -793,6 +811,63 @@ func _ready() -> void:                                                          
 	_render_all_player_views()                                                                 # Draw both starting screens and both debug maps.
 	_update_status()                                                                           # Call a helper function as part of the current controller step.
 
+
+func _setup_deathmatch_overlays() -> void:
+	for player_index in range(player_views.size()):
+		var hud: CanvasLayer = player_views[player_index].get("hud_layer", canvas_layer)
+		var blackout := ColorRect.new()
+		blackout.color = Color.BLACK
+		blackout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		blackout.z_index = 500
+		hud.add_child(blackout)
+		player_join_overlays.append(blackout)
+		var join_label := Label.new()
+		join_label.text = "PRESS START TO JOIN"
+		join_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		join_label.add_theme_font_override("font", pixel_hud_font)
+		join_label.add_theme_font_size_override("font_size", 16)
+		join_label.size = Vector2(VIEWPORT_SIZE.x, 30.0)
+		join_label.z_index = 501
+		hud.add_child(join_label)
+		player_join_labels.append(join_label)
+		var name_label := Label.new()
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.add_theme_font_override("font", pixel_hud_font)
+		name_label.add_theme_font_size_override("font_size", 8)
+		name_label.add_theme_color_override("font_color", Color(0.70, 0.10, 0.45, 1.0) if PLAYER_TEAMS[player_index] == 0 else Color(0.10, 0.62, 0.22, 1.0))
+		name_label.text = "%s  K:%d" % [PLAYER_NAMES[player_index], 0]
+		name_label.size = Vector2(VIEWPORT_SIZE.x, 22.0)
+		name_label.z_index = 360
+		hud.add_child(name_label)
+		player_name_labels.append(name_label)
+		var team_label := Label.new()
+		team_label.add_theme_font_override("font", pixel_hud_font)
+		team_label.add_theme_font_size_override("font_size", 7)
+		team_label.size = Vector2(110.0, 20.0)
+		team_label.z_index = 360
+		hud.add_child(team_label)
+		team_score_labels.append(team_label)
+		var board_label := Label.new()
+		board_label.add_theme_font_override("font", pixel_hud_font)
+		board_label.add_theme_font_size_override("font_size", 8)
+		board_label.z_index = 520
+		board_label.visible = false
+		hud.add_child(board_label)
+		scoreboard_labels.append(board_label)
+	options_overlay = ColorRect.new()
+	options_overlay.color = Color(0.0, 0.0, 0.0, 0.78)
+	options_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	options_overlay.z_index = 700
+	options_overlay.visible = false
+	canvas_layer.add_child(options_overlay)
+	options_label = Label.new()
+	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 3:00\n\nSELECT / ESC: CLOSE"
+	options_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	options_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	options_label.add_theme_font_override("font", pixel_hud_font)
+	options_label.add_theme_font_size_override("font_size", 18)
+	options_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	options_overlay.add_child(options_label)
 
 
 # _input: Records keyboard press and release events so movement does not depend only on raw polling.
@@ -1001,18 +1076,10 @@ func _setup_local_multiplayer() -> void:                                        
 	status_label.visible = false                                                                  # The separate player windows use focused HUD elements instead of the old shared debug readout.
 	var player_one_window := get_window()                                                        # Treat the existing game window as player one's native display.
 	player_windows = [player_one_window]                                                         # Retain player one's host before creating the second display.
-	var player_two_window := Window.new()                                                        # Create an actual native window for player two rather than another panel in player one's window.
+	var player_two_window := player_one_window                                                    # All player views share one native game window.
 	player_two_window.name = "PlayerTwoWindow"                                                  # Keep the second display identifiable in the remote scene tree.
 	player_two_window.title = "XybotsResearch — Player 2"                                      # Make the second monitor unmistakable during local playtests.
-	player_two_window.visible = false                                                            # Keep it undisplayed until native-mode setup and its deferred root attachment finish.
-	player_two_window.size = Vector2i(960, 720)                                                  # Match the 4:3 source view at an exact 6x pixel scale before either player resizes it.
-	player_two_window.unresizable = false                                                        # Make the second display resizable from its first visible frame.
-	player_two_window.borderless = false                                                         # Keep the ordinary Windows title bar so the window can be dragged.
-	player_two_window.extend_to_title = false                                                    # Leave the resize border and title-bar hit area to the operating system.
-	player_two_window.force_native = true                                                        # Bypass the editor's embedded-subwindow mode so Windows can send this screen to monitor two.
-	get_tree().root.call_deferred("add_child", player_two_window)                               # Wait until scene setup completes; root rejects a native-window child during _ready itself.
-	call_deferred("_activate_player_two_window", player_one_window, player_two_window)          # Configure monitors only after the new Window is actually inside the scene tree.
-	player_two_window.close_requested.connect(func() -> void: get_tree().quit())                # Closing either player display ends this local two-player test cleanly.
+	player_two_window.unresizable = false                                                        # Keep the shared display resizable.
 	player_windows.append(player_two_window)                                                     # Retain the native player-two window for layout and HUD placement.
 	player_sprite.set_meta("team_index", 0)                                                    # Persist Team 1 ownership on the scene-authored player sprite.
 	var player_one_opponent := _create_character_sprite("OpponentSprite")                       # Create player one's sprite used for seeing player two.
@@ -1020,10 +1087,10 @@ func _setup_local_multiplayer() -> void:                                        
 	maze_content.add_child(player_one_opponent)                                                 # Put the opponent sprite into player one's clipped camera content.
 	var player_two_viewport := Node2D.new()                                                     # Create a second cropped playfield container for player two.
 	player_two_viewport.name = "MazeViewportP2"                                                 # Name the player-two view for scene-tree inspection.
-	player_two_window.add_child(player_two_viewport)                                             # Attach player two's camera to its own native game window.
+	add_child(player_two_viewport)                                                                # Attach Player 2 beside the scene-owned Player 1 camera in the shared window.
 	var player_two_hud := CanvasLayer.new()                                                      # Give player two a dedicated HUD canvas inside their native window.
 	player_two_hud.name = "PlayerTwoHud"                                                       # Keep the second display's UI easy to inspect.
-	player_two_window.add_child(player_two_hud)                                                  # Draw player-two HUD elements above their own camera only.
+	add_child(player_two_hud)                                                                     # Keep the HUD in the same scene tree as the other split-screen overlays.
 	var player_two_content := _ensure_viewport_clipper(player_two_viewport)                     # Give player two the same 160x120 camera clipper.
 	var player_two_playfield := Sprite2D.new()                                                   # Create player two's transition-frame sprite.
 	player_two_playfield.name = "Playfield"                                                     # Match player one's child naming convention.
@@ -1040,9 +1107,55 @@ func _setup_local_multiplayer() -> void:                                        
 		{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": player_one_opponent, "hud_layer": canvas_layer, "player_window": player_one_window}, # Store player one's existing view nodes.
 		{"maze_viewport": player_two_viewport, "maze_content": player_two_content, "playfield": player_two_playfield, "player_sprite": player_two_sprite, "opponent_sprite": player_two_opponent, "hud_layer": player_two_hud, "player_window": player_two_window}, # Store player two's native-window nodes.
 	]                                                                                           # Close the local-player view list.
+	for player_index in range(2, 4):
+		player_views.append(_create_single_window_player_view(player_index))
 	player_states = _make_start_player_states()                                                 # Create initial player-state records for both local players.
+	_setup_all_view_opponent_sprites()
 	_bind_player_context(0)                                                                     # Bind player one back into the legacy globals after setup.
 
+
+func _create_single_window_player_view(player_index: int) -> Dictionary:
+	var view_root := Node2D.new()
+	view_root.name = "MazeViewportP%d" % (player_index + 1)
+	add_child(view_root)
+	var hud := CanvasLayer.new()
+	hud.name = "PlayerHudP%d" % (player_index + 1)
+	add_child(hud)
+	var content := _ensure_viewport_clipper(view_root)
+	var field := Sprite2D.new()
+	field.name = "Playfield"
+	field.centered = false
+	field.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	content.add_child(field)
+	var self_sprite := _create_character_sprite("PlayerSprite")
+	self_sprite.set_meta("team_index", PLAYER_TEAMS[player_index])
+	content.add_child(self_sprite)
+	var opponent := _create_character_sprite("OpponentSprite")
+	opponent.set_meta("team_index", PLAYER_TEAMS[0])
+	content.add_child(opponent)
+	return {"maze_viewport": view_root, "maze_content": content, "playfield": field, "player_sprite": self_sprite, "opponent_sprite": opponent, "hud_layer": hud, "player_window": get_window()}
+
+
+func _setup_all_view_opponent_sprites() -> void:
+	for viewer_index in range(player_views.size()):
+		var view := player_views[viewer_index]
+		var sprites := {}
+		var retained: AnimatedSprite2D = view.get("opponent_sprite", null)
+		var retained_target := 1 if viewer_index == 0 else 0
+		if retained != null:
+			retained.set_meta("player_index", retained_target)
+			sprites[retained_target] = retained
+		var content: Node2D = view.get("maze_content", null)
+		for target_index in range(4):
+			if target_index == viewer_index or sprites.has(target_index):
+				continue
+			var sprite := _create_character_sprite("OpponentP%d" % (target_index + 1))
+			sprite.set_meta("player_index", target_index)
+			sprite.set_meta("team_index", PLAYER_TEAMS[target_index])
+			content.add_child(sprite)
+			sprites[target_index] = sprite
+		view["opponent_sprites"] = sprites
+		player_views[viewer_index] = view
 
 
 # _activate_player_two_window: Opens two ordinary OS windows that players can drag and resize onto any monitor.
@@ -1071,6 +1184,8 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 	return [                                                                                    # Return the normal two-player gameplay state list.
 		_make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0),                                    # Start player one in the southwest corner facing north.
 		_make_player_state(1, Vector2i(MAP_WIDTH - 1, 0), 2),                                     # Start player two in the northeast corner facing south.
+		_make_player_state(2, Vector2i(MAP_WIDTH - 1, MAP_HEIGHT - 1), 0),
+		_make_player_state(3, Vector2i(0, 0), 2),
 	]                                                                                           # Close the normal state list.
 
 
@@ -1138,6 +1253,8 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"was_right_turn_pressed": false,                                                           # Store this player's right-turn one-shot latch.
 		"health": PLAYER_MAX_HEALTH,                                                               # Store the current combat health shown by the hatch meter.
 		"coins": 0,                                                                                # Track this player's collected objective coins across deaths and respawns.
+		"kills": 0,
+		"deaths": 0,
 		"machine_gun_ammo": 0,                                                                     # Keep zero for the normal infinite-ammo pistol; positive values arm rapid fire.
 		"fire_cooldown": 0.0,                                                                      # Store time remaining before this player can fire again.
 		"hit_timer": 0.0,                                                                          # Store the brief authored hit-pose duration.
@@ -1197,7 +1314,7 @@ func _reset_combat_round() -> void:
 
 # _advance_combat_round: Runs the shared round timer and freezes only objective scoring when time expires.
 func _advance_combat_round(delta: float) -> void:
-	if combat_round_complete or combat_round_duration_seconds <= 0.0:                       # Keep finished and explicitly infinite rounds stable.
+	if not match_started or combat_round_complete or combat_round_duration_seconds <= 0.0:    # Do not start the clock until the first player joins.
 		return
 	combat_round_time_remaining = maxf(combat_round_time_remaining - delta, 0.0)            # Count down in real time rather than from either camera's animation state.
 	if combat_round_time_remaining <= 0.0:
@@ -1376,7 +1493,7 @@ func _setup_combat_hud() -> void:
 		coin_icon.name = "CombatCoinIconP%d" % (player_index + 1)                              # Keep the UI easy to inspect in the remote scene tree.
 		coin_icon.texture = COIN_TEXTURE                                                         # Use the requested front-facing coin frame.
 		coin_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE                                  # Let the explicit source-pixel size control the icon.
-		coin_icon.size = Vector2(5.0, 5.0)                                                       # Keep the objective indicator at roughly half its former size.
+		coin_icon.size = Vector2(4.0, 4.0)
 		coin_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE                                    # Never interfere with the debug menu.
 		coin_icon.z_index = 200                                                                 # Draw above the playfield like the health hatches.
 		hud_layer.add_child(coin_icon)                                                          # Add the score icon to this player's UI layer.
@@ -1384,7 +1501,7 @@ func _setup_combat_hud() -> void:
 		var coin_label := Label.new()                                                            # Create the matching collected/total readout.
 		coin_label.name = "CombatCoinScoreP%d" % (player_index + 1)                            # Keep the UI easy to inspect in the remote scene tree.
 		coin_label.add_theme_font_override("font", pixel_hud_font)                             # Keep score digits deliberately aliased.
-		coin_label.add_theme_font_size_override("font_size", 11)                               # Stay legible without crowding the screen.
+		coin_label.add_theme_font_size_override("font_size", 7)
 		coin_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.22, 1.0))        # Give the objective a clear gold arcade color.
 		coin_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep numbers readable over bright floors.
 		coin_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
@@ -1424,7 +1541,7 @@ func _setup_combat_hud() -> void:
 		timer_label.name = "CombatRoundTimerP%d" % (player_index + 1)
 		timer_label.add_theme_font_override("font", pixel_hud_font)                            # Keep the timer crisp instead of vector-smoothed.
 		timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		timer_label.add_theme_font_size_override("font_size", 18)
+		timer_label.add_theme_font_size_override("font_size", 9)
 		timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.28, 1.0))
 		timer_label.add_theme_color_override("font_shadow_color", Color.BLACK)
 		timer_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -1462,8 +1579,38 @@ func _update_combat_hud() -> void:
 		var viewport_node: Node2D = view.get("maze_viewport", null)                              # Use the same display position and scale as the camera image.
 		if viewport_node != null:
 			meter.position = viewport_node.position + Vector2(5.0, VIEWPORT_SIZE.y * viewport_node.scale.y - 8.0 * viewport_node.scale.y) # Keep the compact meter comfortably inside the lower-left of its camera.
-			meter.scale = viewport_node.scale                                                         # Use the same integer camera scale so the hatch edges stay pixel-sharp.
+			meter.scale = viewport_node.scale * 0.65                                                  # Keep hearts compact in the four-player layout.
 		var state := player_states[player_index]                                                   # Read current combat data.
+		if viewport_node != null and player_index < player_join_overlays.size():
+			var join_overlay := player_join_overlays[player_index]
+			join_overlay.position = viewport_node.position
+			join_overlay.size = VIEWPORT_SIZE * viewport_node.scale
+			join_overlay.visible = not player_joined[player_index]
+			var join_label := player_join_labels[player_index]
+			join_label.position = viewport_node.position + Vector2(0.0, VIEWPORT_SIZE.y * 0.5 * viewport_node.scale.y - 10.0)
+			join_label.scale = viewport_node.scale
+			join_label.visible = not player_joined[player_index]
+			var name_label := player_name_labels[player_index]
+			name_label.position = viewport_node.position + Vector2(0.0, (VIEWPORT_SIZE.y - 18.0) * viewport_node.scale.y)
+			name_label.scale = viewport_node.scale
+			name_label.text = "%s  K:%d" % [PLAYER_NAMES[player_index], int(state.get("kills", 0))]
+			var team_one_score := 0
+			var team_two_score := 0
+			for score_index in range(player_states.size()):
+				if PLAYER_TEAMS[score_index] == 0: team_one_score += int(player_states[score_index].get("kills", 0))
+				else: team_two_score += int(player_states[score_index].get("kills", 0))
+			var team_label := team_score_labels[player_index]
+			team_label.position = viewport_node.position + Vector2(3.0, 3.0)
+			team_label.scale = viewport_node.scale
+			team_label.text = "T1 %d  T2 %d" % [team_one_score, team_two_score]
+			var board := scoreboard_labels[player_index]
+			board.position = viewport_node.position + Vector2(10.0, 28.0) * viewport_node.scale
+			board.scale = viewport_node.scale
+			board.visible = scoreboard_visible
+			if scoreboard_visible:
+				var ranking := player_states.duplicate()
+				ranking.sort_custom(func(a, b): return int(a.get("kills", 0)) > int(b.get("kills", 0)) or (int(a.get("kills", 0)) == int(b.get("kills", 0)) and int(a.get("deaths", 0)) < int(b.get("deaths", 0))))
+				board.text = "SCOREBOARD\n" + "\n".join(ranking.map(func(entry): return "%s  %dK  %dD" % [PLAYER_NAMES[int(entry["player_index"])], int(entry.get("kills", 0)), int(entry.get("deaths", 0))]))
 		meter.set_health(int(state.get("health", PLAYER_MAX_HEALTH)), PLAYER_MAX_HEALTH)          # Redraw the requested ten-hatch health value.
 		if viewport_node != null and player_index < combat_coin_icons.size() and player_index < combat_coin_labels.size(): # Position the lower-right objective UI in the same camera rectangle.
 			var coin_icon := combat_coin_icons[player_index]
@@ -1473,7 +1620,7 @@ func _update_combat_hud() -> void:
 				coin_icon.scale = viewport_node.scale
 				coin_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 24.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
 				coin_label.scale = viewport_node.scale
-				coin_label.text = "%d/%d" % [int(state.get("coins", 0)), combat_total_coin_value]
+				coin_label.text = str(int(state.get("coins", 0)))
 		if viewport_node != null and player_index < combat_ammo_icons.size() and player_index < combat_ammo_labels.size(): # Position the pickup counter at the lower center only while armed.
 			var ammo_icon := combat_ammo_icons[player_index]
 			var ammo_label := combat_ammo_labels[player_index]
@@ -1510,7 +1657,10 @@ func _update_combat_hud() -> void:
 		if player_index < combat_round_timer_labels.size():                                      # Update this window's timer even while its player is dead or waiting.
 			var timer_label := combat_round_timer_labels[player_index]
 			if is_instance_valid(timer_label):
-				timer_label.position = Vector2((window_size.x - timer_label.size.x) * 0.5, 8.0)      # Keep the clock cleanly centered at the top.
+				var timer_view: Node2D = player_views[player_index].get("maze_viewport", null)
+				if timer_view != null:
+					timer_label.position = timer_view.position + Vector2((VIEWPORT_SIZE.x * timer_view.scale.x - timer_label.size.x * timer_view.scale.x) * 0.5, 3.0)
+					timer_label.scale = timer_view.scale
 				if combat_round_duration_seconds <= 0.0:
 					timer_label.text = "TIME ∞"
 				else:
@@ -1526,6 +1676,9 @@ func _update_combat_hud() -> void:
 
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
 func _is_player_fire_pressed_for(player_index: int) -> bool:
+	var keyboard_fire: int = int([KEY_F, KEY_P, KEY_SLASH, KEY_KP_0][player_index])
+	if _is_key_down(keyboard_fire):
+		return true
 	var action_name := ACTION_P2_FIRE if player_index == 1 else ACTION_FIRE                    # Keep each player's fallback key independent.
 	if Input.is_action_pressed(action_name):                                                    # Accept the registered keyboard action first.
 		return true                                                                                 # Report a held fire request.
@@ -1568,7 +1721,7 @@ func _process_combat(delta: float) -> void:
 			var impact_position := origin + direction * maxf(hit_distance, 0.0)                     # Place the explosion exactly at the contact point.
 			_spawn_impact(impact_position, direction, hit_player_index)                             # Show the two-frame authored impact art.
 			if hit_player_index >= 0:                                                               # Apply damage only for body collisions.
-				_apply_projectile_hit(hit_player_index, direction)                                      # Update health, hit pose, and respawn if needed.
+				_apply_projectile_hit(hit_player_index, direction, int(shot["owner"]))                 # Update health, hit pose, and respawn if needed.
 			continue                                                                                   # Remove the consumed projectile.
 		shot["position"] = origin + direction * step_distance                                    # Move unhindered shot to its new shared world position.
 		shot["lifetime"] = lifetime                                                               # Save remaining life.
@@ -1638,7 +1791,7 @@ func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vect
 	var nearest_distance := maximum_distance + 0.001                                           # Keep the first body beyond any possible hit by default.
 	var nearest_player := -1                                                                    # Track which body owns that nearest intersection.
 	for player_index in range(player_states.size()):                                           # Check each currently active local player.
-		if player_index == owner or (player_index == 1 and not player_two_joined):               # Never hit the shooter or an unjoined P2.
+		if player_index == owner or (player_index < player_joined.size() and not player_joined[player_index]) or PLAYER_TEAMS[player_index] == PLAYER_TEAMS[owner]: # No self hits, unjoined ghosts, or friendly fire.
 			continue                                                                                   # Skip this candidate.
 		if bool(player_states[player_index].get("is_dying", false)):                            # Do not let stray bullets repeatedly hit a fallen or respawning body.
 			continue                                                                                   # The player becomes targetable again only after the reverse Death animation finishes.
@@ -1671,7 +1824,7 @@ func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index
 
 
 # _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
-func _apply_projectile_hit(player_index: int, shot_direction: Vector2) -> void:
+func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1) -> void:
 	var state := player_states[player_index]                                                    # Read the target's current state.
 	if bool(state.get("is_dying", false)):                                                     # Ignore stray simultaneous bullets once this player is already down.
 		return                                                                                    # Keep one death sequence and one countdown per defeat.
@@ -1685,6 +1838,12 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2) -> void:
 	state["health"] = maxi(int(state.get("health", PLAYER_MAX_HEALTH)) - 1, 0)                # Remove one hatch.
 	player_states[player_index] = state                                                        # Save the immediate hit result.
 	if int(state["health"]) <= 0:                                                             # Begin an explicit fall, three-second count, and reverse-animation respawn.
+		state["deaths"] = int(state.get("deaths", 0)) + 1
+		player_states[player_index] = state
+		if owner_index >= 0 and owner_index < player_states.size() and PLAYER_TEAMS[owner_index] != PLAYER_TEAMS[player_index]:
+			var owner := player_states[owner_index]
+			owner["kills"] = int(owner.get("kills", 0)) + 1
+			player_states[owner_index] = owner
 		_begin_combat_death(player_index)                                                          # Choose a safe corner now while preserving the fallen body at its old location.
 
 
@@ -2068,7 +2227,7 @@ func _process_player_context(delta: float) -> void:                             
 		character_is_moving = false                                                               # Prevent normal locomotion from competing with the authored Death frames.
 		_play_combat_death_animation(player_sprite, player_states[active_player_index])           # Display Death forward, hold, or backwards according to this shared state.
 		return                                                                                    # Ignore all player input and normal movement until the respawn is complete.
-	if active_player_index == 1 and not player_two_joined:                                    # Keep the second character at its spawn until a person joins this local match.
+	if active_player_index < player_joined.size() and not player_joined[active_player_index]: # Keep every unjoined slot black/idle until its own Start or keyboard input.
 		character_is_moving = false                                                               # Ensure the waiting player remains visually idle in both viewpoints.
 		_play_best_animation(false)                                                               # Play the normal idle pose while waiting for a controller.
 		return                                                                                    # Do not read player-two movement until the join condition has been met.
@@ -2228,6 +2387,20 @@ func _apply_wall_art_debug_visibility() -> void:
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
+	var options_pressed := _is_key_down(KEY_ESCAPE)
+	for device_id in Input.get_connected_joypads():
+		options_pressed = options_pressed or Input.is_joy_button_pressed(device_id, JOY_BUTTON_BACK)
+	if options_pressed and not was_options_pressed:
+		match_paused = not match_paused
+		if options_overlay != null:
+			options_overlay.visible = match_paused
+	was_options_pressed = options_pressed
+	scoreboard_visible = _is_key_down(KEY_TAB) # Scoreboard is informational and never pauses the match.
+	for device_id in Input.get_connected_joypads():
+		scoreboard_visible = scoreboard_visible or Input.is_joy_button_pressed(device_id, JOY_BUTTON_START)
+	if match_paused:
+		_update_combat_hud()
+		return
 	var next_round_pressed := _read_next_round()                                               # Latch the global replay key even while the round remains active.
 	if _read_toggle_debug_menu():                                                              # Check for a one-shot request to open or close the debug menu.
 		_toggle_debug_menu()                                                                     # Change panel visibility without changing any diagnostic state.
@@ -2245,6 +2418,7 @@ func _process(delta: float) -> void:                                            
 		_regenerate_runtime_map()                                                                 # Start a fresh scored round with the normal randomized map and pickups.
 		return                                                                                    # Keep the replay key from also moving a player this frame.
 	_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
+	_update_all_join_states()
 	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
 		_process_player_context(delta)                                                           # Run one player's input, movement, turn, and animation logic.
@@ -2902,6 +3076,21 @@ func _make_3d_material(color: Color) -> StandardMaterial3D:                     
 # _layout_viewport: Scales and centers the 160x120 playfield crop inside the current Godot window.
 func _layout_viewport() -> void:                                                            # Declare this function.
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
+	if player_views.size() >= 4 and not TEMP_GRID_AUDIT:
+		var quadrant_size := viewport_size * 0.5
+		var camera_scale := maxf(1.0, floorf(minf(quadrant_size.x / VIEWPORT_SIZE.x, quadrant_size.y / VIEWPORT_SIZE.y)))
+		for player_index in range(4):
+			var view: Dictionary = player_views[player_index]
+			var view_node: Node2D = view.get("maze_viewport", null)
+			if view_node != null:
+				view_node.scale = Vector2.ONE * camera_scale
+				var layout_cell: int = int([0, 2, 1, 3][player_index]) # Team 1 top row, Team 2 bottom row.
+				var cell_origin := Vector2(float(layout_cell % 2) * quadrant_size.x, float(layout_cell / 2) * quadrant_size.y)
+				view_node.position = cell_origin + (quadrant_size - VIEWPORT_SIZE * camera_scale) * 0.5
+			var minimap: Node2D = view.get("match_minimap_overlay", null)
+			if minimap != null and view_node != null:
+				minimap.position = view_node.position + Vector2(VIEWPORT_SIZE.x * camera_scale - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+		return
 	var status_margin := 84.0                                                                  # Reserve screen space for the three-line debug status text.
 	if TEMP_GRID_AUDIT and player_views.size() == 1:                                           # Use a clean side-by-side layout for the one-player 9x9 audit.
 		var side_gutter := SIDE_BY_SIDE_GUTTER * 2.0                                               # Leave a clear gap between the player camera and source grid.
@@ -3044,7 +3233,7 @@ func _update_match_minimap_overlay() -> void:
 		var center := _match_minimap_point(_player_state_world_position(state))                   # Convert that position into compact map coordinates.
 		var forward := _view_forward_vector_for_state(state).normalized()                         # Use the actual cardinal/diagonal camera orientation for the arrow.
 		var right := Vector2(-forward.y, forward.x)                                               # Derive a perpendicular arrow base without needing a camera cone.
-		var color := Color(1.0, 0.20, 0.20, 1.0) if player_index == 0 else Color(0.20, 0.48, 1.0, 1.0) # Keep P1 red and P2 blue.
+		var color := TEAM_ONE_COLOR if PLAYER_TEAMS[player_index] == 0 else TEAM_TWO_COLOR # Match Team 1 pants and Team 2 vests.
 		var arrow := Polygon2D.new()                                                              # Use one tiny filled triangle rather than any view frustum artwork.
 		arrow.polygon = PackedVector2Array([center + forward * 7.0, center - forward * 4.0 + right * 4.0, center - forward * 4.0 - right * 4.0]) # Use bolder player arrows that remain legible at a glance.
 		arrow.color = color                                                                       # Apply the player's identifying color.
@@ -5338,6 +5527,9 @@ func _xbox_right_stick_turn() -> int:                                           
 
 # _is_player_move_left_pressed: Returns whether the currently bound player is holding local-left movement.
 func _is_player_move_left_pressed() -> bool:                                                # Declare this function.
+	if active_player_index == 1: return _is_key_down(KEY_J)
+	if active_player_index == 2: return _is_key_down(KEY_LEFT)
+	if active_player_index == 3: return _is_key_down(KEY_KP_4)
 	if active_player_index == 1:                                                              # Use number keys for player two.
 		return Input.is_action_pressed(ACTION_P2_MOVE_LEFT) or _is_key_down(KEY_KP_4)          # Read player two's local-left input.
 	return Input.is_action_pressed(ACTION_MOVE_LEFT) or _is_key_down(KEY_A)                   # Read player one's local-left input.
@@ -5346,6 +5538,9 @@ func _is_player_move_left_pressed() -> bool:                                    
 
 # _is_player_move_right_pressed: Returns whether the currently bound player is holding local-right movement.
 func _is_player_move_right_pressed() -> bool:                                               # Declare this function.
+	if active_player_index == 1: return _is_key_down(KEY_L)
+	if active_player_index == 2: return _is_key_down(KEY_RIGHT)
+	if active_player_index == 3: return _is_key_down(KEY_KP_6)
 	if active_player_index == 1:                                                              # Use number keys for player two.
 		return Input.is_action_pressed(ACTION_P2_MOVE_RIGHT) or _is_key_down(KEY_KP_6)         # Read player two's local-right input.
 	return Input.is_action_pressed(ACTION_MOVE_RIGHT) or _is_key_down(KEY_D)                  # Read player one's local-right input.
@@ -5354,6 +5549,9 @@ func _is_player_move_right_pressed() -> bool:                                   
 
 # _is_player_move_forward_pressed: Returns whether the currently bound player is holding local-forward movement.
 func _is_player_move_forward_pressed() -> bool:                                             # Declare this function.
+	if active_player_index == 1: return _is_key_down(KEY_I)
+	if active_player_index == 2: return _is_key_down(KEY_UP)
+	if active_player_index == 3: return _is_key_down(KEY_KP_8)
 	if active_player_index == 1:                                                              # Use number keys for player two.
 		return Input.is_action_pressed(ACTION_P2_MOVE_FORWARD) or _is_key_down(KEY_KP_8)       # Read player two's local-forward input.
 	return Input.is_action_pressed(ACTION_MOVE_FORWARD) or _is_key_down(KEY_W)                 # Read player one's local-forward input.
@@ -5362,6 +5560,9 @@ func _is_player_move_forward_pressed() -> bool:                                 
 
 # _is_player_move_backward_pressed: Returns whether the currently bound player is holding local-backward movement.
 func _is_player_move_backward_pressed() -> bool:                                            # Declare this function.
+	if active_player_index == 1: return _is_key_down(KEY_K)
+	if active_player_index == 2: return _is_key_down(KEY_DOWN)
+	if active_player_index == 3: return _is_key_down(KEY_KP_5)
 	if active_player_index == 1:                                                              # Use number keys for player two.
 		return Input.is_action_pressed(ACTION_P2_MOVE_BACKWARD) or _is_key_down(KEY_KP_5)      # Read player two's local-backward input.
 	return Input.is_action_pressed(ACTION_MOVE_BACKWARD) or _is_key_down(KEY_S)                # Read player one's local-backward input.
@@ -5370,6 +5571,9 @@ func _is_player_move_backward_pressed() -> bool:                                
 
 # _is_player_turn_left_pressed: Returns whether the currently bound player is pressing a left-turn key.
 func _is_player_turn_left_pressed() -> bool:                                                # Declare this function.
+	if active_player_index == 1: return _is_key_down(KEY_U)
+	if active_player_index == 2: return _is_key_down(KEY_COMMA)
+	if active_player_index == 3: return _is_key_down(KEY_KP_7)
 	if active_player_index == 1:                                                              # Use number keys for player two.
 		return Input.is_action_pressed(ACTION_P2_TURN_LEFT) or _is_key_down(KEY_KP_7)          # Read player two's left-turn input.
 	return Input.is_action_pressed(ACTION_TURN_LEFT) or _is_key_down(KEY_Q)                   # Read player one's left-turn input.
@@ -5378,6 +5582,9 @@ func _is_player_turn_left_pressed() -> bool:                                    
 
 # _is_player_turn_right_pressed: Returns whether the currently bound player is pressing a right-turn key.
 func _is_player_turn_right_pressed() -> bool:                                               # Declare this function.
+	if active_player_index == 1: return _is_key_down(KEY_O)
+	if active_player_index == 2: return _is_key_down(KEY_PERIOD)
+	if active_player_index == 3: return _is_key_down(KEY_KP_9)
 	if active_player_index == 1:                                                              # Use number keys for player two.
 		return Input.is_action_pressed(ACTION_P2_TURN_RIGHT) or _is_key_down(KEY_KP_9)         # Read player two's right-turn input.
 	return Input.is_action_pressed(ACTION_TURN_RIGHT) or _is_key_down(KEY_E)                  # Read player one's right-turn input.
@@ -5466,6 +5673,21 @@ func _update_player_two_join_state() -> void:
 	if controller_join or keyboard_join:                                                       # Claim player two on the first deliberate second-player input.
 		player_two_joined = true                                                                # Activate controller two / numpad input for P2.
 		_update_status()                                                                         # Replace the join prompt immediately.
+
+
+func _update_all_join_states() -> void:
+	var join_keys := [[KEY_W, KEY_A, KEY_S, KEY_D, KEY_Q, KEY_E, KEY_F], [KEY_I, KEY_J, KEY_K, KEY_L, KEY_U, KEY_O, KEY_P], [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_COMMA, KEY_PERIOD, KEY_SLASH], [KEY_KP_8, KEY_KP_4, KEY_KP_5, KEY_KP_6, KEY_KP_7, KEY_KP_9, KEY_KP_0]]
+	for player_index in range(4):
+		if player_joined[player_index]:
+			continue
+		var device_id := _xbox_joypad_id_for_player(player_index)
+		var request := device_id >= 0 and Input.is_joy_button_pressed(device_id, JOY_BUTTON_START)
+		for key in join_keys[player_index]:
+			request = request or _is_key_down(key)
+		if request:
+			player_joined[player_index] = true
+			player_two_joined = player_joined[1]
+			match_started = true
 
 
 
@@ -5745,10 +5967,22 @@ func _strafe_display_local_position() -> Vector2:
 
 
 # _position_opponent_sprite: Projects the other local player into the currently bound player's 2D screen.
-func _position_opponent_sprite() -> void:                                                   # Declare this function.
+func _position_opponent_sprite() -> void:
+	var view := player_views[active_player_index]
+	var sprites: Dictionary = view.get("opponent_sprites", {})
+	for target_index in sprites.keys():
+		var sprite: AnimatedSprite2D = sprites[target_index]
+		opponent_sprite = sprite
+		_position_one_opponent_sprite(int(target_index))
+
+
+func _position_one_opponent_sprite(target_index: int) -> void:                              # Project one specific other player into the current camera.
 	if opponent_sprite == null:                                                                # Skip when this view has no opponent sprite.
 		return                                                                                    # Return without changing an opponent sprite.
-	var other_state := _first_other_player_state()                                             # Read the other local player's latest state.
+	if target_index < player_joined.size() and not player_joined[target_index]:
+		opponent_sprite.visible = false
+		return
+	var other_state := _effective_player_state(target_index)                                   # Read this specific other player's latest state.
 	if other_state.is_empty():                                                                 # Hide the sprite if there is no other player.
 		opponent_sprite.visible = false                                                           # Hide the opponent sprite.
 		return                                                                                    # Return without projecting anything.

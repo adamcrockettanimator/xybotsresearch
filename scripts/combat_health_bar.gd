@@ -1,5 +1,7 @@
 extends Node2D
 
+const HEART_TEXTURE := preload("res://assets/Items/Heart/heart.png")
+
 # Small self-contained HUD element for the first playable combat milestone.
 # It deliberately draws in source pixels so the split-screen layout can place
 # one bar beside each player view without relying on a separate UI scene.
@@ -14,22 +16,9 @@ func set_health(value: int, maximum: int) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var label_color := Color(1.0, 0.22, 0.22, 1.0)
-	var fill_color := _health_color()
-	# Simple red medical cross, as requested, followed by ten vertical hatch marks.
-	draw_rect(Rect2(1.0, 3.0, 7.0, 2.0), label_color)
-	draw_rect(Rect2(3.0, 1.0, 2.0, 7.0), label_color)
-	for hatch_index in range(maximum_health):
-		var x := 10.0 + float(hatch_index) * 2.0
-		var hatch_rect := Rect2(x, 1.0, 1.0, 6.0)
-		draw_rect(hatch_rect, Color(0.08, 0.08, 0.08, 0.95))
-		if hatch_index < current_health:
-			draw_rect(hatch_rect, fill_color)
-
-func _health_color() -> Color:
-	var ratio := float(current_health) / float(maximum_health)
-	if ratio > 0.60:
-		return Color(0.15, 0.9, 0.28, 1.0)
-	if ratio > 0.30:
-		return Color(1.0, 0.82, 0.14, 1.0)
-	return Color(1.0, 0.22, 0.18, 1.0)
+	# One authored pixel heart per hit point. Empty hearts remain visible as a
+	# dark silhouette, preserving the compact ten-unit meter.
+	for heart_index in range(maximum_health):
+		var rect := Rect2(Vector2(float(heart_index) * 8.0, 0.0), Vector2(7.0, 7.0))
+		var tint := Color.WHITE if heart_index < current_health else Color(0.13, 0.13, 0.13, 0.95)
+		draw_texture_rect(HEART_TEXTURE, rect, false, tint)
