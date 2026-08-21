@@ -895,6 +895,7 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 		status.text = status_text
 	if is_instance_valid(runtime_status):
 		runtime_status.text = status_text
+		runtime_status.visible = controller != null and controller.debug_menu_open
 
 func _rebuild_runtime_wall_surfaces(entries: Array[Dictionary]) -> int:
 	if wall_render_image == null or wall_render_texture == null or wall_source_image == null:

@@ -113,6 +113,8 @@ const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
 const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
 const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
 const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0)
+const MUSIC_STREAM := preload("res://assets/Audio/Music/Dust and Static.mp3")
+const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
 const PROJECTILE_SPEED := 6.0                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.7                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PROJECTILE_PLAYER_RADIUS := 0.18                                                        # Treat a shot passing close to a player center as a hit.
@@ -724,8 +726,8 @@ var scoreboard_visible := false
 var player_join_overlays: Array[ColorRect] = []
 var player_join_labels: Array[Label] = []
 var player_name_labels: Array[Label] = []
-var team_score_labels: Array[Label] = []
-var scoreboard_labels: Array[Label] = []
+var team_score_labels: Array[RichTextLabel] = []
+var scoreboard_labels: Array[RichTextLabel] = []
 var options_overlay: ColorRect
 var options_label: Label
 var was_options_pressed := false
@@ -760,9 +762,11 @@ var was_next_round_pressed := false                                             
 var match_minimap_overlay: Node2D                                                              # Store the minimalist map currently bound to one player's HUD canvas.
 var match_minimap_static_layer: Node2D                                                         # Retain thin white maze edges until the topology changes.
 var match_minimap_dynamic_layer: Node2D                                                        # Rebuild only the two player arrows every frame.
-const MATCH_MINIMAP_SIZE := 132.0                                                              # Keep the shared maze readable in the upper-right without taking over either play screen.
-const MATCH_MINIMAP_MARGIN := 10.0                                                             # Leave a small safe inset from the upper-right screen edge.
-var pixel_hud_font: SystemFont                                                                  # Share one un-antialiased system font across every gameplay readout.
+const MATCH_MINIMAP_SIZE := 66.0                                                               # Four-player HUD needs a compact half-size map.
+const MATCH_MINIMAP_MARGIN := 5.0                                                              # Leave a small safe inset from the upper-right screen edge.
+var pixel_hud_font: FontFile                                                                   # Share the bundled High Noon pixel font across every gameplay readout.
+var music_player: AudioStreamPlayer
+var gunshot_player: AudioStreamPlayer
 var next_combat_visual_id := 1                                                                  # Give shared shots and impacts stable keys inside each split-screen view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
@@ -779,10 +783,10 @@ const SLOT_GRAPH_TUNER_PATH := "res://slot_graph_tuner.json"                    
 # _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
 func _ready() -> void:                                                                      # Declare this function.
 	_ensure_input_actions()                                                                    # Register local input actions before the first input polling frame.
-	pixel_hud_font = SystemFont.new()                                                          # Build a lightweight native font resource for crisp, arcade-style UI text.
-	pixel_hud_font.font_names = PackedStringArray(["Consolas", "Courier New"])              # Prefer a compact monospaced face so counters do not shift as values change.
+	pixel_hud_font = preload("res://assets/Fonts/High Noon.woff")
 	pixel_hud_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE                            # Render hard pixel edges instead of soft vector-font smoothing.
 	pixel_hud_font.multichannel_signed_distance_field = false                                  # Disable MSDF smoothing for the same deliberately aliased presentation.
+	_setup_shared_audio()
 	status_label.add_theme_font_override("font", pixel_hud_font)                             # Keep even the legacy diagnostic readout consistent when it is temporarily shown.
 	if TEMP_EMPTY_GRID_AUDIT:                                                                  # Use the isolated wall-free slot-guide test surface when explicitly requested.
 		_build_empty_grid_audit_wall_edges()                                                       # Build an empty 5x5 map with no physical wall edges.
@@ -812,6 +816,17 @@ func _ready() -> void:                                                          
 	_update_status()                                                                           # Call a helper function as part of the current controller step.
 
 
+func _setup_shared_audio() -> void:
+	music_player = AudioStreamPlayer.new()
+	music_player.stream = MUSIC_STREAM
+	if music_player.stream is AudioStreamMP3:
+		music_player.stream.loop = true
+	add_child(music_player)
+	gunshot_player = AudioStreamPlayer.new()
+	gunshot_player.stream = GUNSHOT_STREAM
+	add_child(gunshot_player)
+
+
 func _setup_deathmatch_overlays() -> void:
 	for player_index in range(player_views.size()):
 		var hud: CanvasLayer = player_views[player_index].get("hud_layer", canvas_layer)
@@ -825,7 +840,7 @@ func _setup_deathmatch_overlays() -> void:
 		join_label.text = "PRESS START TO JOIN"
 		join_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		join_label.add_theme_font_override("font", pixel_hud_font)
-		join_label.add_theme_font_size_override("font_size", 16)
+		join_label.add_theme_font_size_override("font_size", 6)
 		join_label.size = Vector2(VIEWPORT_SIZE.x, 30.0)
 		join_label.z_index = 501
 		hud.add_child(join_label)
@@ -833,23 +848,37 @@ func _setup_deathmatch_overlays() -> void:
 		var name_label := Label.new()
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_label.add_theme_font_override("font", pixel_hud_font)
-		name_label.add_theme_font_size_override("font_size", 8)
+		name_label.add_theme_font_size_override("font_size", 5)
+		name_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		name_label.add_theme_constant_override("shadow_offset_x", 1)
+		name_label.add_theme_constant_override("shadow_offset_y", 1)
 		name_label.add_theme_color_override("font_color", Color(0.70, 0.10, 0.45, 1.0) if PLAYER_TEAMS[player_index] == 0 else Color(0.10, 0.62, 0.22, 1.0))
-		name_label.text = "%s  K:%d" % [PLAYER_NAMES[player_index], 0]
+		name_label.text = "%s:%d" % [PLAYER_NAMES[player_index], 0]
 		name_label.size = Vector2(VIEWPORT_SIZE.x, 22.0)
 		name_label.z_index = 360
 		hud.add_child(name_label)
 		player_name_labels.append(name_label)
-		var team_label := Label.new()
-		team_label.add_theme_font_override("font", pixel_hud_font)
-		team_label.add_theme_font_size_override("font_size", 7)
-		team_label.size = Vector2(110.0, 20.0)
+		var team_label := RichTextLabel.new()
+		team_label.bbcode_enabled = true
+		team_label.scroll_active = false
+		team_label.add_theme_font_override("normal_font", pixel_hud_font)
+		team_label.add_theme_font_size_override("normal_font_size", 4)
+		team_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		team_label.add_theme_constant_override("shadow_offset_x", 1)
+		team_label.add_theme_constant_override("shadow_offset_y", 1)
+		team_label.size = Vector2(72.0, 14.0)
 		team_label.z_index = 360
 		hud.add_child(team_label)
 		team_score_labels.append(team_label)
-		var board_label := Label.new()
-		board_label.add_theme_font_override("font", pixel_hud_font)
-		board_label.add_theme_font_size_override("font_size", 8)
+		var board_label := RichTextLabel.new()
+		board_label.bbcode_enabled = true
+		board_label.scroll_active = false
+		board_label.add_theme_font_override("normal_font", pixel_hud_font)
+		board_label.add_theme_font_size_override("normal_font_size", 5)
+		board_label.size = Vector2(118.0, 90.0)
+		board_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		board_label.add_theme_constant_override("shadow_offset_x", 1)
+		board_label.add_theme_constant_override("shadow_offset_y", 1)
 		board_label.z_index = 520
 		board_label.visible = false
 		hud.add_child(board_label)
@@ -1501,7 +1530,7 @@ func _setup_combat_hud() -> void:
 		var coin_label := Label.new()                                                            # Create the matching collected/total readout.
 		coin_label.name = "CombatCoinScoreP%d" % (player_index + 1)                            # Keep the UI easy to inspect in the remote scene tree.
 		coin_label.add_theme_font_override("font", pixel_hud_font)                             # Keep score digits deliberately aliased.
-		coin_label.add_theme_font_size_override("font_size", 7)
+		coin_label.add_theme_font_size_override("font_size", 5)
 		coin_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.22, 1.0))        # Give the objective a clear gold arcade color.
 		coin_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep numbers readable over bright floors.
 		coin_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
@@ -1523,7 +1552,7 @@ func _setup_combat_hud() -> void:
 		var ammo_label := Label.new()                                                            # Create the temporary rapid-fire round counter.
 		ammo_label.name = "CombatAmmoP%d" % (player_index + 1)                                  # Keep the temporary UI identifiable in the scene tree.
 		ammo_label.add_theme_font_override("font", pixel_hud_font)                             # Keep ammunition digits deliberately aliased.
-		ammo_label.add_theme_font_size_override("font_size", 11)                               # Match the compact coin-score lettering.
+		ammo_label.add_theme_font_size_override("font_size", 5)
 		ammo_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.72, 1.0))        # Use a pale brass color that reads as ammunition.
 		ammo_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep counter readable over every floor texture.
 		ammo_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
@@ -1541,7 +1570,7 @@ func _setup_combat_hud() -> void:
 		timer_label.name = "CombatRoundTimerP%d" % (player_index + 1)
 		timer_label.add_theme_font_override("font", pixel_hud_font)                            # Keep the timer crisp instead of vector-smoothed.
 		timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		timer_label.add_theme_font_size_override("font_size", 9)
+		timer_label.add_theme_font_size_override("font_size", 5)
 		timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.28, 1.0))
 		timer_label.add_theme_color_override("font_shadow_color", Color.BLACK)
 		timer_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -1579,7 +1608,7 @@ func _update_combat_hud() -> void:
 		var viewport_node: Node2D = view.get("maze_viewport", null)                              # Use the same display position and scale as the camera image.
 		if viewport_node != null:
 			meter.position = viewport_node.position + Vector2(5.0, VIEWPORT_SIZE.y * viewport_node.scale.y - 8.0 * viewport_node.scale.y) # Keep the compact meter comfortably inside the lower-left of its camera.
-			meter.scale = viewport_node.scale * 0.65                                                  # Keep hearts compact in the four-player layout.
+			meter.scale = viewport_node.scale                                                         # Preserve integer nearest-neighbor scaling for pixel hearts.
 		var state := player_states[player_index]                                                   # Read current combat data.
 		if viewport_node != null and player_index < player_join_overlays.size():
 			var join_overlay := player_join_overlays[player_index]
@@ -1593,7 +1622,7 @@ func _update_combat_hud() -> void:
 			var name_label := player_name_labels[player_index]
 			name_label.position = viewport_node.position + Vector2(0.0, (VIEWPORT_SIZE.y - 18.0) * viewport_node.scale.y)
 			name_label.scale = viewport_node.scale
-			name_label.text = "%s  K:%d" % [PLAYER_NAMES[player_index], int(state.get("kills", 0))]
+			name_label.text = "%s:%d" % [PLAYER_NAMES[player_index], int(state.get("kills", 0))]
 			var team_one_score := 0
 			var team_two_score := 0
 			for score_index in range(player_states.size()):
@@ -1602,7 +1631,7 @@ func _update_combat_hud() -> void:
 			var team_label := team_score_labels[player_index]
 			team_label.position = viewport_node.position + Vector2(3.0, 3.0)
 			team_label.scale = viewport_node.scale
-			team_label.text = "T1 %d  T2 %d" % [team_one_score, team_two_score]
+			team_label.text = "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
 			var board := scoreboard_labels[player_index]
 			board.position = viewport_node.position + Vector2(10.0, 28.0) * viewport_node.scale
 			board.scale = viewport_node.scale
@@ -1610,7 +1639,12 @@ func _update_combat_hud() -> void:
 			if scoreboard_visible:
 				var ranking := player_states.duplicate()
 				ranking.sort_custom(func(a, b): return int(a.get("kills", 0)) > int(b.get("kills", 0)) or (int(a.get("kills", 0)) == int(b.get("kills", 0)) and int(a.get("deaths", 0)) < int(b.get("deaths", 0))))
-				board.text = "SCOREBOARD\n" + "\n".join(ranking.map(func(entry): return "%s  %dK  %dD" % [PLAYER_NAMES[int(entry["player_index"])], int(entry.get("kills", 0)), int(entry.get("deaths", 0))]))
+				var rows: Array[String] = ["[center]SCOREBOARD[/center]", "NAME     K   D"]
+				for entry in ranking:
+					var rank_index := int(entry["player_index"])
+					var color := "#b31973" if PLAYER_TEAMS[rank_index] == 0 else "#1b9e38"
+					rows.append("[color=%s]%-6s  %2d  %2d[/color]" % [color, PLAYER_NAMES[rank_index], int(entry.get("kills", 0)), int(entry.get("deaths", 0))])
+				board.text = "\n".join(rows)
 		meter.set_health(int(state.get("health", PLAYER_MAX_HEALTH)), PLAYER_MAX_HEALTH)          # Redraw the requested ten-hatch health value.
 		if viewport_node != null and player_index < combat_coin_icons.size() and player_index < combat_coin_labels.size(): # Position the lower-right objective UI in the same camera rectangle.
 			var coin_icon := combat_coin_icons[player_index]
@@ -1662,10 +1696,10 @@ func _update_combat_hud() -> void:
 					timer_label.position = timer_view.position + Vector2((VIEWPORT_SIZE.x * timer_view.scale.x - timer_label.size.x * timer_view.scale.x) * 0.5, 3.0)
 					timer_label.scale = timer_view.scale
 				if combat_round_duration_seconds <= 0.0:
-					timer_label.text = "TIME ∞"
+					timer_label.text = "∞"
 				else:
 					var displayed_seconds := maxi(0, ceili(combat_round_time_remaining))
-					timer_label.text = "TIME %d:%02d" % [displayed_seconds / 60, displayed_seconds % 60]
+					timer_label.text = "%d:%02d" % [displayed_seconds / 60, displayed_seconds % 60]
 		if player_index < combat_round_result_labels.size():                                     # Show the same frozen result on both independent player displays.
 			var result_label := combat_round_result_labels[player_index]
 			if is_instance_valid(result_label):
@@ -1750,6 +1784,9 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "visual_target_position": origin + direction * visual_distance, "visual_total_distance": maxf(visual_distance, 0.001), "direction": direction, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair so the rendered shot travels in a single straight line.
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
+	if gunshot_player != null:
+		gunshot_player.pitch_scale = randf_range(0.93, 1.07)
+		gunshot_player.play()
 	var machine_gun_rounds := int(state.get("machine_gun_ammo", 0))                            # Read the optional temporary weapon state once at fire time.
 	if machine_gun_rounds > 0:                                                                  # Consume rapid-fire rounds only while the pickup remains armed.
 		var remaining_rounds := machine_gun_rounds - 1                                            # Spend one round while retaining the exact amount for a later dropped pickup.
@@ -1949,7 +1986,7 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 	if sprite == null:
 		return
 	var resolved_team_index := int(sprite.get_meta("team_index", team_index))                 # Prefer the sprite's persistent owner over the transient active camera binding.
-	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER # Pick an immutable team shader rather than a fragile per-instance palette uniform.
+	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER
 	var material := sprite.material as ShaderMaterial                                          # Reuse this sprite's material without sharing per-view uniforms.
 	if material == null or material.shader != expected_shader:
 		material = ShaderMaterial.new()
@@ -5687,6 +5724,8 @@ func _update_all_join_states() -> void:
 		if request:
 			player_joined[player_index] = true
 			player_two_joined = player_joined[1]
+			if not match_started and music_player != null:
+				music_player.play()
 			match_started = true
 
 
