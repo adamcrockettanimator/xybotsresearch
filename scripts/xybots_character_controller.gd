@@ -113,7 +113,7 @@ const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
 const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
 const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
 const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0)
-const MUSIC_STREAM := preload("res://assets/Audio/Music/Dust and Static.mp3")
+const MUSIC_STREAM := preload("res://assets/Audio/Music/Ecstacy of Gold.mp3")
 const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
 const PROJECTILE_SPEED := 6.0                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.7                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
@@ -728,6 +728,7 @@ var player_join_labels: Array[Label] = []
 var player_name_labels: Array[Label] = []
 var team_score_labels: Array[RichTextLabel] = []
 var scoreboard_labels: Array[RichTextLabel] = []
+var scoreboard_player_index := -1
 var options_overlay: ColorRect
 var options_label: Label
 var was_options_pressed := false
@@ -870,19 +871,9 @@ func _setup_deathmatch_overlays() -> void:
 		team_label.z_index = 360
 		hud.add_child(team_label)
 		team_score_labels.append(team_label)
-		var board_label := RichTextLabel.new()
-		board_label.bbcode_enabled = true
-		board_label.scroll_active = false
-		board_label.add_theme_font_override("normal_font", pixel_hud_font)
-		board_label.add_theme_font_size_override("normal_font_size", 5)
-		board_label.size = Vector2(118.0, 90.0)
-		board_label.add_theme_color_override("font_shadow_color", Color.BLACK)
-		board_label.add_theme_constant_override("shadow_offset_x", 1)
-		board_label.add_theme_constant_override("shadow_offset_y", 1)
-		board_label.z_index = 520
-		board_label.visible = false
-		hud.add_child(board_label)
-		scoreboard_labels.append(board_label)
+		var board := _make_scoreboard_label()
+		hud.add_child(board)
+		scoreboard_labels.append(board)
 	options_overlay = ColorRect.new()
 	options_overlay.color = Color(0.0, 0.0, 0.0, 0.78)
 	options_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1599,6 +1590,29 @@ func _setup_combat_hud() -> void:
 
 
 # _update_combat_hud: Positions the simple player health hatches inside each split-screen camera.
+func _make_scoreboard_label() -> RichTextLabel:
+	var board := RichTextLabel.new()
+	board.bbcode_enabled = true
+	board.scroll_active = false
+	board.add_theme_font_override("normal_font", pixel_hud_font)
+	board.add_theme_font_size_override("normal_font_size", 5)
+	board.size = Vector2(156.0, 105.0)
+	board.add_theme_color_override("font_shadow_color", Color.BLACK)
+	board.add_theme_constant_override("shadow_offset_x", 1)
+	board.add_theme_constant_override("shadow_offset_y", 1)
+	board.z_index = 520
+	board.visible = false
+	return board
+
+
+func _team_scoreboard_rows(team_name: String, team_score: int, team_deaths: int, members: Array[Dictionary], color: String) -> Array[String]:
+	var rows: Array[String] = ["[color=%s]%-8s %5d  %6d[/color]" % [color, team_name, team_score, team_deaths], "[color=%s]---------------------[/color]" % color]
+	for entry in members:
+		var member_index := int(entry["player_index"])
+		rows.append("[color=%s]%-8s %5d  %6d[/color]" % [color, PLAYER_NAMES[member_index], int(entry.get("kills", 0)), int(entry.get("deaths", 0))])
+	return rows
+
+
 func _update_combat_hud() -> void:
 	for player_index in range(mini(combat_health_bars.size(), player_states.size())):          # Update only the meters that have a valid player state.
 		var meter := combat_health_bars[player_index]                                              # Read this player's retained hatch-bar node.
@@ -1633,17 +1647,29 @@ func _update_combat_hud() -> void:
 			team_label.scale = viewport_node.scale
 			team_label.text = "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
 			var board := scoreboard_labels[player_index]
-			board.position = viewport_node.position + Vector2(10.0, 28.0) * viewport_node.scale
+			var board_visible := scoreboard_player_index == player_index
+			board.position = viewport_node.position + Vector2(2.0, 28.0) * viewport_node.scale
 			board.scale = viewport_node.scale
-			board.visible = scoreboard_visible
-			if scoreboard_visible:
-				var ranking := player_states.duplicate()
-				ranking.sort_custom(func(a, b): return int(a.get("kills", 0)) > int(b.get("kills", 0)) or (int(a.get("kills", 0)) == int(b.get("kills", 0)) and int(a.get("deaths", 0)) < int(b.get("deaths", 0))))
-				var rows: Array[String] = ["[center]SCOREBOARD[/center]", "NAME     K   D"]
-				for entry in ranking:
-					var rank_index := int(entry["player_index"])
-					var color := "#b31973" if PLAYER_TEAMS[rank_index] == 0 else "#1b9e38"
-					rows.append("[color=%s]%-6s  %2d  %2d[/color]" % [color, PLAYER_NAMES[rank_index], int(entry.get("kills", 0)), int(entry.get("deaths", 0))])
+			board.visible = board_visible
+			if board_visible:
+				var lawmen: Array[Dictionary] = []
+				var outlaws: Array[Dictionary] = []
+				var lawmen_deaths := 0
+				var outlaws_deaths := 0
+				for entry in player_states:
+					if PLAYER_TEAMS[int(entry["player_index"])] == 0:
+						lawmen.append(entry)
+						lawmen_deaths += int(entry.get("deaths", 0))
+					else:
+						outlaws.append(entry)
+						outlaws_deaths += int(entry.get("deaths", 0))
+				var score_sort := func(a, b): return int(a.get("kills", 0)) > int(b.get("kills", 0)) or (int(a.get("kills", 0)) == int(b.get("kills", 0)) and int(a.get("deaths", 0)) < int(b.get("deaths", 0)))
+				lawmen.sort_custom(score_sort)
+				outlaws.sort_custom(score_sort)
+				var rows: Array[String] = ["         Kills  Deaths"]
+				rows.append_array(_team_scoreboard_rows("Lawmen", team_one_score, lawmen_deaths, lawmen, "#b31973"))
+				rows.append("")
+				rows.append_array(_team_scoreboard_rows("Outlaws", team_two_score, outlaws_deaths, outlaws, "#1b9e38"))
 				board.text = "\n".join(rows)
 		meter.set_health(int(state.get("health", PLAYER_MAX_HEALTH)), PLAYER_MAX_HEALTH)          # Redraw the requested ten-hatch health value.
 		if viewport_node != null and player_index < combat_coin_icons.size() and player_index < combat_coin_labels.size(): # Position the lower-right objective UI in the same camera rectangle.
@@ -1785,7 +1811,7 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
 	if gunshot_player != null:
-		gunshot_player.pitch_scale = randf_range(0.93, 1.07)
+		gunshot_player.pitch_scale = randf_range(0.78, 1.22)
 		gunshot_player.play()
 	var machine_gun_rounds := int(state.get("machine_gun_ammo", 0))                            # Read the optional temporary weapon state once at fire time.
 	if machine_gun_rounds > 0:                                                                  # Consume rapid-fire rounds only while the pickup remains armed.
@@ -2432,9 +2458,13 @@ func _process(delta: float) -> void:                                            
 		if options_overlay != null:
 			options_overlay.visible = match_paused
 	was_options_pressed = options_pressed
-	scoreboard_visible = _is_key_down(KEY_TAB) # Scoreboard is informational and never pauses the match.
-	for device_id in Input.get_connected_joypads():
-		scoreboard_visible = scoreboard_visible or Input.is_joy_button_pressed(device_id, JOY_BUTTON_START)
+	# Scoreboard is informational and only appears in the view belonging to the input that requested it.
+	scoreboard_player_index = 0 if _is_key_down(KEY_TAB) else -1
+	for player_index in range(player_states.size()):
+		var player_joypad := _xbox_joypad_id_for_player(player_index)
+		if player_joypad >= 0 and Input.is_joy_button_pressed(player_joypad, JOY_BUTTON_START):
+			scoreboard_player_index = player_index
+	scoreboard_visible = scoreboard_player_index >= 0
 	if match_paused:
 		_update_combat_hud()
 		return
