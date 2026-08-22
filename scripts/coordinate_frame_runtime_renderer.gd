@@ -104,6 +104,8 @@ var runtime_wall_layer: Node2D
 var wall_art_sprite: Sprite2D
 var wall_render_image: Image
 var wall_render_texture: ImageTexture
+var wall_occlusion_image: Image
+var wall_occlusion_texture: ImageTexture
 var wall_source_image: Image
 var wall_source_texture: Texture2D
 var wall_height_image: Image
@@ -298,6 +300,9 @@ func _initialize() -> void:
 	wall_render_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
 	wall_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	wall_render_texture = ImageTexture.create_from_image(wall_render_image)
+	wall_occlusion_image = Image.create(int(VIEW_SIZE.x), int(VIEW_SIZE.y), false, Image.FORMAT_RGBA8)
+	wall_occlusion_image.fill(Color(0.0, 0.0, 0.0, 0.0))
+	wall_occlusion_texture = ImageTexture.create_from_image(wall_occlusion_image)
 	wall_art_sprite = Sprite2D.new()
 	wall_art_sprite.name = "CoordinateFrameWallArt"
 	wall_art_sprite.centered = false
@@ -928,6 +933,7 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 func _rebuild_runtime_wall_surfaces(entries: Array[Dictionary]) -> int:
 	if wall_render_image == null or wall_render_texture == null or wall_source_image == null:
 		return 0
+	_rebuild_wall_occlusion_mask(entries)
 	if _can_use_gpu_wall_renderer():
 		var gpu_started_us := Time.get_ticks_usec()
 		var gpu_count := _rebuild_gpu_wall_surfaces(entries)
@@ -949,6 +955,44 @@ func _rebuild_runtime_wall_surfaces(entries: Array[Dictionary]) -> int:
 	wall_render_texture.update(wall_render_image)
 	profile_upload_us += Time.get_ticks_usec() - upload_started_us
 	return entries.size()
+
+
+# get_wall_occlusion_texture: Exposes the nearest opaque wall depth at every
+# logical screen pixel.  World-sprite shaders use it to discard only the parts
+# of an actor or item genuinely behind a wall, rather than treating a billboard
+# as one all-or-nothing center ray.
+func get_wall_occlusion_texture() -> Texture2D:
+	return wall_occlusion_texture
+
+
+# _rebuild_wall_occlusion_mask: Rasterizes the already accepted wall quads
+# far-to-near into a compact depth map.  Alpha means a wall owns this screen
+# pixel; red stores its camera depth normalized to the shared 6.25-cell range.
+func _rebuild_wall_occlusion_mask(entries: Array[Dictionary]) -> void:
+	if wall_occlusion_image == null or wall_occlusion_texture == null:
+		return
+	wall_occlusion_image.fill(Color(0.0, 0.0, 0.0, 0.0))
+	for entry in entries:
+		var quad: PackedVector2Array = entry.get("quad", PackedVector2Array())
+		if quad.size() != 4:
+			continue
+		var inverse := _inverse_homography(quad[0], quad[1], quad[2], quad[3])
+		if inverse.size() != 3:
+			continue
+		var bounds := _quad_bounds(quad)
+		var min_x := clampi(floori(bounds.position.x), 0, int(VIEW_SIZE.x) - 1)
+		var min_y := clampi(floori(bounds.position.y), 0, int(VIEW_SIZE.y) - 1)
+		var max_x := clampi(ceili(bounds.end.x), 0, int(VIEW_SIZE.x) - 1)
+		var max_y := clampi(ceili(bounds.end.y), 0, int(VIEW_SIZE.y) - 1)
+		var depths: Vector2 = entry.get("depths", Vector2(float(entry.get("depth", MAX_DEPTH)), float(entry.get("depth", MAX_DEPTH))))
+		for y in range(min_y, max_y + 1):
+			for x in range(min_x, max_x + 1):
+				var uv := _inverse_homography_uv(inverse[0], inverse[1], inverse[2], Vector2(x, y))
+				if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
+					continue
+				var depth := lerpf(depths.x, depths.y, uv.x)
+				wall_occlusion_image.set_pixel(x, y, Color(clampf(depth / 6.25, 0.0, 1.0), 0.0, 0.0, 1.0))
+	wall_occlusion_texture.update(wall_occlusion_image)
 
 
 # _visible_floor_cells: Produces one projected quad per real maze cell using

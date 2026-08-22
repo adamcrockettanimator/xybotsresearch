@@ -109,7 +109,7 @@ const MACHINE_GUN_FIRE_INTERVAL := 0.12                                         
 const MACHINE_GUN_AMMO := 20                                                                  # Keep the rapid-fire pickup powerful without allowing a prolonged dominant streak.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const COIN_PICKUP_RADIUS := 0.32                                                              # Let a player collect a center-of-cell coin without requiring exact pixel contact.
-const DEFAULT_COMBAT_ROUND_SECONDS := 79.221                                                  # Match Ecstacy of Gold's observed audible ending; the MP3 container reports roughly 23 seconds of silent tail after the music.
+const DEFAULT_COMBAT_ROUND_SECONDS := 101.60                                                  # Match the Godot importer waveform's 101.60 s end of audible song content, excluding the MP3 container tail.
 const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
 const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
 const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
@@ -898,7 +898,7 @@ func _setup_deathmatch_overlays() -> void:
 	options_overlay.visible = false
 	canvas_layer.add_child(options_overlay)
 	options_label = Label.new()
-	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:19\n\nSELECT / ESC: CLOSE"
+	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:42\n\nSELECT / ESC: CLOSE"
 	options_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	options_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	options_label.add_theme_font_override("font", pixel_hud_font)
@@ -2222,7 +2222,21 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 		sprite.material = material
 	sprite.self_modulate = Color.WHITE                                                       # Ensure prior per-sprite tinting cannot make world objects dark after distance lighting was removed.
 	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth)) # Quantize source pixels from discrete perspective depth bands.
+	var occlusion_texture := _active_wall_occlusion_texture()
+	material.set_shader_parameter("wall_occlusion_texture", occlusion_texture)
+	material.set_shader_parameter("world_view_depth", world_view_depth)
+	material.set_shader_parameter("use_wall_occlusion", occlusion_texture != null)
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
+
+
+# _active_wall_occlusion_texture: Each split-screen viewer owns its own wall
+# depth mask, so a sprite can be clipped per pixel against that viewer's walls.
+func _active_wall_occlusion_texture() -> Texture2D:
+	if active_player_index >= 0 and active_player_index < coordinate_renderers.size():
+		var renderer := coordinate_renderers[active_player_index]
+		if is_instance_valid(renderer) and renderer.has_method("get_wall_occlusion_texture"):
+			return renderer.call("get_wall_occlusion_texture") as Texture2D
+	return null
 
 
 # _clear_runtime_world_sprite_style: Keeps the local player camera-relative body at its authored brightness and source pixel resolution.
@@ -2321,7 +2335,7 @@ func _update_combat_view() -> void:
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
 			var target_world := _player_state_world_position(state)                                  # Project the opposing hit body into this view.
-			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18):
+			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18) or not _world_actor_has_clear_line_of_sight(target_world):
 				continue                                                                                 # Keep hidden opponents hidden even while hit.
 			var projection := _opponent_projection_from_current_camera(target_world)                 # Use same view model as opponent sprite.
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
@@ -2338,7 +2352,7 @@ func _update_combat_view() -> void:
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
 func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0) -> void:
-	if not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16): # Keep collectibles in front of the camera and inside its actual fan.
+	if not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position): # Keep collectibles in front of the camera, inside its fan, and behind no blocking edge.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
 	var projection := _opponent_projection_from_current_camera(world_position)                  # Reuse the stable world-to-view projection shared with opponents.
 	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
@@ -6329,6 +6343,9 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
+	if not _world_actor_has_clear_line_of_sight(target_world):                                  # Test the same thin-wall ray geometry used by movement and wall selection.
+		opponent_sprite.visible = false                                                           # Never expose a foot or edge of an actor whose body center is blocked by a wall.
+		return
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
@@ -6593,7 +6610,7 @@ func _world_actor_has_clear_line_of_sight(target_world: Vector2) -> bool:
 	if target_distance <= 0.025:                                                               # A player occupying the camera point cannot be blocked by an intervening edge.
 		return true                                                                               # Keep this degenerate near-camera case visible.
 	var ray_direction := to_target / target_distance                                           # Normalize the camera-to-opponent line for segment intersection.
-	var body_clearance := 0.08                                                                 # Stop an edge touching the body boundary from falsely hiding a player standing flush to it.
+	var body_clearance := 0.005                                                                # Preserve only floating-point tolerance; a player flush to a blocking wall must not leak through it.
 	for edge in _all_physical_wall_edges():                                                    # Test the direct sight line against the identical thin-wall geometry used for collision.
 		var hit_distance := _ray_segment_hit_distance(origin, ray_direction, Vector2(edge["a"]), Vector2(edge["b"])) # Find the first point where this line meets each physical wall edge.
 		if hit_distance >= 0.0 and hit_distance < target_distance - body_clearance:              # Any edge strictly before the opponent blocks the whole sprite.
