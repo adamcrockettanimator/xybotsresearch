@@ -1544,8 +1544,14 @@ func _runtime_camera_origin(forward: Vector2, right: Vector2) -> Vector2:
 	# the source cell until the final grid-position snap.
 	var origin := _template_camera_origin(forward)
 	if int(controller.forward_step) != 0:
-		var forward_fraction := 0.25 if int(controller.forward_step) == 1 else 0.50
-		if String(controller.forward_transition_name) == "backward":
+		var is_backward := String(controller.forward_transition_name) == "backward"
+		# Backward playback shows the authored art in reverse (Fwd 2 then Fwd 1),
+		# but its camera positions must still progress away from the source cell.
+		# Convert the displayed stage back to chronological camera stage before
+		# choosing the quarter/half distance.
+		var chronological_stage := 3 - int(controller.forward_step) if is_backward else int(controller.forward_step)
+		var forward_fraction := 0.25 if chronological_stage == 1 else 0.50
+		if is_backward:
 			forward_fraction = -forward_fraction
 		return origin + forward * forward_fraction
 	if int(controller.strafe_step) != 0:
