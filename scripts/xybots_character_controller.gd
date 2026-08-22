@@ -2325,7 +2325,7 @@ func _update_combat_view() -> void:
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
 func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0) -> void:
-	if not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position): # Keep collectibles inside the actual current camera fan and behind physical walls.
+	if not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position): # Keep collectibles in front of the camera, inside its actual fan, and behind physical walls.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
 	var projection := _opponent_projection_from_current_camera(world_position)                  # Reuse the stable world-to-view projection shared with opponents.
 	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
@@ -6550,17 +6550,27 @@ func _projected_sprite_overlaps_viewport(screen_x: float, screen_y: float, sprit
 
 
 
-# _world_actor_overlaps_current_camera_fan: Checks whether an actor body overlaps this player's camera fan.
+# _world_actor_overlaps_current_camera_fan: Checks whether a remote world actor overlaps this player's forward camera fan.
 func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin: float) -> bool: # Declare this function.
 	var origin := _runtime_camera_origin_for_visibility()                                      # Use the runtime renderer's exact rear-biased/interpolated camera point.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact visible camera heading, including temporary diagonal poses.
 	var right := Vector2(-forward.y, forward.x).normalized()                                   # Build the matching camera-right axis for the live fan test.
 	var relative := target_world - origin                                                      # Measure the target relative to the camera.
 	var depth := relative.dot(forward)                                                         # Compute target depth along camera-forward.
-	if depth <= -CAMERA_REAR_OFFSET - side_margin or depth > DEBUG_VIEW_CONE_DEPTH + 0.75 + side_margin: # Keep a same-cell body visible behind the rear-biased camera origin, but reject genuinely rearward actors.
-		return false                                                                              # Report the opponent as not visible.
+	if depth <= 0.01 or depth > DEBUG_VIEW_CONE_DEPTH + 0.75 + side_margin:                    # Remote actors in the cell behind the viewer must never inherit the local body's rear-camera allowance.
+		return false                                                                              # Report the remote actor as not visible.
 	var side := absf(relative.dot(right))                                                       # Measure the actor's distance from the center of the currently visible fan.
 	return side <= _camera_fan_half_width_at_depth(maxf(depth, 0.0)) + side_margin             # Reject actors that have already left this camera's real left/right field of view.
+
+
+
+# _world_pickup_is_in_front_of_current_camera: Pickups must never use the
+# body-renderer's rear-camera allowance.  That allowance keeps the local player
+# stable, but otherwise leaks the item in the cell behind the player onto screen.
+func _world_pickup_is_in_front_of_current_camera(target_world: Vector2) -> bool:
+	var origin := _runtime_camera_origin_for_visibility()
+	var forward := _view_forward_vector().normalized()
+	return (target_world - origin).dot(forward) > 0.01
 
 
 
