@@ -1595,8 +1595,8 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 	# player.  A body genuinely behind the camera should still be discarded.
 	if raw_depth <= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH:
 		return {"visible": false, "view_depth": raw_depth, "view_side": local.x}
-	# Project feet from the exact live pose. The protected near depth puts a
-	# same-cell opponent on the same rear-wall floor line as the local player.
+	# Keep world movement continuous.  Discrete LOD bands affect only the source
+	# pixel grid; they must never make an opponent jog in place then lurch.
 	var display_local := Vector2(local.x, maxf(raw_depth, WORLD_ACTOR_PROTECTED_DISPLAY_DEPTH))
 	var feet := _project_view_point(display_local, 0.0)
 	var head := _project_view_point(display_local, object_height)

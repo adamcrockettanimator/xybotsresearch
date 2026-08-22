@@ -109,7 +109,7 @@ const MACHINE_GUN_FIRE_INTERVAL := 0.12                                         
 const MACHINE_GUN_AMMO := 20                                                                  # Keep the rapid-fire pickup powerful without allowing a prolonged dominant streak.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const COIN_PICKUP_RADIUS := 0.32                                                              # Let a player collect a center-of-cell coin without requiring exact pixel contact.
-const DEFAULT_COMBAT_ROUND_SECONDS := 102.221                                                 # Trim the observed three-second tail so the round ends with Ecstacy of Gold in gameplay.
+const DEFAULT_COMBAT_ROUND_SECONDS := 79.221                                                  # Match Ecstacy of Gold's observed audible ending; the MP3 container reports roughly 23 seconds of silent tail after the music.
 const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
 const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
 const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
@@ -898,7 +898,7 @@ func _setup_deathmatch_overlays() -> void:
 	options_overlay.visible = false
 	canvas_layer.add_child(options_overlay)
 	options_label = Label.new()
-	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:42\n\nSELECT / ESC: CLOSE"
+	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:19\n\nSELECT / ESC: CLOSE"
 	options_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	options_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	options_label.add_theme_font_override("font", pixel_hud_font)
@@ -2190,15 +2190,27 @@ func _combat_sprite(key: String) -> Sprite2D:
 	return node                                                                                 # Return the cached visual node.
 
 
-# _runtime_world_sprite_texel_stride: Groups enough source texels that each
-# resulting world-sprite block spans at least one logical output pixel.
-func _runtime_world_sprite_texel_stride(sprite_scale: float) -> float:
-	var footprint := maxf(1.0, 1.0 / maxf(sprite_scale, 0.001))                               # Estimate how many source texels would otherwise collapse into one logical screen pixel.
-	return clampf(ceilf(footprint), 1.0, 8.0)                                                   # Use a whole source-texel block large enough to prevent sub-pixel character detail.
+# _runtime_world_sprite_texel_stride: Recreates the supplied eight-level run
+# reference procedurally.  The measured authored reductions are 1.00, .90,
+# .79, .64, .57, .50, .40, and .29.  Their inverse gives the source-pixel grid
+# stride: nearby steps remain subtle while the final distant silhouette uses
+# a noticeably coarser grid.  Depth, rather than sprite scale, drives this so
+# a small coin in the current cell never gets mistaken for a far coin.
+func _runtime_world_sprite_texel_stride(world_view_depth: float) -> float:
+	const LOD_STRIDES := [1.0, 1.11, 1.27, 1.56, 1.75, 2.0, 2.5, 3.5]
+	if world_view_depth <= 0.96:
+		return LOD_STRIDES[0]
+	var remote_depth := world_view_depth - 0.96
+	var step_index: int
+	if remote_depth < 2.0:
+		step_index = 1 + int(floorf(remote_depth * 2.0))
+	else:
+		step_index = 5 + int(floorf((remote_depth - 2.0) * 3.0))
+	return float(LOD_STRIDES[clampi(step_index, 0, LOD_STRIDES.size() - 1)])
 
 
 # _apply_runtime_world_sprite_style: Gives a world-projected sprite its own GPU material, with no object distance darkening.
-func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0) -> void:
+func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0, world_view_depth := 0.0) -> void:
 	if sprite == null:
 		return
 	var resolved_team_index: int = int(PLAYER_TEAMS[team_index]) if team_index >= 0 and team_index < PLAYER_TEAMS.size() else team_index # Normalize player indices to their team so normal and hit sprites always share one palette.
@@ -2209,7 +2221,7 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 		material.shader = expected_shader
 		sprite.material = material
 	sprite.self_modulate = Color.WHITE                                                       # Ensure prior per-sprite tinting cannot make world objects dark after distance lighting was removed.
-	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(sprite_scale)) # Quantize the source sample grid like the runtime walls.
+	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth)) # Quantize source pixels from discrete perspective depth bands.
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
 
 
@@ -2270,7 +2282,7 @@ func _update_combat_view() -> void:
 		var start_scale := clampf(spawn_height / 40.0, 0.28, 1.0)                                 # Read the sprite size at the muzzle.
 		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
 		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
-		_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Keep projectile sampling on the logical pixel grid.
+		_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Match projectile source sampling to its world depth.
 		sprite.z_index = int(projection["z_index"])                                              # Let the world-projected bullet sit behind its firing character rather than overlaying the body.
 		sprite.visible = true                                                                      # Reveal this valid projectile.
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
@@ -2284,7 +2296,7 @@ func _update_combat_view() -> void:
 		sprite.texture = SHOT_EXPLOSION_1_TEXTURE if float(impact["timer"]) > IMPACT_DURATION * 0.5 else SHOT_EXPLOSION_2_TEXTURE # Flip through authored two-frame impact art.
 		sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - float(projection["actor_height"]) * 0.48) # Center effect at visible impact height.
 		sprite.scale = Vector2.ONE * clampf(float(projection["actor_height"]) / 34.0, 0.35, 1.2) # Keep close impacts readable.
-		_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Quantize impact pixels without distance darkening.
+		_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Match impact source sampling to its world depth.
 		sprite.z_index = int(projection["z_index"]) + 3                                         # Put impact on top of its struck surface.
 		sprite.visible = true                                                                      # Reveal active explosion.
 		used[key] = true                                                                           # Preserve this effect node.
@@ -2316,7 +2328,7 @@ func _update_combat_view() -> void:
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index]) # Match the opponent's team palette and pixel-grid treatment.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], float(projection.get("view_depth", 0.0))) # Match the opponent's team palette and depth band.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
@@ -2336,7 +2348,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.texture = texture                                                                    # Use the authored coin or gun pixel art.
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
-	_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Coarsen world pickups without distance darkening.
+	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Apply the same depth band without punishing nearby small pickups.
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
@@ -6323,7 +6335,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
-	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0))) # Keep the opponent on its own team palette and logical pixel grid.
+	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0))) # Match actor source sampling to its discrete depth band.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
 
