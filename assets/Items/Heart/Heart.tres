@@ -1,0 +1,14 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://d3qsbchlgep8"]
+
+[ext_resource type="Texture2D" uid="uid://cb8mi1276582" path="res://assets/Items/Heart/heart.png" id="1_stp5n"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_stp5n")
+}],
+"loop": 1,
+"name": &"Heart",
+"speed": 5.0
+}]

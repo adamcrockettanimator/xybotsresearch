@@ -103,9 +103,10 @@ const ACTION_P2_TURN_RIGHT := "xybots_p2_turn_right"                            
 const ACTION_FIRE := "xybots_fire"                                                           # Name the player-one pistol fire action.
 const ACTION_P2_FIRE := "xybots_p2_fire"                                                     # Name the player-two pistol fire action.
 const PLAYER_MAX_HEALTH := 10                                                                  # Start every player with ten visible health hatches.
+const PLAYER_STARTING_HEALTH := 3                                                              # Spawn with a vulnerable three hearts; pickups can build health to the ten-heart cap.
 const PISTOL_FIRE_INTERVAL := 0.32                                                            # Keep the infinite-ammo pistol deliberate rather than machine-gun fast.
 const MACHINE_GUN_FIRE_INTERVAL := 0.12                                                       # Keep the pickup clearly faster than the pistol without making it a blur.
-const MACHINE_GUN_AMMO := 100                                                                 # Give the temporary pickup the requested one hundred rapid-fire rounds.
+const MACHINE_GUN_AMMO := 20                                                                  # Keep the rapid-fire pickup powerful without allowing a prolonged dominant streak.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const COIN_PICKUP_RADIUS := 0.32                                                              # Let a player collect a center-of-cell coin without requiring exact pixel contact.
 const DEFAULT_COMBAT_ROUND_SECONDS := 102.221                                                 # Trim the observed three-second tail so the round ends with Ecstacy of Gold in gameplay.
@@ -139,6 +140,9 @@ const COIN_TEXTURES := [                                                        
 	preload("res://assets/Items/Coin/Coin_03.png"),
 	preload("res://assets/Items/Coin/Coin_04.png"),
 ]
+const HEART_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Heart/Heart.tres")    # Use the user-authored SpriteFrames asset for world health pickups.
+const HEART_MAP_SPAWN_CHANCE := 0.20                                                          # Replace roughly one fifth of round-start coin cells with health pickups for testing.
+const HEART_DROP_CHANCE := 0.45                                                               # Make kill drops frequent enough to exercise health recovery during playtests.
 const GUN_TEXTURE := preload("res://assets/Items/Gun/Gun.png")                              # Use the authored machine-gun pickup art in world space and HUD.
 const XBOX_STICK_DEADZONE := 0.22                                                            # Ignore small Xbox-stick drift around its physical center.
 const XBOX_TURN_THRESHOLD := 0.62                                                            # Require a deliberate right-stick push before issuing one turn input.
@@ -728,11 +732,14 @@ var player_join_labels: Array[Label] = []
 var player_name_labels: Array[Label] = []
 var team_score_labels: Array[RichTextLabel] = []
 var scoreboard_labels: Array[RichTextLabel] = []
+var scoreboard_shop_labels: Array[RichTextLabel] = []
 var scoreboard_player_index := -1
 var options_overlay: ColorRect
 var options_label: Label
 var was_options_pressed := false
 var was_scoreboard_pressed := false
+var was_shop_heart_pressed := [false, false, false, false]
+var was_shop_gun_pressed := [false, false, false, false]
 var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
 var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
 var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
@@ -748,6 +755,7 @@ var combat_coin_icons: Array[TextureRect] = []                                  
 var combat_ammo_labels: Array[Label] = []                                                     # Store the temporary rapid-fire ammo counter for each local view.
 var combat_ammo_icons: Array[TextureRect] = []                                                # Store the gun icon only while its player is armed.
 var world_coins: Array[Dictionary] = []                                                       # Keep uncollected map and dropped coins in shared world coordinates.
+var world_hearts: Array[Dictionary] = []                                                      # Keep rare one-health drops in the same shared world space as coins and guns.
 var machine_gun_pickup: Dictionary = {}                                                       # Keep the one active machine-gun pickup in shared world coordinates.
 var machine_gun_respawn_timer := 0.0                                                          # Count down only while no contested machine-gun pickup exists.
 var combat_total_coin_value := 0                                                              # Preserve the round's original coin total for score labels even after drops.
@@ -851,7 +859,7 @@ func _setup_deathmatch_overlays() -> void:
 		hud.add_child(join_label)
 		player_join_labels.append(join_label)
 		var name_label := Label.new()
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		name_label.add_theme_font_override("font", pixel_hud_font)
 		name_label.add_theme_font_size_override("font_size", 5)
 		name_label.add_theme_color_override("font_shadow_color", Color.BLACK)
@@ -859,7 +867,7 @@ func _setup_deathmatch_overlays() -> void:
 		name_label.add_theme_constant_override("shadow_offset_y", 1)
 		name_label.add_theme_color_override("font_color", Color(0.70, 0.10, 0.45, 1.0) if PLAYER_TEAMS[player_index] == 0 else Color(0.10, 0.62, 0.22, 1.0))
 		name_label.text = "%s:%d" % [PLAYER_NAMES[player_index], 0]
-		name_label.size = Vector2(VIEWPORT_SIZE.x, 22.0)
+		name_label.size = Vector2(74.0, 10.0)
 		name_label.z_index = 360
 		hud.add_child(name_label)
 		player_name_labels.append(name_label)
@@ -878,6 +886,9 @@ func _setup_deathmatch_overlays() -> void:
 		var board := _make_scoreboard_label()
 		hud.add_child(board)
 		scoreboard_labels.append(board)
+		var shop := _make_scoreboard_shop_label()
+		hud.add_child(shop)
+		scoreboard_shop_labels.append(shop)
 	options_overlay = ColorRect.new()
 	options_overlay.color = Color(0.0, 0.0, 0.0, 0.78)
 	options_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1275,7 +1286,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"last_visible_wall_ids": [],                                                               # Store this player's currently rendered wall ids.
 		"was_left_turn_pressed": false,                                                            # Store this player's left-turn one-shot latch.
 		"was_right_turn_pressed": false,                                                           # Store this player's right-turn one-shot latch.
-		"health": PLAYER_MAX_HEALTH,                                                               # Store the current combat health shown by the hatch meter.
+		"health": PLAYER_STARTING_HEALTH,                                                         # Begin each round with three recoverable hearts.
 		"coins": 0,                                                                                # Track this player's collected objective coins across deaths and respawns.
 		"kills": 0,
 		"deaths": 0,
@@ -1318,11 +1329,16 @@ func _setup_combat_collectibles() -> void:
 # _reset_combat_collectibles: Rebuilds every map coin and places one machine gun away from the spawn corners.
 func _reset_combat_collectibles() -> void:
 	world_coins.clear()                                                                        # Remove old map/dropped coins before rebuilding the round objective.
+	world_hearts.clear()                                                                       # Remove unclaimed health drops with the completed round.
 	_reset_combat_round()                                                                     # Restart the shared match clock and clear any prior frozen result with the new map.
 	combat_total_coin_value = MAP_WIDTH * MAP_HEIGHT                                          # Keep the original map total stable for both players' score readouts.
 	for y in range(MAP_HEIGHT):                                                                # Visit every walkable maze cell exactly once.
-		for x in range(MAP_WIDTH):                                                              # Place the single objective coin at the center of this cell.
-			world_coins.append({"id": next_combat_visual_id, "position": Vector2(float(x) + 0.5, float(y) + 0.5), "value": 1}) # Store world-space pickup data independent of either camera.
+		for x in range(MAP_WIDTH):                                                              # Place one coin or heart pickup at the center of each cell.
+			var position := Vector2(float(x) + 0.5, float(y) + 0.5)
+			if randf() < HEART_MAP_SPAWN_CHANCE:
+				world_hearts.append({"id": next_combat_visual_id, "position": position})          # Let a portion of ordinary coin cells become one-health pickups.
+			else:
+				world_coins.append({"id": next_combat_visual_id, "position": position, "value": 1}) # Keep every remaining cell as the existing coin pickup.
 			next_combat_visual_id += 1                                                            # Reserve a stable visual cache key for the coin.
 	machine_gun_pickup = {}                                                                   # Clear any pickup held by the old map before choosing a fresh contested location.
 	machine_gun_respawn_timer = 0.0                                                          # Allow the first pickup to appear immediately.
@@ -1404,6 +1420,27 @@ func _collect_combat_pickups(delta: float) -> void:
 		else:
 			remaining_coins.append(coin)
 	world_coins = remaining_coins                                                            # Keep only still-uncollected objective or dropped coins.
+	var remaining_hearts: Array[Dictionary] = []
+	for heart in world_hearts:
+		var collected_by := -1
+		var heart_position: Vector2 = heart.get("position", Vector2.ZERO)
+		if not combat_round_complete:
+			for player_index in range(player_states.size()):
+				if player_index >= player_joined.size() or not player_joined[player_index]:
+					continue
+				var state := player_states[player_index]
+				if bool(state.get("is_dying", false)) or int(state.get("health", PLAYER_MAX_HEALTH)) >= PLAYER_MAX_HEALTH:
+					continue
+				if _player_state_world_position(state).distance_to(heart_position) <= COIN_PICKUP_RADIUS:
+					collected_by = player_index
+					break
+		if collected_by >= 0:
+			var collector := player_states[collected_by]
+			collector["health"] = mini(PLAYER_MAX_HEALTH, int(collector.get("health", 0)) + 1)
+			player_states[collected_by] = collector
+		else:
+			remaining_hearts.append(heart)
+	world_hearts = remaining_hearts                                                         # Keep heart items available until an injured joined player claims them.
 	if not machine_gun_pickup.is_empty():                                                    # Test the active pickup only while it exists in the world.
 		var pickup_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)
 		for player_index in range(player_states.size()):
@@ -1454,6 +1491,15 @@ func _drop_coins_for_defeat(player_index: int) -> void:
 		position.y = clampf(position.y, 0.08, float(MAP_HEIGHT) - 0.08)
 		world_coins.append({"id": next_combat_visual_id, "position": position, "value": 1})
 		next_combat_visual_id += 1
+
+
+func _maybe_drop_heart_for_kill(defeated_player_index: int) -> void:
+	if combat_round_complete or randf() >= HEART_DROP_CHANCE:
+		return
+	var defeated := player_states[defeated_player_index]
+	var position := _player_state_world_position(defeated)
+	world_hearts.append({"id": next_combat_visual_id, "position": position})
+	next_combat_visual_id += 1
 
 
 # _drop_machine_gun_for_defeat: Returns the existing weapon to the map at the defeated player's actual location with its remaining magazine intact.
@@ -1640,6 +1686,22 @@ func _make_scoreboard_label() -> RichTextLabel:
 	return board
 
 
+func _make_scoreboard_shop_label() -> RichTextLabel:
+	var shop := RichTextLabel.new()
+	shop.bbcode_enabled = true
+	shop.scroll_active = false
+	shop.add_theme_font_override("normal_font", pixel_hud_font)
+	shop.add_theme_font_size_override("normal_font_size", 3)
+	shop.add_theme_color_override("font_shadow_color", Color.BLACK)
+	shop.add_theme_constant_override("shadow_offset_x", 1)
+	shop.add_theme_constant_override("shadow_offset_y", 1)
+	shop.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shop.size = Vector2(156.0, 24.0)
+	shop.z_index = 521
+	shop.visible = false
+	return shop
+
+
 func _team_scoreboard_rows(team_name: String, team_score: int, team_deaths: int, members: Array[Dictionary], color: String) -> Array[String]:
 	var rows: Array[String] = ["[color=%s]%-8s %5d  %6d[/color]" % [color, team_name, team_score, team_deaths], "[color=%s]---------------------[/color]" % color]
 	for member_position in range(members.size()):
@@ -1671,7 +1733,7 @@ func _final_scoreboard_text() -> String:
 			outlaws_kills += int(entry.get("kills", 0))
 			outlaws_deaths += int(entry.get("deaths", 0))
 	var winner_color := "#b31973" if lawmen_kills > outlaws_kills else ("#1b9e38" if outlaws_kills > lawmen_kills else "#f2df47")
-	var rows: Array[String] = ["[font_size=24][color=#b31973]LAW MEN %d[/color]   [color=#1b9e38]OUTLAWS %d[/color][/font_size]" % [team_round_wins[0], team_round_wins[1]], "", "[color=%s]%s[/color]" % [winner_color, combat_round_result], "", "         Kills  Deaths"]
+	var rows: Array[String] = ["[font_size=24][color=#b31973]LAWMEN %d[/color]   [color=#1b9e38]OUTLAWS %d[/color][/font_size]" % [team_round_wins[0], team_round_wins[1]], "", "[color=%s]%s[/color]" % [winner_color, combat_round_result], "", "         Kills  Deaths"]
 	rows.append_array(_team_scoreboard_rows("Lawmen", lawmen_kills, lawmen_deaths, lawmen, "#b31973"))
 	rows.append("")
 	rows.append_array(_team_scoreboard_rows("Outlaws", outlaws_kills, outlaws_deaths, outlaws, "#1b9e38"))
@@ -1703,7 +1765,7 @@ func _update_combat_hud() -> void:
 			join_label.scale = viewport_node.scale
 			join_label.visible = not player_joined[player_index]
 			var name_label := player_name_labels[player_index]
-			name_label.position = viewport_node.position + Vector2(0.0, (VIEWPORT_SIZE.y - 18.0) * viewport_node.scale.y)
+			name_label.position = viewport_node.position + Vector2(3.0, 2.0) * viewport_node.scale
 			name_label.scale = viewport_node.scale
 			name_label.text = "%s:%d" % [PLAYER_NAMES[player_index], int(state.get("kills", 0))]
 			var team_one_score := 0
@@ -1712,7 +1774,7 @@ func _update_combat_hud() -> void:
 				if PLAYER_TEAMS[score_index] == 0: team_one_score += int(player_states[score_index].get("kills", 0))
 				else: team_two_score += int(player_states[score_index].get("kills", 0))
 			var team_label := team_score_labels[player_index]
-			team_label.position = viewport_node.position + Vector2(3.0, 3.0)
+			team_label.position = viewport_node.position + Vector2(3.0, 12.0) * viewport_node.scale
 			team_label.scale = viewport_node.scale
 			team_label.text = "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
 			var board := scoreboard_labels[player_index]
@@ -1720,6 +1782,15 @@ func _update_combat_hud() -> void:
 			board.position = viewport_node.position + Vector2(2.0, 28.0) * viewport_node.scale
 			board.scale = viewport_node.scale
 			board.visible = board_visible
+			var shop := scoreboard_shop_labels[player_index]
+			shop.position = viewport_node.position + Vector2(2.0, 98.0) * viewport_node.scale
+			shop.scale = viewport_node.scale
+			shop.visible = board_visible and not combat_round_complete
+			if shop.visible:
+				var coins := int(state.get("coins", 0))
+				var heart_color := "#ffffff" if coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH else "#5c5c5c"
+				var gun_color := "#ffffff" if coins >= 10 else "#5c5c5c"
+				shop.text = "[center][color=%s]PRESS A: BUY [img=5x5]res://assets/Items/Heart/heart_icon.png[/img] $5[/color]\n[font_size=1] [/font_size]\n[color=%s]PRESS B: BUY [img=5x5]res://assets/Items/Gun/Gun.png[/img] $10[/color][/center]" % [heart_color, gun_color]
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -1756,9 +1827,9 @@ func _update_combat_hud() -> void:
 			var ammo_label := combat_ammo_labels[player_index]
 			var rounds := int(state.get("machine_gun_ammo", 0))
 			if is_instance_valid(ammo_icon) and is_instance_valid(ammo_label):
-				ammo_icon.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x * 0.5 - 13.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 8.0) * viewport_node.scale.y)
+				ammo_icon.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 66.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 8.0) * viewport_node.scale.y)
 				ammo_icon.scale = viewport_node.scale
-				ammo_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x * 0.5 - 5.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
+				ammo_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 54.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
 				ammo_label.scale = viewport_node.scale
 				ammo_label.text = str(rounds)
 				ammo_icon.visible = rounds > 0
@@ -1980,6 +2051,7 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 			var owner := player_states[owner_index]
 			owner["kills"] = int(owner.get("kills", 0)) + 1
 			player_states[owner_index] = owner
+			_maybe_drop_heart_for_kill(player_index)                                                # A kill can leave a rare one-health recovery item at the defeat location.
 		_begin_combat_death(player_index)                                                          # Choose a safe corner now while preserving the fallen body at its old location.
 
 
@@ -2090,7 +2162,7 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 		state["is_dying"] = false                                                                # Return player control and vulnerability only after the body is visibly back.
 		state["death_phase"] = ""                                                               # Clear the staged-respawn marker.
 		state["death_timer"] = 0.0                                                               # Reset timer for the next defeat.
-		state["health"] = PLAYER_MAX_HEALTH                                                      # Refill the ten hatch health meter on completed respawn.
+		state["health"] = PLAYER_STARTING_HEALTH                                                 # Return with the same three-heart baseline as the start of a round.
 		state["last_animation"] = &""                                                          # Force the normal idle animation to restart cleanly next frame.
 		return state                                                                               # Do not overwrite the cleared phase below.
 	state["death_phase"] = phase                                                              # Save the current or newly entered phase.
@@ -2165,6 +2237,9 @@ func _update_combat_view() -> void:
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
 		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), COIN_TEXTURES[coin_frame], coin_position, used, 0.16, 0.5) # Keep spinning coins at roughly half their former world size.
+	for heart in world_hearts:
+		var heart_position: Vector2 = heart.get("position", Vector2.ZERO)
+		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), HEART_SPRITE_FRAMES.get_frame_texture(&"Heart", 0), heart_position, used, 0.18, 0.65) # Render the user-authored heart SpriteFrames item as a compact floor pickup.
 	if not machine_gun_pickup.is_empty():                                                       # Draw the contested rapid-fire pickup only while it remains unclaimed.
 		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared Vector2 directly instead of reconstructing it from a Variant.
 		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), GUN_TEXTURE, gun_position, used, 0.10) # Keep the pickup at a readable floor-level height.
@@ -2565,6 +2640,29 @@ func _apply_wall_art_debug_visibility() -> void:
 
 
 
+func _update_scoreboard_shop_input() -> void:
+	for player_index in range(player_states.size()):
+		var joypad_id := _xbox_joypad_id_for_player(player_index)
+		var heart_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_A)
+		var gun_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_B)
+		if player_index == 0:
+			heart_pressed = heart_pressed or _is_key_down(KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
+			gun_pressed = gun_pressed or _is_key_down(KEY_2)
+		if scoreboard_player_index == player_index and not combat_round_complete:
+			var state := player_states[player_index]
+			var coins := int(state.get("coins", 0))
+			if heart_pressed and not was_shop_heart_pressed[player_index] and coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH:
+				state["coins"] = coins - 5
+				state["health"] = mini(PLAYER_MAX_HEALTH, int(state.get("health", 0)) + 1)
+				player_states[player_index] = state
+			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10:
+				state["coins"] = coins - 10
+				state["machine_gun_ammo"] = MACHINE_GUN_AMMO
+				player_states[player_index] = state
+		was_shop_heart_pressed[player_index] = heart_pressed
+		was_shop_gun_pressed[player_index] = gun_pressed
+
+
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
@@ -2583,6 +2681,7 @@ func _process(delta: float) -> void:                                            
 		if player_joypad >= 0 and Input.is_joy_button_pressed(player_joypad, JOY_BUTTON_START):
 			scoreboard_player_index = player_index
 	scoreboard_visible = scoreboard_player_index >= 0
+	_update_scoreboard_shop_input()
 	if match_paused:
 		_update_combat_hud()
 		return
