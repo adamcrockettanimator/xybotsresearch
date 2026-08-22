@@ -158,9 +158,10 @@ const SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                   
 const LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                                  # Keep the local feet anchor inside the projected floor-zone polygon.
 const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                                  # Keep the local feet slightly inside the front edge of the projected floor-zone polygon.
 const NEAREST_ACTOR_LOD_HEIGHT := 48.0                                                       # Match the coordinate renderer's protected largest actor LOD; heads should sit near the center of the 120-pixel view, not crowd the ceiling.
-const CHARACTER_NEAREST_LAYER := 96                                                          # Set the closest character draw layer; this is only z-order, not perspective math.
-const LOCAL_CHARACTER_LAYER := 96                                                            # Draw the local body above wall art; the camera clipper handles frame-edge cropping.
-const CHARACTER_LAYER_BY_DEPTH := [96, 74, 56, 32, 24, 16]                                  # Keep actors in front of same-depth side walls through the renderer's two extended distance bands.
+const CHARACTER_NEAREST_LAYER := 625                                                         # Match the near end of the shared back-to-front world draw scale.
+const LOCAL_CHARACTER_LAYER := 700                                                           # The local first-person body is nearest to its own camera and remains above world geometry.
+const WORLD_DRAW_DEPTH_RANGE := 6.25                                                        # Cover the coordinate renderer's useful 5.5-cell view plus its far clip margin.
+const WORLD_DRAW_DEPTH_SCALE := 100.0                                                       # Leave enough integer layers for walls, characters, items, and effects to interleave.
 const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
 const LOCAL_REAR_CAMERA_SCALE_BOOST := 0.20                                                   # Enlarge the local body near the camera after cropping hides the lower frame.
 const DEBUG_WALL_LABELS_ENABLED := false                                                    # Hide renderer-selected wall labels while the blue slot-grid audit is being checked.
@@ -2246,8 +2247,8 @@ func _update_combat_view() -> void:
 		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), GUN_TEXTURE, gun_position, used, 0.10) # Keep the pickup at a readable floor-level height.
 	for shot in active_projectiles:                                                             # Render every shared projectile from this camera.
 		var world_position: Vector2 = shot["position"]                                           # Read shared-world shot position.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10) or not _world_actor_has_clear_line_of_sight(world_position): # Cull shots using the exact map walls.
-			continue                                                                                   # Do not draw through walls or outside this view.
+		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10):
+			continue                                                                                   # Do not draw outside this view; pixel-level wall occlusion happens in the sprite shader.
 		var projection := _opponent_projection_from_current_camera(world_position)                # Reuse the established world-to-camera perspective.
 		var key := "shot_%d" % int(shot["id"])                                                  # Build a stable cached visual name.
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the shot sprite.
@@ -2269,14 +2270,14 @@ func _update_combat_view() -> void:
 		var start_scale := clampf(spawn_height / 40.0, 0.28, 1.0)                                 # Read the sprite size at the muzzle.
 		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
 		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
-		_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Keep projectile sampling on the logical pixel grid without distance darkening.
+		_apply_runtime_world_sprite_style(sprite, sprite.scale.x) # Keep projectile sampling on the logical pixel grid.
 		sprite.z_index = int(projection["z_index"])                                              # Let the world-projected bullet sit behind its firing character rather than overlaying the body.
 		sprite.visible = true                                                                      # Reveal this valid projectile.
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
 	for impact in active_impacts:                                                               # Render each short explosion similarly.
 		var world_position: Vector2 = impact["position"]                                        # Read collision world point.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.12) or not _world_actor_has_clear_line_of_sight(world_position): # Keep blocked impacts hidden.
-			continue                                                                                   # Do not leak hit flashes through geometry.
+		if not _world_actor_overlaps_current_camera_fan(world_position, 0.12):
+			continue                                                                                   # Do not draw outside this view; pixel-level wall occlusion happens in the sprite shader.
 		var projection := _opponent_projection_from_current_camera(world_position)                # Project collision point in this view.
 		var key := "impact_%d" % int(impact["id"])                                              # Build a stable effect key.
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the impact sprite.
@@ -2308,14 +2309,14 @@ func _update_combat_view() -> void:
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
 			var target_world := _player_state_world_position(state)                                  # Project the opposing hit body into this view.
-			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18) or not _world_actor_has_clear_line_of_sight(target_world):
+			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18):
 				continue                                                                                 # Keep hidden opponents hidden even while hit.
 			var projection := _opponent_projection_from_current_camera(target_world)                 # Use same view model as opponent sprite.
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index]) # Match the opponent's team palette and pixel-grid treatment without distance darkening.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index]) # Match the opponent's team palette and pixel-grid treatment.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
@@ -2325,7 +2326,7 @@ func _update_combat_view() -> void:
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
 func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0) -> void:
-	if not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position): # Keep collectibles in front of the camera, inside its actual fan, and behind physical walls.
+	if not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16): # Keep collectibles in front of the camera and inside its actual fan.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
 	var projection := _opponent_projection_from_current_camera(world_position)                  # Reuse the stable world-to-view projection shared with opponents.
 	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
@@ -2571,6 +2572,9 @@ func _render_bound_player_context() -> void:                                    
 			view_slot_overlay.visible = false
 		if is_instance_valid(perspective_extents_overlay):
 			perspective_extents_overlay.visible = false
+		# Build this view's wall-depth texture before giving world sprites their
+		# per-pixel occlusion uniforms for the same camera pose.
+		coordinate_renderer.render_bound_player_context(get_process_delta_time())
 		_position_player()                                                                        # Keep the active player's sprite synchronized with movement and authored transition frames.
 		_position_opponent_sprite()                                                               # Keep the opponent in the shared local view without invoking legacy wall visibility work.
 		_update_combat_view()                                                                      # Project shared pistol shots, impacts, and hit poses through this same camera.
@@ -2578,7 +2582,6 @@ func _render_bound_player_context() -> void:                                    
 		var coordinate_legacy_elapsed_us := Time.get_ticks_usec() - legacy_render_started_us      # Measure the deliberately retained non-environment work for the profiler.
 		if coordinate_renderer.has_method("record_legacy_render_time"):                         # Let the replacement renderer include this retained controller cost in its CSV sample.
 			coordinate_renderer.record_legacy_render_time(coordinate_legacy_elapsed_us)             # Store the small player/map-only legacy timing value.
-		coordinate_renderer.render_bound_player_context(get_process_delta_time())                 # Render the coordinate environment after the actors and shared map are current.
 		if enable_3d_diagnostic and active_player_index == 0:                                     # Keep the deprecated diagnostic usable without re-enabling the legacy renderer.
 			_update_3d_diagnostic()                                                                  # Sync its camera to player one's current state.
 		return                                                                                    # Do not redraw hidden legacy environment sprites, slot labels, or perspective guides every frame.
@@ -6314,16 +6317,13 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
-	if not _world_actor_has_clear_line_of_sight(target_world):                                  # Do not let the high-z opponent sprite draw through any physical maze edge.
-		opponent_sprite.visible = false                                                           # Hide the opponent when the first solid edge sits between this camera and their body.
-		return                                                                                    # Return before the sprite can be placed above the runtime wall canvas.
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
 	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
-	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0))) # Keep the opponent on its own team palette and logical pixel grid without distance darkening.
+	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0))) # Keep the opponent on its own team palette and logical pixel grid.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
 
@@ -6524,10 +6524,9 @@ func _front_wall_height_at_view_depth(view_depth: float) -> float:              
 
 
 
-# _character_layer_for_view_depth: Places actors between wall draw rows using the renderer's depth buckets.
+# _character_layer_for_view_depth: Places every projected world object on one shared back-to-front depth scale.
 func _character_layer_for_view_depth(view_depth: float) -> int:                             # Declare this function.
-	var depth_index := clampi(int(floor(maxf(view_depth, 0.0))), 0, CHARACTER_LAYER_BY_DEPTH.size() - 1) # Convert camera depth into the matching wall-art row.
-	return int(CHARACTER_LAYER_BY_DEPTH[depth_index])                                        # Return the actor layer for this shared wall/floor perspective depth.
+	return roundi((WORLD_DRAW_DEPTH_RANGE - clampf(view_depth, 0.0, WORLD_DRAW_DEPTH_RANGE)) * WORLD_DRAW_DEPTH_SCALE) # Nearer geometry receives the later Canvas draw layer.
 
 
 # _opponent_camera_side_margin_from_projection: Converts projected sprite width into camera-space fan overlap.

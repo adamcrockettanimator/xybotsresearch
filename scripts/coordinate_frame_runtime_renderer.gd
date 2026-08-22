@@ -285,7 +285,8 @@ func _initialize() -> void:
 	# the two authored wall layers available for parallax without CPU rasterizing.
 	runtime_wall_layer = Node2D.new()
 	runtime_wall_layer.name = "CoordinateFrameHomographyWalls"
-	runtime_wall_layer.z_index = 8
+	# Each child wall receives its own shared camera-depth draw layer below.
+	runtime_wall_layer.z_index = 0
 	# Runtime_Master_Wall is already the exact 128x88 master canvas.  The older
 	# source sat inside a 160x120 authored sprite sheet and needed cropping.
 	wall_source_texture = master_texture
@@ -679,7 +680,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("clamp_layer_edges", layer_uv_edge_clamp_enabled)
-		sprite.z_index = index
+		sprite.z_index = controller._character_layer_for_view_depth(float(entry["depth"])) if controller != null else index
 	wall_art_sprite.visible = false
 	return entries.size()
 
