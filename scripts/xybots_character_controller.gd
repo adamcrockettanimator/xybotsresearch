@@ -2000,20 +2000,60 @@ func _begin_combat_death(player_index: int) -> void:
 	player_states[player_index] = state                                                        # Save the staged sequence.
 
 
-# _combat_respawn_destination: Finds the furthest map corner and inward-facing camera angle for one player.
+# _combat_respawn_destination: Finds a free map cell with the greatest path distance from living enemies.
 func _combat_respawn_destination(player_index: int) -> Dictionary:
-	var opponent_index := 1 - player_index                                                      # This milestone has exactly two local players.
-	var opponent_cell: Vector2i = player_states[opponent_index].get("grid_position", Vector2i.ZERO) # Read the other player's location.
-	var corners := [Vector2i(0, 0), Vector2i(MAP_WIDTH - 1, 0), Vector2i(0, MAP_HEIGHT - 1), Vector2i(MAP_WIDTH - 1, MAP_HEIGHT - 1)] # Consider all safe map corners.
-	var best_corner: Vector2i = corners[0]                                                      # Start with any corner.
-	var best_distance := -1                                                                     # Find the greatest Manhattan separation.
-	for corner in corners:
-		var distance: int = abs(corner.x - opponent_cell.x) + abs(corner.y - opponent_cell.y)    # Measure safe grid separation.
-		if distance > best_distance:
-			best_distance = distance                                                                  # Retain the farther corner.
-			best_corner = corner                                                                     # Retain its cell.
-	var respawn_facing := 0 if best_corner.y == MAP_HEIGHT - 1 else 2                          # Point inward from the top/bottom respawn row.
-	return {"cell": best_corner, "facing": respawn_facing}                                   # Return only destination data so the old death body can remain in place.
+	var best_cells: Array[Vector2i] = []
+	var best_safety := -1
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var candidate := Vector2i(x, y)
+			var occupied := false
+			var nearest_enemy_distance := MAP_WIDTH * MAP_HEIGHT + 1
+			var has_living_enemy := false
+			for other_index in range(player_states.size()):
+				if other_index == player_index or other_index >= player_joined.size() or not player_joined[other_index]:
+					continue
+				var other_state := player_states[other_index]
+				if bool(other_state.get("is_dying", false)):
+					continue
+				var other_cell: Vector2i = other_state.get("grid_position", Vector2i(-1, -1))
+				if candidate == other_cell:
+					occupied = true
+					break
+				if PLAYER_TEAMS[other_index] != PLAYER_TEAMS[player_index]:
+					has_living_enemy = true
+					nearest_enemy_distance = mini(nearest_enemy_distance, _maze_cell_path_distance(candidate, other_cell))
+			if occupied:
+				continue
+			var safety := nearest_enemy_distance if has_living_enemy else 0
+			if safety > best_safety:
+				best_safety = safety
+				best_cells = [candidate]
+			elif safety == best_safety:
+				best_cells.append(candidate)
+	var chosen := best_cells[randi() % best_cells.size()] if not best_cells.is_empty() else Vector2i(0, MAP_HEIGHT - 1)
+	var respawn_facing := 0 if chosen.y == MAP_HEIGHT - 1 else 2
+	return {"cell": chosen, "facing": respawn_facing}
+
+
+func _maze_cell_path_distance(from_cell: Vector2i, target_cell: Vector2i) -> int:
+	if from_cell == target_cell:
+		return 0
+	var frontier: Array[Vector2i] = [from_cell]
+	var distances: Dictionary = {from_cell: 0}
+	var directions: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	while not frontier.is_empty():
+		var cell: Vector2i = frontier.pop_front()
+		var distance: int = distances[cell]
+		for direction: Vector2i in directions:
+			var next_cell: Vector2i = cell + direction
+			if not _is_open_cell(next_cell) or _has_wall_edge(cell, direction) or distances.has(next_cell):
+				continue
+			if next_cell == target_cell:
+				return distance + 1
+			distances[next_cell] = distance + 1
+			frontier.append(next_cell)
+	return MAP_WIDTH * MAP_HEIGHT + 1
 
 
 # _advance_combat_death_state: Runs Death forward, holds the 3/2/1 countdown, then plays the same frames backwards at the new spawn.
@@ -2026,6 +2066,9 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 	elif phase == "countdown" and timer >= DEATH_COUNTDOWN_SECONDS:                          # After 3, 2, 1, relocate the still-fallen sprite.
 		phase = "respawn"                                                                        # Begin playing Death backwards at the chosen safe corner.
 		timer = 0.0                                                                                # Start the reverse animation on its fully fallen pose.
+		var fresh_respawn := _combat_respawn_destination(int(state.get("player_index", 0)))     # Re-evaluate just before re-entry so enemies cannot camp the cell chosen at death time.
+		state["death_respawn_cell"] = fresh_respawn["cell"]
+		state["death_respawn_facing"] = fresh_respawn["facing"]
 		state["grid_position"] = state.get("death_respawn_cell", state.get("grid_position", Vector2i.ZERO)) # Move only after the countdown is complete.
 		state["local_floor_position"] = HOME_LOCAL_FLOOR_POSITION                               # Restore the normal in-cell resting point.
 		state["facing"] = int(state.get("death_respawn_facing", 0))                            # Restore the intended inward-facing camera.
@@ -3374,6 +3417,8 @@ func _update_match_minimap_overlay() -> void:
 		if player_index >= player_joined.size() or not player_joined[player_index]:
 			continue                                                                                # Do not reveal an unjoined player's spawn position on any minimap.
 		var state := player_states[player_index]                                                  # Read the player's true shared-world position and current view direction.
+		if bool(state.get("is_dying", false)):
+			continue                                                                                # Remove defeated players from every minimap until their respawn animation has finished.
 		var center := _match_minimap_point(_player_state_world_position(state))                   # Convert that position into compact map coordinates.
 		var forward := _view_forward_vector_for_state(state).normalized()                         # Use the actual cardinal/diagonal camera orientation for the arrow.
 		var right := Vector2(-forward.y, forward.x)                                               # Derive a perpendicular arrow base without needing a camera cone.
