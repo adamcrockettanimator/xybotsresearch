@@ -754,6 +754,7 @@ var combat_total_coin_value := 0                                                
 var combat_round_time_remaining := DEFAULT_COMBAT_ROUND_SECONDS                               # Count down shared match time independently of either player's camera.
 var combat_round_complete := false                                                            # Freeze score changes after the clock reaches zero while allowing post-round movement and shooting.
 var combat_round_result := ""                                                                 # Store the final winner/draw announcement exactly once.
+var team_round_wins := [0, 0]                                                                 # Retain Lawmen/Outlaws round wins across replayed rounds in this game session.
 var combat_round_timer_label: Label                                                           # Show the running round clock in the upper-right without covering either player view.
 var combat_round_result_label: Label                                                          # Show the frozen winner announcement only after the timer expires.
 var combat_round_timer_labels: Array[Label] = []                                              # Keep one top-center match clock in each player's native window.
@@ -1355,6 +1356,8 @@ func _advance_combat_round(delta: float) -> void:
 			combat_round_result = "DRAW!"                                                       # Make tied final scores unambiguous.
 		else:
 			combat_round_result = "LAWMEN WIN!" if lawmen_kills > outlaws_kills else "OUTLAWS WIN!"
+			var winning_team := 0 if lawmen_kills > outlaws_kills else 1
+			team_round_wins[winning_team] += 1                                                     # Keep the metagame tally until the application session ends.
 
 
 # _spawn_machine_gun_pickup: Places the one contested pickup in a random non-occupied maze cell.
@@ -1668,7 +1671,7 @@ func _final_scoreboard_text() -> String:
 			outlaws_kills += int(entry.get("kills", 0))
 			outlaws_deaths += int(entry.get("deaths", 0))
 	var winner_color := "#b31973" if lawmen_kills > outlaws_kills else ("#1b9e38" if outlaws_kills > lawmen_kills else "#f2df47")
-	var rows: Array[String] = ["[color=%s]%s[/color]" % [winner_color, combat_round_result], "", "         Kills  Deaths"]
+	var rows: Array[String] = ["[font_size=24][color=#b31973]LAW MEN %d[/color]   [color=#1b9e38]OUTLAWS %d[/color][/font_size]" % [team_round_wins[0], team_round_wins[1]], "", "[color=%s]%s[/color]" % [winner_color, combat_round_result], "", "         Kills  Deaths"]
 	rows.append_array(_team_scoreboard_rows("Lawmen", lawmen_kills, lawmen_deaths, lawmen, "#b31973"))
 	rows.append("")
 	rows.append_array(_team_scoreboard_rows("Outlaws", outlaws_kills, outlaws_deaths, outlaws, "#1b9e38"))
