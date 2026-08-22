@@ -756,6 +756,7 @@ var combat_ammo_labels: Array[Label] = []                                       
 var combat_ammo_icons: Array[TextureRect] = []                                                # Store the gun icon only while its player is armed.
 var world_coins: Array[Dictionary] = []                                                       # Keep uncollected map and dropped coins in shared world coordinates.
 var world_hearts: Array[Dictionary] = []                                                      # Keep rare one-health drops in the same shared world space as coins and guns.
+var vending_machine: Dictionary = {}                                                          # Store one wall-attached shop per generated maze.
 var machine_gun_pickup: Dictionary = {}                                                       # Keep the one active machine-gun pickup in shared world coordinates.
 var machine_gun_respawn_timer := 0.0                                                          # Count down only while no contested machine-gun pickup exists.
 var combat_total_coin_value := 0                                                              # Preserve the round's original coin total for score labels even after drops.
@@ -1783,14 +1784,14 @@ func _update_combat_hud() -> void:
 			board.scale = viewport_node.scale
 			board.visible = board_visible
 			var shop := scoreboard_shop_labels[player_index]
-			shop.position = viewport_node.position + Vector2(2.0, 98.0) * viewport_node.scale
+			shop.position = viewport_node.position + Vector2(2.0, 82.0) * viewport_node.scale
 			shop.scale = viewport_node.scale
-			shop.visible = board_visible and not combat_round_complete
+			shop.visible = _player_can_use_vending_machine(player_index) and not combat_round_complete
 			if shop.visible:
 				var coins := int(state.get("coins", 0))
 				var heart_color := "#ffffff" if coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH else "#5c5c5c"
 				var gun_color := "#ffffff" if coins >= 10 else "#5c5c5c"
-				shop.text = "[center][color=%s]PRESS A: BUY [img=5x5]res://assets/Items/Heart/heart_icon.png[/img] $5[/color]\n[font_size=1] [/font_size]\n[color=%s]PRESS B: BUY [img=5x5]res://assets/Items/Gun/Gun.png[/img] $10[/color][/center]" % [heart_color, gun_color]
+				shop.text = "[center][color=%s]PRESS A: BUY [img=5x5]res://assets/Items/Heart/heart.png[/img] $5[/color]\n[font_size=1] [/font_size]\n[color=%s]PRESS B: BUY [img=5x5]res://assets/Items/Gun/Gun.png[/img] $10[/color][/center]" % [heart_color, gun_color]
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -2640,6 +2641,17 @@ func _apply_wall_art_debug_visibility() -> void:
 
 
 
+func _player_can_use_vending_machine(player_index: int) -> bool:
+	if vending_machine.is_empty() or player_index >= player_states.size() or player_index >= player_joined.size() or not player_joined[player_index]:
+		return false
+	var state := player_states[player_index]
+	if bool(state.get("is_dying", false)) or int(state.get("turn_45_direction", 0)) != 0:
+		return false
+	var vending_cell: Vector2i = vending_machine.get("cell", Vector2i(-1, -1))
+	var vending_direction: Vector2i = vending_machine.get("direction", Vector2i.ZERO)
+	return state.get("grid_position", Vector2i(-2, -2)) == vending_cell and _facing_vector_for_index(int(state.get("facing", 0))) == vending_direction
+
+
 func _update_scoreboard_shop_input() -> void:
 	for player_index in range(player_states.size()):
 		var joypad_id := _xbox_joypad_id_for_player(player_index)
@@ -2648,7 +2660,7 @@ func _update_scoreboard_shop_input() -> void:
 		if player_index == 0:
 			heart_pressed = heart_pressed or _is_key_down(KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
 			gun_pressed = gun_pressed or _is_key_down(KEY_2)
-		if scoreboard_player_index == player_index and not combat_round_complete:
+		if _player_can_use_vending_machine(player_index) and not combat_round_complete:
 			var state := player_states[player_index]
 			var coins := int(state.get("coins", 0))
 			if heart_pressed and not was_shop_heart_pressed[player_index] and coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH:
@@ -3512,6 +3524,13 @@ func _update_match_minimap_overlay() -> void:
 					_add_match_minimap_line(match_minimap_static_layer, top_right, bottom_right, wall_color, 2.0)
 		match_minimap_static_layer.set_meta("map_static_dirty", false)                          # Retain the maze geometry until its topology changes.
 	_clear_debug_map_layer(match_minimap_dynamic_layer)                                        # Replace just the two player arrows each frame.
+	if not vending_machine.is_empty():
+		var vending_cell: Vector2i = vending_machine.get("cell", Vector2i.ZERO)
+		var vending_marker := Polygon2D.new()
+		var vending_center := _match_minimap_point(Vector2(vending_cell) + Vector2(0.5, 0.5))
+		vending_marker.polygon = PackedVector2Array([vending_center + Vector2(-2.0, -2.0), vending_center + Vector2(2.0, -2.0), vending_center + Vector2(2.0, 2.0), vending_center + Vector2(-2.0, 2.0)])
+		vending_marker.color = Color(0.55, 0.55, 0.55, 1.0)
+		match_minimap_dynamic_layer.add_child(vending_marker)                                   # Keep the neutral shop marker below the team-colored player arrows.
 	for player_index in range(player_states.size()):
 		if player_index >= player_joined.size() or not player_joined[player_index]:
 			continue                                                                                # Do not reveal an unjoined player's spawn position on any minimap.
@@ -7496,6 +7515,7 @@ func _build_random_maze_wall_edges() -> void:                                   
 	var start_cell := Vector2i(0, MAP_HEIGHT - 1)                                              # Start the test player in the southwest corner of the generated map.
 	_carve_maze_from(start_cell, visited, rng)                                                 # Carve a connected maze from the starting cell.
 	_add_extra_maze_openings(rng)                                                              # Open a few extra internal walls so the map has some loops.
+	_select_vending_machine_wall()                                                             # Give this generated maze one randomly placed wall shop.
 	grid_position = start_cell                                                                 # Place the player at the start of the generated maze.
 	facing = 0                                                                                 # Face north so the first view looks into the map.
 	turn_45_direction = 0                                                                      # Reset any temporary halfway-turn view when generating a new map.
@@ -7503,6 +7523,20 @@ func _build_random_maze_wall_edges() -> void:                                   
 	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Reset the player to the normal local tile position.
 	pending_grid_delta = Vector2i.ZERO                                                         # Clear any stale cell-crossing request.
 	last_blocked_direction = ""                                                                # Clear any stale blocked-movement status.
+
+
+func _select_vending_machine_wall() -> void:
+	var candidates: Array[Dictionary] = []
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			for direction in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+				if _has_wall_edge(cell, direction):
+					candidates.append({"cell": cell, "direction": direction})
+	if candidates.is_empty():
+		vending_machine = {}
+		return
+	vending_machine = candidates[randi() % candidates.size()]
 
 
 

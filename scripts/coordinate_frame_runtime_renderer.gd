@@ -9,6 +9,7 @@ extends Node
 const VIEW_SIZE := Vector2(160.0, 120.0)
 const WALL_LAYER1_PATH := "res://assets/Environment/Wall_Layer1.png"
 const WALL_LAYER2_PATH := "res://assets/Environment/Wall_layer2.png"
+const VENDING_MACHINE_PATH := "res://assets/Environment/vendingMachine.png"
 const CEILING_LAYER1_PATH := "res://assets/Environment/ceiling_layer1.png"
 const CEILING_LAYER2_PATH := "res://assets/Environment/ceiling_layer2.png"
 const MASTER_WALL_PATH := WALL_LAYER1_PATH
@@ -110,6 +111,7 @@ var wall_layer1_image: Image
 var wall_layer2_image: Image
 var wall_layer1_texture: Texture2D
 var wall_layer2_texture: Texture2D
+var vending_machine_texture: Texture2D
 var gpu_wall_shader: Shader
 var gpu_wall_dummy_texture: ImageTexture
 var gpu_wall_base_mip_texture: Texture2D
@@ -568,6 +570,7 @@ func _load_runtime_wall_layers() -> void:
 	wall_layer2_image = null
 	wall_layer1_texture = load(WALL_LAYER1_PATH) as Texture2D
 	wall_layer2_texture = load(WALL_LAYER2_PATH) as Texture2D
+	vending_machine_texture = load(VENDING_MACHINE_PATH) as Texture2D
 	if wall_layer1_texture == null or wall_layer2_texture == null:
 		push_error("Could not load runtime wall layer textures.")
 		return
@@ -650,8 +653,15 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 			sprite.visible = false
 			continue
 		var material := gpu_wall_materials[index]
+		var is_vending_wall := _entry_is_vending_machine_wall(entry)
+		var source_texture: Texture2D = vending_machine_texture if is_vending_wall and vending_machine_texture != null else wall_source_texture
+		var source_size: Vector2 = Vector2(source_texture.get_size()) if source_texture != null else Vector2.ONE
 		var use_layers := wall_parallax_enabled and wall_layer1_texture != null and wall_layer2_texture != null
-		var layer_offset := _layer_parallax_uv_offset(entry) if use_layers else Vector2.ZERO
+		if is_vending_wall:
+			use_layers = true                                                                      # Reuse the same single-layer vending art for both wall passes.
+		# The vending art is a single painted wall.  Feed it through both passes
+		# without parallax shifting so the two copies stay perfectly registered.
+		var layer_offset: Vector2 = _layer_parallax_uv_offset(entry) if use_layers and not is_vending_wall else Vector2.ZERO
 		var layer1_weight := (layer_movement_balance - 1.0) * 0.5
 		var layer2_weight := (layer_movement_balance + 1.0) * 0.5
 		material.set_shader_parameter("inverse_row0", inverse[0])
@@ -659,19 +669,36 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("wall_light", float(entry["light"]))
 		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_wall_base_mip_texture != null
-		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips else wall_source_texture)
-		material.set_shader_parameter("base_texture_size", Vector2(wall_source_image.get_width(), wall_source_image.get_height()))
+		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips and not is_vending_wall else source_texture)
+		material.set_shader_parameter("base_texture_size", source_size)
 		material.set_shader_parameter("use_integer_uv_scale_snap", use_gpu_mips)
 		material.set_shader_parameter("use_layer_parallax", use_layers)
-		material.set_shader_parameter("layer1_texture", gpu_wall_layer1_mip_texture if use_gpu_mips and gpu_wall_layer1_mip_texture != null else (wall_layer1_texture if wall_layer1_texture != null else wall_source_texture))
-		material.set_shader_parameter("layer2_texture", gpu_wall_layer2_mip_texture if use_gpu_mips and gpu_wall_layer2_mip_texture != null else (wall_layer2_texture if wall_layer2_texture != null else wall_source_texture))
-		material.set_shader_parameter("layer_texture_size", Vector2(wall_layer1_image.get_width(), wall_layer1_image.get_height()) if wall_layer1_image != null else Vector2(wall_source_image.get_width(), wall_source_image.get_height()))
+		material.set_shader_parameter("layer1_texture", source_texture if is_vending_wall else (gpu_wall_layer1_mip_texture if use_gpu_mips and gpu_wall_layer1_mip_texture != null else (wall_layer1_texture if wall_layer1_texture != null else wall_source_texture)))
+		material.set_shader_parameter("layer2_texture", source_texture if is_vending_wall else (gpu_wall_layer2_mip_texture if use_gpu_mips and gpu_wall_layer2_mip_texture != null else (wall_layer2_texture if wall_layer2_texture != null else wall_source_texture)))
+		material.set_shader_parameter("layer_texture_size", source_size if is_vending_wall else (Vector2(wall_layer1_image.get_width(), wall_layer1_image.get_height()) if wall_layer1_image != null else Vector2(wall_source_image.get_width(), wall_source_image.get_height())))
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("clamp_layer_edges", layer_uv_edge_clamp_enabled)
 		sprite.z_index = index
 	wall_art_sprite.visible = false
 	return entries.size()
+
+
+func _entry_is_vending_machine_wall(entry: Dictionary) -> bool:
+	if controller == null or controller.vending_machine.is_empty():
+		return false
+	var vending_cell: Vector2i = controller.vending_machine.get("cell", Vector2i(-1, -1))
+	var vending_direction: Vector2i = controller.vending_machine.get("direction", Vector2i.ZERO)
+	var segment: Array[Vector2] = controller._physical_cell_edge_segment(vending_cell, vending_direction)
+	if segment.size() != 2 or String(entry.get("edge_key", "")) != String(controller._physical_edge_key(segment[0], segment[1])):
+		return false
+	# Physical walls are visible from either neighboring cell, but the vending
+	# artwork belongs only to the selected cell-facing surface.  Its inward normal
+	# points from the wall midpoint into that selected cell.
+	var camera_origin: Vector2 = entry.get("camera_origin", Vector2.ZERO)
+	var wall_midpoint := (segment[0] + segment[1]) * 0.5
+	var selected_face_normal := -Vector2(vending_direction)
+	return (camera_origin - wall_midpoint).dot(selected_face_normal) > 0.0
 
 
 # _load_runtime_ceiling_layers: Read the independently-authored ceiling base
@@ -1410,6 +1437,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var quad := _project_wall_quad(first_local, second_local)
 		var average_depth := (maxf(first_local.y, NEAR_CLIP) + maxf(second_local.y, NEAR_CLIP)) * 0.5
 		result.append({
+			"edge_key": String(edge["key"]),
+			"camera_origin": camera_origin,
 			"quad": quad,
 			"first_local": first_local,
 			"second_local": second_local,
