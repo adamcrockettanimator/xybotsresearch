@@ -108,7 +108,7 @@ const MACHINE_GUN_FIRE_INTERVAL := 0.12                                         
 const MACHINE_GUN_AMMO := 100                                                                 # Give the temporary pickup the requested one hundred rapid-fire rounds.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const COIN_PICKUP_RADIUS := 0.32                                                              # Let a player collect a center-of-cell coin without requiring exact pixel contact.
-const DEFAULT_COMBAT_ROUND_SECONDS := 3.0 * 60.0                                              # Deathmatch defaults to a three-minute round.
+const DEFAULT_COMBAT_ROUND_SECONDS := 102.221                                                 # Trim the observed three-second tail so the round ends with Ecstacy of Gold in gameplay.
 const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
 const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
 const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
@@ -623,7 +623,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
 @export var walk_through_walls_cheat := false                                                # Let a deliberate debug cheat bypass only player movement collision, including the outer map boundary.
-@export_range(0.0, 900.0, 1.0, "or_greater") var combat_round_duration_seconds := DEFAULT_COMBAT_ROUND_SECONDS # Let the inspector use zero for an infinite test round or tune the normal five-minute match length.
+@export_range(0.0, 900.0, 0.001, "or_greater") var combat_round_duration_seconds := DEFAULT_COMBAT_ROUND_SECONDS # Let the inspector use zero for an infinite test round or tune the music-length match.
 
 @export_group("3D Diagnostic Camera")                                                       # Group the editable 3D diagnostic camera controls in the Godot inspector.
 @export_range(45.0, 110.0, 1.0) var diagnostic_3d_camera_fov := 78.0                         # Let the user tune the 3D diagnostic camera field of view.
@@ -758,6 +758,9 @@ var combat_round_timer_label: Label                                             
 var combat_round_result_label: Label                                                          # Show the frozen winner announcement only after the timer expires.
 var combat_round_timer_labels: Array[Label] = []                                              # Keep one top-center match clock in each player's native window.
 var combat_round_result_labels: Array[Label] = []                                             # Keep one center-screen winner prompt in each player's native window.
+var end_round_canvas: CanvasLayer                                                              # Keep the post-round presentation above every per-player HUD canvas.
+var end_round_overlay: ColorRect                                                               # Cover the playfield with the final team result and complete standings.
+var end_round_scoreboard: RichTextLabel                                                        # Present the final scoreboard once for the shared four-player display.
 var player_windows: Array[Window] = []                                                        # Store the native game window that owns each local player's full-screen view.
 var was_next_round_pressed := false                                                            # Latch X so a held key starts one new round rather than repeatedly rerolling it.
 var match_minimap_overlay: Node2D                                                              # Store the minimalist map currently bound to one player's HUD canvas.
@@ -821,7 +824,7 @@ func _setup_shared_audio() -> void:
 	music_player = AudioStreamPlayer.new()
 	music_player.stream = MUSIC_STREAM
 	if music_player.stream is AudioStreamMP3:
-		music_player.stream.loop = true
+		music_player.stream.loop = false                                                         # One round uses one song; do not restart it under the final standings.
 	add_child(music_player)
 	gunshot_player = AudioStreamPlayer.new()
 	gunshot_player.stream = GUNSHOT_STREAM
@@ -881,7 +884,7 @@ func _setup_deathmatch_overlays() -> void:
 	options_overlay.visible = false
 	canvas_layer.add_child(options_overlay)
 	options_label = Label.new()
-	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 3:00\n\nSELECT / ESC: CLOSE"
+	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:42\n\nSELECT / ESC: CLOSE"
 	options_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	options_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	options_label.add_theme_font_override("font", pixel_hud_font)
@@ -1339,12 +1342,19 @@ func _advance_combat_round(delta: float) -> void:
 	combat_round_time_remaining = maxf(combat_round_time_remaining - delta, 0.0)            # Count down in real time rather than from either camera's animation state.
 	if combat_round_time_remaining <= 0.0:
 		combat_round_complete = true                                                           # Freeze coin collection, not movement or combat, at the end horn.
-		var player_one_score := int(player_states[0].get("coins", 0)) if player_states.size() > 0 else 0
-		var player_two_score := int(player_states[1].get("coins", 0)) if player_states.size() > 1 else 0
-		if player_one_score == player_two_score:
+		var lawmen_kills := 0
+		var outlaws_kills := 0
+		for player_index in range(player_states.size()):
+			if player_index >= player_joined.size() or not player_joined[player_index]:
+				continue
+			if PLAYER_TEAMS[player_index] == 0:
+				lawmen_kills += int(player_states[player_index].get("kills", 0))
+			else:
+				outlaws_kills += int(player_states[player_index].get("kills", 0))
+		if lawmen_kills == outlaws_kills:
 			combat_round_result = "DRAW!"                                                       # Make tied final scores unambiguous.
 		else:
-			combat_round_result = "PLAYER %d WINS!" % (1 if player_one_score > player_two_score else 2) # Preserve the requested highest-coin winner rule.
+			combat_round_result = "LAWMEN WIN!" if lawmen_kills > outlaws_kills else "OUTLAWS WIN!"
 
 
 # _spawn_machine_gun_pickup: Places the one contested pickup in a random non-occupied maze cell.
@@ -1585,6 +1595,28 @@ func _setup_combat_hud() -> void:
 		result_label.z_index = 351
 		hud_layer.add_child(result_label)
 		combat_round_result_labels.append(result_label)
+	end_round_canvas = CanvasLayer.new()
+	end_round_canvas.name = "EndRoundCanvas"
+	end_round_canvas.layer = 100                                                               # Draw above all four HUD canvases, including maps, names, hearts, and counters.
+	add_child(end_round_canvas)
+	end_round_overlay = ColorRect.new()
+	end_round_overlay.color = Color(0.02, 0.015, 0.01, 0.92)
+	end_round_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	end_round_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	end_round_overlay.visible = false
+	end_round_canvas.add_child(end_round_overlay)
+	end_round_scoreboard = RichTextLabel.new()
+	end_round_scoreboard.bbcode_enabled = true
+	end_round_scoreboard.scroll_active = false
+	end_round_scoreboard.add_theme_font_override("normal_font", pixel_hud_font)
+	end_round_scoreboard.add_theme_font_size_override("normal_font_size", 16)
+	end_round_scoreboard.add_theme_color_override("font_color", Color.WHITE)
+	end_round_scoreboard.add_theme_color_override("font_shadow_color", Color.BLACK)
+	end_round_scoreboard.add_theme_constant_override("shadow_offset_x", 2)
+	end_round_scoreboard.add_theme_constant_override("shadow_offset_y", 2)
+	end_round_scoreboard.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 110.0)
+	end_round_scoreboard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	end_round_overlay.add_child(end_round_scoreboard)
 	_update_combat_hud()                                                                        # Draw the initial full-health meters immediately.
 
 
@@ -1607,10 +1639,44 @@ func _make_scoreboard_label() -> RichTextLabel:
 
 func _team_scoreboard_rows(team_name: String, team_score: int, team_deaths: int, members: Array[Dictionary], color: String) -> Array[String]:
 	var rows: Array[String] = ["[color=%s]%-8s %5d  %6d[/color]" % [color, team_name, team_score, team_deaths], "[color=%s]---------------------[/color]" % color]
-	for entry in members:
+	for member_position in range(members.size()):
+		if member_position > 0:
+			rows.append("[font_size=2] [/font_size]")                                            # Use a half-height spacer between teammates without changing any column positions.
+		var entry: Dictionary = members[member_position]
 		var member_index := int(entry["player_index"])
 		rows.append("[color=%s]%-8s %5d  %6d[/color]" % [color, PLAYER_NAMES[member_index], int(entry.get("kills", 0)), int(entry.get("deaths", 0))])
 	return rows
+
+
+func _final_scoreboard_text() -> String:
+	var lawmen: Array[Dictionary] = []
+	var outlaws: Array[Dictionary] = []
+	var lawmen_kills := 0
+	var lawmen_deaths := 0
+	var outlaws_kills := 0
+	var outlaws_deaths := 0
+	for entry in player_states:
+		var entry_index := int(entry["player_index"])
+		if entry_index >= player_joined.size() or not player_joined[entry_index]:
+			continue
+		if PLAYER_TEAMS[entry_index] == 0:
+			lawmen.append(entry)
+			lawmen_kills += int(entry.get("kills", 0))
+			lawmen_deaths += int(entry.get("deaths", 0))
+		else:
+			outlaws.append(entry)
+			outlaws_kills += int(entry.get("kills", 0))
+			outlaws_deaths += int(entry.get("deaths", 0))
+	var winner_color := "#b31973" if lawmen_kills > outlaws_kills else ("#1b9e38" if outlaws_kills > lawmen_kills else "#f2df47")
+	var rows: Array[String] = ["[color=%s]%s[/color]" % [winner_color, combat_round_result], "", "         Kills  Deaths"]
+	rows.append_array(_team_scoreboard_rows("Lawmen", lawmen_kills, lawmen_deaths, lawmen, "#b31973"))
+	rows.append("")
+	rows.append_array(_team_scoreboard_rows("Outlaws", outlaws_kills, outlaws_deaths, outlaws, "#1b9e38"))
+	rows.append("")
+	rows.append("PRESS START FOR NEXT ROUND")
+	for row_index in range(rows.size()):
+		rows[row_index] = "[center]%s[/center]" % rows[row_index]
+	return "\n".join(rows)
 
 
 func _update_combat_hud() -> void:
@@ -1657,15 +1723,16 @@ func _update_combat_hud() -> void:
 				var lawmen_deaths := 0
 				var outlaws_deaths := 0
 				for entry in player_states:
-					if PLAYER_TEAMS[int(entry["player_index"])] == 0:
+					var entry_index := int(entry["player_index"])
+					if entry_index >= player_joined.size() or not player_joined[entry_index]:
+						continue
+					if PLAYER_TEAMS[entry_index] == 0:
 						lawmen.append(entry)
 						lawmen_deaths += int(entry.get("deaths", 0))
 					else:
 						outlaws.append(entry)
 						outlaws_deaths += int(entry.get("deaths", 0))
-				var score_sort := func(a, b): return int(a.get("kills", 0)) > int(b.get("kills", 0)) or (int(a.get("kills", 0)) == int(b.get("kills", 0)) and int(a.get("deaths", 0)) < int(b.get("deaths", 0)))
-				lawmen.sort_custom(score_sort)
-				outlaws.sort_custom(score_sort)
+				# Preserve the roster order: Bart/Hank for Lawmen and Jed/Wyatt for Outlaws.
 				var rows: Array[String] = ["         Kills  Deaths"]
 				rows.append_array(_team_scoreboard_rows("Lawmen", team_one_score, lawmen_deaths, lawmen, "#b31973"))
 				rows.append("")
@@ -1730,8 +1797,11 @@ func _update_combat_hud() -> void:
 			var result_label := combat_round_result_labels[player_index]
 			if is_instance_valid(result_label):
 				result_label.position = Vector2((window_size.x - result_label.size.x) * 0.5, (window_size.y - result_label.size.y) * 0.5) # Center the end-of-round message in the play screen.
-				result_label.text = "%s\nPRESS X TO PLAY AGAIN" % combat_round_result if not combat_round_result.is_empty() else ""
-				result_label.visible = not combat_round_result.is_empty()
+				result_label.visible = false                                                          # The shared full-screen board owns the final result presentation.
+	if end_round_overlay != null and end_round_scoreboard != null:
+		end_round_overlay.visible = not combat_round_result.is_empty()
+		if end_round_overlay.visible:
+			end_round_scoreboard.text = _final_scoreboard_text()
 
 
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
@@ -2011,7 +2081,7 @@ func _runtime_world_sprite_texel_stride(sprite_scale: float) -> float:
 func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0) -> void:
 	if sprite == null:
 		return
-	var resolved_team_index := int(sprite.get_meta("team_index", team_index))                 # Prefer the sprite's persistent owner over the transient active camera binding.
+	var resolved_team_index: int = int(PLAYER_TEAMS[team_index]) if team_index >= 0 and team_index < PLAYER_TEAMS.size() else team_index # Normalize player indices to their team so normal and hit sprites always share one palette.
 	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER
 	var material := sprite.material as ShaderMaterial                                          # Reuse this sprite's material without sharing per-view uniforms.
 	if material == null or material.shader != expected_shader:
@@ -2110,7 +2180,8 @@ func _update_combat_view() -> void:
 		if player_index == active_player_index:                                                   # Local player already has a correct self projection.
 			sprite.position = player_sprite.position                                                  # Reuse their visible feet registration.
 			sprite.scale = player_sprite.scale                                                        # Reuse their body scale.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, player_index)                    # Keep the hit body on its owning player's team palette without distance darkening.
+			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index])      # Keep the hit body on its owning team's palette without distance darkening.
 			sprite.z_index = player_sprite.z_index + 3                                               # Keep reaction above nearby environment art.
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
@@ -2121,7 +2192,8 @@ func _update_combat_view() -> void:
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, player_index) # Match the opponent's team palette and pixel-grid treatment without distance darkening.
+			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index]) # Match the opponent's team palette and pixel-grid treatment without distance darkening.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
@@ -2482,7 +2554,7 @@ func _process(delta: float) -> void:                                            
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
 	if combat_round_complete and next_round_pressed:                                           # Let either local player restart only after the result was frozen.
-		_regenerate_runtime_map()                                                                 # Start a fresh scored round with the normal randomized map and pickups.
+		_regenerate_runtime_map(true)                                                             # Start a fresh scored round and restart its one-shot music track.
 		return                                                                                    # Keep the replay key from also moving a player this frame.
 	_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
 	_update_all_join_states()
@@ -3296,6 +3368,8 @@ func _update_match_minimap_overlay() -> void:
 		match_minimap_static_layer.set_meta("map_static_dirty", false)                          # Retain the maze geometry until its topology changes.
 	_clear_debug_map_layer(match_minimap_dynamic_layer)                                        # Replace just the two player arrows each frame.
 	for player_index in range(player_states.size()):
+		if player_index >= player_joined.size() or not player_joined[player_index]:
+			continue                                                                                # Do not reveal an unjoined player's spawn position on any minimap.
 		var state := player_states[player_index]                                                  # Read the player's true shared-world position and current view direction.
 		var center := _match_minimap_point(_player_state_world_position(state))                   # Convert that position into compact map coordinates.
 		var forward := _view_forward_vector_for_state(state).normalized()                         # Use the actual cardinal/diagonal camera orientation for the arrow.
@@ -5684,9 +5758,12 @@ func _read_regenerate_map() -> bool:                                            
 
 
 
-# _read_next_round: Returns true once for the end-of-round replay key.
+# _read_next_round: Returns true once for an end-of-round Start request, with X retained as a keyboard fallback.
 func _read_next_round() -> bool:
-	var replay_pressed := _is_key_down(KEY_X)                                                 # Reserve X for the explicit post-round replay prompt.
+	var replay_pressed := _is_key_down(KEY_X)                                                 # Retain X as the keyboard fallback for the explicit post-round replay prompt.
+	for player_index in range(player_states.size()):
+		var device_id := _xbox_joypad_id_for_player(player_index)
+		replay_pressed = replay_pressed or (device_id >= 0 and Input.is_joy_button_pressed(device_id, JOY_BUTTON_START))
 	var replay_just_pressed := replay_pressed and not was_next_round_pressed                  # Ignore a held key so a new round cannot immediately retrigger.
 	was_next_round_pressed = replay_pressed                                                    # Store the current state for the next process frame.
 	return replay_just_pressed                                                                 # Return the one-shot replay request.
@@ -7204,7 +7281,7 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 
 
 # _regenerate_runtime_map: Rerolls the 4x4 thin-wall maze during play and redraws every dependent view.
-func _regenerate_runtime_map() -> void:                                                     # Declare this function.
+func _regenerate_runtime_map(restart_round_music := false) -> void:                         # Declare this function.
 	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
 	active_projectiles.clear()                                                                 # Remove shots that belonged to the old maze topology.
 	active_impacts.clear()                                                                     # Remove old-wall impact flashes with the old map.
@@ -7221,8 +7298,11 @@ func _regenerate_runtime_map() -> void:                                         
 		_update_status()                                                                          # Refresh the one-player status text.
 		return                                                                                    # Skip the normal two-player random-maze reset.
 	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
-	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset both local players into opposite corners of the new shared map.
+	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset all four local players into their team spawn corners on the new shared map.
 	_reset_combat_collectibles()                                                               # Replace every objective coin and the contested gun for the newly generated maze.
+	if restart_round_music and music_player != null:
+		music_player.stop()
+		music_player.play()                                                                      # Replay only when Start begins a new round, never for an in-round R reroll.
 	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.
 	_update_status()                                                                           # Update the status text for the new map state.
 
@@ -7240,12 +7320,9 @@ func _mark_debug_map_static_layers_dirty() -> void:
 
 
 
-# _reset_player_states_after_map: Reinitializes both local players after the shared thin-wall map changes.
+# _reset_player_states_after_map: Reinitializes all local players after the shared thin-wall map changes.
 func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:                    # Declare this function.
-	player_states = [                                                                          # Replace both state records with clean starts.
-		_make_player_state(0, player_one_cell, 0),                                                # Put player one at the requested start facing north.
-		_make_player_state(1, Vector2i(MAP_WIDTH - 1, 0), 2),                                     # Put player two at the opposite corner facing south.
-	]                                                                                           # Close the regenerated player-state list.
+	player_states = _make_start_player_states()                                                # Restore Bart, Jed, Hank, and Wyatt so keyboard-only players remain simulated after a replay.
 	for player_index in range(player_views.size()):                                           # Reset the visible animation latch for every player view.
 		_bind_player_context(player_index)                                                       # Bind this player's state and sprite.
 		_play_best_animation(false)                                                               # Return this player to idle.
