@@ -118,7 +118,10 @@ const MUSIC_STREAM := preload("res://assets/Audio/Music/Ecstacy of Gold.mp3")
 const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
 const PROJECTILE_SPEED := 6.0                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.7                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
-const PROJECTILE_PLAYER_RADIUS := 0.18                                                        # Treat a shot passing close to a player center as a hit.
+const PLAYER_CAPSULE_RADIUS := 0.16                                                           # Leave roughly one less source-pixel of wall clearance per side while retaining a real circular top-down footprint.
+const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
+const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
+const PROJECTILE_WALL_GUARD_RADIUS := 0.12                                                    # Give thin source-map edges a gameplay thickness so diagonal corner grazes cannot hit an unseen body.
 const IMPACT_DURATION := 0.22                                                                 # Keep the two authored explosion frames on screen briefly.
 const HIT_REACTION_DURATION := 0.20                                                           # Keep the one-frame hit pose readable without freezing movement.
 const DEATH_FALL_SECONDS := 0.70                                                              # Let the nine-frame death animation read clearly before the respawn countdown begins.
@@ -158,10 +161,10 @@ const SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                   
 const LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                                  # Keep the local feet anchor inside the projected floor-zone polygon.
 const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                                  # Keep the local feet slightly inside the front edge of the projected floor-zone polygon.
 const NEAREST_ACTOR_LOD_HEIGHT := 48.0                                                       # Match the coordinate renderer's protected largest actor LOD; heads should sit near the center of the 120-pixel view, not crowd the ceiling.
-const CHARACTER_NEAREST_LAYER := 625                                                         # Match the near end of the shared back-to-front world draw scale.
-const LOCAL_CHARACTER_LAYER := 700                                                           # The local first-person body is nearest to its own camera and remains above world geometry.
+const CHARACTER_NEAREST_LAYER := 3125                                                        # Match the near end of the higher-precision shared back-to-front world draw scale.
+const LOCAL_CHARACTER_LAYER := 3500                                                          # The local first-person body is nearest to its own camera and remains above world geometry.
 const WORLD_DRAW_DEPTH_RANGE := 6.25                                                        # Cover the coordinate renderer's useful 5.5-cell view plus its far clip margin.
-const WORLD_DRAW_DEPTH_SCALE := 100.0                                                       # Leave enough integer layers for walls, characters, items, and effects to interleave.
+const WORLD_DRAW_DEPTH_SCALE := 500.0                                                       # Preserve sub-centicell actor-versus-wall depth differences without exceeding Godot's normal Canvas z range.
 const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
 const LOCAL_REAR_CAMERA_SCALE_BOOST := 0.20                                                   # Enlarge the local body near the camera after cropping hides the lower frame.
 const DEBUG_WALL_LABELS_ENABLED := false                                                    # Hide renderer-selected wall labels while the blue slot-grid audit is being checked.
@@ -786,6 +789,8 @@ var next_combat_visual_id := 1                                                  
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_open := false                                                                 # Track whether the debug-menu panel is currently visible.
+var debug_combat_hit_label: Label                                                            # Show the most recent final combat line-of-sight verdict only inside the F3 menu.
+var last_projectile_hit_debug := "No final projectile hit check yet."                        # Preserve the exact wall/cell evidence from the latest attempted damage event.
 var slot_graph_tuner_enabled := false                                                        # Let the visible current graph accept direct endpoint tuning.
 var slot_graph_tuner_overrides: Dictionary = {}                                              # Store source-vector edits by active graph and slot ID.
 var slot_graph_tuner_drag: Dictionary = {}                                                   # Track the one player-view endpoint currently under the mouse.
@@ -925,6 +930,7 @@ func _input(event: InputEvent) -> void:                                         
 func _setup_debug_menu() -> void:
 	debug_menu_panel = PanelContainer.new()                                                    # Create one UI panel above both local player views.
 	debug_menu_panel.name = "DebugOverlayMenu"                                                # Give the panel a clear scene-tree name for editor inspection.
+	debug_menu_panel.z_index = 700                                                            # Keep F3 controls above the high-priority ray map while inspecting it.
 	debug_menu_panel.position = Vector2(12.0, 92.0)                                            # Place the menu below the existing runtime status text.
 	debug_menu_panel.custom_minimum_size = Vector2(268.0, 0.0)                                # Keep labels readable without covering the entire game window.
 	debug_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP                                  # Prevent mouse clicks on the menu from passing to the playfield.
@@ -961,6 +967,10 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "coordinate_wall_parallax", "Wall Layers (P)")           # Toggle Layer 1/Layer 2 view-dependent separation on the runtime wall pass.
 	_add_debug_menu_check(content, "coordinate_ceiling_parallax", "Ceiling Layers (C)")     # Toggle the independent two-layer ceiling pass without changing its projected geometry.
 	_add_debug_menu_check(content, "coordinate_layer_edge_clamp", "Layer Edge Clamp (L)")    # Extend offset wall-layer edge texels instead of opening transparent UV seams.
+	debug_combat_hit_label = Label.new()                                                        # Add a compact readout for diagnosing final gameplay hit authority.
+	debug_combat_hit_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART                       # Keep the diagnostic readable inside the narrow F3 panel.
+	debug_combat_hit_label.custom_minimum_size = Vector2(250.0, 0.0)                           # Give the cell and edge details enough width to be useful.
+	content.add_child(debug_combat_hit_label)                                                   # Place combat evidence beneath the display toggles.
 	var save_tuner := Button.new()                                                             # Provide an explicit, reversible save action.
 	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
 	save_tuner.pressed.connect(_save_slot_graph_tuner_overrides)                              # Save edits only when deliberately requested.
@@ -1047,6 +1057,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_top_down_source_overlay = enabled                                                 # Show or hide the top-down wall/contact source map.
 		"rays":
 			show_raycast_debug = enabled                                                           # Show or hide sampled visibility rays and their hit markers.
+			if enabled:
+				show_top_down_source_overlay = true                                                  # Make the authoritative map visible whenever ray inspection is requested from F3.
 		"extents":
 			show_perspective_extents_overlay = enabled                                             # Show or hide projected floor and actor-boundary guides.
 		"slot_grid":
@@ -1100,6 +1112,8 @@ func _refresh_debug_menu() -> void:
 		var check: CheckBox = debug_menu_checks[option_key]                                      # Read the checkbox stored for this menu key.
 		if check != null:                                                                        # Skip a node only if it has been freed during scene teardown.
 			check.set_pressed_no_signal(_debug_option_value(String(option_key)))                   # Reflect the current flag without recursively redrawing.
+	if debug_combat_hit_label != null:                                                         # Refresh the latest combat result whenever F3 is opened.
+		debug_combat_hit_label.text = "LAST COMBAT LOS\n" + last_projectile_hit_debug          # Keep gameplay diagnostics out of the normal split-screen HUD.
 
 
 
@@ -1927,7 +1941,7 @@ func _process_combat(delta: float) -> void:
 			var impact_position := origin + direction * maxf(hit_distance, 0.0)                     # Place the explosion exactly at the contact point.
 			_spawn_impact(impact_position, direction, hit_player_index)                             # Show the two-frame authored impact art.
 			if hit_player_index >= 0:                                                               # Apply damage only for body collisions.
-				_apply_projectile_hit(hit_player_index, direction, int(shot["owner"]))                 # Update health, hit pose, and respawn if needed.
+				_apply_projectile_hit(hit_player_index, direction, int(shot["owner"]))                 # Revalidate the complete owner-to-target path before changing health.
 			continue                                                                                   # Remove the consumed projectile.
 		shot["position"] = origin + direction * step_distance                                    # Move unhindered shot to its new shared world position.
 		shot["lifetime"] = lifetime                                                               # Save remaining life.
@@ -1946,7 +1960,11 @@ func _process_combat(delta: float) -> void:
 func _spawn_pistol_shot(player_index: int) -> void:
 	var state := player_states[player_index]                                                    # Read the completed movement state.
 	var direction := _view_forward_vector_for_state(state).normalized()                         # Shoot directly along the visible camera/player aim heading.
-	var origin := _player_state_world_position(state) + direction * 0.34                         # Start beyond the firing body so collision and the first visual frame both read as a gun muzzle shot.
+	var body_origin := _player_state_world_position(state)                                      # Keep the simulation rooted at the player's actual collision center, never beyond a wall.
+	var desired_muzzle_distance := 0.34                                                          # Preserve the authored visual separation between body and pistol muzzle when the lane is clear.
+	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance) # Check the short body-to-muzzle segment before placing the bullet.
+	var muzzle_distance := minf(desired_muzzle_distance, maxf(muzzle_wall_distance - PROJECTILE_WALL_EPSILON, 0.0)) # Clamp the muzzle just in front of a wall instead of spawning a shot on its far side.
+	var origin := body_origin + direction * muzzle_distance                                      # Start the projectile at the safe, wall-bounded muzzle point.
 	var maximum_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME                               # Determine a stable visual end point for the complete projectile lifetime.
 	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
 	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance) # Include a player already directly in this firing lane.
@@ -1973,12 +1991,56 @@ func _spawn_pistol_shot(player_index: int) -> void:
 
 # _nearest_projectile_wall_distance: Finds the first physical maze edge struck inside one projectile segment.
 func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float) -> float:
-	var nearest := maximum_distance + 0.001                                                     # Treat no wall as just beyond this frame's segment.
+	var nearest := maximum_distance + 1.0                                                       # Keep a clear-path sentinel safely beyond player-hit contact tolerance.
 	for edge in _all_physical_wall_edges():                                                    # Reuse the authoritative thin-wall collision geometry.
 		var distance := _ray_segment_hit_distance_limited(origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance) # Test the short segment.
 		if distance >= 0.0 and distance < nearest:                                                # Retain the closest edge only.
 			nearest = distance                                                                        # Update the nearest contact.
+	var topology_distance := _projectile_topology_wall_distance(origin, direction, maximum_distance) # Cross-check against the movement map's exact cell-edge ownership.
+	nearest = minf(nearest, topology_distance)                                                  # Let either representation block the shot; topology closes endpoint/parallel-ray gaps.
 	return nearest                                                                              # Return greater than max when this path is clear.
+
+
+# _projectile_topology_wall_distance: Walks the ray through maze cells so projectile blocking uses the same edge ownership as movement.
+func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float) -> float:
+	if maximum_distance <= 0.0 or direction.length_squared() <= 0.000001:                     # Avoid invalid DDA state for zero-length paths.
+		return maximum_distance + 1.0                                                             # Treat an empty path as clear.
+	var ray_direction := direction.normalized()                                                 # Make DDA distances world-unit distances.
+	var sample_origin := origin + ray_direction * 0.0001                                       # Bias inside the forward cell so a muzzle on an edge does not start ambiguously behind it.
+	var cell := Vector2i(floori(sample_origin.x), floori(sample_origin.y))                    # Identify the first movement cell traversed by the projectile.
+	if not _is_open_cell(cell):                                                                 # A shot starting outside the maze cannot enter through its boundary.
+		return 0.0                                                                                # Block immediately at the map boundary.
+	var step_x := signi(ray_direction.x)                                                        # Record which vertical grid boundaries the ray crosses.
+	var step_y := signi(ray_direction.y)                                                        # Record which horizontal grid boundaries the ray crosses.
+	var t_delta_x := absf(1.0 / ray_direction.x) if step_x != 0 else INF                       # Measure distance between successive vertical crossings.
+	var t_delta_y := absf(1.0 / ray_direction.y) if step_y != 0 else INF                       # Measure distance between successive horizontal crossings.
+	var boundary_x := float(cell.x + 1) if step_x > 0 else float(cell.x)                       # Choose the first vertical boundary in the ray direction.
+	var boundary_y := float(cell.y + 1) if step_y > 0 else float(cell.y)                       # Choose the first horizontal boundary in the ray direction.
+	var t_max_x := (boundary_x - sample_origin.x) / ray_direction.x if step_x != 0 else INF    # Find distance to the first vertical crossing.
+	var t_max_y := (boundary_y - sample_origin.y) / ray_direction.y if step_y != 0 else INF    # Find distance to the first horizontal crossing.
+	while minf(t_max_x, t_max_y) <= maximum_distance + PROJECTILE_WALL_EPSILON:                # Visit every cell edge crossed inside this projectile segment.
+		if absf(t_max_x - t_max_y) <= PROJECTILE_WALL_EPSILON:                                   # A corner crossing touches both cell edges at the same instant.
+			var diagonal_distance := maxf(0.0, t_max_x + 0.0001)                                   # Convert the biased DDA distance back to a non-negative projectile distance.
+			if _has_wall_edge(cell, Vector2i(step_x, 0)) or _has_wall_edge(cell, Vector2i(0, step_y)): # A solid edge on either corner branch blocks the diagonal shot.
+				return diagonal_distance                                                               # Stop at the first blocked corner contact.
+			cell += Vector2i(step_x, step_y)                                                        # Advance through the open diagonal corner.
+			t_max_x += t_delta_x                                                                    # Schedule the next vertical crossing.
+			t_max_y += t_delta_y                                                                    # Schedule the next horizontal crossing.
+		elif t_max_x < t_max_y:                                                                   # The ray next crosses a vertical cell edge.
+			var horizontal_distance := maxf(0.0, t_max_x + 0.0001)                                 # Convert its DDA distance into projectile distance.
+			var horizontal_delta := Vector2i(step_x, 0)                                             # Express the crossed edge in movement-map coordinates.
+			if _has_wall_edge(cell, horizontal_delta):                                              # Use the same wall table as player movement.
+				return horizontal_distance                                                             # Stop at the first blocking vertical edge.
+			cell += horizontal_delta                                                                # Enter the next open cell.
+			t_max_x += t_delta_x                                                                    # Schedule the following vertical crossing.
+		else:                                                                                     # The ray next crosses a horizontal cell edge.
+			var vertical_distance := maxf(0.0, t_max_y + 0.0001)                                   # Convert its DDA distance into projectile distance.
+			var vertical_delta := Vector2i(0, step_y)                                               # Express the crossed edge in movement-map coordinates.
+			if _has_wall_edge(cell, vertical_delta):                                                # Use the same wall table as player movement.
+				return vertical_distance                                                               # Stop at the first blocking horizontal edge.
+			cell += vertical_delta                                                                  # Enter the next open cell.
+			t_max_y += t_delta_y                                                                    # Schedule the following horizontal crossing.
+	return maximum_distance + 1.0                                                              # No blocking movement edge lies along this projectile segment.
 
 
 # _ray_segment_hit_distance_limited: Variant of the visibility ray helper without its camera-distance cap.
@@ -2005,7 +2067,12 @@ func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vect
 		if bool(player_states[player_index].get("is_dying", false)):                            # Do not let stray bullets repeatedly hit a fallen or respawning body.
 			continue                                                                                   # The player becomes targetable again only after the reverse Death animation finishes.
 		var distance := _ray_circle_hit_distance(origin, direction, _player_state_world_position(player_states[player_index]), PROJECTILE_PLAYER_RADIUS) # Test the compact player body circle.
-		if distance >= 0.0 and distance <= maximum_distance and distance < nearest_distance:     # Retain only a nearer valid body hit.
+		if distance < 0.0 or distance > maximum_distance:                                        # Ignore bodies that the projectile ray does not reach during this segment.
+			continue                                                                                   # Leave the candidate out of the nearest-hit test.
+		var wall_distance := _nearest_projectile_wall_distance(origin, direction, distance)       # Re-test the exact body-contact interval against every physical wall edge.
+		if wall_distance <= distance + PROJECTILE_WALL_EPSILON:                                   # A wall at or before the body contact always owns this shot.
+			continue                                                                                   # Reject the body so neither immediate nor later simulation can damage through it.
+		if distance < nearest_distance:                                                            # Retain only a nearer, unobstructed body hit.
 			nearest_distance = distance                                                               # Store the collision distance.
 			nearest_player = player_index                                                            # Store the player index.
 	if nearest_player < 0:                                                                      # Return empty data when no opposing body was hit.
@@ -2032,8 +2099,78 @@ func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index
 	next_combat_visual_id += 1                                                                  # Reserve a stable visual key.
 
 
+# _projectile_owner_has_clear_path_to_player: Final gameplay authority for combat line-of-sight, using the same cell-edge wall ownership as movement.
+func _projectile_owner_has_clear_path_to_player(owner_index: int, target_index: int, record_debug := true) -> bool:
+	if owner_index < 0 or owner_index >= player_states.size() or target_index < 0 or target_index >= player_states.size(): # Reject malformed combat references defensively.
+		if record_debug: _set_projectile_hit_debug("P%s -> P%s  INVALID ACTOR INDEX  BLOCKED" % [owner_index + 1, target_index + 1]) # Preserve the actual final-gate reason for F3 inspection.
+		return false                                                                               # Invalid combat actors can never receive damage.
+	var owner_cell: Vector2i = player_states[owner_index].get("grid_position", Vector2i(-1, -1)) # Use the canonical maze cell, not camera-local art offsets that rotate with each player's view.
+	var target_cell: Vector2i = player_states[target_index].get("grid_position", Vector2i(-1, -1)) # Use the target's matching canonical cell ownership.
+	if not _is_open_cell(owner_cell) or not _is_open_cell(target_cell):                         # Treat invalid cell state as blocked rather than permitting a speculative hit.
+		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  INVALID CELL  BLOCKED" % [owner_index + 1, owner_cell, target_index + 1, target_cell]) # Expose stale player-state cells directly.
+		return false                                                                               # Keep combat contained by the maze footprint.
+	var cell_delta := target_cell - owner_cell                                                  # Identify the direct shared edge when players occupy neighboring cells.
+	if abs(cell_delta.x) + abs(cell_delta.y) == 1:                                             # Adjacent players can only shoot through their one shared edge.
+		var shared_edge_blocked := _has_wall_edge(owner_cell, cell_delta)                         # Ask the exact movement wall table whether that edge is open.
+		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  ADJ %s  EDGE=%s  %s" % [owner_index + 1, owner_cell, target_index + 1, target_cell, cell_delta, "WALL" if shared_edge_blocked else "OPEN", "BLOCKED" if shared_edge_blocked else "ALLOWED"]) # Make a visual/combat-map mismatch unambiguous.
+		return not shared_edge_blocked                                                            # Let the shared cell edge be decisive for adjacent players.
+	var owner_world := Vector2(float(owner_cell.x) + 0.5, float(owner_cell.y) + 0.5)           # Trace longer shots from stable cell centers so facing changes cannot move the gameplay line across a wall.
+	var target_world := Vector2(float(target_cell.x) + 0.5, float(target_cell.y) + 0.5)        # Use the same canonical center for the target.
+	var path := target_world - owner_world                                                      # Build the top-down segment joining the two actual bodies.
+	var path_distance := path.length()                                                          # Preserve its real world length for the cell-edge trace.
+	if path_distance <= PROJECTILE_PLAYER_RADIUS:                                               # Bodies already overlapping cannot have a wall between their collision centers.
+		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  OVERLAP  ALLOWED" % [owner_index + 1, owner_cell, target_index + 1, target_cell]) # Record the exceptional close-contact case.
+		return true                                                                                # Keep close-quarter combat responsive.
+	var wall_distance := _projectile_topology_wall_distance(owner_world, path / path_distance, path_distance) # Walk the exact movement-map edges between the two centers.
+	if wall_distance <= path_distance + PROJECTILE_WALL_EPSILON:                               # A crossed movement edge blocks the ordinary centerline route.
+		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  TRACE %.3f/%.3f  WALL  BLOCKED" % [owner_index + 1, owner_cell, target_index + 1, target_cell, wall_distance, path_distance]) # Show whether the topological trace itself found a wall.
+		return false                                                                               # Reject the hit before any health mutation.
+	var grazes_wall := _projectile_path_grazes_wall(owner_world, target_world)                  # Check the conservative thick-wall guard after the exact cell-edge trace.
+	if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  TRACE %.3f/%.3f  GUARD=%s  %s" % [owner_index + 1, owner_cell, target_index + 1, target_cell, wall_distance, path_distance, "WALL" if grazes_wall else "CLEAR", "BLOCKED" if grazes_wall else "ALLOWED"]) # Retain all gameplay inputs needed to diagnose a surprising damage event.
+	return not grazes_wall                                                                       # Also reject a diagonal route that only clears a mathematically zero-width wall corner.
+
+
+# _set_projectile_hit_debug: Records final gameplay LOS evidence without putting debug text into live player HUDs.
+func _set_projectile_hit_debug(message: String) -> void:
+	last_projectile_hit_debug = message                                                         # Keep the latest result available after the shot or impact expires.
+	if debug_combat_hit_label != null:                                                          # Update an already-open F3 panel immediately.
+		debug_combat_hit_label.text = "LAST COMBAT LOS\n" + last_projectile_hit_debug           # Prefix the compact evidence consistently.
+	print("[Combat LOS] " + message)                                                           # Mirror the same evidence to the Godot output panel for screenshot-free capture.
+
+
+# _projectile_path_grazes_wall: Treats physical wall edges as slightly thick only when confirming a player hit.
+func _projectile_path_grazes_wall(origin: Vector2, target: Vector2) -> bool:
+	var path := target - origin                                                                 # Measure the owner-to-target center line once.
+	var path_distance := path.length()                                                          # Keep sampling in world units rather than screen pixels.
+	if path_distance <= PROJECTILE_PLAYER_RADIUS:                                               # Overlapping bodies have no intervening hit-confirmation path.
+		return false                                                                               # Preserve close-range contact behavior.
+	var direction := path / path_distance                                                       # Normalize the sampled line.
+	var tested_distance := maxf(path_distance - PROJECTILE_PLAYER_RADIUS, 0.0)                # Stop at the target's near body contact so a wall behind a visible target does not block the shot.
+	var sample_count := maxi(1, ceili(tested_distance / 0.025))                                # Sample more densely than the smallest intended diagonal corner clearance.
+	var guard_radius_squared := PROJECTILE_WALL_GUARD_RADIUS * PROJECTILE_WALL_GUARD_RADIUS   # Avoid square roots inside the wall/sample loop.
+	for sample_index in range(sample_count + 1):                                               # Visit the complete path up to the target's near body surface.
+		var sample_distance := tested_distance * float(sample_index) / float(sample_count)       # Place this sample evenly in world space.
+		var point := origin + direction * sample_distance                                         # Convert the sample back into a maze coordinate.
+		for edge in _all_physical_wall_edges():                                                   # Test every authoritative movement wall segment.
+			if _point_to_segment_distance_squared(point, Vector2(edge["a"]), Vector2(edge["b"])) <= guard_radius_squared: # Any near-corner wall footprint blocks an otherwise invisible hit.
+				return true                                                                            # Report the first thick-wall contact.
+	return false                                                                                # The complete player-hit route had real clearance from every wall.
+
+
+# _point_to_segment_distance_squared: Returns squared distance from one world point to a finite thin-wall segment.
+func _point_to_segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) -> float:
+	var segment := b - a                                                                        # Measure the finite wall direction.
+	var segment_length_squared := segment.length_squared()                                     # Avoid a division by zero on malformed map data.
+	if segment_length_squared <= 0.000001:                                                     # Treat a degenerate wall as one point.
+		return point.distance_squared_to(a)                                                       # Return direct point distance.
+	var blend := clampf((point - a).dot(segment) / segment_length_squared, 0.0, 1.0)          # Find the closest finite segment point.
+	return point.distance_squared_to(a + segment * blend)                                      # Return squared distance for guard-radius comparison.
+
+
 # _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
 func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1) -> void:
+	if owner_index >= 0 and not _projectile_owner_has_clear_path_to_player(owner_index, player_index): # Make wall blocking decisive at the final damage boundary.
+		return                                                                                    # Do not permit health, score, or death updates through a movement-blocking edge.
 	var state := player_states[player_index]                                                    # Read the target's current state.
 	if bool(state.get("is_dying", false)):                                                     # Ignore stray simultaneous bullets once this player is already down.
 		return                                                                                    # Keep one death sequence and one countdown per defeat.
@@ -2222,21 +2359,7 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 		sprite.material = material
 	sprite.self_modulate = Color.WHITE                                                       # Ensure prior per-sprite tinting cannot make world objects dark after distance lighting was removed.
 	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth)) # Quantize source pixels from discrete perspective depth bands.
-	var occlusion_texture := _active_wall_occlusion_texture()
-	material.set_shader_parameter("wall_occlusion_texture", occlusion_texture)
-	material.set_shader_parameter("world_view_depth", world_view_depth)
-	material.set_shader_parameter("use_wall_occlusion", occlusion_texture != null)
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
-
-
-# _active_wall_occlusion_texture: Each split-screen viewer owns its own wall
-# depth mask, so a sprite can be clipped per pixel against that viewer's walls.
-func _active_wall_occlusion_texture() -> Texture2D:
-	if active_player_index >= 0 and active_player_index < coordinate_renderers.size():
-		var renderer := coordinate_renderers[active_player_index]
-		if is_instance_valid(renderer) and renderer.has_method("get_wall_occlusion_texture"):
-			return renderer.call("get_wall_occlusion_texture") as Texture2D
-	return null
 
 
 # _clear_runtime_world_sprite_style: Keeps the local player camera-relative body at its authored brightness and source pixel resolution.
@@ -2273,8 +2396,8 @@ func _update_combat_view() -> void:
 		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), GUN_TEXTURE, gun_position, used, 0.10) # Keep the pickup at a readable floor-level height.
 	for shot in active_projectiles:                                                             # Render every shared projectile from this camera.
 		var world_position: Vector2 = shot["position"]                                           # Read shared-world shot position.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10):
-			continue                                                                                   # Do not draw outside this view; pixel-level wall occlusion happens in the sprite shader.
+		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10) or not _world_actor_has_clear_line_of_sight(world_position):
+			continue                                                                                   # Do not draw a live bullet beyond an intervening physical wall in this camera.
 		var projection := _opponent_projection_from_current_camera(world_position)                # Reuse the established world-to-camera perspective.
 		var key := "shot_%d" % int(shot["id"])                                                  # Build a stable cached visual name.
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the shot sprite.
@@ -2302,8 +2425,8 @@ func _update_combat_view() -> void:
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
 	for impact in active_impacts:                                                               # Render each short explosion similarly.
 		var world_position: Vector2 = impact["position"]                                        # Read collision world point.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.12):
-			continue                                                                                   # Do not draw outside this view; pixel-level wall occlusion happens in the sprite shader.
+		if not _world_actor_overlaps_current_camera_fan(world_position, 0.12) or not _world_actor_has_clear_line_of_sight(world_position):
+			continue                                                                                   # Keep far-side wall impacts hidden from this camera as well.
 		var projection := _opponent_projection_from_current_camera(world_position)                # Project collision point in this view.
 		var key := "impact_%d" % int(impact["id"])                                              # Build a stable effect key.
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the impact sprite.
@@ -2337,12 +2460,12 @@ func _update_combat_view() -> void:
 			var target_world := _player_state_world_position(state)                                  # Project the opposing hit body into this view.
 			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18) or not _world_actor_has_clear_line_of_sight(target_world):
 				continue                                                                                 # Keep hidden opponents hidden even while hit.
-			var projection := _opponent_projection_from_current_camera(target_world)                 # Use same view model as opponent sprite.
+			var projection := _opponent_projection_from_current_camera(target_world)                 # Sort the hit body from its collision-safe center, matching the regular opponent sprite.
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], float(projection.get("view_depth", 0.0))) # Match the opponent's team palette and depth band.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], float(projection.get("view_depth", 0.0))) # Match hit bodies to their owning team's world-sprite LOD.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
 		sprite.visible = true                                                                      # Reveal the reaction.
@@ -2362,7 +2485,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.texture = texture                                                                    # Use the authored coin or gun pixel art.
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
-	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Apply the same depth band without punishing nearby small pickups.
+	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Keep pickups on the same depth-driven source-pixel grid.
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
@@ -3580,7 +3703,7 @@ func _update_match_minimap_overlay() -> void:
 func _setup_debug_map_overlay() -> void:                                                     # Declare this function.
 	debug_map_overlay = Node2D.new()                                                           # Create the parent node for the top-down map lines and arrow.
 	debug_map_overlay.name = "DebugTopDownMap"                                                 # Name the overlay node so it is easy to find in the scene tree.
-	debug_map_overlay.z_index = 100                                                            # Draw the debug map above status and playfield art.
+	debug_map_overlay.z_index = 600                                                            # Keep ray diagnostics above the match HUD so their wall hits remain inspectable.
 	canvas_layer.add_child(debug_map_overlay)                                                  # Attach the debug map to the UI canvas layer.
 	debug_map_static_layer = Node2D.new()                                                      # Keep maze guides and wall edges in a retained layer that only changes when the maze changes.
 	debug_map_static_layer.name = "StaticMaze"                                                 # Give the retained source-of-truth geometry an inspectable scene-tree name.
@@ -3597,13 +3720,14 @@ func _setup_debug_map_overlay() -> void:                                        
 func _update_debug_map_overlay() -> void:                                                    # Declare this function.
 	if debug_map_overlay == null:                                                              # Skip drawing if the overlay has not been created yet.
 		return                                                                                    # Return without drawing the map.
-	if not TEMP_GRID_AUDIT:                                                                     # The match uses the compact clean minimap instead of the old diagnostic source-map panel.
-		debug_map_overlay.visible = false                                                         # Never reveal blue guides, cones, or slot labels during normal local play.
+	var show_ray_diagnostic := show_raycast_debug                                               # Ray inspection explicitly overrides the normal clean-minimap presentation.
+	if not TEMP_GRID_AUDIT and not show_ray_diagnostic:                                         # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
+		debug_map_overlay.visible = false                                                         # Keep blue guides, cones, and slot labels out of normal local play.
 		_update_match_minimap_overlay()                                                          # Keep the map replacement synchronized with movement and orientation.
 		return                                                                                    # Skip all legacy diagnostic geometry.
-	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the single shared map above both views.
-	debug_map_overlay.visible = show_top_down_source_overlay and is_shared_match_map           # Keep P2's private overlay hidden instead of allowing its redraw to reveal a duplicate map.
-	if not show_top_down_source_overlay or not is_shared_match_map:                            # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
+	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the one source-map diagnostic panel.
+	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic) and is_shared_match_map # Ray debugging may reveal the source map without enabling the full audit by default.
+	if not (show_top_down_source_overlay or show_ray_diagnostic) or not is_shared_match_map:   # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
 		return                                                                                    # Return without drawing the map.
 
 	if not is_instance_valid(debug_map_static_layer) or not is_instance_valid(debug_map_dynamic_layer): # Recover safely if an older scene tree lacks the retained-map children.
@@ -3809,7 +3933,80 @@ func _add_debug_raycast_rays() -> void:                                         
 				continue                                                                                 # Continue to the next all-hit sample.
 			var hit_position := _debug_map_world_position(sample["hit_position"])                      # Convert this farther wall hit into top-down overlay pixels.
 			_add_debug_raycast_hit_marker(hit_position, extra_hit_dot_color, 1.15)                     # Draw the farther hit as a smaller red marker.
+	_add_debug_object_silhouette_rays(origin_world, right)                                      # Overlay targeted object rays separately from the fixed camera fan.
 
+
+
+# _add_debug_object_silhouette_rays: Draws the three camera-to-object test
+# rays that a ray-based sprite-occlusion pass would use. Green reaches the
+# sampled player silhouette; red terminates at the blocking wall first.
+func _add_debug_object_silhouette_rays(origin_world: Vector2, camera_right: Vector2) -> void:
+	var origin := _debug_map_world_position(origin_world)
+	var edges := _all_physical_wall_edges()
+	var clear_color := Color(0.15, 1.0, 0.35, 0.95)
+	var blocked_color := Color(1.0, 0.12, 0.18, 0.98)
+	var target_color := Color(1.0, 1.0, 1.0, 0.9)
+	for player_index in range(player_states.size()):
+		if player_index == active_player_index or player_index >= player_joined.size() or not player_joined[player_index]:
+			continue
+		var state := player_states[player_index]
+		if bool(state.get("is_dying", false)):
+			continue
+		var target_center := _player_state_world_position(state)
+		for lateral_fraction in [-1.0, 0.0, 1.0]:
+			var target := target_center + camera_right * float(lateral_fraction) * 0.24
+			var offset := target - origin_world
+			var target_distance := offset.length()
+			if target_distance <= 0.025:
+				continue
+			var ray_direction := offset / target_distance
+			var nearest_hit := -1.0
+			for edge in edges:
+				var hit_distance := _ray_segment_hit_distance(origin_world, ray_direction, Vector2(edge["a"]), Vector2(edge["b"]))
+				if hit_distance >= 0.0 and (nearest_hit < 0.0 or hit_distance < nearest_hit):
+					nearest_hit = hit_distance
+			var target_map := _debug_map_world_position(target)
+			if nearest_hit >= 0.0 and nearest_hit < target_distance - 0.018:
+				var hit_map := _debug_map_world_position(origin_world + ray_direction * nearest_hit)
+				_add_debug_line(origin, hit_map, blocked_color, 2.0)
+				_add_debug_raycast_hit_marker(hit_map, blocked_color, 2.4)
+				_add_debug_line(hit_map, target_map, Color(blocked_color, 0.28), 1.0)
+			else:
+				_add_debug_line(origin, target_map, clear_color, 2.0)
+			_add_debug_raycast_hit_marker(target_map, target_color, 1.5)
+		_add_debug_depth_readout(player_index, target_center, _debug_map_world_position(target_center))
+
+
+# _add_debug_depth_readout: Labels a remote player with its exact projection
+# depth/layer and the projected wall whose on-screen bounds overlap its body.
+# It makes a same-depth or parent-layer ordering mistake visible in one frame.
+func _add_debug_depth_readout(player_index: int, target_world: Vector2, map_position: Vector2) -> void:
+	var projection := _opponent_projection_from_current_camera(target_world)
+	var actor_depth := float(projection.get("view_depth", 0.0))
+	var actor_sort_depth := float(projection.get("sort_view_depth", actor_depth))
+	var actor_layer := int(projection.get("z_index", 0))
+	var actor_height := float(projection.get("actor_height", 0.0))
+	var actor_rect := Rect2(Vector2(float(projection.get("screen_x", 0.0)) - actor_height * 0.32, float(projection.get("feet_y", 0.0)) - actor_height), Vector2(actor_height * 0.64, actor_height))
+	var overlap := {}
+	if active_player_index >= 0 and active_player_index < coordinate_renderers.size():
+		var renderer := coordinate_renderers[active_player_index]
+		if is_instance_valid(renderer) and renderer.has_method("get_wall_depth_debug_entries"):
+			for wall in renderer.call("get_wall_depth_debug_entries"):
+				var quad: PackedVector2Array = wall.get("quad", PackedVector2Array())
+				if quad.size() != 4:
+					continue
+				var bounds := Rect2(quad[0], Vector2.ZERO)
+				for point in quad:
+					bounds = bounds.expand(point)
+				if bounds.intersects(actor_rect) and (overlap.is_empty() or absf(float(wall["depth"]) - actor_depth) < absf(float(overlap["depth"]) - actor_depth)):
+					overlap = wall
+	var label := Label.new()
+	label.text = "P%d d%.2f s%.2f z%d\nW %s" % [player_index + 1, actor_depth, actor_sort_depth, actor_layer, "d%.2f z%d" % [float(overlap["depth"]), int(overlap["z_index"])] if not overlap.is_empty() else "none"]
+	label.position = map_position + Vector2(4.0, -12.0)
+	label.z_index = 20
+	label.add_theme_font_override("font", pixel_hud_font)
+	label.add_theme_font_size_override("font_size", 8)
+	_debug_map_draw_parent().add_child(label)
 
 
 # _add_debug_raycast_hit_marker: Adds a small diamond marker at one ray wall hit.
@@ -6112,6 +6309,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 
 	if not is_transitioning:                                                                   # Keep free local movement bounded when no tile-crossing transition started.
 		tile_offset = Vector2(clampf(tile_offset.x, -1.0, 1.0), clampf(tile_offset.y, -1.0, 1.0)) # Keep the physical offset inside this tile after free movement.
+		tile_offset = _constrain_tile_offset_to_player_capsule(tile_offset)                      # Stop the capsule center a physical radius before any closed cell edge.
 		local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the clamped physical offset back into local art-space registration.
 
 
@@ -6190,7 +6388,7 @@ func _move_diagonal_world_axis(world_position: Vector2, distance: float, positiv
 	if _can_player_cross_edge(current_cell, crossing_delta):                                   # Allow movement through an open edge or the deliberate player cheat into the neighboring grid cell.
 		return candidate                                                                          # The following axis sweep will use the new cell when necessary.
 	var boundary := float(current_index + 1) if distance > 0.0 else float(current_index)       # Locate the blocked east/south or west/north cell edge.
-	var safe_axis := boundary - 0.0001 if distance > 0.0 else boundary + 0.0001                # Stay just inside the current cell so its ownership remains stable.
+	var safe_axis := boundary - PLAYER_CAPSULE_RADIUS if distance > 0.0 else boundary + PLAYER_CAPSULE_RADIUS # Stop the circular player body at its physical wall contact while keeping the other axis free to slide.
 	if axis_is_x:                                                                               # Clamp the rejected east/west candidate.
 		candidate.x = safe_axis                                                                    # Keep the player pressed against the source-map wall.
 	else:                                                                                       # Clamp the rejected north/south candidate.
@@ -6208,12 +6406,36 @@ func _current_player_world_position() -> Vector2:                               
 
 
 
+# _constrain_tile_offset_to_player_capsule: Keeps the cardinal-view player
+# center off the left/right walls while preserving the authored forward/back
+# contact and transition presentation used by the local camera.
+func _constrain_tile_offset_to_player_capsule(tile_offset: Vector2) -> Vector2:
+	if walk_through_walls_cheat:
+		return tile_offset
+	var contact_offset := clampf(1.0 - PLAYER_CAPSULE_RADIUS / LOCAL_TILE_WORLD_HALF_EXTENT, 0.0, 1.0)
+	if _has_wall_at(_left_vector()):
+		tile_offset.x = maxf(tile_offset.x, -contact_offset)
+	if _has_wall_at(-_left_vector()):
+		tile_offset.x = minf(tile_offset.x, contact_offset)
+	return tile_offset
+
+
+
 # _constrain_player_world_position_to_camera_cell: Keeps ordinary diagonal local motion inside the actual source-map cell that owns its camera.
 func _constrain_player_world_position_to_camera_cell(world_position: Vector2) -> Vector2:
 	if walk_through_walls_cheat:                                                               # Keep the exploratory cheat completely unrestricted, including beyond the map border.
 		return world_position                                                                     # Do not alter the intentionally out-of-bounds player point.
 	const CELL_EDGE_EPSILON := 0.0001                                                          # Retain a stable floori ownership while allowing the player to touch a blocked edge visually.
-	return Vector2(clampf(world_position.x, float(grid_position.x) + CELL_EDGE_EPSILON, float(grid_position.x + 1) - CELL_EDGE_EPSILON), clampf(world_position.y, float(grid_position.y) + CELL_EDGE_EPSILON, float(grid_position.y + 1) - CELL_EDGE_EPSILON)) # Clip the 45-degree local diamond against the physical cell rectangle before it can leak through a diagonal side wall.
+	var constrained := Vector2(clampf(world_position.x, float(grid_position.x) + CELL_EDGE_EPSILON, float(grid_position.x + 1) - CELL_EDGE_EPSILON), clampf(world_position.y, float(grid_position.y) + CELL_EDGE_EPSILON, float(grid_position.y + 1) - CELL_EDGE_EPSILON)) # Clip the 45-degree local diamond against the physical cell rectangle before it can leak through a diagonal side wall.
+	if _has_wall_edge(grid_position, Vector2i(1, 0)):
+		constrained.x = minf(constrained.x, float(grid_position.x + 1) - PLAYER_CAPSULE_RADIUS)
+	if _has_wall_edge(grid_position, Vector2i(-1, 0)):
+		constrained.x = maxf(constrained.x, float(grid_position.x) + PLAYER_CAPSULE_RADIUS)
+	if _has_wall_edge(grid_position, Vector2i(0, 1)):
+		constrained.y = minf(constrained.y, float(grid_position.y + 1) - PLAYER_CAPSULE_RADIUS)
+	if _has_wall_edge(grid_position, Vector2i(0, -1)):
+		constrained.y = maxf(constrained.y, float(grid_position.y) + PLAYER_CAPSULE_RADIUS)
+	return constrained
 
 
 
@@ -6258,20 +6480,18 @@ func _position_player() -> void:                                                
 		return                                                                                    # Do not update or redraw the body until reverse Death starts at respawn.
 	player_sprite.visible = true                                                              # Restore the local actor after temporary 45-degree validation views hide it.
 	var display_local_position := _translation_display_local_position()                         # Let the actor travel smoothly through authored forward or side camera frames without changing collision or the source-map graph.
-	var depth := clampf(display_local_position.y, 0.0, 1.0)                                    # Project the visual actor from its interpolated Fwd depth or its ordinary live depth.
-	var projection := _self_actor_projection_at_local_depth(depth)                              # Sample self-view feet from the true local position and scale from visible S0 space.
-	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Clamp only the rendered feet anchor inside the visible floor polygon.
+	var depth := clampf(display_local_position.y, 0.0, 1.0)                                    # Preserve the authored self-camera depth path; it intentionally differs from a remote world projection during forward/back transitions.
+	var projection := _self_actor_projection_at_local_depth(depth)                              # Restore the calibrated local floor/feet projection that keeps motion smooth through Fwd and Right frames.
+	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Continue to derive lateral registration from the local floor polygon.
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
 	var actor_height := NEAREST_ACTOR_LOD_HEIGHT                                               # The local actor always occupies the nearest camera cell, so use the same protected largest LOD as a same-cell opponent.
 	var source_body_height := _standard_actor_body_height() if player_sprite.animation == &"Death" else _sprite_body_height_to_foot(player_sprite) # Keep the authored death sheet at normal body scale despite its unusual visible bounds.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
-	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the measured feet line.
+	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the calibrated self-view feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
 	_apply_runtime_world_sprite_style(player_sprite, sprite_scale, active_player_index)         # Use this player's authored or Team 2 palette without distance darkening.
 	player_sprite.z_index = LOCAL_CHARACTER_LAYER                                              # Keep the local body above wall art; the clipped viewport trims anything outside the camera frame.
-
-
 
 # _forward_display_local_position: Smoothly moves the rendered actor across Fwd 1 and Fwd 2 while the physical crossing remains safely edge-locked.
 func _forward_display_local_position() -> Vector2:
@@ -6332,7 +6552,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 		return                                                                                    # Wait for the reverse Death sequence to begin at the new spawn.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
-	var projection := _opponent_projection_from_current_camera(target_world)                    # Project the opponent through the current player's camera model.
+	var projection := _opponent_projection_from_current_camera(target_world)                    # Sort from the collision-safe player center; the capsule is for movement, not draw depth.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
@@ -6343,16 +6563,16 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
-	if not _world_actor_has_clear_line_of_sight(target_world):                                  # Test the same thin-wall ray geometry used by movement and wall selection.
-		opponent_sprite.visible = false                                                           # Never expose a foot or edge of an actor whose body center is blocked by a wall.
-		return
+	if not _projectile_owner_has_clear_path_to_player(active_player_index, target_index, false): # Use the identical stable cell-edge authority as final damage so a combat-blocked opponent can never remain visible.
+		opponent_sprite.visible = false                                                           # Prevent feet-only leaks and transient turn-frame flashes through a blocking edge.
+		return                                                                                    # Keep visual and combat wall authority identical before any sprite/z-order work.
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
 	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
-	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0))) # Match actor source sampling to its discrete depth band.
+	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0))) # Match opponents to the same depth-driven source-pixel grid.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
 
@@ -6397,7 +6617,7 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 
 
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
-func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:         # Declare this function.
+func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:          # Project world art from its collision-safe center point.
 	# The coordinate compositor owns the live in-between camera pose.  Use its
 	# exact wall/floor projection for every remote world object so actors,
 	# pickups, bullets, and impacts travel continuously with a transition rather
@@ -6415,11 +6635,13 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 		var runtime_projection: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", target_world)
 		if runtime_projection is Dictionary and bool(runtime_projection.get("visible", false)):
 			var runtime_depth := float(runtime_projection.get("view_depth", 0.0))
+			var sort_depth := runtime_depth                                                          # Collision owns capsule separation; draw order uses the center that collision keeps on the correct side of every wall.
 			var runtime_result: Dictionary = runtime_projection.duplicate()
 			# Both the remote body's position and stepped size come from the live
 			# coordinate renderer, so its camera pose remains authoritative.
 			runtime_result["scale_view_depth"] = runtime_depth
-			runtime_result["z_index"] = _character_layer_for_view_depth(runtime_depth)
+			runtime_result["sort_view_depth"] = sort_depth
+			runtime_result["z_index"] = _character_layer_for_view_depth(sort_depth)
 			return runtime_result
 	var origin := _runtime_camera_origin_for_visibility()                                      # Use the identical staged camera origin used for renderer visibility and actor culling.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact live heading used by the coordinate walls, including NE/NW halfway poses.
@@ -6447,9 +6669,10 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 	var scale_projection := _corridor_projection_at_view_depth(scale_view_depth)               # Sample only actor scale from the protected near-camera depth.
 	actor_height = float(scale_projection["actor_height"])                                    # Replace actor height while keeping true feet and screen-side position.
 	var screen_y := feet_y - actor_height * 0.5                                                 # Keep a legacy centered y value for debugging; final sprite registration uses feet_y.
-	var character_layer := _character_layer_for_view_depth(view_depth)                         # Use wall-depth buckets so same-depth side walls do not erase visible actors.
+	var sort_depth := view_depth                                                                # Keep fallback draw ordering centered on the same collision-safe body point.
+	var character_layer := _character_layer_for_view_depth(sort_depth)                         # Use center depth so walls between the camera and body always win.
 	var corridor_width := maxf(float(corridor["right_x"]) - float(corridor["left_x"]), 1.0)    # Measure how many screen pixels represent one visible tile width at this depth.
-	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "scale_view_depth": scale_view_depth, "view_depth": view_depth, "z_index": character_layer, "corridor_width": corridor_width} # Return the projected screen coordinates, scale input, physical depth, and character layer.
+	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "scale_view_depth": scale_view_depth, "view_depth": view_depth, "sort_view_depth": sort_depth, "z_index": character_layer, "corridor_width": corridor_width} # Return projected geometry plus the distinct physical sort depth.
 
 
 
@@ -6602,20 +6825,17 @@ func _world_pickup_is_in_front_of_current_camera(target_world: Vector2) -> bool:
 
 
 
-# _world_actor_has_clear_line_of_sight: Uses the same physical thin-wall map as movement and runtime wall visibility.
+# _world_actor_has_clear_line_of_sight: Uses the same physical player-body wall path as combat, rather than the renderer's rear-biased camera cheat point.
 func _world_actor_has_clear_line_of_sight(target_world: Vector2) -> bool:
-	var origin := _runtime_camera_origin_for_visibility()                                      # Start from the exact runtime camera point used by wall visibility.
-	var to_target := target_world - origin                                                     # Measure the world-space segment from camera to opponent.
-	var target_distance := to_target.length()                                                  # Keep the exact body-center distance for nearest-wall comparison.
-	if target_distance <= 0.025:                                                               # A player occupying the camera point cannot be blocked by an intervening edge.
-		return true                                                                               # Keep this degenerate near-camera case visible.
-	var ray_direction := to_target / target_distance                                           # Normalize the camera-to-opponent line for segment intersection.
-	var body_clearance := 0.005                                                                # Preserve only floating-point tolerance; a player flush to a blocking wall must not leak through it.
-	for edge in _all_physical_wall_edges():                                                    # Test the direct sight line against the identical thin-wall geometry used for collision.
-		var hit_distance := _ray_segment_hit_distance(origin, ray_direction, Vector2(edge["a"]), Vector2(edge["b"])) # Find the first point where this line meets each physical wall edge.
-		if hit_distance >= 0.0 and hit_distance < target_distance - body_clearance:              # Any edge strictly before the opponent blocks the whole sprite.
-			return false                                                                           # Prevent the actor's high render layer from leaking through that wall.
-	return true                                                                                # No intervening wall segment blocks the opponent's body center.
+	var origin := _current_player_world_position()                                             # Start at the observing player's collision-safe body center, not the visual camera's rear offset.
+	var to_target := target_world - origin                                                     # Measure the authoritative top-down path between the two visible bodies.
+	var target_distance := to_target.length()                                                  # Keep the exact body-center distance for the shared wall query.
+	if target_distance <= 0.025:                                                               # Actors occupying the same physical point cannot have a wall between them.
+		return true                                                                               # Preserve the degenerate close-contact case.
+	var ray_direction := to_target / target_distance                                           # Normalize for the shared projectile/topology wall query.
+	var body_clearance := 0.005                                                                # Leave only numerical tolerance at the target body surface.
+	var wall_distance := _nearest_projectile_wall_distance(origin, ray_direction, target_distance - body_clearance) # Reuse exact movement-edge DDA plus wall-segment collision already proven for combat.
+	return wall_distance > target_distance - body_clearance + PROJECTILE_WALL_EPSILON          # Hide the entire opponent when any solid edge lies before their body center.
 
 
 

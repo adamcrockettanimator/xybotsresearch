@@ -7,10 +7,6 @@ render_mode unshaded;
 // arcade-style reduction from one sprite sheet rather than fractional pixels.
 uniform float texel_stride = 1.0;
 uniform float team_palette = 0.0;
-uniform sampler2D wall_occlusion_texture : filter_nearest;
-uniform float wall_occlusion_depth_range = 6.25;
-uniform float world_view_depth = 0.0;
-uniform bool use_wall_occlusion = false;
 
 void fragment() {
 	vec2 texture_size = vec2(1.0) / TEXTURE_PIXEL_SIZE;
@@ -18,12 +14,6 @@ void fragment() {
 	vec2 texel = floor(UV * texture_size / stride) * stride + stride * 0.5;
 	texel = clamp(texel, vec2(0.5), texture_size - vec2(0.5));
 	vec4 sampled = texture(TEXTURE, texel / texture_size);
-	if (use_wall_occlusion && sampled.a > 0.0) {
-		vec4 wall_mask = texture(wall_occlusion_texture, SCREEN_UV);
-		if (wall_mask.a > 0.5 && wall_mask.r * wall_occlusion_depth_range + 0.01 < world_view_depth) {
-			discard;
-		}
-	}
 	// Team 1 is the authored palette. Team 2 remaps only the costume swatches
 	// shown in the supplied reference: blue becomes green and magenta becomes
 	// orange/brown, while skin, weapon, outlines, and neutral pixels stay intact.
@@ -40,8 +30,5 @@ void fragment() {
 			else sampled.rgb = vec3(0.66275, 0.30980, 0.0);
 		}
 	}
-	// COLOR already contains the canvas texture sample at this stage. Multiplying
-	// it by sampled a second time squares every source color and darkens sprites.
-	// Output the deliberately snapped authored sample directly instead.
 	COLOR = sampled;
 }
