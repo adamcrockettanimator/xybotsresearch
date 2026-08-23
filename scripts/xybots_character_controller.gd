@@ -116,6 +116,9 @@ const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
 const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0)
 const MUSIC_STREAM := preload("res://assets/Audio/Music/Ecstacy of Gold.mp3")
 const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
+const COIN_PICKUP_STREAM := preload("res://assets/Audio/SFX/Coin.mp3")
+const HEART_PICKUP_STREAM := preload("res://assets/Audio/SFX/heart.mp3")
+const MACHINE_GUN_PICKUP_STREAM := preload("res://assets/Audio/SFX/MachineGun.mp3")
 const PROJECTILE_SPEED := 6.0                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.7                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PLAYER_CAPSULE_RADIUS := 0.16                                                           # Leave roughly one less source-pixel of wall clearance per side while retaining a real circular top-down footprint.
@@ -785,6 +788,9 @@ const MATCH_MINIMAP_MARGIN := 5.0                                               
 var pixel_hud_font: FontFile                                                                   # Share the bundled High Noon pixel font across every gameplay readout.
 var music_player: AudioStreamPlayer
 var gunshot_player: AudioStreamPlayer
+var coin_pickup_player: AudioStreamPlayer
+var heart_pickup_player: AudioStreamPlayer
+var machine_gun_pickup_player: AudioStreamPlayer
 var next_combat_visual_id := 1                                                                  # Give shared shots and impacts stable keys inside each split-screen view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
@@ -845,6 +851,21 @@ func _setup_shared_audio() -> void:
 	gunshot_player = AudioStreamPlayer.new()
 	gunshot_player.stream = GUNSHOT_STREAM
 	add_child(gunshot_player)
+	coin_pickup_player = AudioStreamPlayer.new()
+	coin_pickup_player.stream = COIN_PICKUP_STREAM
+	add_child(coin_pickup_player)
+	heart_pickup_player = AudioStreamPlayer.new()
+	heart_pickup_player.stream = HEART_PICKUP_STREAM
+	add_child(heart_pickup_player)
+	machine_gun_pickup_player = AudioStreamPlayer.new()
+	machine_gun_pickup_player.stream = MACHINE_GUN_PICKUP_STREAM
+	add_child(machine_gun_pickup_player)
+
+
+# _play_pickup_sound: Plays a shared one-shot item cue without duplicating it across local viewports.
+func _play_pickup_sound(player: AudioStreamPlayer) -> void:
+	if player != null:                                                                          # Keep early scene setup and teardown safe.
+		player.play()                                                                             # Restart the concise cue for this one successful collection.
 
 
 func _setup_deathmatch_overlays() -> void:
@@ -1433,6 +1454,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			var collector := player_states[collected_by]
 			collector["coins"] = int(collector.get("coins", 0)) + int(coin.get("value", 1))
 			player_states[collected_by] = collector
+			_play_pickup_sound(coin_pickup_player)                                                   # Play one shared coin chime, independent of the number of split-screen cameras.
 		else:
 			remaining_coins.append(coin)
 	world_coins = remaining_coins                                                            # Keep only still-uncollected objective or dropped coins.
@@ -1454,6 +1476,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			var collector := player_states[collected_by]
 			collector["health"] = mini(PLAYER_MAX_HEALTH, int(collector.get("health", 0)) + 1)
 			player_states[collected_by] = collector
+			_play_pickup_sound(heart_pickup_player)                                                  # Confirm the health pickup once for the whole shared match.
 		else:
 			remaining_hearts.append(heart)
 	world_hearts = remaining_hearts                                                         # Keep heart items available until an injured joined player claims them.
@@ -1466,6 +1489,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			if _player_state_world_position(state).distance_to(pickup_position) <= COIN_PICKUP_RADIUS:
 				state["machine_gun_ammo"] = int(machine_gun_pickup.get("ammo", MACHINE_GUN_AMMO)) # Preserve a dropped gun's remaining rounds rather than refilling it.
 				player_states[player_index] = state
+				_play_pickup_sound(machine_gun_pickup_player)                                        # Announce the contested weapon pickup once, not once per viewport.
 				machine_gun_pickup = {}                                                           # Consume the shared map pickup.
 				machine_gun_respawn_timer = 0.0                                                   # A held gun does not start a duplicate-world-pickup timer.
 				break
@@ -2819,10 +2843,12 @@ func _update_scoreboard_shop_input() -> void:
 				state["coins"] = coins - 5
 				state["health"] = mini(PLAYER_MAX_HEALTH, int(state.get("health", 0)) + 1)
 				player_states[player_index] = state
+				_play_pickup_sound(heart_pickup_player)                                               # Reuse the health cue for a successful vending-machine heart purchase.
 			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10:
 				state["coins"] = coins - 10
 				state["machine_gun_ammo"] = MACHINE_GUN_AMMO
 				player_states[player_index] = state
+				_play_pickup_sound(machine_gun_pickup_player)                                         # Reuse the weapon cue for a successful vending-machine gun purchase.
 		was_shop_heart_pressed[player_index] = heart_pressed
 		was_shop_gun_pressed[player_index] = gun_pressed
 
