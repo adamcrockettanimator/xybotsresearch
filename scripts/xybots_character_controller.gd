@@ -108,7 +108,6 @@ const PISTOL_FIRE_INTERVAL := 0.32                                              
 const MACHINE_GUN_FIRE_INTERVAL := 0.12                                                       # Keep the pickup clearly faster than the pistol without making it a blur.
 const MACHINE_GUN_AMMO := 20                                                                  # Keep the rapid-fire pickup powerful without allowing a prolonged dominant streak.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
-const COIN_PICKUP_RADIUS := 0.32                                                              # Let a player collect a center-of-cell coin without requiring exact pixel contact.
 const DEFAULT_COMBAT_ROUND_SECONDS := 101.60                                                  # Match the Godot importer waveform's 101.60 s end of audible song content, excluding the MP3 container tail.
 const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
 const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
@@ -117,11 +116,11 @@ const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0)
 const MUSIC_STREAM := preload("res://assets/Audio/Music/Ecstacy of Gold.mp3")
 const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
 const COIN_PICKUP_STREAM := preload("res://assets/Audio/SFX/Coin.mp3")
-const HEART_PICKUP_STREAM := preload("res://assets/Audio/SFX/heart.mp3")
+const HEART_PICKUP_STREAM := preload("res://assets/Audio/SFX/Heart.mp3")
 const MACHINE_GUN_PICKUP_STREAM := preload("res://assets/Audio/SFX/MachineGun.mp3")
 const PROJECTILE_SPEED := 6.0                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.7                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
-const PLAYER_CAPSULE_RADIUS := 0.16                                                           # Leave roughly one less source-pixel of wall clearance per side while retaining a real circular top-down footprint.
+const PLAYER_CAPSULE_RADIUS := 0.10                                                           # Match the visible body width more closely while retaining one shared circular footprint for movement, combat, and pickups.
 const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
 const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
 const PROJECTILE_WALL_GUARD_RADIUS := 0.12                                                    # Give thin source-map edges a gameplay thickness so diagonal corner grazes cannot hit an unseen body.
@@ -628,6 +627,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var enable_3d_diagnostic := false                                                    # Keep the experimental 3D view disabled unless it is explicitly needed.
 @export var show_top_down_source_overlay := true                                             # Show the 2D source-of-truth map overlay during wall/collision debugging.
 @export var show_raycast_debug := false                                                      # Show individual visibility rays and their first-hit points on the top-down map.
+@export var show_pickup_range_debug := false                                                 # Show the same-cell front/back pickup ellipse on the top-down source map.
 @export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
@@ -711,6 +711,7 @@ var manual_strafe_step_enabled := false                                         
 var was_manual_strafe_step_pressed := false                                                 # Latch lateral input so a held stick cannot skip multiple side-camera stages.
 var grid_position := Vector2i(0, 3)                                                         # Track the current cell in the top-down maze map.
 var local_floor_position := HOME_LOCAL_FLOOR_POSITION                                       # Track the character position inside the current tile.
+var player_world_position := Vector2(0.5, 3.5)                                              # Keep one persistent capsule center as the authoritative gameplay position; local coordinates are now only the current camera's representation of it.
 var run_dir := DIR_N                                                                        # Track the body movement direction used for animation selection.
 var aim_dir := DIR_N                                                                        # Track the aiming direction used for animation selection.
 var last_animation: StringName = &""                                                        # Remember the last animation to avoid restarting it every frame.
@@ -976,6 +977,7 @@ func _setup_debug_menu() -> void:
 
 	_add_debug_menu_check(content, "source_map", "Map Walls")                               # Add the logical-map and wall-contact overlay toggle.
 	_add_debug_menu_check(content, "rays", "Ray Casts")                                     # Add the raycast inspection overlay toggle.
+	_add_debug_menu_check(content, "pickup_range", "Pickup Range")                         # Show the true same-cell pickup footprint for tuning.
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
 	_add_debug_menu_check(content, "slot_grid", "Slot Grid (F2)")                           # Add the existing F2 quick-toggle as a menu option.
 	_add_debug_menu_check(content, "render_walls", "Render Walls")                          # Let floor/grid tuning run without opaque wall art covering the player view.
@@ -1035,6 +1037,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_top_down_source_overlay                                                     # Return the logical-map and physical-wall overlay state.
 		"rays":
 			return show_raycast_debug                                                              # Return the visibility ray overlay state.
+		"pickup_range":
+			return show_pickup_range_debug                                                         # Return the same-cell collectible footprint diagnostic state.
 		"extents":
 			return show_perspective_extents_overlay                                                # Return the measured floor/actor extent overlay state.
 		"slot_grid":
@@ -1082,6 +1086,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_raycast_debug = enabled                                                           # Show or hide sampled visibility rays and their hit markers.
 			if enabled:
 				show_top_down_source_overlay = true                                                  # Make the authoritative map visible whenever ray inspection is requested from F3.
+		"pickup_range":
+			show_pickup_range_debug = enabled
+			if enabled:
+				show_top_down_source_overlay = true                                                  # The ellipse is meaningful only on the top-down source map.
 		"extents":
 			show_perspective_extents_overlay = enabled                                             # Show or hide projected floor and actor-boundary guides.
 		"slot_grid":
@@ -1270,6 +1278,7 @@ func _make_audit_player_state(player_index: int, start_cell: Vector2i, start_fac
 	state["turn_45_direction"] = start_turn_45                                                  # Apply the requested cardinal or halfway-turn view.
 	state["turn_step"] = 2 if start_turn_45 != 0 else 0                                         # Keep audit diagonal starts on the 45-degree stage.
 	state["local_floor_position"] = start_local_position                                       # Apply the requested in-cell actor position.
+	state["world_position"] = _world_position_from_state_fields(start_cell, start_local_position, state) # Make the audit capsule agree with its displayed starting pose.
 	state["world_run_dir"] = _direction_string_for_facing(start_facing)                        # Keep the world run direction coherent with the audit facing.
 	state["world_aim_dir"] = _direction_string_for_facing(start_facing)                        # Keep the world aim direction coherent with the audit facing.
 	return state                                                                               # Return the corrected audit state.
@@ -1314,6 +1323,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"was_manual_strafe_step_pressed": false,                                                    # Store the one-shot lateral-step input latch.
 		"grid_position": start_cell,                                                               # Store this player's source-map cell.
 		"local_floor_position": HOME_LOCAL_FLOOR_POSITION,                                        # Store this player's position inside the current cell.
+		"world_position": Vector2(float(start_cell.x) + 0.5, float(start_cell.y) + 0.5),            # Store the single authoritative capsule center in world space.
 		"run_dir": DIR_N,                                                                          # Store this player's current body movement animation direction.
 		"aim_dir": DIR_N,                                                                          # Store this player's current aim animation direction.
 		"last_animation": &"",                                                                     # Store this player's last animation name.
@@ -1449,7 +1459,7 @@ func _collect_combat_pickups(delta: float) -> void:
 					continue
 				if player_index == 1 and not player_two_joined:
 					continue
-				if _player_state_world_position(state).distance_to(coin_position) <= COIN_PICKUP_RADIUS:
+				if _player_can_collect_pickup(state, coin_position):
 					collected_by = player_index
 					break
 		if collected_by >= 0:
@@ -1471,7 +1481,7 @@ func _collect_combat_pickups(delta: float) -> void:
 				var state := player_states[player_index]
 				if bool(state.get("is_dying", false)) or int(state.get("health", PLAYER_MAX_HEALTH)) >= PLAYER_MAX_HEALTH:
 					continue
-				if _player_state_world_position(state).distance_to(heart_position) <= COIN_PICKUP_RADIUS:
+				if _player_can_collect_pickup(state, heart_position):
 					collected_by = player_index
 					break
 		if collected_by >= 0:
@@ -1488,7 +1498,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			var state := player_states[player_index]
 			if bool(state.get("is_dying", false)) or (player_index == 1 and not player_two_joined):
 				continue
-			if _player_state_world_position(state).distance_to(pickup_position) <= COIN_PICKUP_RADIUS:
+			if _player_can_collect_pickup(state, pickup_position):
 				state["machine_gun_ammo"] = int(machine_gun_pickup.get("ammo", MACHINE_GUN_AMMO)) # Preserve a dropped gun's remaining rounds rather than refilling it.
 				player_states[player_index] = state
 				_play_pickup_sound(machine_gun_pickup_player)                                        # Announce the contested weapon pickup once, not once per viewport.
@@ -1502,6 +1512,13 @@ func _collect_combat_pickups(delta: float) -> void:
 			machine_gun_respawn_timer = maxf(machine_gun_respawn_timer - delta, 0.0)          # Count down only after the last magazine has been spent.
 		if not _machine_gun_is_held() and machine_gun_respawn_timer <= 0.0:
 			_spawn_machine_gun_pickup()                                                          # Return one gun to the map for the next contest.
+
+
+# _player_can_collect_pickup: Uses the same circular body footprint that blocks
+# player movement. Pickups are points, so contact means their origin enters the
+# player's actual capsule circle rather than a larger camera-compensation zone.
+func _player_can_collect_pickup(state: Dictionary, pickup_position: Vector2) -> bool:
+	return _player_state_world_position(state).distance_to(pickup_position) <= PLAYER_CAPSULE_RADIUS
 
 
 # _machine_gun_is_held: Keeps the shared pickup from duplicating while either living player retains ammunition.
@@ -2311,6 +2328,7 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 		state["facing"] = int(state.get("death_respawn_facing", 0))                            # Restore the intended inward-facing camera.
 		state["turn_45_direction"] = 0                                                          # Clear any old turn interpolation data.
 		state["turn_step"] = 0                                                                   # Clear any old turn interpolation data.
+		state["world_position"] = _world_position_from_state_fields(state["grid_position"], state["local_floor_position"], state) # Teleport the actual capsule with the respawning actor, rather than leaving old collision at the corpse.
 		state["forward_step"] = 0                                                                # Clear any old forward interpolation data.
 		state["strafe_step"] = 0                                                                 # Clear any old strafe interpolation data.
 		state["is_transitioning"] = false                                                        # Do not carry a transition from the death location to the respawn.
@@ -2501,7 +2519,8 @@ func _update_combat_view() -> void:
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
 func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0) -> void:
-	if not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position): # Keep collectibles in front of the camera, inside its fan, and behind no blocking edge.
+	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
+	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position)): # Keep remote collectibles in front of the camera fan and behind no blocking edge; same-cell targets do not cross a wall.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
 	var projection := _opponent_projection_from_current_camera(world_position)                  # Reuse the stable world-to-view projection shared with opponents.
 	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
@@ -2586,6 +2605,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	was_manual_strafe_step_pressed = bool(state.get("was_manual_strafe_step_pressed", false)) # Restore the one-shot side-step input latch.
 	grid_position = state.get("grid_position", Vector2i.ZERO)                                  # Restore this player's current map cell.
 	local_floor_position = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)        # Restore this player's local cell position.
+	player_world_position = state.get("world_position", _world_position_from_state_fields(grid_position, local_floor_position, state)) # Restore the sole physics capsule center, with a compatibility fallback for old saves.
 	run_dir = String(state.get("run_dir", DIR_N))                                              # Restore this player's run animation direction.
 	aim_dir = String(state.get("aim_dir", DIR_N))                                              # Restore this player's aim animation direction.
 	last_animation = state.get("last_animation", &"")                                          # Restore this player's last animation name.
@@ -2628,6 +2648,7 @@ func _save_player_context(player_index: int) -> void:                           
 	state["was_manual_strafe_step_pressed"] = was_manual_strafe_step_pressed                  # Save the one-shot side-step input latch.
 	state["grid_position"] = grid_position                                                     # Save this player's map cell.
 	state["local_floor_position"] = local_floor_position                                       # Save this player's local cell position.
+	state["world_position"] = player_world_position                                            # Save the authoritative capsule center used by movement, pickups, and combat.
 	state["run_dir"] = run_dir                                                                  # Save this player's run animation direction.
 	state["aim_dir"] = aim_dir                                                                  # Save this player's aim animation direction.
 	state["last_animation"] = last_animation                                                   # Save this player's last animation name.
@@ -2743,7 +2764,7 @@ func _render_bound_player_context() -> void:                                    
 		show_slot_grid_debug = false
 		show_selected_wall_slot_debug = false
 		show_perspective_extents_overlay = false
-		if is_instance_valid(view_slot_overlay):
+		if is_instance_valid(view_slot_overlay) and not show_pickup_range_debug:                  # Preserve collision diagnostics while the coordinate renderer owns normal slot art.
 			view_slot_overlay.visible = false
 		if is_instance_valid(perspective_extents_overlay):
 			perspective_extents_overlay.visible = false
@@ -2762,6 +2783,8 @@ func _render_bound_player_context() -> void:                                    
 		var map_started_us := Time.get_ticks_usec()
 		_update_debug_map_overlay()                                                               # Retain the shared top-down map, including both player markers and cones.
 		var map_elapsed_us := Time.get_ticks_usec() - map_started_us
+		if show_pickup_range_debug:                                                               # The runtime-compositor path returns before legacy overlay refresh, so explicitly rebuild collision guides in every active camera.
+			_update_view_slot_debug_overlay()
 		if coordinate_renderer.has_method("record_legacy_render_breakdown"):
 			coordinate_renderer.record_legacy_render_breakdown(player_elapsed_us, opponents_elapsed_us, combat_elapsed_us, map_elapsed_us)
 		elif coordinate_renderer.has_method("record_legacy_render_time"):
@@ -3012,7 +3035,7 @@ func _setup_perspective_extents_overlay() -> void:                              
 func _setup_view_slot_overlay() -> void:                                                   # Declare this function.
 	view_slot_overlay = Node2D.new()                                                          # Create the overlay root used for player-view slot labels.
 	view_slot_overlay.name = "DebugViewSlotGrid"                                              # Name the overlay so it is easy to inspect in the scene tree.
-	view_slot_overlay.z_index = 220                                                           # Draw the slot audit above wall art and character sprites.
+	view_slot_overlay.z_index = 800                                                           # Draw player-view diagnostics above world art; the source-map panel remains the only higher debug layer.
 	maze_content.add_child(view_slot_overlay)                                                  # Attach the overlay inside the clipped camera content.
 	_update_view_slot_debug_overlay()                                                         # Draw the initial slot audit labels immediately.
 
@@ -3137,11 +3160,14 @@ func _add_perspective_sprite_bounds(sprite: AnimatedSprite2D, color: Color, labe
 func _update_view_slot_debug_overlay() -> void:                                             # Declare this function.
 	if view_slot_overlay == null:                                                            # Skip when this player view has no slot audit overlay.
 		return                                                                                    # Return without drawing slot labels.
-	view_slot_overlay.visible = show_slot_grid_debug                                           # Apply the inspector/debug toggle to the player-view audit overlay.
+	var show_pickup_view_debug := show_pickup_range_debug                                       # Draw collision footprints in every active player camera so shared visibility/collision bugs can be compared directly.
+	view_slot_overlay.visible = show_slot_grid_debug or show_pickup_view_debug                 # Share the clipped player-view overlay with the optional pickup-range guide.
 	for child in view_slot_overlay.get_children():                                            # Remove previous frame's blue slot guide primitives.
 		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip nodes already queued by an earlier redraw.
 			view_slot_overlay.remove_child(child)                                                  # Detach it now so the rebuilt audit labels do not visually stack.
 			child.queue_free()                                                                       # Queue the old slot audit primitive for safe end-of-frame cleanup.
+	if show_pickup_view_debug:                                                                 # Draw the exact live pickup footprint in Player 1's camera as well as on the source map.
+		_add_view_pickup_collection_ellipse()                                                    # Project the same interaction ellipse through the active camera floor model.
 	if not show_slot_grid_debug:                                                              # Avoid rebuilding hidden guide geometry.
 		return                                                                                    # Return after clearing stale children.
 	var source_presence := _debug_slot_has_wall_by_id()                                        # Read which numbered source-map slots are currently blocked.
@@ -3335,6 +3361,104 @@ func _add_view_slot_debug_line(start: Vector2, end: Vector2, color: Color, width
 	line.default_color = color                                                                  # Apply the requested blue line color.
 	line.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                    # Keep the debug line crisp over pixel art.
 	view_slot_overlay.add_child(line)                                                          # Add the line to the active player-view slot overlay.
+
+
+
+# _add_view_pickup_collection_ellipse: Projects every visible player's live collision circle into this camera.
+func _add_view_pickup_collection_ellipse() -> void:
+	var local_state := _effective_player_state(active_player_index)                            # Read this camera owner's collision-safe body state.
+	if local_state.is_empty():                                                                  # Wait until the camera has a valid player state.
+		return
+	_add_view_local_display_collision_circle(Color(1.0, 0.84, 0.10, 0.96))                    # Gold shows the local camera's display-space body footprint, so it always encloses the sprite the player controls.
+	_add_view_player_collision_circle(local_state, Color(0.10, 0.90, 1.0, 0.96), true)         # Cyan shows the shared world capsule exactly as opponents, pickups, and combat perceive it.
+	for player_index in range(player_states.size()):                                           # Add only opponents that this camera can genuinely see.
+		if player_index == active_player_index or player_index >= player_joined.size() or not player_joined[player_index]:
+			continue
+		var other_state := player_states[player_index]
+		if bool(other_state.get("is_dying", false)):
+			continue
+		var other_center := _player_state_world_position(other_state)
+		if not _world_actor_overlaps_current_camera_fan(other_center, PLAYER_CAPSULE_RADIUS) or not _world_actor_has_clear_line_of_sight(other_center):
+			continue
+		var team_color := TEAM_ONE_COLOR if PLAYER_TEAMS[player_index] == 0 else TEAM_TWO_COLOR
+		_add_view_player_collision_circle(other_state, Color(team_color.r, team_color.g, team_color.b, 0.96), false) # Team color identifies each visible opponent's collision footprint.
+
+
+
+# _add_view_local_display_collision_circle: Draws the local player's view-space capsule guide using the exact projection that positions their sprite.
+func _add_view_local_display_collision_circle(color: Color) -> void:
+	var display_local := _translation_display_local_position()                                 # Match the authored forward/strafe visual cheat that currently positions the local sprite.
+	var display_offset := _local_position_to_tile_offset(display_local)                        # Work in the same normalized right/forward units as the capsule.
+	var previous := Vector2.ZERO                                                               # Retain the previous perimeter sample for a closed outline.
+	var center_screen := _project_local_display_floor_point(display_local)                     # Mark the same floor anchor used by the local body.
+	var physical_center := _project_local_physical_floor_point(display_local)                  # Keep a non-clamped floor anchor so the perimeter can retain its real size at a wall.
+	var segment_count := 20                                                                    # Keep this diagnostic smooth enough to read without affecting gameplay.
+	for segment_index in range(segment_count + 1):
+		var angle := TAU * float(segment_index) / float(segment_count)
+		var perimeter_offset := display_offset + Vector2(cos(angle), sin(angle)) * PLAYER_CAPSULE_RADIUS / LOCAL_TILE_WORLD_HALF_EXTENT # Turn the physical radius into local display units before projecting it.
+		var perimeter_local := Vector2(_signed_unit_to_axis(perimeter_offset.x, HOME_LOCAL_FLOOR_POSITION.x, STRAFE_LEFT_WALL_CONTACT_X, STRAFE_RIGHT_WALL_CONTACT_X), _signed_forward_unit_to_axis(perimeter_offset.y)) # Do not clamp diagnostic perimeter samples to the cell: the capsule outline must remain round while pressed against a wall.
+		var point := center_screen + (_project_local_physical_floor_point(perimeter_local) - physical_center) # Preserve the sprite's actual displayed foot anchor while applying the correctly projected physical perimeter delta.
+		if segment_index > 0:
+			_add_view_slot_debug_line(previous, point, color, 1.0)
+		previous = point
+	_add_view_collision_center_dot(center_screen, color)                                      # Gold diamond identifies the local screen-space visual anchor.
+
+
+# _project_local_display_floor_point: Reuses _position_player's self-view floor math for an arbitrary local point.
+func _project_local_display_floor_point(local_position: Vector2) -> Vector2:
+	var depth := clampf(local_position.y, 0.0, 1.0)
+	var projection := _self_actor_projection_at_local_depth(depth)
+	var side_ratio := _self_screen_side_ratio_for_projection(local_position.x, projection)
+	return Vector2(lerpf(float(projection["left_x"]), float(projection["right_x"]), side_ratio), float(projection["feet_y"]))
+
+
+# _project_local_physical_floor_point: Projects local floor coordinates without the protected self-view visual clamps; used only to preserve diagnostic perimeter geometry.
+func _project_local_physical_floor_point(local_position: Vector2) -> Vector2:
+	var projection := _corridor_projection_at_view_depth(_view_depth_for_local_floor_depth(local_position.y))
+	return Vector2(lerpf(float(projection["left_x"]), float(projection["right_x"]), local_position.x), float(projection["feet_y"]))
+
+
+# _add_view_player_collision_circle: Draws one authoritative capsule-circle footprint and its exact body center in this view.
+func _add_view_player_collision_circle(state: Dictionary, color: Color, is_local_player: bool) -> void:
+	var center_world := _player_state_world_position(state)                                    # This is the same center used by movement, pickups, line of sight, and projectile hits.
+	var forward := _view_forward_vector_for_state(state).normalized()                          # Rotate the circular footprint consistently with the world grid.
+	var right := Vector2(-forward.y, forward.x)                                                # Build its perpendicular world axis.
+	var previous := Vector2.ZERO                                                               # Retain the prior projected point for one closed outline.
+	var center_screen := Vector2.ZERO                                                         # Keep the exact projected body center for the requested dot.
+	var segment_count := 20                                                                    # Keep the diagnostic smooth enough to read but cheap to rebuild.
+	for segment_index in range(segment_count + 1):                                             # Trace the circle in world space.
+		var angle := TAU * float(segment_index) / float(segment_count)                           # Convert this sample into a full turn around the center.
+		var point_world := center_world + right * cos(angle) * PLAYER_CAPSULE_RADIUS + forward * sin(angle) * PLAYER_CAPSULE_RADIUS # Use the exact shared collision radius in both axes.
+		var point := _view_collision_point_for_world(point_world, is_local_player)               # Project this footprint point through the camera actually rendering this view.
+		if segment_index > 0:                                                                    # Join each point after the first into one closed outline.
+			_add_view_slot_debug_line(previous, point, color, 1.0)                                 # Keep the footprint crisp on the pixel grid.
+		previous = point                                                                         # Keep the point for the following edge.
+		if segment_index == 0:
+			center_screen = _view_collision_point_for_world(center_world, is_local_player)         # Project the exact center once, independently of the perimeter samples.
+	_add_view_collision_center_dot(center_screen, color)                                       # Mark the precise collision/visibility/calculation origin.
+
+
+
+# _view_collision_point_for_world: Projects one collision diagnostic point through this local camera.
+func _view_collision_point_for_world(world_point: Vector2, is_local_player: bool) -> Vector2:
+	var coordinate_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null # Use the same live camera pose that draws this view, including authored transition frames.
+	if coordinate_renderer != null and is_instance_valid(coordinate_renderer) and coordinate_renderer.has_method("runtime_project_world_point_for_current_pose"):
+		var runtime_projection: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", world_point, 0.0, is_local_player) # Allow only the local capsule to remain visible inside the protected near-camera zone.
+		if runtime_projection is Dictionary and bool(runtime_projection.get("visible", false)):
+			return Vector2(float(runtime_projection.get("screen_x", 80.0)), float(runtime_projection.get("feet_y", 112.0))) # Plot the diagnostic through the identical floor projection as environment and actors.
+	if is_local_player:                                                                        # Keep a safe legacy fallback during renderer setup before the live compositor exists.
+		return _screen_floor_point_for_camera_local_position(_camera_local_point_from_world(world_point))
+	var projection := _opponent_projection_from_current_camera(world_point)                   # Remote players use the compositor's exact current camera pose.
+	return Vector2(float(projection.get("screen_x", 80.0)), float(projection.get("feet_y", 112.0))) # Fall back safely if a perimeter sample touches the fan edge.
+
+
+
+# _add_view_collision_center_dot: Adds a tiny filled marker at the exact top-down body center projected into this view.
+func _add_view_collision_center_dot(position: Vector2, color: Color) -> void:
+	var dot := Polygon2D.new()                                                                 # Use a filled diamond so one logical pixel remains readable over a line.
+	dot.polygon = PackedVector2Array([position + Vector2(0, -1.5), position + Vector2(1.5, 0), position + Vector2(0, 1.5), position + Vector2(-1.5, 0)])
+	dot.color = color                                                                          # Match the corresponding footprint color.
+	view_slot_overlay.add_child(dot)                                                           # Keep the dot in the same clipped high-priority overlay.
 
 
 
@@ -3758,13 +3882,14 @@ func _update_debug_map_overlay() -> void:                                       
 	if debug_map_overlay == null:                                                              # Skip drawing if the overlay has not been created yet.
 		return                                                                                    # Return without drawing the map.
 	var show_ray_diagnostic := show_raycast_debug                                               # Ray inspection explicitly overrides the normal clean-minimap presentation.
-	if not TEMP_GRID_AUDIT and not show_ray_diagnostic:                                         # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
+	var show_pickup_diagnostic := show_pickup_range_debug                                      # Pickup tuning uses the same source-map panel without enabling ray clutter.
+	if not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic:          # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
 		debug_map_overlay.visible = false                                                         # Keep blue guides, cones, and slot labels out of normal local play.
 		_update_match_minimap_overlay()                                                          # Keep the map replacement synchronized with movement and orientation.
 		return                                                                                    # Skip all legacy diagnostic geometry.
 	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the one source-map diagnostic panel.
-	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic) and is_shared_match_map # Ray debugging may reveal the source map without enabling the full audit by default.
-	if not (show_top_down_source_overlay or show_ray_diagnostic) or not is_shared_match_map:   # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
+	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic) and is_shared_match_map # Focused diagnostics may reveal the source map without the full audit.
+	if not (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic) or not is_shared_match_map: # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
 		return                                                                                    # Return without drawing the map.
 
 	if not is_instance_valid(debug_map_static_layer) or not is_instance_valid(debug_map_dynamic_layer): # Recover safely if an older scene tree lacks the retained-map children.
@@ -3806,6 +3931,7 @@ func _update_debug_map_overlay() -> void:                                       
 	_add_debug_other_player_view_cones()                                                        # Draw each other joined player's camera cone on this shared source-of-truth map.
 	_add_debug_all_wall_slot_numbers()                                                         # Draw the independent blue slot-number audit on every local slot candidate.
 	_add_debug_raycast_rays()                                                                   # Draw sampled raycast lines and first-hit points so visibility can be inspected.
+	_add_debug_pickup_collection_ellipse()                                                      # Show the actual front/back-biased same-cell collection zone when requested.
 	_add_debug_visible_wall_slots()                                                            # Highlight the wall slots selected by the renderer on the source map.
 	_add_debug_player_bounds(home_center)                                                       # Draw the playable/contact footprint inside the current cell.
 	_add_debug_player_marker(home_center, Color(1.0, 1.0, 1.0, 0.35))                           # Draw a faint marker at the home center for offset comparison.
@@ -3827,6 +3953,30 @@ func _add_debug_combat_pickup_markers() -> void:
 		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared world pickup coordinate directly.
 		var gun_center := _debug_map_world_position(gun_position)                                # Convert its shared world coordinate into map overlay pixels.
 		_add_debug_player_marker(gun_center, Color(0.95, 0.34, 0.10, 0.98))                     # Use orange-red so the gun is distinguishable from P1/P2/coins.
+
+
+
+# _add_debug_pickup_collection_ellipse: Draws the exact player collision circle
+# used for pickup contact, so the source-map guide is gameplay-authoritative.
+func _add_debug_pickup_collection_ellipse() -> void:
+	if not show_pickup_range_debug:
+		return
+	var state := _effective_player_state(active_player_index)
+	if state.is_empty():
+		return
+	var center_world := _player_state_world_position(state)
+	var forward := _view_forward_vector_for_state(state).normalized()
+	var right := Vector2(-forward.y, forward.x)
+	var previous := Vector2.ZERO
+	var segment_count := 20
+	for segment_index in range(segment_count + 1):
+		var angle := TAU * float(segment_index) / float(segment_count)
+		var point_world := center_world + right * cos(angle) * PLAYER_CAPSULE_RADIUS + forward * sin(angle) * PLAYER_CAPSULE_RADIUS
+		var point := _debug_map_world_position(point_world)
+		if segment_index > 0:
+			_add_debug_line(previous, point, Color(1.0, 0.84, 0.10, 0.96), 2.0)
+		previous = point
+	_add_debug_player_marker(_debug_map_world_position(center_world), Color(1.0, 0.84, 0.10, 0.96))
 
 
 
@@ -6311,6 +6461,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 		if _can_player_cross_edge(grid_position, _facing_vector()):                               # Check whether the forward tile edge is open or the deliberate player cheat is active.
 			tile_offset.y = 1.0                                                                       # Hold the physical offset at the forward edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local forward edge.
+			_sync_player_world_position_from_local_pose()                                               # Advance the physical capsule with the transition start, not merely the sprite.
 			_try_cross_tile("forward", _facing_vector(), "front")                                    # Start the forward tile-crossing transition.
 			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked front wall.
@@ -6321,6 +6472,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 		if _can_player_cross_edge(grid_position, -_facing_vector()):                              # Check whether the backward tile edge is open or the deliberate player cheat is active.
 			tile_offset.y = -1.0                                                                      # Hold the physical offset at the back edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local back edge.
+			_sync_player_world_position_from_local_pose()                                               # Advance the physical capsule with the transition start, not merely the sprite.
 			_try_cross_tile("backward", -_facing_vector(), "back")                                   # Start the backward tile-crossing transition.
 			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked back wall.
@@ -6331,6 +6483,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 		if _can_player_cross_edge(grid_position, _left_vector()):                                 # Check whether the camera-left tile edge is open or the deliberate player cheat is active.
 			tile_offset.x = -1.0                                                                      # Hold the physical offset at the left edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local left edge.
+			_sync_player_world_position_from_local_pose()                                               # Advance the physical capsule with the transition start, not merely the sprite.
 			_try_cross_tile("strafe_left", _left_vector(), "left")                                   # Start the left strafe tile-crossing transition.
 			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked left wall.
@@ -6341,6 +6494,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 		if _can_player_cross_edge(grid_position, -_left_vector()):                                # Check whether the camera-right tile edge is open or the deliberate player cheat is active.
 			tile_offset.x = 1.0                                                                       # Hold the physical offset at the right edge during the transition.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local right edge.
+			_sync_player_world_position_from_local_pose()                                               # Advance the physical capsule with the transition start, not merely the sprite.
 			_try_cross_tile("strafe_right", -_left_vector(), "right")                                # Start the right strafe tile-crossing transition.
 			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
 		else:                                                                                     # Handle a blocked right wall.
@@ -6352,6 +6506,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 		tile_offset = Vector2(clampf(tile_offset.x, -1.0, 1.0), clampf(tile_offset.y, -1.0, 1.0)) # Keep the physical offset inside this tile after free movement.
 		tile_offset = _constrain_tile_offset_to_player_capsule(tile_offset)                      # Stop the capsule center a physical radius before any closed cell edge.
 		local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the clamped physical offset back into local art-space registration.
+		_sync_player_world_position_from_local_pose()                                                # Keep the persistent capsule exactly aligned with the final legal local point.
 
 
 
@@ -6439,11 +6594,22 @@ func _move_diagonal_world_axis(world_position: Vector2, distance: float, positiv
 
 
 
-# _current_player_world_position: Converts the bound player's camera-local offset into the actual world point, including halfway turns.
+# _world_position_from_state_fields: Converts camera-local state into world space only while initializing legacy records.
+func _world_position_from_state_fields(cell: Vector2i, local_position: Vector2, state: Dictionary) -> Vector2:
+	var local_offset := _local_position_to_tile_offset(local_position)
+	var forward := _view_forward_vector_for_state(state)
+	var right := Vector2(-forward.y, forward.x).normalized()
+	return Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5) + right * local_offset.x * LOCAL_TILE_WORLD_HALF_EXTENT + forward * local_offset.y * LOCAL_TILE_WORLD_HALF_EXTENT
+
+
+# _current_player_world_position: Returns the bound player's authoritative world-space capsule center.
 func _current_player_world_position() -> Vector2:                                           # Declare this function.
-	var tile_offset := _local_position_to_tile_offset(local_floor_position)                    # Convert art-space local position into signed right/forward coordinates.
-	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Anchor the player at the center of their current source-map cell.
-	return cell_center + _view_right_vector() * tile_offset.x * LOCAL_TILE_WORLD_HALF_EXTENT + _view_forward_vector() * tile_offset.y * LOCAL_TILE_WORLD_HALF_EXTENT # Rotate the offset through the exact visible camera basis.
+	return player_world_position                                                               # Movement, pickups, combat, visibility, and debug all use this one center.
+
+
+# _sync_player_world_position_from_local_pose: Updates the capsule after deliberate local movement; turns and display cheats never call this implicitly.
+func _sync_player_world_position_from_local_pose() -> void:
+	player_world_position = _world_position_from_state_fields(grid_position, local_floor_position, {"facing": facing, "turn_45_direction": turn_45_direction, "turn_step": turn_step})
 
 
 
@@ -6458,6 +6624,10 @@ func _constrain_tile_offset_to_player_capsule(tile_offset: Vector2) -> Vector2:
 		tile_offset.x = maxf(tile_offset.x, -contact_offset)
 	if _has_wall_at(-_left_vector()):
 		tile_offset.x = minf(tile_offset.x, contact_offset)
+	if _has_wall_at(_facing_vector()):
+		tile_offset.y = minf(tile_offset.y, contact_offset)
+	if _has_wall_at(-_facing_vector()):
+		tile_offset.y = maxf(tile_offset.y, -contact_offset)
 	return tile_offset
 
 
@@ -6489,6 +6659,7 @@ func _set_player_world_position_for_current_view(world_position: Vector2) -> voi
 
 # _set_player_world_position_in_camera_cell: Reprojects a world point through an explicitly retained camera cell for brief diagonal-corner grace.
 func _set_player_world_position_in_camera_cell(world_position: Vector2, camera_cell: Vector2i) -> void:
+	player_world_position = world_position                                                     # Commit gameplay first; the camera-local location below is a derived view coordinate.
 	grid_position = camera_cell                                                                # Keep the requested camera/source-map cell even when the actor is a few pixels over one companion edge.
 	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Rebuild that cell's fixed center.
 	var relative := world_position - cell_center                                                # Measure the player point from its newly assigned cell center.
@@ -6636,6 +6807,7 @@ func _effective_player_state(player_index: int) -> Dictionary:                  
 			"facing": facing,                                                                        # Include the current facing.
 			"grid_position": grid_position,                                                         # Include the current grid cell.
 			"local_floor_position": local_floor_position,                                           # Include the current local position.
+			"world_position": player_world_position,                                                # Include the shared gameplay capsule center rather than recomputing it from display state.
 			"character_is_moving": character_is_moving,                                             # Include whether the current player is running.
 			"world_run_dir": world_run_dir,                                                         # Include the current player's world movement direction.
 			"world_aim_dir": world_aim_dir,                                                         # Include the current player's world aim direction.
@@ -6648,12 +6820,11 @@ func _effective_player_state(player_index: int) -> Dictionary:                  
 
 # _player_state_world_position: Converts a player's cell and local offset into shared world-grid coordinates.
 func _player_state_world_position(state: Dictionary) -> Vector2:                            # Declare this function.
+	if state.has("world_position"):
+		return state["world_position"]                                                           # Prefer the persistent capsule center; it is the source of truth for every gameplay calculation.
 	var state_cell: Vector2i = state.get("grid_position", Vector2i.ZERO)                       # Read the player's current cell.
 	var state_local: Vector2 = state.get("local_floor_position", HOME_LOCAL_FLOOR_POSITION)    # Read the player's local position inside that cell.
-	var local_offset := _local_position_to_tile_offset(state_local)                            # Convert art-space local position into right/forward tile offsets.
-	var forward := _view_forward_vector_for_state(state)                                       # Use the saved visible cardinal or diagonal view direction.
-	var right := Vector2(-forward.y, forward.x).normalized()                                  # Build the matching camera-right direction from that visible forward vector.
-	return Vector2(float(state_cell.x) + 0.5, float(state_cell.y) + 0.5) + right * local_offset.x * LOCAL_TILE_WORLD_HALF_EXTENT + forward * local_offset.y * LOCAL_TILE_WORLD_HALF_EXTENT # Return the world-grid point inside the cell.
+	return _world_position_from_state_fields(state_cell, state_local, state)                   # Keep compatibility with state records created before the capsule field existed.
 
 
 
@@ -6860,9 +7031,22 @@ func _world_actor_overlaps_current_camera_fan(target_world: Vector2, side_margin
 # body-renderer's rear-camera allowance.  That allowance keeps the local player
 # stable, but otherwise leaks the item in the cell behind the player onto screen.
 func _world_pickup_is_in_front_of_current_camera(target_world: Vector2) -> bool:
+	if _world_position_is_in_active_player_cell(target_world):                                # A pickup sharing the player's walkable cell is an interaction target, not an object in the cell behind the camera.
+		return true                                                                               # Do not let the rear-biased camera origin make it disappear at a forward wall.
 	var origin := _runtime_camera_origin_for_visibility()
 	var forward := _view_forward_vector().normalized()
 	return (target_world - origin).dot(forward) > 0.01
+
+
+
+# _world_position_is_in_active_player_cell: Limits the local-pickup culling exception to the exact walkable cell occupied by this camera's player.
+func _world_position_is_in_active_player_cell(target_world: Vector2) -> bool:
+	var state := _effective_player_state(active_player_index)                                  # Read the actual state rather than the legacy renderer's temporary grid binding.
+	if state.is_empty():                                                                       # Avoid inventing a local-cell exception before a player has joined.
+		return false
+	var player_cell: Vector2i = state.get("grid_position", Vector2i(-999, -999))               # Use the authoritative current map cell; a body at a wall boundary must not round into its neighbor.
+	var target_cell := Vector2i(floori(target_world.x), floori(target_world.y))                # Use the same grid convention as the pickup state.
+	return target_cell == player_cell                                                          # Only exact same-cell pickups bypass the rear-camera visual cull.
 
 
 
@@ -7481,6 +7665,7 @@ func _reset_local_position_after_transition(sequence_name: String) -> void:     
 			local_floor_position.x = _side_limits_for_depth(local_floor_position.y).x                # Enter the new cell from its camera-left side instead of snapping to center.
 		"turn_left", "turn_right":                                                                # Start this block.
 			local_floor_position = _rotated_local_position_for_turn(sequence_name)                   # Preserve the player's tile offset while rotating it into the new camera frame.
+	_sync_player_world_position_from_local_pose()                                                # Rebuild the one physical capsule from the newly committed cell/basis after any completed transition.
 
 
 

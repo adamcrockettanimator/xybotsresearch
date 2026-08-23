@@ -1776,7 +1776,7 @@ func runtime_camera_origin_for_current_pose() -> Vector2:
 # runtime_project_world_point_for_current_pose: a shared bridge for players,
 # pickups, projectiles, and impacts.  Its camera pose is exactly the pose used
 # by the wall, floor, and ceiling quads for all authored transition frames.
-func runtime_project_world_point_for_current_pose(world_position: Vector2, object_height := WORLD_ACTOR_HEIGHT) -> Dictionary:
+func runtime_project_world_point_for_current_pose(world_position: Vector2, object_height := WORLD_ACTOR_HEIGHT, allow_protected_near_debug := false) -> Dictionary:
 	if controller == null:
 		return {"visible": false}
 	var forward: Vector2 = controller._view_forward_vector().normalized()
@@ -1786,7 +1786,7 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 	var raw_depth := local.y
 	# Keep the actor in the same forward-facing display volume as the local
 	# player.  A body genuinely behind the camera should still be discarded.
-	if raw_depth <= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH:
+	if raw_depth <= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH and not allow_protected_near_debug:
 		return {"visible": false, "view_depth": raw_depth, "view_side": local.x}
 	# Keep world movement continuous.  Discrete LOD bands affect only the source
 	# pixel grid; they must never make an opponent jog in place then lurch.
@@ -1797,7 +1797,7 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 	var continuous_actor_height := maxf(absf(feet.y - head.y), 1.0)
 	var actor_height := WORLD_ACTOR_LOD_MAX_HEIGHT if raw_depth <= WORLD_ACTOR_NEAREST_CELL_DEPTH else continuous_actor_height
 	return {
-		"visible": raw_depth >= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH and raw_depth <= MAX_DEPTH + 0.75,
+		"visible": (allow_protected_near_debug or raw_depth >= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH) and raw_depth <= MAX_DEPTH + 0.75,
 		"screen_x": feet.x,
 		"feet_y": feet.y,
 		"screen_y": (feet.y + head.y) * 0.5,
