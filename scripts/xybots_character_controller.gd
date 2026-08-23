@@ -723,6 +723,8 @@ var sprite_body_height_cache: Dictionary = {}                                   
 var pending_grid_delta := Vector2i.ZERO                                                     # Store the cell movement that will be applied after a transition finishes.
 var last_blocked_direction := ""                                                            # Store the most recent blocked movement label for debug display.
 var wall_edges: Dictionary = {}                                                             # Store explicit thin-wall edge flags for each open cell.
+var physical_wall_edges_cache: Array = []                                                   # Retain immutable maze segments instead of rebuilding dictionaries for every actor visibility sample.
+var physical_wall_edges_cache_dirty := true                                                 # Mark the cached segment list stale only when a new maze topology is generated.
 var last_visible_wall_ids: Array[int] = []                                                   # Store the currently selected straight-wall ids for debug display.
 var was_left_turn_pressed := false                                                          # Track previous-frame left turn input so snapped turns only fire once per press.
 var was_right_turn_pressed := false                                                         # Track previous-frame right turn input so snapped turns only fire once per press.
@@ -2748,13 +2750,22 @@ func _render_bound_player_context() -> void:                                    
 		# Build this view's wall-depth texture before giving world sprites their
 		# per-pixel occlusion uniforms for the same camera pose.
 		coordinate_renderer.render_bound_player_context(get_process_delta_time())
+		var player_started_us := Time.get_ticks_usec()
 		_position_player()                                                                        # Keep the active player's sprite synchronized with movement and authored transition frames.
+		var player_elapsed_us := Time.get_ticks_usec() - player_started_us
+		var opponents_started_us := Time.get_ticks_usec()
 		_position_opponent_sprite()                                                               # Keep the opponent in the shared local view without invoking legacy wall visibility work.
+		var opponents_elapsed_us := Time.get_ticks_usec() - opponents_started_us
+		var combat_started_us := Time.get_ticks_usec()
 		_update_combat_view()                                                                      # Project shared pistol shots, impacts, and hit poses through this same camera.
+		var combat_elapsed_us := Time.get_ticks_usec() - combat_started_us
+		var map_started_us := Time.get_ticks_usec()
 		_update_debug_map_overlay()                                                               # Retain the shared top-down map, including both player markers and cones.
-		var coordinate_legacy_elapsed_us := Time.get_ticks_usec() - legacy_render_started_us      # Measure the deliberately retained non-environment work for the profiler.
-		if coordinate_renderer.has_method("record_legacy_render_time"):                         # Let the replacement renderer include this retained controller cost in its CSV sample.
-			coordinate_renderer.record_legacy_render_time(coordinate_legacy_elapsed_us)             # Store the small player/map-only legacy timing value.
+		var map_elapsed_us := Time.get_ticks_usec() - map_started_us
+		if coordinate_renderer.has_method("record_legacy_render_breakdown"):
+			coordinate_renderer.record_legacy_render_breakdown(player_elapsed_us, opponents_elapsed_us, combat_elapsed_us, map_elapsed_us)
+		elif coordinate_renderer.has_method("record_legacy_render_time"):
+			coordinate_renderer.record_legacy_render_time(Time.get_ticks_usec() - legacy_render_started_us)
 		if enable_3d_diagnostic and active_player_index == 0:                                     # Keep the deprecated diagnostic usable without re-enabling the legacy renderer.
 			_update_3d_diagnostic()                                                                  # Sync its camera to player one's current state.
 		return                                                                                    # Do not redraw hidden legacy environment sprites, slot labels, or perspective guides every frame.
@@ -5455,6 +5466,8 @@ func _raycast_wall_hit_samples_for_basis(origin: Vector2, forward: Vector2, righ
 
 # _all_physical_wall_edges: Returns every unique blocking wall edge in world-grid coordinates.
 func _all_physical_wall_edges() -> Array:                                                   # Declare this function.
+	if not physical_wall_edges_cache_dirty:
+		return physical_wall_edges_cache                                                        # Reuse the current maze's immutable edge list in combat and per-view visibility checks.
 	var edges := []                                                                            # Store unique physical wall segments.
 	var emitted_keys := {}                                                                     # Track canonical endpoint keys so shared walls are emitted once.
 	for y in range(MAP_HEIGHT):                                                                # Iterate through each map row.
@@ -5469,7 +5482,9 @@ func _all_physical_wall_edges() -> Array:                                       
 					continue                                                                              # Continue to the next edge.
 				emitted_keys[key] = true                                                              # Mark this physical edge as emitted.
 				edges.append({"a": segment[0], "b": segment[1], "delta": delta, "key": key})          # Store this unique wall edge and its source orientation.
-	return edges                                                                              # Return the full physical wall edge list.
+	physical_wall_edges_cache = edges                                                         # Keep the completed topology for every subsequent ray, projectile, and visibility test.
+	physical_wall_edges_cache_dirty = false                                                   # The cache remains valid until the maze is explicitly rebuilt.
+	return physical_wall_edges_cache                                                         # Return the full physical wall edge list.
 
 
 
@@ -7686,6 +7701,7 @@ func _left_vector_for_index(facing_index: int) -> Vector2i:                     
 
 # _build_empty_grid_audit_wall_edges: Builds the temporary wall-free 5x5 grid used to isolate slot-guide geometry.
 func _build_empty_grid_audit_wall_edges() -> void:
+	physical_wall_edges_cache_dirty = true                                                    # The audit topology is about to replace every cached physical segment.
 	wall_edges.clear()                                                                         # Discard the saved/reference maze before creating the isolated test surface.
 	for y in range(MAP_HEIGHT):                                                                # Visit every row in the temporary 5x5 grid.
 		for x in range(MAP_WIDTH):                                                               # Visit every cell in the temporary 5x5 grid.
@@ -7702,6 +7718,7 @@ func _build_empty_grid_audit_wall_edges() -> void:
 
 # _build_fixed_reference_maze_wall_edges: Restores the current saved 4x4 thin-wall maze instead of rerolling on startup.
 func _build_fixed_reference_maze_wall_edges() -> void:                                     # Declare this function.
+	physical_wall_edges_cache_dirty = true                                                    # The saved maze replaces the current physical wall topology.
 	wall_edges.clear()                                                                         # Clear any previous map wall data before loading the fixed reference map.
 	var saved_rows := [                                                                       # Store the saved generated map as north/east/south/west wall bits per cell.
 		"1001 1000 1010 1100",                                                                  # Store row 0 of the saved generated map.
@@ -7783,6 +7800,7 @@ func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:         
 
 # _build_random_maze_wall_edges: Builds a generated 4x4 thin-wall maze with closed outside borders.
 func _build_random_maze_wall_edges() -> void:                                               # Declare this function.
+	physical_wall_edges_cache_dirty = true                                                    # A rerolled maze invalidates the retained unique physical wall list.
 	wall_edges.clear()                                                                         # Clear any previous map wall data before generating the maze.
 	for y in range(MAP_HEIGHT):                                                                # Iterate through every row in the 4x4 map.
 		for x in range(MAP_WIDTH):                                                               # Iterate through every column in the 4x4 map.

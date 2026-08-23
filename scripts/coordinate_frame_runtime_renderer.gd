@@ -38,6 +38,7 @@ const RUNTIME_FLOOR_TEXTURE_PATHS := [
 const SHADER_PATH := "res://scripts/coordinate_frame_homography.gdshader"
 const SINGLE_WALL_SHADER_PATH := "res://scripts/coordinate_frame_single_homography.gdshader"
 const GPU_WALL_SHADER_PATH := "res://scripts/coordinate_frame_gpu_wall_homography.gdshader"
+const GPU_PLANE_SHADER_PATH := "res://scripts/coordinate_frame_gpu_plane_homography.gdshader"
 const TEMPLATE_ROOT := "res://assets/CoordinateFrames/"
 # The canvas shader needs three vec4 rows per wall.  A 96-wall allocation can
 # exceed the portable fragment-uniform budget and silently leave the layer
@@ -91,6 +92,7 @@ var floor_art_sprite: Sprite2D
 var floor_render_image: Image
 var floor_render_texture: ImageTexture
 var floor_source_image: Image
+var floor_source_texture: Texture2D
 var floor_mip_images: Array[Image] = []
 var runtime_ceiling_layer: Node2D
 var ceiling_art_sprite: Sprite2D
@@ -98,6 +100,8 @@ var ceiling_render_image: Image
 var ceiling_render_texture: ImageTexture
 var ceiling_layer1_image: Image
 var ceiling_layer2_image: Image
+var ceiling_layer1_texture: Texture2D
+var ceiling_layer2_texture: Texture2D
 var ceiling_layer1_mip_images: Array[Image] = []
 var ceiling_layer2_mip_images: Array[Image] = []
 var runtime_wall_layer: Node2D
@@ -119,6 +123,11 @@ var gpu_wall_layer1_mip_texture: Texture2D
 var gpu_wall_layer2_mip_texture: Texture2D
 var gpu_wall_sprites: Array[Sprite2D] = []
 var gpu_wall_materials: Array[ShaderMaterial] = []
+var gpu_plane_shader: Shader
+var gpu_floor_sprites: Array[Sprite2D] = []
+var gpu_floor_materials: Array[ShaderMaterial] = []
+var gpu_ceiling_sprites: Array[Sprite2D] = []
+var gpu_ceiling_materials: Array[ShaderMaterial] = []
 var runtime_black_backdrop: ColorRect
 var coordinate_background: Sprite2D
 var status: Label
@@ -149,6 +158,7 @@ var integer_uv_scale_snap_enabled := true
 var wall_ewa_filter_enabled := false
 var wall_parallax_enabled := true
 var gpu_wall_renderer_enabled := true
+var gpu_plane_renderer_enabled := true
 var parallax_max_texels := 4.0
 var parallax_side_multiplier := 1.0
 var parallax_vertical_multiplier := 1.0
@@ -174,6 +184,10 @@ var initialized := false
 # microseconds because this experiment's costly work happens in short bursts
 # whenever a pose changes, rather than as one uniform GPU draw call.
 var profile_pending_legacy_us := 0
+var profile_pending_player_us := 0
+var profile_pending_opponents_us := 0
+var profile_pending_combat_us := 0
+var profile_pending_map_us := 0
 var profile_floor_raster_us := 0
 var profile_ceiling_raster_us := 0
 var profile_wall_raster_us := 0
@@ -184,6 +198,10 @@ var profile_window_start_us := 0
 var profile_sample_count := 0
 var profile_total_sum_us := 0
 var profile_legacy_sum_us := 0
+var profile_player_sum_us := 0
+var profile_opponents_sum_us := 0
+var profile_combat_sum_us := 0
+var profile_map_sum_us := 0
 var profile_background_sum_us := 0
 var profile_floor_sum_us := 0
 var profile_ceiling_sum_us := 0
@@ -306,6 +324,7 @@ func _initialize() -> void:
 	wall_art_sprite.z_index = 0
 	runtime_wall_layer.add_child(wall_art_sprite)
 	_initialize_gpu_wall_renderer()
+	_initialize_gpu_plane_renderer()
 	controller.environment_layer.add_child(runtime_wall_layer)
 
 	# The previous in-playfield caption was being scaled with the 160×120 view,
@@ -370,6 +389,20 @@ func render_bound_player_context(delta: float) -> void:
 # sprite/debug render pass, before this coordinate compositor replaces it.
 func record_legacy_render_time(elapsed_us: int) -> void:
 	profile_pending_legacy_us = maxi(0, elapsed_us)
+	profile_pending_player_us = 0
+	profile_pending_opponents_us = 0
+	profile_pending_combat_us = 0
+	profile_pending_map_us = 0
+
+
+# record_legacy_render_breakdown: Records retained controller work by subsystem
+# so live playtests can identify the expensive portion without changing it.
+func record_legacy_render_breakdown(player_us: int, opponents_us: int, combat_us: int, map_us: int) -> void:
+	profile_pending_player_us = maxi(0, player_us)
+	profile_pending_opponents_us = maxi(0, opponents_us)
+	profile_pending_combat_us = maxi(0, combat_us)
+	profile_pending_map_us = maxi(0, map_us)
+	profile_pending_legacy_us = profile_pending_player_us + profile_pending_opponents_us + profile_pending_combat_us + profile_pending_map_us
 
 
 # _reset_profile_log: Starts a fresh, easily inspectable CSV for the current run.
@@ -378,7 +411,7 @@ func _reset_profile_log() -> void:
 	if file == null:
 		push_warning("Could not create coordinate runtime profile log: %s" % ProjectSettings.globalize_path(PROFILE_LOG_PATH))
 		return
-	file.store_line("elapsed_s,player,samples,avg_total_ms,peak_total_ms,avg_legacy_ms,avg_background_ms,avg_floor_ms,avg_ceiling_ms,avg_wall_ms,avg_upload_ms,avg_rebuild_ms,peak_rebuild_ms")
+	file.store_line("elapsed_s,player,samples,avg_total_ms,peak_total_ms,avg_legacy_ms,avg_player_ms,avg_opponents_ms,avg_combat_ms,avg_map_ms,avg_background_ms,avg_floor_ms,avg_ceiling_ms,avg_wall_ms,avg_upload_ms,avg_rebuild_ms,peak_rebuild_ms")
 	file.close()
 	print("Coordinate runtime profile log: %s" % ProjectSettings.globalize_path(PROFILE_LOG_PATH))
 
@@ -391,6 +424,10 @@ func _profile_record_frame(total_us: int) -> void:
 	profile_sample_count += 1
 	profile_total_sum_us += total_us
 	profile_legacy_sum_us += profile_pending_legacy_us
+	profile_player_sum_us += profile_pending_player_us
+	profile_opponents_sum_us += profile_pending_opponents_us
+	profile_combat_sum_us += profile_pending_combat_us
+	profile_map_sum_us += profile_pending_map_us
 	profile_background_sum_us += profile_background_us
 	profile_floor_sum_us += profile_floor_raster_us
 	profile_ceiling_sum_us += profile_ceiling_raster_us
@@ -406,6 +443,10 @@ func _profile_record_frame(total_us: int) -> void:
 	profile_sample_count = 0
 	profile_total_sum_us = 0
 	profile_legacy_sum_us = 0
+	profile_player_sum_us = 0
+	profile_opponents_sum_us = 0
+	profile_combat_sum_us = 0
+	profile_map_sum_us = 0
 	profile_background_sum_us = 0
 	profile_floor_sum_us = 0
 	profile_ceiling_sum_us = 0
@@ -425,7 +466,7 @@ func _append_profile_sample(elapsed_seconds: float) -> void:
 	if file == null:
 		return
 	file.seek_end()
-	file.store_line("%.3f,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f" % [elapsed_seconds, target_player_index + 1, profile_sample_count, profile_total_sum_us / divisor, float(profile_total_peak_us) / 1000.0, profile_legacy_sum_us / divisor, profile_background_sum_us / divisor, profile_floor_sum_us / divisor, profile_ceiling_sum_us / divisor, profile_wall_sum_us / divisor, profile_upload_sum_us / divisor, profile_rebuild_sum_us / divisor, float(profile_rebuild_peak_us) / 1000.0])
+	file.store_line("%.3f,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f" % [elapsed_seconds, target_player_index + 1, profile_sample_count, profile_total_sum_us / divisor, float(profile_total_peak_us) / 1000.0, profile_legacy_sum_us / divisor, profile_player_sum_us / divisor, profile_opponents_sum_us / divisor, profile_combat_sum_us / divisor, profile_map_sum_us / divisor, profile_background_sum_us / divisor, profile_floor_sum_us / divisor, profile_ceiling_sum_us / divisor, profile_wall_sum_us / divisor, profile_upload_sum_us / divisor, profile_rebuild_sum_us / divisor, float(profile_rebuild_peak_us) / 1000.0])
 	file.close()
 
 func _input(event: InputEvent) -> void:
@@ -536,6 +577,7 @@ func _load_floor_source_texture(path: String) -> void:
 		push_error("Could not read runtime floor texture: %s" % path)
 		return
 	floor_source_image = image
+	floor_source_texture = texture
 	floor_mip_images = _build_mip_chain(floor_source_image)
 	active_floor_texture_label = path.get_file().get_basename()
 
@@ -610,6 +652,22 @@ func _initialize_gpu_wall_renderer() -> void:
 # Only the optional multi-tap EWA experiment uses the CPU fallback for now.
 func _can_use_gpu_wall_renderer() -> bool:
 	return gpu_wall_renderer_enabled and gpu_wall_shader != null and gpu_wall_dummy_texture != null and not wall_ewa_filter_enabled
+
+
+# _initialize_gpu_plane_renderer: Shares the wall carrier texture but keeps
+# floor/ceiling materials independent, so each visible plane cell is projected
+# on the GPU without CPU image rasterization or uploads.
+func _initialize_gpu_plane_renderer() -> void:
+	gpu_plane_shader = load(GPU_PLANE_SHADER_PATH) as Shader
+	if gpu_plane_shader == null:
+		gpu_plane_renderer_enabled = false
+		push_warning("GPU plane shader unavailable; using CPU floor and ceiling rasterizers.")
+
+
+# _can_use_gpu_plane_renderer: Preserve the CPU compositor as an automatic
+# fallback on a missing/unsupported shader, but use GPU planes in normal play.
+func _can_use_gpu_plane_renderer() -> bool:
+	return gpu_plane_renderer_enabled and gpu_plane_shader != null and gpu_wall_dummy_texture != null
 
 
 # _set_gpu_wall_sprites_visible: Avoids destroying working GPU materials when a
@@ -713,13 +771,13 @@ func _entry_is_vending_machine_wall(entry: Dictionary) -> bool:
 func _load_runtime_ceiling_layers() -> void:
 	ceiling_layer1_image = null
 	ceiling_layer2_image = null
-	var layer1_texture := load(CEILING_LAYER1_PATH) as Texture2D
-	var layer2_texture := load(CEILING_LAYER2_PATH) as Texture2D
-	if layer1_texture == null or layer2_texture == null:
+	ceiling_layer1_texture = load(CEILING_LAYER1_PATH) as Texture2D
+	ceiling_layer2_texture = load(CEILING_LAYER2_PATH) as Texture2D
+	if ceiling_layer1_texture == null or ceiling_layer2_texture == null:
 		push_error("Could not load runtime ceiling layer textures.")
 		return
-	ceiling_layer1_image = layer1_texture.get_image()
-	ceiling_layer2_image = layer2_texture.get_image()
+	ceiling_layer1_image = ceiling_layer1_texture.get_image()
+	ceiling_layer2_image = ceiling_layer2_texture.get_image()
 	if ceiling_layer1_image == null or ceiling_layer2_image == null:
 		push_error("Could not read runtime ceiling layer textures.")
 		return
@@ -1041,6 +1099,13 @@ func _quad_bounds(quad: PackedVector2Array) -> Rect2:
 func _rebuild_runtime_floor_surfaces(entries: Array[Dictionary]) -> int:
 	if floor_render_image == null or floor_render_texture == null or floor_source_image == null:
 		return 0
+	if _can_use_gpu_plane_renderer() and floor_source_texture != null:
+		var gpu_started_us := Time.get_ticks_usec()
+		var gpu_count := _rebuild_gpu_floor_surfaces(entries)
+		profile_floor_raster_us = Time.get_ticks_usec() - gpu_started_us
+		return gpu_count
+	_set_gpu_floor_sprites_visible(false)
+	floor_art_sprite.visible = true
 	var raster_started_us := Time.get_ticks_usec()
 	floor_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	for entry in entries:
@@ -1049,6 +1114,53 @@ func _rebuild_runtime_floor_surfaces(entries: Array[Dictionary]) -> int:
 	var upload_started_us := Time.get_ticks_usec()
 	floor_render_texture.update(floor_render_image)
 	profile_upload_us += Time.get_ticks_usec() - upload_started_us
+	return entries.size()
+
+
+# _set_gpu_floor_sprites_visible: Retains allocated GPU plane materials while
+# the CPU fallback is active for a future diagnostic comparison.
+func _set_gpu_floor_sprites_visible(visible: bool) -> void:
+	for sprite in gpu_floor_sprites:
+		if is_instance_valid(sprite):
+			sprite.visible = visible
+
+
+# _rebuild_gpu_floor_surfaces: Assigns one inverse-homography material per
+# visible floor cell; the GPU performs every texel lookup and lighting sample.
+func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
+	while gpu_floor_sprites.size() < entries.size():
+		var sprite := Sprite2D.new()
+		sprite.name = "GpuProjectedFloor%02d" % gpu_floor_sprites.size()
+		sprite.centered = false
+		sprite.texture = gpu_wall_dummy_texture
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var material := ShaderMaterial.new()
+		material.shader = gpu_plane_shader
+		sprite.material = material
+		runtime_floor_layer.add_child(sprite)
+		gpu_floor_sprites.append(sprite)
+		gpu_floor_materials.append(material)
+	for index in range(gpu_floor_sprites.size()):
+		var sprite := gpu_floor_sprites[index]
+		if not is_instance_valid(sprite):
+			continue
+		var is_active := index < entries.size()
+		sprite.visible = is_active
+		if not is_active:
+			continue
+		var quad: PackedVector2Array = entries[index]["quad"]
+		var inverse := _inverse_homography(quad[0], quad[1], quad[2], quad[3])
+		if inverse.size() != 3:
+			sprite.visible = false
+			continue
+		var material := gpu_floor_materials[index]
+		material.set_shader_parameter("inverse_row0", inverse[0])
+		material.set_shader_parameter("inverse_row1", inverse[1])
+		material.set_shader_parameter("inverse_row2", inverse[2])
+		material.set_shader_parameter("base_texture", floor_source_texture)
+		material.set_shader_parameter("use_layers", false)
+		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT)
+	floor_art_sprite.visible = false
 	return entries.size()
 
 
@@ -1140,6 +1252,13 @@ func _visible_ceiling_cells() -> Array[Dictionary]:
 func _rebuild_runtime_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 	if ceiling_render_image == null or ceiling_render_texture == null or ceiling_layer1_image == null:
 		return 0
+	if _can_use_gpu_plane_renderer() and ceiling_layer1_texture != null:
+		var gpu_started_us := Time.get_ticks_usec()
+		var gpu_count := _rebuild_gpu_ceiling_surfaces(entries)
+		profile_ceiling_raster_us = Time.get_ticks_usec() - gpu_started_us
+		return gpu_count
+	_set_gpu_ceiling_sprites_visible(false)
+	ceiling_art_sprite.visible = true
 	var raster_started_us := Time.get_ticks_usec()
 	ceiling_render_image.fill(Color(0.0, 0.0, 0.0, 0.0))
 	for entry in entries:
@@ -1148,6 +1267,61 @@ func _rebuild_runtime_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 	var upload_started_us := Time.get_ticks_usec()
 	ceiling_render_texture.update(ceiling_render_image)
 	profile_upload_us += Time.get_ticks_usec() - upload_started_us
+	return entries.size()
+
+
+# _set_gpu_ceiling_sprites_visible: Keeps GPU resources reusable whenever the
+# CPU fallback is selected instead of freeing/recreating view surfaces.
+func _set_gpu_ceiling_sprites_visible(visible: bool) -> void:
+	for sprite in gpu_ceiling_sprites:
+		if is_instance_valid(sprite):
+			sprite.visible = visible
+
+
+# _rebuild_gpu_ceiling_surfaces: Mirrors the floor GPU pass while preserving
+# the authored two-layer ceiling parallax in each independent cell material.
+func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
+	while gpu_ceiling_sprites.size() < entries.size():
+		var sprite := Sprite2D.new()
+		sprite.name = "GpuProjectedCeiling%02d" % gpu_ceiling_sprites.size()
+		sprite.centered = false
+		sprite.texture = gpu_wall_dummy_texture
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var material := ShaderMaterial.new()
+		material.shader = gpu_plane_shader
+		sprite.material = material
+		runtime_ceiling_layer.add_child(sprite)
+		gpu_ceiling_sprites.append(sprite)
+		gpu_ceiling_materials.append(material)
+	for index in range(gpu_ceiling_sprites.size()):
+		var sprite := gpu_ceiling_sprites[index]
+		if not is_instance_valid(sprite):
+			continue
+		var is_active := index < entries.size()
+		sprite.visible = is_active
+		if not is_active:
+			continue
+		var entry := entries[index]
+		var quad: PackedVector2Array = entry["quad"]
+		var inverse := _inverse_homography(quad[0], quad[1], quad[2], quad[3])
+		if inverse.size() != 3:
+			sprite.visible = false
+			continue
+		var layer_offset := _ceiling_parallax_uv_offset(Vector2i(entry["cell"]), Vector2(entry["origin"]), Vector2(entry["forward"]), Vector2(entry["right"]))
+		var layer1_weight := (ceiling_layer_movement_balance - 1.0) * 0.5
+		var layer2_weight := (ceiling_layer_movement_balance + 1.0) * 0.5
+		var material := gpu_ceiling_materials[index]
+		material.set_shader_parameter("inverse_row0", inverse[0])
+		material.set_shader_parameter("inverse_row1", inverse[1])
+		material.set_shader_parameter("inverse_row2", inverse[2])
+		material.set_shader_parameter("base_texture", ceiling_layer1_texture)
+		material.set_shader_parameter("layer1_texture", ceiling_layer1_texture)
+		material.set_shader_parameter("layer2_texture", ceiling_layer2_texture if ceiling_layer2_texture != null else ceiling_layer1_texture)
+		material.set_shader_parameter("use_layers", ceiling_parallax_enabled and ceiling_layer2_texture != null)
+		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
+		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
+		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT)
+	ceiling_art_sprite.visible = false
 	return entries.size()
 
 
