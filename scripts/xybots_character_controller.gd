@@ -7,9 +7,13 @@
 extends Node2D                                                                              # Use Node2D as the root script type for the prototype scene.
 
 const DIR_N := "N"                                                                          # Name the north-facing animation/map direction.
+const DIR_NE := "NE"                                                                        # Name the northeast-facing local run animation direction.
 const DIR_E := "E"                                                                          # Name the east-facing animation/map direction.
+const DIR_SE := "SE"                                                                        # Name the southeast-facing local run animation direction.
 const DIR_S := "S"                                                                          # Name the south-facing animation/map direction.
+const DIR_SW := "SW"                                                                        # Name the southwest-facing local run animation direction.
 const DIR_W := "W"                                                                          # Name the west-facing animation/map direction.
+const DIR_NW := "NW"                                                                        # Name the northwest-facing local run animation direction.
 
 const VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
@@ -53,7 +57,9 @@ const FORWARD_PASSTHROUGH_SECONDS := 0.075                                      
 const FORWARD_RUN_ANIMATION_SPEED := 1.75                                                     # Let the body visibly keep running while the two authored camera frames catch up.
 const STRAFE_PASSTHROUGH_SECONDS := 0.075                                                    # Keep each authored side-camera frame equally brisk during ordinary automatic strafing.
 const TURN_STAGE_SEQUENCE_NAMES := ["idle", "turn_22", "turn_45", "turn_66"]               # Name the cardinal and authored intermediate turn views for debug status.
-const PLAYER_FRAMES := "res://assets/frames/renamed_trimmed_sequence/capture_frames.tres"   # Point to the baked player animation SpriteFrames resource.
+const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir.tres"   # Team 1 uses the new authored-color Cowboy2 run set.
+const TEAM_TWO_FRAMES := "res://assets/Characters/Cowboy1_RunN_8Dir/Cowboy1_RunN_8Dir.tres" # Team 2 uses the original grayscale Cowboy1 run set.
+const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
 const PLAYER_IDLE_TEXTURE := "res://assets/frames/IdleN_AimN/IdleN_AimN.png"                # Point to the user-provided first-player idle sprite.
 
 const FAR_FLOOR_Y := 0.30                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -111,8 +117,8 @@ const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                        
 const DEFAULT_COMBAT_ROUND_SECONDS := 101.60                                                  # Match the Godot importer waveform's 101.60 s end of audible song content, excluding the MP3 container tail.
 const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
 const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
-const TEAM_ONE_COLOR := Color(0.92, 0.08, 0.62, 1.0)
-const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0)
+const TEAM_ONE_COLOR := Color(0.58, 0.24, 0.86, 1.0) # Lawmen: purple tint applied over the grayscale Cowboy sprite.
+const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0) # Outlaws: green tint applied over the grayscale Cowboy sprite.
 const MUSIC_STREAM := preload("res://assets/Audio/Music/Ecstacy of Gold.mp3")
 const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
 const COIN_PICKUP_STREAM := preload("res://assets/Audio/SFX/Coin.mp3")
@@ -1164,7 +1170,7 @@ func _setup_local_multiplayer() -> void:                                        
 	player_two_window.unresizable = false                                                        # Keep the shared display resizable.
 	player_windows.append(player_two_window)                                                     # Retain the native player-two window for layout and HUD placement.
 	player_sprite.set_meta("team_index", 0)                                                    # Persist Team 1 ownership on the scene-authored player sprite.
-	var player_one_opponent := _create_character_sprite("OpponentSprite")                       # Create player one's sprite used for seeing player two.
+	var player_one_opponent := _create_character_sprite("OpponentSprite", 1)                    # Create player one's Team 2 Cowboy1 sprite used for seeing player two.
 	player_one_opponent.set_meta("team_index", 1)                                              # This view's opponent is always the Team 2 character.
 	maze_content.add_child(player_one_opponent)                                                 # Put the opponent sprite into player one's clipped camera content.
 	var player_two_viewport := Node2D.new()                                                     # Create a second cropped playfield container for player two.
@@ -1179,10 +1185,10 @@ func _setup_local_multiplayer() -> void:                                        
 	player_two_playfield.centered = false                                                       # Anchor player two's playfield from its top-left corner.
 	player_two_playfield.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                     # Preserve the cropped pixel art.
 	player_two_content.add_child(player_two_playfield)                                          # Add the playfield to player two's clipped camera content.
-	var player_two_sprite := _create_character_sprite("PlayerSprite")                           # Create player two's own character sprite.
+	var player_two_sprite := _create_character_sprite("PlayerSprite", 1)                        # Create player two's own Team 2 Cowboy1 character sprite.
 	player_two_sprite.set_meta("team_index", 1)                                                # Persist Team 2 ownership independently of whichever view is currently bound.
 	player_two_content.add_child(player_two_sprite)                                             # Add player two's self sprite to the clipped camera content.
-	var player_two_opponent := _create_character_sprite("OpponentSprite")                       # Create player two's sprite used for seeing player one.
+	var player_two_opponent := _create_character_sprite("OpponentSprite", 0)                    # Create player two's Team 1 Cowboy2 sprite used for seeing player one.
 	player_two_opponent.set_meta("team_index", 0)                                              # This view's opponent is always the Team 1 character.
 	player_two_content.add_child(player_two_opponent)                                           # Add player two's opponent sprite to the clipped camera content.
 	player_views = [                                                                            # Store view-node bundles for each local player.
@@ -1209,10 +1215,10 @@ func _create_single_window_player_view(player_index: int) -> Dictionary:
 	field.centered = false
 	field.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	content.add_child(field)
-	var self_sprite := _create_character_sprite("PlayerSprite")
+	var self_sprite := _create_character_sprite("PlayerSprite", PLAYER_TEAMS[player_index])
 	self_sprite.set_meta("team_index", PLAYER_TEAMS[player_index])
 	content.add_child(self_sprite)
-	var opponent := _create_character_sprite("OpponentSprite")
+	var opponent := _create_character_sprite("OpponentSprite", PLAYER_TEAMS[0])
 	opponent.set_meta("team_index", PLAYER_TEAMS[0])
 	content.add_child(opponent)
 	return {"maze_viewport": view_root, "maze_content": content, "playfield": field, "player_sprite": self_sprite, "opponent_sprite": opponent, "hud_layer": hud, "player_window": get_window()}
@@ -1231,7 +1237,7 @@ func _setup_all_view_opponent_sprites() -> void:
 		for target_index in range(4):
 			if target_index == viewer_index or sprites.has(target_index):
 				continue
-			var sprite := _create_character_sprite("OpponentP%d" % (target_index + 1))
+			var sprite := _create_character_sprite("OpponentP%d" % (target_index + 1), PLAYER_TEAMS[target_index])
 			sprite.set_meta("player_index", target_index)
 			sprite.set_meta("team_index", PLAYER_TEAMS[target_index])
 			content.add_child(sprite)
@@ -1285,11 +1291,16 @@ func _make_audit_player_state(player_index: int, start_cell: Vector2i, start_fac
 
 
 
-# _create_character_sprite: Builds a character AnimatedSprite2D with duplicated frames for a local player or opponent.
-func _create_character_sprite(sprite_name: String) -> AnimatedSprite2D:                    # Declare this function.
+# _create_character_sprite: Builds a character AnimatedSprite2D with the run set assigned to its team.
+func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedSprite2D:   # Declare this function.
 	var sprite := AnimatedSprite2D.new()                                                       # Create a fresh animated character sprite.
 	sprite.name = sprite_name                                                                   # Name the sprite for scene-tree inspection.
-	sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                          # Give this sprite its own copy of the loaded player animations.
+	var frames_path := TEAM_TWO_FRAMES if team_index == 1 else TEAM_ONE_FRAMES                 # Select Cowboy1 grayscale for Team 2 and Cowboy2 color for Team 1.
+	var frames := load(frames_path)                                                             # Load that team's SpriteFrames resource.
+	if frames is SpriteFrames:
+		sprite.sprite_frames = frames.duplicate(true)                                             # Give this sprite its own mutable copy of the team's animations.
+	else:
+		sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                        # Retain the prior player resource as a safe fallback if an asset is missing.
 	sprite.centered = true                                                                      # Register the sprite from its center like the original player node.
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                  # Preserve the source sprite pixels when scaled.
 	sprite.z_index = 10 if sprite_name == "PlayerSprite" else 9                                 # Give characters a default layer before runtime depth sorting.
@@ -2395,13 +2406,13 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 	if sprite == null:
 		return
 	var resolved_team_index: int = int(PLAYER_TEAMS[team_index]) if team_index >= 0 and team_index < PLAYER_TEAMS.size() else team_index # Normalize player indices to their team so normal and hit sprites always share one palette.
-	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER
+	var expected_shader := WORLD_SPRITE_LOD_SHADER                                              # Keep the opposing Cowboy on the same unshifted grayscale sprite pass.
 	var material := sprite.material as ShaderMaterial                                          # Reuse this sprite's material without sharing per-view uniforms.
 	if material == null or material.shader != expected_shader:
 		material = ShaderMaterial.new()
 		material.shader = expected_shader
 		sprite.material = material
-	sprite.self_modulate = Color.WHITE                                                       # Ensure prior per-sprite tinting cannot make world objects dark after distance lighting was removed.
+	sprite.self_modulate = Color.WHITE                                                        # Preserve Cowboy1 grayscale and Cowboy2 authored colors without a team palette shift.
 	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth)) # Quantize source pixels from discrete perspective depth bands.
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
 
@@ -2745,7 +2756,7 @@ func _process_player_context(delta: float) -> void:                             
 		character_is_moving = false                                                               # Mark this player as idle for opponent first-frame fallback.
 		world_run_dir = _direction_string_for_world_vector(_view_forward_vector())                # Use the visible camera direction as the idle body fallback.
 		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
-		_play_best_animation(false)                                                               # Play the best idle animation.
+		_hold_current_run_frame()                                                                 # Preserve the current run frame until a dedicated idle set exists.
 
 
 
@@ -7208,12 +7219,21 @@ func _texture_body_height_to_foot(texture: Texture2D) -> float:                 
 
 # _movement_to_first_player_run_dir: Maps local movement input to the first-player run animation while keeping aim camera-forward.
 func _movement_to_first_player_run_dir(movement: Vector2) -> String:                        # Declare this function.
+	# Keep a small axis dead zone, then use the diagonal renders only when both
+	# stick axes are meaningfully engaged; this preserves deliberate cardinal runs.
+	if movement.length_squared() <= 0.0001:
+		return DIR_N
+	var abs_x := absf(movement.x)
+	var abs_y := absf(movement.y)
+	if minf(abs_x, abs_y) >= maxf(abs_x, abs_y) * 0.5:
+		if movement.y < 0.0:
+			return DIR_NW if movement.x > 0.0 else DIR_NE
+		return DIR_SW if movement.x > 0.0 else DIR_SE
 	# Analog sticks nearly always include a small off-axis value. Choose the
-	# dominant input axis so a forward stick push still plays RunN_AimN rather
-	# than being mistaken for a W+D diagonal input.
+	# dominant input axis when the stick is not intentionally diagonal.
 	if absf(movement.y) >= absf(movement.x):                                                   # Prefer forward/back when the stick is primarily vertical.
 		return DIR_S if movement.y > 0.0 else DIR_N                                              # Select the matching cardinal run animation.
-	return DIR_E if movement.x > 0.0 else DIR_W                                                # Select the matching cardinal left/right run animation.
+	return DIR_W if movement.x > 0.0 else DIR_E                                                # Compensate for the Blender camera's horizontal render orientation.
 
 
 
@@ -7271,7 +7291,7 @@ func _view_relative_dir(world_direction: String, viewer_facing: int) -> String: 
 	var depth_amount := world_vector.dot(forward)                                              # Measure how much this direction points into or out of the viewer's screen.
 	var side_amount := world_vector.dot(right)                                                 # Measure how much this direction points left or right on the viewer's screen.
 	if absf(side_amount) >= absf(depth_amount):                                                # Prefer side views when a tie is possible.
-		return DIR_E if side_amount > 0.0 else DIR_W                                             # Return the screen-side direction.
+		return DIR_W if side_amount > 0.0 else DIR_E                                             # Match the horizontally mirrored Blender render orientation used by the player.
 	return DIR_N if depth_amount > 0.0 else DIR_S                                              # Return forward-away or backward-toward direction.
 
 
@@ -7356,6 +7376,17 @@ func _play_best_animation(is_moving: bool) -> void:                             
 	player_sprite.play(animation)                                                              # Update player sprite rendering or animation state.
 
 
+# _hold_current_run_frame: Holds the current Cowboy run frame; initializes a north-facing first frame on startup.
+func _hold_current_run_frame() -> void:
+	if player_sprite.sprite_frames == null or not player_sprite.sprite_frames.has_animation(&"RunN_AimN"):
+		return
+	if player_sprite.animation == &"" or player_sprite.animation == &"default" or not player_sprite.sprite_frames.has_animation(player_sprite.animation) or player_sprite.sprite_frames.get_frame_count(player_sprite.animation) == 0:
+		player_sprite.animation = &"RunN_AimN"
+		player_sprite.frame = 0
+		last_animation = &"RunN_AimN"
+	player_sprite.pause()
+
+
 
 # _keep_forward_run_animating: Ensures the player visibly runs throughout the short Fwd camera catch-up.
 func _keep_forward_run_animating() -> void:
@@ -7368,9 +7399,6 @@ func _keep_forward_run_animating() -> void:
 
 # _best_animation_for: Finds the exact or nearest fallback animation for a requested run and aim direction.
 func _best_animation_for(run: String, aim: String, is_moving: bool) -> StringName:          # Declare this function.
-	if not is_moving and available_animations.has("IdleN_AimN"):                               # Run the following block only when this condition is true.
-		return &"IdleN_AimN"                                                                      # Return this computed result to the caller.
-
 	var exact := "Run%s_Aim%s" % [run, aim]                                                    # Store mutable runtime state for assets, rendering, movement, or debug output.
 	if available_animations.has(exact):                                                        # Run the following block only when this condition is true.
 		return StringName(exact)                                                                  # Return this computed result to the caller.

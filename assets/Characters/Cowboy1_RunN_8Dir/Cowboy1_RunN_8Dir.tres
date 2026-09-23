@@ -1,0 +1,242 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://86q1i3b3qbl7"]
+
+[ext_resource type="Texture2D" uid="uid://chlbufqphxhbu" path="res://assets/Characters/Cowboy1_RunN_8Dir/E/E_000.png" id="E0"]
+[ext_resource type="Texture2D" uid="uid://ctcu7ddhs1it4" path="res://assets/Characters/Cowboy1_RunN_8Dir/E/E_001.png" id="E1"]
+[ext_resource type="Texture2D" uid="uid://nxcvg7imehrw" path="res://assets/Characters/Cowboy1_RunN_8Dir/E/E_002.png" id="E2"]
+[ext_resource type="Texture2D" uid="uid://c7dimxub0xd5n" path="res://assets/Characters/Cowboy1_RunN_8Dir/E/E_003.png" id="E3"]
+[ext_resource type="Texture2D" uid="uid://d2lyym31bqi3o" path="res://assets/Characters/Cowboy1_RunN_8Dir/E/E_004.png" id="E4"]
+[ext_resource type="Texture2D" uid="uid://8b45ervcvy40" path="res://assets/Characters/Cowboy1_RunN_8Dir/E/E_005.png" id="E5"]
+[ext_resource type="Texture2D" uid="uid://da6sbnlshh5xo" path="res://assets/Characters/Cowboy1_RunN_8Dir/N/N_000.png" id="N0"]
+[ext_resource type="Texture2D" uid="uid://be3lnbmdrfqg0" path="res://assets/Characters/Cowboy1_RunN_8Dir/N/N_001.png" id="N1"]
+[ext_resource type="Texture2D" uid="uid://dxnb06xrdmlfy" path="res://assets/Characters/Cowboy1_RunN_8Dir/N/N_002.png" id="N2"]
+[ext_resource type="Texture2D" uid="uid://d06kxp5ipr5pj" path="res://assets/Characters/Cowboy1_RunN_8Dir/N/N_003.png" id="N3"]
+[ext_resource type="Texture2D" uid="uid://buhky0182x4rr" path="res://assets/Characters/Cowboy1_RunN_8Dir/N/N_004.png" id="N4"]
+[ext_resource type="Texture2D" uid="uid://bqlbou8x7smsf" path="res://assets/Characters/Cowboy1_RunN_8Dir/N/N_005.png" id="N5"]
+[ext_resource type="Texture2D" uid="uid://bt1y7hk82ne2b" path="res://assets/Characters/Cowboy1_RunN_8Dir/NE/NE_000.png" id="NE0"]
+[ext_resource type="Texture2D" uid="uid://jma7k6jo48yq" path="res://assets/Characters/Cowboy1_RunN_8Dir/NE/NE_001.png" id="NE1"]
+[ext_resource type="Texture2D" uid="uid://ceyypvkanhng3" path="res://assets/Characters/Cowboy1_RunN_8Dir/NE/NE_002.png" id="NE2"]
+[ext_resource type="Texture2D" uid="uid://dvhacugbkqi1o" path="res://assets/Characters/Cowboy1_RunN_8Dir/NE/NE_003.png" id="NE3"]
+[ext_resource type="Texture2D" uid="uid://cmoto3nfv4e35" path="res://assets/Characters/Cowboy1_RunN_8Dir/NE/NE_004.png" id="NE4"]
+[ext_resource type="Texture2D" uid="uid://bimri7rf1lg0r" path="res://assets/Characters/Cowboy1_RunN_8Dir/NE/NE_005.png" id="NE5"]
+[ext_resource type="Texture2D" uid="uid://c4j2bv0sfowwn" path="res://assets/Characters/Cowboy1_RunN_8Dir/NW/NW_000.png" id="NW0"]
+[ext_resource type="Texture2D" uid="uid://bonw38hmdmdpi" path="res://assets/Characters/Cowboy1_RunN_8Dir/NW/NW_001.png" id="NW1"]
+[ext_resource type="Texture2D" uid="uid://1bdh0io0bofk" path="res://assets/Characters/Cowboy1_RunN_8Dir/NW/NW_002.png" id="NW2"]
+[ext_resource type="Texture2D" uid="uid://bolhovropxs8s" path="res://assets/Characters/Cowboy1_RunN_8Dir/NW/NW_003.png" id="NW3"]
+[ext_resource type="Texture2D" uid="uid://t38vfgyt1gir" path="res://assets/Characters/Cowboy1_RunN_8Dir/NW/NW_004.png" id="NW4"]
+[ext_resource type="Texture2D" uid="uid://cnapnlktyaoys" path="res://assets/Characters/Cowboy1_RunN_8Dir/NW/NW_005.png" id="NW5"]
+[ext_resource type="Texture2D" uid="uid://dtu1bqhi6gl0i" path="res://assets/Characters/Cowboy1_RunN_8Dir/S/S_000.png" id="S0"]
+[ext_resource type="Texture2D" uid="uid://bljps6yffqprs" path="res://assets/Characters/Cowboy1_RunN_8Dir/S/S_001.png" id="S1"]
+[ext_resource type="Texture2D" uid="uid://dpv6f0w3ikkha" path="res://assets/Characters/Cowboy1_RunN_8Dir/S/S_002.png" id="S2"]
+[ext_resource type="Texture2D" uid="uid://bh3s32hvnkrxt" path="res://assets/Characters/Cowboy1_RunN_8Dir/S/S_003.png" id="S3"]
+[ext_resource type="Texture2D" uid="uid://llmt0b8br7uc" path="res://assets/Characters/Cowboy1_RunN_8Dir/S/S_004.png" id="S4"]
+[ext_resource type="Texture2D" uid="uid://c71rlpjhtn7d2" path="res://assets/Characters/Cowboy1_RunN_8Dir/S/S_005.png" id="S5"]
+[ext_resource type="Texture2D" uid="uid://ct7c4ssnu2ff2" path="res://assets/Characters/Cowboy1_RunN_8Dir/SE/SE_000.png" id="SE0"]
+[ext_resource type="Texture2D" uid="uid://5x6jk8vhw8xy" path="res://assets/Characters/Cowboy1_RunN_8Dir/SE/SE_001.png" id="SE1"]
+[ext_resource type="Texture2D" uid="uid://b6rb6xxpxr3ph" path="res://assets/Characters/Cowboy1_RunN_8Dir/SE/SE_002.png" id="SE2"]
+[ext_resource type="Texture2D" uid="uid://8acjawrpg414" path="res://assets/Characters/Cowboy1_RunN_8Dir/SE/SE_003.png" id="SE3"]
+[ext_resource type="Texture2D" uid="uid://brjmemv77yre0" path="res://assets/Characters/Cowboy1_RunN_8Dir/SE/SE_004.png" id="SE4"]
+[ext_resource type="Texture2D" uid="uid://b277wyyqhl8qe" path="res://assets/Characters/Cowboy1_RunN_8Dir/SE/SE_005.png" id="SE5"]
+[ext_resource type="Texture2D" uid="uid://cfjptu0m01o0b" path="res://assets/Characters/Cowboy1_RunN_8Dir/SW/SW_000.png" id="SW0"]
+[ext_resource type="Texture2D" uid="uid://clas2veftb7br" path="res://assets/Characters/Cowboy1_RunN_8Dir/SW/SW_001.png" id="SW1"]
+[ext_resource type="Texture2D" uid="uid://bm2eclvothnm6" path="res://assets/Characters/Cowboy1_RunN_8Dir/SW/SW_002.png" id="SW2"]
+[ext_resource type="Texture2D" uid="uid://c3ppi15djtvfy" path="res://assets/Characters/Cowboy1_RunN_8Dir/SW/SW_003.png" id="SW3"]
+[ext_resource type="Texture2D" uid="uid://f70m0hcn8k0k" path="res://assets/Characters/Cowboy1_RunN_8Dir/SW/SW_004.png" id="SW4"]
+[ext_resource type="Texture2D" uid="uid://6uam3eec87u4" path="res://assets/Characters/Cowboy1_RunN_8Dir/SW/SW_005.png" id="SW5"]
+[ext_resource type="Texture2D" uid="uid://cro4fffla4gpe" path="res://assets/Characters/Cowboy1_RunN_8Dir/W/W_000.png" id="W0"]
+[ext_resource type="Texture2D" uid="uid://engoywhqxoi1" path="res://assets/Characters/Cowboy1_RunN_8Dir/W/W_001.png" id="W1"]
+[ext_resource type="Texture2D" uid="uid://cepmqm603y6h4" path="res://assets/Characters/Cowboy1_RunN_8Dir/W/W_002.png" id="W2"]
+[ext_resource type="Texture2D" uid="uid://dfrujb2tf8pqb" path="res://assets/Characters/Cowboy1_RunN_8Dir/W/W_003.png" id="W3"]
+[ext_resource type="Texture2D" uid="uid://bf26o64rtibfi" path="res://assets/Characters/Cowboy1_RunN_8Dir/W/W_004.png" id="W4"]
+[ext_resource type="Texture2D" uid="uid://c00jgqcxoocwv" path="res://assets/Characters/Cowboy1_RunN_8Dir/W/W_005.png" id="W5"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("E0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E5")
+}],
+"loop": 1,
+"name": &"RunE_AimN",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("NE0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE5")
+}],
+"loop": 1,
+"name": &"RunNE_AimN",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("NW0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW5")
+}],
+"loop": 1,
+"name": &"RunNW_AimN",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("N0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N5")
+}],
+"loop": 1,
+"name": &"RunN_AimN",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("SE0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE5")
+}],
+"loop": 1,
+"name": &"RunSE_AimN",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("SW0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW5")
+}],
+"loop": 1,
+"name": &"RunSW_AimN",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("S0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S5")
+}],
+"loop": 1,
+"name": &"RunS_AimN",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("W0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W5")
+}],
+"loop": 1,
+"name": &"RunW_AimN",
+"speed": 8.0
+}, {
+"frames": [],
+"loop": 1,
+"name": &"default",
+"speed": 5.0
+}]
