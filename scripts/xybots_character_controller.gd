@@ -14,6 +14,7 @@ const DIR_S := "S"                                                              
 const DIR_SW := "SW"                                                                        # Name the southwest-facing local run animation direction.
 const DIR_W := "W"                                                                          # Name the west-facing animation/map direction.
 const DIR_NW := "NW"                                                                        # Name the northwest-facing local run animation direction.
+const ANIMATION_DIRECTIONS: Array[String] = [DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW] # Keep clockwise names for eight-way aim/run selection.
 
 const VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
@@ -57,8 +58,8 @@ const FORWARD_PASSTHROUGH_SECONDS := 0.075                                      
 const FORWARD_RUN_ANIMATION_SPEED := 1.75                                                     # Let the body visibly keep running while the two authored camera frames catch up.
 const STRAFE_PASSTHROUGH_SECONDS := 0.075                                                    # Keep each authored side-camera frame equally brisk during ordinary automatic strafing.
 const TURN_STAGE_SEQUENCE_NAMES := ["idle", "turn_22", "turn_45", "turn_66"]               # Name the cardinal and authored intermediate turn views for debug status.
-const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir.tres"   # Team 1 uses the new authored-color Cowboy2 run set.
-const TEAM_TWO_FRAMES := "res://assets/Characters/Cowboy1_RunN_8Dir/Cowboy1_RunN_8Dir.tres" # Team 2 uses the original grayscale Cowboy1 run set.
+const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir_Strafe.tres" # Team 1 uses Cowboy2's authored-color runs plus aim-relative strafes.
+const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                                       # Team 2 uses Cowboy2's new animations with the green/brown costume palette.
 const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
 const PLAYER_IDLE_TEXTURE := "res://assets/frames/IdleN_AimN/IdleN_AimN.png"                # Point to the user-provided first-player idle sprite.
 
@@ -721,6 +722,8 @@ var player_world_position := Vector2(0.5, 3.5)                                  
 var run_dir := DIR_N                                                                        # Track the body movement direction used for animation selection.
 var aim_dir := DIR_N                                                                        # Track the aiming direction used for animation selection.
 var last_animation: StringName = &""                                                        # Remember the last animation to avoid restarting it every frame.
+var run_animation_reversed := false                                                         # Request reverse playback only for straight local backward movement.
+var last_animation_reversed := false                                                        # Remember playback direction so RunN can switch between forward and reverse.
 var character_is_moving := false                                                            # Track whether the bound player is actively moving this frame.
 var world_run_dir := DIR_N                                                                  # Track this player's movement direction in shared world space for opponent rendering.
 var world_aim_dir := DIR_N                                                                  # Track this player's aim direction in shared world space for opponent rendering.
@@ -1338,6 +1341,8 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"run_dir": DIR_N,                                                                          # Store this player's current body movement animation direction.
 		"aim_dir": DIR_N,                                                                          # Store this player's current aim animation direction.
 		"last_animation": &"",                                                                     # Store this player's last animation name.
+		"run_animation_reversed": false,                                                           # Store whether this player currently requests a reversed forward run.
+		"last_animation_reversed": false,                                                          # Store the direction of the last started playback.
 		"character_is_moving": false,                                                              # Store whether this player is actively running this frame.
 		"world_run_dir": _direction_string_for_facing(start_facing),                                # Store this player's shared-world movement direction.
 		"world_aim_dir": _direction_string_for_facing(start_facing),                                # Store this player's shared-world aim direction.
@@ -2406,13 +2411,13 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 	if sprite == null:
 		return
 	var resolved_team_index: int = int(PLAYER_TEAMS[team_index]) if team_index >= 0 and team_index < PLAYER_TEAMS.size() else team_index # Normalize player indices to their team so normal and hit sprites always share one palette.
-	var expected_shader := WORLD_SPRITE_LOD_SHADER                                              # Keep the opposing Cowboy on the same unshifted grayscale sprite pass.
+	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER # Give Team 2 the established green/brown costume remap.
 	var material := sprite.material as ShaderMaterial                                          # Reuse this sprite's material without sharing per-view uniforms.
 	if material == null or material.shader != expected_shader:
 		material = ShaderMaterial.new()
 		material.shader = expected_shader
 		sprite.material = material
-	sprite.self_modulate = Color.WHITE                                                        # Preserve Cowboy1 grayscale and Cowboy2 authored colors without a team palette shift.
+	sprite.self_modulate = Color.WHITE                                                        # Let the selected shader preserve Team 1 or remap Team 2 costume swatches.
 	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth)) # Quantize source pixels from discrete perspective depth bands.
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
 
@@ -2620,6 +2625,8 @@ func _bind_player_context(player_index: int) -> void:                           
 	run_dir = String(state.get("run_dir", DIR_N))                                              # Restore this player's run animation direction.
 	aim_dir = String(state.get("aim_dir", DIR_N))                                              # Restore this player's aim animation direction.
 	last_animation = state.get("last_animation", &"")                                          # Restore this player's last animation name.
+	run_animation_reversed = bool(state.get("run_animation_reversed", false))                  # Restore the requested straight-backward playback direction.
+	last_animation_reversed = bool(state.get("last_animation_reversed", false))                 # Restore the last playback direction latch.
 	character_is_moving = bool(state.get("character_is_moving", false))                        # Restore whether this player is actively running.
 	world_run_dir = String(state.get("world_run_dir", _direction_string_for_facing(facing)))    # Restore this player's world movement direction.
 	world_aim_dir = String(state.get("world_aim_dir", _direction_string_for_facing(facing)))    # Restore this player's world aim direction.
@@ -2663,6 +2670,8 @@ func _save_player_context(player_index: int) -> void:                           
 	state["run_dir"] = run_dir                                                                  # Save this player's run animation direction.
 	state["aim_dir"] = aim_dir                                                                  # Save this player's aim animation direction.
 	state["last_animation"] = last_animation                                                   # Save this player's last animation name.
+	state["run_animation_reversed"] = run_animation_reversed                                   # Save whether straight-backward movement requests reverse playback.
+	state["last_animation_reversed"] = last_animation_reversed                                 # Save the direction of the last started playback.
 	state["character_is_moving"] = character_is_moving                                         # Save whether this player is actively running.
 	state["world_run_dir"] = world_run_dir                                                     # Save this player's world movement direction for other views.
 	state["world_aim_dir"] = world_aim_dir                                                     # Save this player's world aim direction for other views.
@@ -2742,6 +2751,7 @@ func _process_player_context(delta: float) -> void:                             
 	if movement != Vector2.ZERO:                                                               # Choose moving animation and move through the current cell.
 		run_dir = _movement_to_first_player_run_dir(movement)                                     # Select the visible body-run direction for this local view.
 		aim_dir = DIR_N                                                                           # Keep this player's aim locked camera-forward in their own view.
+		run_animation_reversed = movement.y > 0.0 and absf(movement.x) < absf(movement.y) * 0.5 # Reverse only a mostly straight local-backward run; retain backward diagonal behavior.
 		character_is_moving = true                                                                # Mark this player as moving so opponents can play run animations.
 		world_run_dir = _world_movement_dir_for_current_view(movement)                            # Convert local movement through the visible cardinal or diagonal camera basis.
 		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
@@ -2753,6 +2763,7 @@ func _process_player_context(delta: float) -> void:                             
 	else:                                                                                      # Handle no movement input.
 		run_dir = DIR_N                                                                           # Reset the visible body direction to camera-forward idle.
 		aim_dir = DIR_N                                                                           # Keep aim camera-forward while idle.
+		run_animation_reversed = false                                                            # Do not carry reversed playback into the next forward run.
 		character_is_moving = false                                                               # Mark this player as idle for opponent first-frame fallback.
 		world_run_dir = _direction_string_for_world_vector(_view_forward_vector())                # Use the visible camera direction as the idle body fallback.
 		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
@@ -7219,45 +7230,45 @@ func _texture_body_height_to_foot(texture: Texture2D) -> float:                 
 
 # _movement_to_first_player_run_dir: Maps local movement input to the first-player run animation while keeping aim camera-forward.
 func _movement_to_first_player_run_dir(movement: Vector2) -> String:                        # Declare this function.
-	# Keep a small axis dead zone, then use the diagonal renders only when both
-	# stick axes are meaningfully engaged; this preserves deliberate cardinal runs.
 	if movement.length_squared() <= 0.0001:
 		return DIR_N
+	# Ignore harmless stick X drift while pushing mostly forward/back. A deliberate
+	# diagonal remains a strafe, so lateral magnitude must reach half the vertical one.
 	var abs_x := absf(movement.x)
 	var abs_y := absf(movement.y)
-	if minf(abs_x, abs_y) >= maxf(abs_x, abs_y) * 0.5:
-		if movement.y < 0.0:
-			return DIR_NW if movement.x > 0.0 else DIR_NE
-		return DIR_SW if movement.x > 0.0 else DIR_SE
-	# Analog sticks nearly always include a small off-axis value. Choose the
-	# dominant input axis when the stick is not intentionally diagonal.
-	if absf(movement.y) >= absf(movement.x):                                                   # Prefer forward/back when the stick is primarily vertical.
-		return DIR_S if movement.y > 0.0 else DIR_N                                              # Select the matching cardinal run animation.
-	return DIR_W if movement.x > 0.0 else DIR_E                                                # Compensate for the Blender camera's horizontal render orientation.
+	if abs_x > 0.001 and (abs_y <= 0.001 or abs_x >= abs_y * 0.5):
+		return DIR_W if movement.x > 0.0 else DIR_E
+	return DIR_S if movement.y > 0.0 else DIR_N
 
 
 
-# _world_movement_dir_for_local_movement: Converts camera-local movement input into a shared cardinal world direction.
+# _world_movement_dir_for_local_movement: Converts camera-local movement input into a shared eight-way world direction.
 func _world_movement_dir_for_local_movement(movement: Vector2, facing_index: int) -> String: # Declare this function.
 	var forward := Vector2(_facing_vector_for_index(facing_index))                              # Convert the player's camera-forward direction into a Vector2.
 	var right := Vector2(-_left_vector_for_index(facing_index))                                 # Convert the player's camera-right direction into a Vector2.
 	var world_vector := right * movement.x + forward * -movement.y                              # Rotate local side/forward input into world grid space.
-	return _direction_string_for_world_vector(world_vector)                                     # Return the cardinal direction that best describes the movement.
+	return _direction_string_for_world_vector(world_vector)                                     # Preserve diagonal motion for other players' animation selection.
 
 
 
 # _world_movement_dir_for_current_view: Converts local movement through the active cardinal or halfway-turn camera basis.
 func _world_movement_dir_for_current_view(movement: Vector2) -> String:                       # Declare this function.
 	var world_vector := _view_right_vector() * movement.x + _view_forward_vector() * -movement.y # Rotate local movement through the actual visible camera direction.
-	return _direction_string_for_world_vector(world_vector)                                     # Use the nearest available cardinal animation direction for diagonal travel.
+	return _direction_string_for_world_vector(world_vector)                                     # Preserve the nearest cardinal or diagonal world direction.
 
 
 
-# _direction_string_for_world_vector: Converts a world-space vector into one N/E/S/W animation direction.
+# _direction_string_for_world_vector: Converts a world-space vector into one of eight animation directions.
 func _direction_string_for_world_vector(world_vector: Vector2) -> String:                  # Declare this function.
 	if world_vector.length_squared() <= 0.0001:                                                # Treat tiny vectors as no meaningful direction.
 		return DIR_N                                                                              # Return north as the stable fallback direction.
-	if absf(world_vector.x) >= absf(world_vector.y):                                           # Prefer side motion when diagonal values are tied.
+	var abs_x := absf(world_vector.x)                                                           # Measure horizontal movement for diagonal classification.
+	var abs_y := absf(world_vector.y)                                                           # Measure vertical movement for diagonal classification.
+	if minf(abs_x, abs_y) >= maxf(abs_x, abs_y) * 0.5:                                         # Keep deliberate diagonals instead of collapsing them to a cardinal direction.
+		if world_vector.y < 0.0:
+			return DIR_NE if world_vector.x > 0.0 else DIR_NW
+		return DIR_SE if world_vector.x > 0.0 else DIR_SW
+	if abs_x >= abs_y:                                                                          # Prefer side motion when diagonal input is below the diagonal threshold.
 		return DIR_E if world_vector.x > 0.0 else DIR_W                                          # Return east or west from the dominant x component.
 	return DIR_S if world_vector.y > 0.0 else DIR_N                                            # Return south or north from the dominant y component.
 
@@ -7269,15 +7280,23 @@ func _direction_string_for_facing(facing_index: int) -> String:                 
 
 
 
-# _world_vector_for_direction_string: Converts an N/E/S/W animation direction back into a world vector.
+# _world_vector_for_direction_string: Converts an eight-way animation direction back into a world vector.
 func _world_vector_for_direction_string(direction: String) -> Vector2:                    # Declare this function.
 	match direction:                                                                          # Branch by the direction label stored in player state.
+		DIR_NE:
+			return Vector2(1.0, -1.0)
 		DIR_E:                                                                                   # Handle east.
 			return Vector2(1.0, 0.0)                                                               # Return the east vector.
+		DIR_SE:
+			return Vector2(1.0, 1.0)
 		DIR_S:                                                                                   # Handle south.
 			return Vector2(0.0, 1.0)                                                               # Return the south vector.
+		DIR_SW:
+			return Vector2(-1.0, 1.0)
 		DIR_W:                                                                                   # Handle west.
 			return Vector2(-1.0, 0.0)                                                              # Return the west vector.
+		DIR_NW:
+			return Vector2(-1.0, -1.0)
 		_:                                                                                       # Handle north and any malformed fallback.
 			return Vector2(0.0, -1.0)                                                              # Return the north vector.
 
@@ -7290,9 +7309,9 @@ func _view_relative_dir(world_direction: String, viewer_facing: int) -> String: 
 	var right := Vector2(-_left_vector_for_index(viewer_facing))                               # Read the viewer's camera-right vector.
 	var depth_amount := world_vector.dot(forward)                                              # Measure how much this direction points into or out of the viewer's screen.
 	var side_amount := world_vector.dot(right)                                                 # Measure how much this direction points left or right on the viewer's screen.
-	if absf(side_amount) >= absf(depth_amount):                                                # Prefer side views when a tie is possible.
-		return DIR_W if side_amount > 0.0 else DIR_E                                             # Match the horizontally mirrored Blender render orientation used by the player.
-	return DIR_N if depth_amount > 0.0 else DIR_S                                              # Return forward-away or backward-toward direction.
+	# Convert into screen direction, retaining the established horizontal mirror,
+	# then classify it eight-way so opponent diagonals survive the camera transform.
+	return _direction_string_for_world_vector(Vector2(-side_amount, -depth_amount))
 
 
 
@@ -7332,7 +7351,7 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 	var relative_aim := _view_relative_dir(other_world_aim, facing)                            # Convert aim direction into this viewer's animation space.
 	if not moving:                                                                             # Use a first run frame as the idle placeholder until idle variants exist.
 		relative_run = relative_aim                                                               # Face the idle fallback body in the same direction as the opponent's aim.
-	var animation := _best_opponent_animation_for(relative_run, relative_aim)                  # Pick the exact or nearest available opponent animation.
+	var animation := _best_opponent_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Pick from this opponent's own team resource.
 	if animation == &"":                                                                       # Skip if no usable animation exists.
 		return                                                                                    # Return without changing the opponent sprite.
 	if opponent_sprite.animation != animation:                                                 # Avoid restarting the same opponent animation every frame.
@@ -7347,33 +7366,61 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 
 
 # _best_opponent_animation_for: Finds the best available run/aim animation for another player.
-func _best_opponent_animation_for(run: String, aim: String) -> StringName:                # Declare this function.
+func _best_opponent_animation_for(run: String, aim: String, frames: SpriteFrames) -> StringName: # Declare this function.
 	var exact := "Run%s_Aim%s" % [run, aim]                                                   # Build the preferred exact run/aim animation name.
-	if available_animations.has(exact):                                                        # Use the exact opponent angle when the art exists.
+	if frames.has_animation(exact):                                                            # Use the exact opponent angle when this team's art exists.
 		return StringName(exact)                                                                  # Return the exact animation name.
+	var strafe := _strafe_animation_for(run, aim, frames)                                      # Resolve diagonal or side movement to matching authored strafe art while retaining aim.
+	if strafe != &"":
+		return strafe
 	var same_aim_suffix := "_Aim%s" % aim                                                      # Build a suffix for animations that at least aim the correct way.
-	for animation in available_animations.keys():                                              # Search all loaded animations.
+	for animation in frames.get_animation_names():                                             # Search this opponent's own animations.
 		if String(animation).ends_with(same_aim_suffix):                                          # Prefer correct aiming direction over body direction when exact art is missing.
 			return StringName(animation)                                                             # Return this aim-compatible fallback.
-	var same_run := _first_animation_with_prefix("Run%s_Aim" % run)                            # Search for a fallback with the requested body/run direction.
-	if same_run != &"":                                                                        # Use same-run fallback if available.
-		return same_run                                                                           # Return that fallback.
-	if available_animations.has("IdleN_AimN"):                                                 # Keep the old north idle as a final readable fallback.
+	for animation in frames.get_animation_names():                                             # Prefer a matching body direction only after aim-compatible choices fail.
+		if String(animation).begins_with("Run%s_Aim" % run):
+			return StringName(animation)
+	if frames.has_animation("IdleN_AimN"):                                                    # Keep the old north idle as a final readable fallback.
 		return &"IdleN_AimN"                                                                      # Return the generic idle fallback.
 	return &""                                                                                 # Return no animation when the resource is unexpectedly empty.
+
+
+# _strafe_animation_for: Chooses left/right strafe art from the run direction relative to aim.
+func _strafe_animation_for(run: String, aim: String, frames: SpriteFrames) -> StringName:
+	var run_index := ANIMATION_DIRECTIONS.find(run)
+	var aim_index := ANIMATION_DIRECTIONS.find(aim)
+	if run_index < 0 or aim_index < 0:
+		return &""
+	# Direction labels retain a horizontal mirror, so unmirror before determining
+	# which side of the aim vector the body is moving. This keeps NE/NW aligned
+	# with the same left/right art contract as the already-correct E/W cases.
+	var screen_run := _world_vector_for_direction_string(run) * Vector2(-1.0, 1.0)
+	var screen_aim := _world_vector_for_direction_string(aim) * Vector2(-1.0, 1.0)
+	var side_cross := screen_aim.cross(screen_run)
+	if absf(side_cross) <= 0.001:                                                             # Forward and backward movement have no authored strafe equivalent.
+		return &""
+	# In the retained mirrored label system, screen-right uses clockwise-minus-two
+	# and screen-left uses clockwise-plus-two; diagonal motion follows its side.
+	var strafe_run_index := (aim_index + 2) % ANIMATION_DIRECTIONS.size() if side_cross < 0.0 else (aim_index + 6) % ANIMATION_DIRECTIONS.size()
+	var candidate := "Run%s_Aim%s" % [ANIMATION_DIRECTIONS[strafe_run_index], aim]
+	return StringName(candidate) if frames.has_animation(candidate) else &""
 
 
 
 # _play_best_animation: Chooses and starts the best available player animation for the current movement state.
 func _play_best_animation(is_moving: bool) -> void:                                         # Declare this function.
-	var animation := _best_animation_for(run_dir, aim_dir, is_moving)                          # Store mutable runtime state for assets, rendering, movement, or debug output.
+	var animation := &"RunN_AimN" if run_animation_reversed else _best_animation_for(run_dir, aim_dir, is_moving) # Reuse forward art backwards for straight local-backward movement.
 	if animation == &"":                                                                       # Run the following block only when this condition is true.
 		return                                                                                    # Return to the caller without producing a value.
-	if animation == last_animation and player_sprite.is_playing():                             # Run the following block only when this condition is true.
+	if animation == last_animation and run_animation_reversed == last_animation_reversed and player_sprite.is_playing(): # Avoid restarting unless playback direction changed.
 		return                                                                                    # Return to the caller without producing a value.
 
 	last_animation = animation                                                                 # Compute and store this value for the current step.
-	player_sprite.play(animation)                                                              # Update player sprite rendering or animation state.
+	last_animation_reversed = run_animation_reversed                                           # Latch playback direction alongside its animation name.
+	if run_animation_reversed:
+		player_sprite.play_backwards(animation)                                                  # Play the camera-forward run in reverse while backing straight up.
+	else:
+		player_sprite.play(animation)                                                            # Update player sprite rendering or animation state.
 
 
 # _hold_current_run_frame: Holds the current Cowboy run frame; initializes a north-facing first frame on startup.
@@ -7384,6 +7431,7 @@ func _hold_current_run_frame() -> void:
 		player_sprite.animation = &"RunN_AimN"
 		player_sprite.frame = 0
 		last_animation = &"RunN_AimN"
+		last_animation_reversed = false
 	player_sprite.pause()
 
 
