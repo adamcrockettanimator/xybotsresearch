@@ -62,6 +62,7 @@ const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8
 const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                                       # Team 2 uses Cowboy2's new animations with the green/brown costume palette.
 const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
 const IDLE_FRAMES := "res://assets/Characters/Cowboy2_Idle_8Dir/Cowboy2_Idle_8Dir.tres"     # Load the twelve-frame eight-direction Cowboy 2 idle set alongside the run SpriteFrames.
+const DEATH_FRAMES := "res://assets/Characters/Cowboy2_Death_8Dir/Cowboy2_Death_8Dir.tres"  # Load the preliminary eight-camera death reaction alongside run and idle SpriteFrames.
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
 
 const FAR_FLOOR_Y := 0.30                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -1306,10 +1307,26 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 	else:
 		sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                        # Retain the prior player resource as a safe fallback if an asset is missing.
 	_add_idle_animations(sprite.sprite_frames)                                                   # Give every player and opponent the same directional idle clips as the primary player.
+	_add_death_animations(sprite.sprite_frames)                                                  # Give every player and opponent the preliminary directional death clips.
 	sprite.centered = true                                                                      # Register the sprite from its center like the original player node.
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                  # Preserve the source sprite pixels when scaled.
 	sprite.z_index = 10 if sprite_name == "PlayerSprite" else 9                                 # Give characters a default layer before runtime depth sorting.
 	sprite.visible = sprite_name == "PlayerSprite"                                             # Hide opponent sprites until another player is actually visible.
+	var respawn_label := Label.new()                                                            # Add a compact world-space countdown for a dead opponent.
+	respawn_label.name = "OpponentRespawnCountdown"                                            # Keep the label easy to find without sharing it with the local HUD timer.
+	respawn_label.add_theme_font_override("font", pixel_hud_font)                            # Match the existing hard-edged HUD lettering.
+	respawn_label.add_theme_font_size_override("font_size", 8)                               # Stay smaller than the coin, heart, and gun pickup presentation.
+	respawn_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.18, 1.0))        # Use a readable arcade-yellow countdown over the fallen body.
+	respawn_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep the numeral legible against every death frame.
+	respawn_label.add_theme_constant_override("shadow_offset_x", 1)                          # Use one source pixel of hard shadow horizontally.
+	respawn_label.add_theme_constant_override("shadow_offset_y", 1)                          # Use one source pixel of hard shadow vertically.
+	respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER                           # Center the one-digit counter over the body.
+	respawn_label.position = Vector2(-4.0, -28.0)                                              # Anchor the small label above the sprite origin in source-pixel space.
+	respawn_label.size = Vector2(8.0, 8.0)                                                     # Keep the label compact before normal character depth scaling.
+	respawn_label.mouse_filter = Control.MOUSE_FILTER_IGNORE                                   # Never interfere with gameplay input.
+	respawn_label.z_index = 1                                                                  # Draw just above its owning opponent sprite.
+	respawn_label.visible = false                                                              # Show only during the opponent's countdown phase.
+	sprite.add_child(respawn_label)                                                            # Let the counter follow the body through projection and depth scaling.
 	return sprite                                                                               # Return the configured character sprite.
 
 
@@ -2701,7 +2718,7 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
 	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)): # Let the explicit death sequence own the body and camera while down.
 		character_is_moving = false                                                               # Prevent normal locomotion from competing with the authored Death frames.
-		_play_combat_death_animation(player_sprite, player_states[active_player_index])           # Display Death forward, hold, or backwards according to this shared state.
+		_play_combat_death_animation(player_sprite, player_states[active_player_index], &"DeathN") # The local player always sees the camera-forward north death render.
 		return                                                                                    # Ignore all player input and normal movement until the respawn is complete.
 	if active_player_index < player_joined.size() and not player_joined[active_player_index]: # Keep every unjoined slot black/idle until its own Start or keyboard input.
 		character_is_moving = false                                                               # Ensure the waiting player remains visually idle in both viewpoints.
@@ -4642,6 +4659,7 @@ func _setup_player_animation() -> void:                                         
 		player_sprite.sprite_frames = SpriteFrames.new()                                          # Update player sprite rendering or animation state.
 
 	_add_idle_animations(player_sprite.sprite_frames)                                          # Add the twelve-frame directional idle clips to the primary player's run resource.
+	_add_death_animations(player_sprite.sprite_frames)                                         # Add the preliminary directional death clips to the primary player's run resource.
 	_cache_animations()                                                                        # Call a helper function as part of the current controller step.
 	player_sprite.centered = true                                                              # Update player sprite rendering or animation state.
 	player_sprite.z_index = 10                                                                 # Update player sprite rendering or animation state.
@@ -4665,6 +4683,25 @@ func _add_idle_animations(frames: SpriteFrames) -> void:
 		frames.set_animation_speed(animation, idle_source.get_animation_speed(animation))
 		for frame_index in idle_source.get_frame_count(animation):
 			frames.add_frame(animation, idle_source.get_frame_texture(animation, frame_index), idle_source.get_frame_duration(animation, frame_index))
+
+
+# _add_death_animations: Copies the preliminary eight camera-view death reaction into one mutable sprite resource.
+func _add_death_animations(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	var death_source := load(DEATH_FRAMES) as SpriteFrames
+	if death_source == null:
+		return
+	for animation in death_source.get_animation_names():
+		if not String(animation).begins_with("Death"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, death_source.get_animation_loop(animation))
+		frames.set_animation_speed(animation, death_source.get_animation_speed(animation))
+		for frame_index in death_source.get_frame_count(animation):
+			frames.add_frame(animation, death_source.get_frame_texture(animation, frame_index), death_source.get_frame_duration(animation, frame_index))
 
 
 
@@ -6725,7 +6762,7 @@ func _position_player() -> void:                                                
 	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Continue to derive lateral registration from the local floor polygon.
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
 	var actor_height := NEAREST_ACTOR_LOD_HEIGHT                                               # The local actor always occupies the nearest camera cell, so use the same protected largest LOD as a same-cell opponent.
-	var source_body_height := _standard_actor_body_height() if player_sprite.animation == &"Death" else _sprite_body_height_to_foot(player_sprite) # Keep the authored death sheet at normal body scale despite its unusual visible bounds.
+	var source_body_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") else _sprite_body_height_to_foot(player_sprite) # Keep directional death sheets at normal body scale despite unusual visible bounds.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the calibrated self-view feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
@@ -6787,16 +6824,13 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	if other_state.is_empty():                                                                 # Hide the sprite if there is no other player.
 		opponent_sprite.visible = false                                                           # Hide the opponent sprite.
 		return                                                                                    # Return without projecting anything.
-	if bool(other_state.get("is_dying", false)) and String(other_state.get("death_phase", "")) == "countdown": # Do not allow later opponent placement to restore a completed dead frame.
-		opponent_sprite.visible = false                                                           # Remove the dead body entirely from the surviving player's view too.
-		return                                                                                    # Wait for the reverse Death sequence to begin at the new spawn.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
 	var projection := _opponent_projection_from_current_camera(target_world)                    # Sort from the collision-safe player center; the capsule is for movement, not draw depth.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
-	var source_body_height := _standard_actor_body_height() if opponent_sprite.animation == &"Death" else _sprite_body_height_to_foot(opponent_sprite) # Keep death frames from inflating in an opponent camera too.
+	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") else _sprite_body_height_to_foot(opponent_sprite) # Keep directional death sheets from inflating in an opponent camera too.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
@@ -6815,6 +6849,19 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0))) # Match opponents to the same depth-driven source-pixel grid.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
+	_update_opponent_respawn_countdown(opponent_sprite, other_state)                           # Overlay the shared countdown only while this visible opponent is down.
+
+
+
+# _update_opponent_respawn_countdown: Shows the same 3/2/1 as the defeated player's blackout over their held final death frame.
+func _update_opponent_respawn_countdown(sprite: AnimatedSprite2D, state: Dictionary) -> void:
+	var label := sprite.get_node_or_null("OpponentRespawnCountdown") as Label
+	if label == null:
+		return
+	var counting_down := bool(state.get("is_dying", false)) and String(state.get("death_phase", "")) == "countdown"
+	label.visible = counting_down
+	if counting_down:
+		label.text = str(maxi(1, ceili(DEATH_COUNTDOWN_SECONDS - float(state.get("death_timer", 0.0)))))
 
 
 
@@ -7321,12 +7368,12 @@ func _view_relative_dir(world_direction: String, viewer_facing: int) -> String: 
 
 
 
-# _play_combat_death_animation: Scrubs the authored nine-frame Death animation forward, holds it, or plays it backwards without relying on timing signals.
-func _play_combat_death_animation(sprite: AnimatedSprite2D, state: Dictionary) -> void:
-	if sprite == null or sprite.sprite_frames == null or not sprite.sprite_frames.has_animation(&"Death"): # Leave a safe fallback if the asset set is incomplete.
+# _play_combat_death_animation: Scrubs one directional Death clip forward, holds it, or plays it backwards without relying on timing signals.
+func _play_combat_death_animation(sprite: AnimatedSprite2D, state: Dictionary, death_animation: StringName = &"DeathN", hold_during_countdown: bool = false) -> void:
+	if sprite == null or sprite.sprite_frames == null or not sprite.sprite_frames.has_animation(death_animation): # Leave a safe fallback if the requested directional clip is incomplete.
 		return                                                                                    # Do not interrupt normal drawing in that unlikely case.
 	var phase := String(state.get("death_phase", "fall"))                                    # Read the staged playback state.
-	if phase == "countdown":                                                                  # The forward death frames have finished during this three-second pause.
+	if phase == "countdown" and not hold_during_countdown:                                   # Keep the local player's own blackout free of a body during its three-second pause.
 		sprite.visible = false                                                                     # Remove the last death frame entirely until reverse playback begins at respawn.
 		return                                                                                    # Do not leave the fallen body held on screen.
 	sprite.visible = true                                                                      # Show only the forward fall and backward respawn portions.
@@ -7335,9 +7382,9 @@ func _play_combat_death_animation(sprite: AnimatedSprite2D, state: Dictionary) -
 		progress = clampf(float(state.get("death_timer", 0.0)) / DEATH_FALL_SECONDS, 0.0, 1.0) # Convert elapsed seconds into a normalized frame position.
 	elif phase == "respawn":                                                                   # Reverse the same frames once the player has been moved to the safe cell.
 		progress = 1.0 - clampf(float(state.get("death_timer", 0.0)) / DEATH_RESPAWN_SECONDS, 0.0, 1.0) # Convert elapsed seconds into backwards frame playback.
-	var frame_total := maxi(sprite.sprite_frames.get_frame_count(&"Death"), 1)                # Read the exact authored frame count rather than hard-coding nine.
+	var frame_total := maxi(sprite.sprite_frames.get_frame_count(death_animation), 1)          # Read the exact authored frame count rather than hard-coding nine.
 	var death_frame := clampi(roundi(progress * float(frame_total - 1)), 0, frame_total - 1)   # Pick the nearest source frame for stable low-frame-rate arcade playback.
-	sprite.animation = &"Death"                                                                # Select Death directly so the frame uses the right SpriteFrames resource.
+	sprite.animation = death_animation                                                         # Select the requested camera-view Death clip.
 	sprite.frame = death_frame                                                                   # Show the phase's exact frame without relying on animation time.
 	sprite.pause()                                                                              # Stop AnimatedSprite2D from advancing independently of shared combat state.
 
@@ -7347,7 +7394,10 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 	if opponent_sprite.sprite_frames == null:                                                  # Skip animation if the opponent sprite has no SpriteFrames resource.
 		return                                                                                    # Return without changing animation.
 	if bool(other_state.get("is_dying", false)):                                               # Render the same visible death stage in the other player's camera.
-		_play_combat_death_animation(opponent_sprite, other_state)                                # Keep both viewpoints synchronized to the shared respawn timer.
+		var other_facing := int(other_state.get("facing", 0))
+		var other_world_aim := String(other_state.get("world_aim_dir", _direction_string_for_facing(other_facing)))
+		var death_direction := _view_relative_dir(other_world_aim, facing)
+		_play_combat_death_animation(opponent_sprite, other_state, _death_animation_for(death_direction, opponent_sprite.sprite_frames), true) # Hold the final directional death frame for opponents during the synchronized countdown.
 		return                                                                                    # Do not let normal run/aim selection overwrite the Death frame.
 	var moving := bool(other_state.get("character_is_moving", false))                          # Read whether the opponent is actively running.
 	var other_facing := int(other_state.get("facing", 0))                                      # Read the opponent's camera/aim facing for fallbacks.
@@ -7445,6 +7495,14 @@ func _idle_animation_for(direction: String, frames: SpriteFrames) -> StringName:
 	if frames != null and frames.has_animation(exact):
 		return exact
 	return &"IdleN" if frames != null and frames.has_animation(&"IdleN") else &""
+
+
+# _death_animation_for: Resolves a visible opponent's body direction to the matching preliminary death render.
+func _death_animation_for(direction: String, frames: SpriteFrames) -> StringName:
+	var exact := StringName("Death" + direction)
+	if frames != null and frames.has_animation(exact):
+		return exact
+	return &"DeathN" if frames != null and frames.has_animation(&"DeathN") else &""
 
 
 
