@@ -61,7 +61,8 @@ const TURN_STAGE_SEQUENCE_NAMES := ["idle", "turn_22", "turn_45", "turn_66"]    
 const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir_Strafe.tres" # Team 1 uses Cowboy2's authored-color runs plus aim-relative strafes.
 const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                                       # Team 2 uses Cowboy2's new animations with the green/brown costume palette.
 const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
-const PLAYER_IDLE_TEXTURE := "res://assets/frames/IdleN_AimN/IdleN_AimN.png"                # Point to the user-provided first-player idle sprite.
+const IDLE_FRAMES := "res://assets/Characters/Cowboy2_Idle_8Dir/Cowboy2_Idle_8Dir.tres"     # Load the twelve-frame eight-direction Cowboy 2 idle set alongside the run SpriteFrames.
+const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
 
 const FAR_FLOOR_Y := 0.30                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
 const NEAR_FLOOR_Y := 0.93                                                                  # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -1304,6 +1305,7 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 		sprite.sprite_frames = frames.duplicate(true)                                             # Give this sprite its own mutable copy of the team's animations.
 	else:
 		sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                        # Retain the prior player resource as a safe fallback if an asset is missing.
+	_add_idle_animations(sprite.sprite_frames)                                                   # Give every player and opponent the same directional idle clips as the primary player.
 	sprite.centered = true                                                                      # Register the sprite from its center like the original player node.
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                  # Preserve the source sprite pixels when scaled.
 	sprite.z_index = 10 if sprite_name == "PlayerSprite" else 9                                 # Give characters a default layer before runtime depth sorting.
@@ -2767,7 +2769,7 @@ func _process_player_context(delta: float) -> void:                             
 		character_is_moving = false                                                               # Mark this player as idle for opponent first-frame fallback.
 		world_run_dir = _direction_string_for_world_vector(_view_forward_vector())                # Use the visible camera direction as the idle body fallback.
 		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
-		_hold_current_run_frame()                                                                 # Preserve the current run frame until a dedicated idle set exists.
+		_play_idle_animation()                                                                    # Play the new forward-facing idle loop while this player is not moving.
 
 
 
@@ -4639,26 +4641,30 @@ func _setup_player_animation() -> void:                                         
 	else:                                                                                      # Run this fallback branch when previous conditions were not met.
 		player_sprite.sprite_frames = SpriteFrames.new()                                          # Update player sprite rendering or animation state.
 
-	_add_idle_animation()                                                                      # Call a helper function as part of the current controller step.
+	_add_idle_animations(player_sprite.sprite_frames)                                          # Add the twelve-frame directional idle clips to the primary player's run resource.
 	_cache_animations()                                                                        # Call a helper function as part of the current controller step.
 	player_sprite.centered = true                                                              # Update player sprite rendering or animation state.
 	player_sprite.z_index = 10                                                                 # Update player sprite rendering or animation state.
 
 
 
-# _add_idle_animation: Adds the one-frame IdleN_AimN animation from the user-provided idle PNG.
-func _add_idle_animation() -> void:                                                         # Declare this function.
-	var idle_texture := _load_png_texture(PLAYER_IDLE_TEXTURE)                                 # Store mutable runtime state for assets, rendering, movement, or debug output.
-	if idle_texture == null:                                                                   # Run the following block only when this condition is true.
-		return                                                                                    # Return to the caller without producing a value.
-
-	var frames := player_sprite.sprite_frames                                                  # Store mutable runtime state for assets, rendering, movement, or debug output.
-	if frames.has_animation("IdleN_AimN"):                                                     # Run the following block only when this condition is true.
-		frames.remove_animation("IdleN_AimN")                                                     # Continue the controller logic for this section.
-	frames.add_animation("IdleN_AimN")                                                         # Continue the controller logic for this section.
-	frames.set_animation_loop("IdleN_AimN", true)                                              # Continue the controller logic for this section.
-	frames.set_animation_speed("IdleN_AimN", 1.0)                                              # Continue the controller logic for this section.
-	frames.add_frame("IdleN_AimN", idle_texture)                                               # Continue the controller logic for this section.
+# _add_idle_animations: Copies all eight new idle directions into one sprite's mutable run resource.
+func _add_idle_animations(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	var idle_source := load(IDLE_FRAMES) as SpriteFrames
+	if idle_source == null:
+		return
+	for animation in idle_source.get_animation_names():
+		if not String(animation).begins_with("Idle"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, idle_source.get_animation_loop(animation))
+		frames.set_animation_speed(animation, idle_source.get_animation_speed(animation))
+		for frame_index in idle_source.get_frame_count(animation):
+			frames.add_frame(animation, idle_source.get_frame_texture(animation, frame_index), idle_source.get_frame_duration(animation, frame_index))
 
 
 
@@ -7305,8 +7311,8 @@ func _world_vector_for_direction_string(direction: String) -> Vector2:          
 # _view_relative_dir: Converts a world direction into the viewer's screen-relative animation direction.
 func _view_relative_dir(world_direction: String, viewer_facing: int) -> String:           # Declare this function.
 	var world_vector := _world_vector_for_direction_string(world_direction)                    # Convert the saved world direction into a vector.
-	var forward := Vector2(_facing_vector_for_index(viewer_facing))                            # Read the viewer's camera-forward vector.
-	var right := Vector2(-_left_vector_for_index(viewer_facing))                               # Read the viewer's camera-right vector.
+	var forward := _view_forward_vector() if viewer_facing == facing else Vector2(_facing_vector_for_index(viewer_facing)) # Preserve the actual diagonal basis for the bound viewer while retaining cardinal fallback for other contexts.
+	var right := _view_right_vector() if viewer_facing == facing else Vector2(-_left_vector_for_index(viewer_facing)) # Rotate the same active diagonal basis to obtain camera-right.
 	var depth_amount := world_vector.dot(forward)                                              # Measure how much this direction points into or out of the viewer's screen.
 	var side_amount := world_vector.dot(right)                                                 # Measure how much this direction points left or right on the viewer's screen.
 	# Convert into screen direction, retaining the established horizontal mirror,
@@ -7349,9 +7355,7 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 	var other_world_aim := String(other_state.get("world_aim_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world aim direction.
 	var relative_run := _view_relative_dir(other_world_run, facing)                            # Convert run direction into this viewer's animation space.
 	var relative_aim := _view_relative_dir(other_world_aim, facing)                            # Convert aim direction into this viewer's animation space.
-	if not moving:                                                                             # Use a first run frame as the idle placeholder until idle variants exist.
-		relative_run = relative_aim                                                               # Face the idle fallback body in the same direction as the opponent's aim.
-	var animation := _best_opponent_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Pick from this opponent's own team resource.
+	var animation := _idle_animation_for(relative_aim, opponent_sprite.sprite_frames) if not moving else _best_opponent_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Pick a directional idle when stopped, otherwise retain the existing run/aim selection.
 	if animation == &"":                                                                       # Skip if no usable animation exists.
 		return                                                                                    # Return without changing the opponent sprite.
 	if opponent_sprite.animation != animation:                                                 # Avoid restarting the same opponent animation every frame.
@@ -7359,9 +7363,9 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 	if moving:                                                                                 # Keep active opponents animated.
 		if not opponent_sprite.is_playing():                                                       # Resume if the sprite was paused or stopped while idle.
 			opponent_sprite.play(animation)                                                            # Play the selected opponent animation.
-	else:                                                                                      # Freeze idle opponents on the first frame of the chosen directional run.
-		opponent_sprite.frame = 0                                                                  # Display the first frame as the temporary idle pose.
-		opponent_sprite.stop()                                                                     # Stop playback so the first-frame idle fallback holds still.
+	else:                                                                                      # Keep stopped opponents visibly breathing in their view-relative idle loop.
+		if not opponent_sprite.is_playing():
+			opponent_sprite.play(animation)
 
 
 
@@ -7423,16 +7427,24 @@ func _play_best_animation(is_moving: bool) -> void:                             
 		player_sprite.play(animation)                                                            # Update player sprite rendering or animation state.
 
 
-# _hold_current_run_frame: Holds the current Cowboy run frame; initializes a north-facing first frame on startup.
-func _hold_current_run_frame() -> void:
-	if player_sprite.sprite_frames == null or not player_sprite.sprite_frames.has_animation(&"RunN_AimN"):
+# _play_idle_animation: Plays the camera-forward idle; the local player's body always faces their own camera.
+func _play_idle_animation() -> void:
+	var idle_animation := _idle_animation_for(DIR_N, player_sprite.sprite_frames)
+	if idle_animation == &"":
 		return
-	if player_sprite.animation == &"" or player_sprite.animation == &"default" or not player_sprite.sprite_frames.has_animation(player_sprite.animation) or player_sprite.sprite_frames.get_frame_count(player_sprite.animation) == 0:
-		player_sprite.animation = &"RunN_AimN"
-		player_sprite.frame = 0
-		last_animation = &"RunN_AimN"
-		last_animation_reversed = false
-	player_sprite.pause()
+	player_sprite.speed_scale = 1.0
+	if player_sprite.animation != idle_animation or not player_sprite.is_playing():
+		player_sprite.play(idle_animation)
+	last_animation = idle_animation
+	last_animation_reversed = false
+
+
+# _idle_animation_for: Resolves a stopped opponent's body direction in the current player's view.
+func _idle_animation_for(direction: String, frames: SpriteFrames) -> StringName:
+	var exact := StringName("Idle" + direction)
+	if frames != null and frames.has_animation(exact):
+		return exact
+	return &"IdleN" if frames != null and frames.has_animation(&"IdleN") else &""
 
 
 
