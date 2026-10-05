@@ -738,11 +738,10 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("clamp_layer_edges", layer_uv_edge_clamp_enabled)
-		# A far-side player's capsule-front can legally touch this same thin wall
-		# plane.  Give opaque walls the one-layer tie-breaker so that exact contact
-		# remains occluded, while a near-side player (one full capsule radius closer)
-		# still sorts clearly in front.
-		sprite.z_index = (controller._character_layer_for_view_depth(float(entry["depth"])) + 1) if controller != null else index
+		# Each wall is painted inside its camera-facing source cell. Characters in
+		# that cell use the immediately later layer, while nearer cells paint over
+		# the complete far-cell group.
+		sprite.z_index = (controller._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1) if controller != null else index
 	wall_art_sprite.visible = false
 	return entries.size()
 
@@ -1022,10 +1021,38 @@ func get_wall_depth_debug_entries() -> Array[Dictionary]:
 		var depth := float(entry.get("depth", 0.0))
 		result.append({
 			"quad": entry.get("quad", PackedVector2Array()),
+			"edge_key": entry.get("edge_key", ""),
+			"facing_cell": entry.get("facing_cell", Vector2i(-1, -1)),
 			"depth": depth,
-			"z_index": (controller._character_layer_for_view_depth(depth) + 1) if controller != null else 0,
+			"z_index": (controller._character_layer_for_view_depth(float(entry.get("cell_draw_depth", depth))) + 1) if controller != null else 0,
 		})
 	return result
+
+
+# runtime_wall_impact_layer: Returns the effect layer only when this camera is
+# on the projectile's impact side of the retained wall. A shared thin wall
+# blocks shots from both directions, but its impact art is not visible through
+# the opposite/back face.
+func runtime_wall_impact_layer(edge_key: String, projectile_direction: Vector2) -> int:
+	if controller == null or projectile_direction.length_squared() <= 0.000001:
+		return -1
+	for entry in last_wall_entries:
+		if String(entry.get("edge_key", "")) != edge_key:
+			continue
+		var world_a: Vector2 = entry.get("world_a", Vector2.ZERO)
+		var world_b: Vector2 = entry.get("world_b", Vector2.ZERO)
+		var edge_direction := world_b - world_a
+		if edge_direction.length_squared() <= 0.000001:
+			return -1
+		var normal := Vector2(-edge_direction.y, edge_direction.x).normalized()
+		var midpoint := (world_a + world_b) * 0.5
+		var viewer_side := (Vector2(entry.get("camera_origin", Vector2.ZERO)) - midpoint).dot(normal)
+		var impact_side := -projectile_direction.normalized().dot(normal)
+		if viewer_side * impact_side <= 0.0001:
+			return -1
+		var depth := float(entry.get("depth", 0.0))
+		return controller._character_layer_for_view_depth(float(entry.get("cell_draw_depth", depth))) + 4
+	return -1
 
 
 # _visible_floor_cells: Produces one projected quad per real maze cell using
@@ -1606,10 +1633,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	# The first-hit ray fan is still useful for ordinary visibility, but it can
 	# miss a wall that only enters through the extreme left or right edge between
-	# two rays.  That produced the black wedges at the screen borders.  Start with
-	# those ray-visible edges, then supplement them with every authoritative map
-	# edge that geometrically intersects the same frustum.  They are drawn
-	# far-to-near below, so nearer opaque wall bases still provide occlusion.
+	# two rays. Start with those ray-visible edges, then supplement them with
+	# every authoritative map edge that geometrically intersects the same frustum.
 	var edges_by_key := {}
 	for ray_visible_edge in controller._visible_physical_wall_edges_for_basis(camera_origin, forward, right):
 		edges_by_key[String(ray_visible_edge["key"])] = ray_visible_edge
@@ -1630,14 +1655,21 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			continue
 		var quad := _project_wall_quad(first_local, second_local)
 		var average_depth := (maxf(first_local.y, NEAR_CLIP) + maxf(second_local.y, NEAR_CLIP)) * 0.5
+		var facing_cell := _wall_facing_cell(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin)
+		var facing_center := Vector2(float(facing_cell.x) + 0.5, float(facing_cell.y) + 0.5)
+		var cell_draw_depth := clampf(facing_center.distance_to(camera_origin), NEAR_CLIP, MAX_DEPTH)
 		result.append({
 			"edge_key": String(edge["key"]),
 			"camera_origin": camera_origin,
+			"world_a": Vector2(edge["a"]),
+			"world_b": Vector2(edge["b"]),
 			"quad": quad,
 			"first_local": first_local,
 			"second_local": second_local,
 			"depths": Vector2(maxf(first_local.y, NEAR_CLIP), maxf(second_local.y, NEAR_CLIP)),
 			"depth": average_depth,
+			"cell_draw_depth": cell_draw_depth,
+			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
 		})
 	# Retain the nearest useful walls if the full physical set exceeds the GPU
@@ -1649,6 +1681,16 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		result = result.slice(0, MAX_WALLS)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	return result
+
+
+# _wall_facing_cell: A visible thin wall belongs to the cell on the camera side
+# of its plane. Its opposite side is the wall's back, so it must not participate
+# in that adjacent cell's draw group.
+func _wall_facing_cell(world_a: Vector2, world_b: Vector2, camera_origin: Vector2) -> Vector2i:
+	var midpoint := (world_a + world_b) * 0.5
+	if is_equal_approx(world_a.x, world_b.x):
+		return Vector2i(floori(world_a.x) if camera_origin.x >= world_a.x else floori(world_a.x) - 1, floori(midpoint.y))
+	return Vector2i(floori(midpoint.x), floori(world_a.y) if camera_origin.y >= world_a.y else floori(world_a.y) - 1)
 
 func _wall_edge_points(cell: Vector2i, edge: int) -> Array[Vector2]:
 	match edge:

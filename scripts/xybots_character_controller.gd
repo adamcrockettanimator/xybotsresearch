@@ -180,6 +180,7 @@ const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                     
 const NEAREST_ACTOR_LOD_HEIGHT := 48.0                                                       # Match the coordinate renderer's protected largest actor LOD; heads should sit near the center of the 120-pixel view, not crowd the ceiling.
 const CHARACTER_NEAREST_LAYER := 3125                                                        # Match the near end of the higher-precision shared back-to-front world draw scale.
 const LOCAL_CHARACTER_LAYER := 3500                                                          # The local first-person body is nearest to its own camera and remains above world geometry.
+const WORLD_EFFECT_FOREGROUND_LAYER := 3400                                                  # Keep travelling combat effects continuously visible above camera-facing wall art until their real collision.
 const WORLD_DRAW_DEPTH_RANGE := 6.25                                                        # Cover the coordinate renderer's useful 5.5-cell view plus its far clip margin.
 const WORLD_DRAW_DEPTH_SCALE := 500.0                                                       # Preserve sub-centicell actor-versus-wall depth differences without exceeding Godot's normal Canvas z range.
 const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
@@ -2034,7 +2035,8 @@ func _process_combat(delta: float) -> void:
 			hit_player_index = int(player_hit["player_index"])                                     # Remember the struck player.
 		if hit_distance <= step_distance:                                                         # Resolve any hit inside this frame's travel segment.
 			var impact_position := origin + direction * maxf(hit_distance, 0.0)                     # Place the explosion exactly at the contact point.
-			_spawn_impact(impact_position, direction, hit_player_index)                             # Show the two-frame authored impact art.
+			var wall_edge_key := _nearest_projectile_wall_edge_key(origin, direction, step_distance) if hit_player_index < 0 else "" # Retain the actual struck wall so its flash can share that wall's cell layer in every view.
+			_spawn_impact(impact_position, direction, hit_player_index, wall_edge_key)              # Show the two-frame authored impact art.
 			if hit_player_index >= 0:                                                               # Apply damage only for body collisions.
 				_apply_projectile_hit(hit_player_index, direction, int(shot["owner"]))                 # Revalidate the complete owner-to-target path before changing health.
 			continue                                                                                   # Remove the consumed projectile.
@@ -2101,6 +2103,20 @@ func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maxi
 	var topology_distance := _projectile_topology_wall_distance(origin, direction, maximum_distance) # Cross-check against the movement map's exact cell-edge ownership.
 	nearest = minf(nearest, topology_distance)                                                  # Let either representation block the shot; topology closes endpoint/parallel-ray gaps.
 	return nearest                                                                              # Return greater than max when this path is clear.
+
+
+# _nearest_projectile_wall_edge_key: Identifies the physical edge selected by a wall impact.
+# The regular distance query also has a topology fallback for boundary robustness; this
+# key is visual metadata only, so an absent key simply uses the impact's point layer.
+func _nearest_projectile_wall_edge_key(origin: Vector2, direction: Vector2, maximum_distance: float) -> String:
+	var nearest := maximum_distance + PROJECTILE_WALL_EPSILON                                  # Keep a clear-path sentinel beyond this frame's collision segment.
+	var nearest_key := ""                                                                       # Preserve the canonical edge key for the closest physical hit.
+	for edge in _all_physical_wall_edges():                                                     # Match the same authoritative thin-wall geometry used by the projectile.
+		var distance := _ray_segment_hit_distance_limited(origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance) # Test this candidate wall segment.
+		if distance >= 0.0 and distance < nearest:                                                # Retain the first surface struck by this projectile step.
+			nearest = distance                                                                        # Save its contact distance.
+			nearest_key = String(edge["key"])                                                       # Carry its stable key into the short-lived impact visual.
+	return nearest_key                                                                          # Empty means only the topology fallback found the collision.
 
 
 # _projectile_topology_wall_distance: Walks the ray through maze cells so projectile blocking uses the same edge ownership as movement.
@@ -2196,9 +2212,19 @@ func _ray_circle_hit_distance(origin: Vector2, direction: Vector2, circle_center
 
 
 # _spawn_impact: Records a short impact visual at an actual shared-world collision point.
-func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index: int) -> void:
-	active_impacts.append({"id": next_combat_visual_id, "position": world_position, "direction": direction, "timer": IMPACT_DURATION, "hit_player": hit_player_index}) # Keep the impact world-space so both cameras agree.
+func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index: int, wall_edge_key := "") -> void:
+	active_impacts.append({"id": next_combat_visual_id, "position": world_position, "direction": direction, "timer": IMPACT_DURATION, "hit_player": hit_player_index, "wall_edge_key": wall_edge_key}) # Keep the impact world-space so both cameras agree, with a wall key only for wall strikes.
 	next_combat_visual_id += 1                                                                  # Reserve a stable visual key.
+
+
+# _impact_layer_for_current_view: Keeps a wall-hit flash above the rendered wall that received it.
+func _impact_layer_for_current_view(wall_edge_key: String, projectile_direction: Vector2, fallback_layer: int) -> int:
+	if wall_edge_key.is_empty() or active_player_index < 0 or active_player_index >= coordinate_renderers.size(): # Player impacts and unavailable views retain ordinary point-depth layering.
+		return fallback_layer                                                                     # No wall-specific layer applies.
+	var renderer := coordinate_renderers[active_player_index]                                  # Read this camera's already-built visible wall list.
+	if not is_instance_valid(renderer) or not renderer.has_method("runtime_wall_impact_layer"):
+		return fallback_layer                                                                     # Keep the normal layer until a renderer is available.
+	return int(renderer.call("runtime_wall_impact_layer", wall_edge_key, projectile_direction)) # Let the renderer accept only the struck front face from this camera.
 
 
 # _projectile_owner_has_clear_path_to_player: Final gameplay authority for combat line-of-sight, using the same cell-edge wall ownership as movement.
@@ -2499,9 +2525,9 @@ func _update_combat_view() -> void:
 		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), _gun_animation_texture(), gun_position, used, 0.10) # Cycle the authored Gun.tres rotation at its configured speed.
 	for shot in active_projectiles:                                                             # Render every shared projectile from this camera.
 		var world_position: Vector2 = shot["position"]                                           # Read shared-world shot position.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10) or not _world_actor_has_clear_line_of_sight(world_position):
-			continue                                                                                   # Do not draw a live bullet beyond an intervening physical wall in this camera.
-		var projection := _opponent_projection_from_current_camera(world_position)                # Reuse the established world-to-camera perspective.
+		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10) or not _world_point_has_clear_camera_line(world_position):
+			continue                                                                                   # Do not draw a point shot after a real wall lies between it and this camera.
+		var projection := _opponent_projection_from_current_camera(world_position, true)          # Keep the moving shot immediately after the camera-facing walls in its current cell.
 		var key := "shot_%d" % int(shot["id"])                                                  # Build a stable cached visual name.
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the shot sprite.
 		var side := absf((world_position - _camera_grid_origin()).dot(_view_right_vector()))      # Pick the side shot only for strongly oblique travel.
@@ -2525,21 +2551,24 @@ func _update_combat_view() -> void:
 		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
 		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
 		_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Match projectile source sampling to its world depth.
-		sprite.z_index = int(projection["z_index"])                                              # Let the world-projected bullet sit behind its firing character rather than overlaying the body.
+		sprite.z_index = WORLD_EFFECT_FOREGROUND_LAYER                                             # Hold one foreground layer for the full shot path so wall-cell transitions cannot make it flicker out.
 		sprite.visible = true                                                                      # Reveal this valid projectile.
 		used[key] = true                                                                           # Preserve it through stale-node hiding.
 	for impact in active_impacts:                                                               # Render each short explosion similarly.
 		var world_position: Vector2 = impact["position"]                                        # Read collision world point.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.12) or not _world_actor_has_clear_line_of_sight(world_position):
-			continue                                                                                   # Keep far-side wall impacts hidden from this camera as well.
-		var projection := _opponent_projection_from_current_camera(world_position)                # Project collision point in this view.
+		if not _world_actor_overlaps_current_camera_fan(world_position, 0.12):
+			continue                                                                                   # Let the per-pixel wall mask hide covered impact pixels.
+		var projection := _opponent_projection_from_current_camera(world_position, true)          # Keep the impact immediately after the camera-facing walls in its contact cell.
 		var key := "impact_%d" % int(impact["id"])                                              # Build a stable effect key.
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the impact sprite.
 		sprite.texture = SHOT_EXPLOSION_1_TEXTURE if float(impact["timer"]) > IMPACT_DURATION * 0.5 else SHOT_EXPLOSION_2_TEXTURE # Flip through authored two-frame impact art.
 		sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - float(projection["actor_height"]) * 0.48) # Center effect at visible impact height.
 		sprite.scale = Vector2.ONE * clampf(float(projection["actor_height"]) / 34.0, 0.35, 1.2) # Keep close impacts readable.
 		_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Match impact source sampling to its world depth.
-		sprite.z_index = int(projection["z_index"]) + 3                                         # Put impact on top of its struck surface.
+		var impact_layer := _impact_layer_for_current_view(String(impact.get("wall_edge_key", "")), Vector2(impact.get("direction", Vector2.ZERO)), int(projection["z_index"]) + 3) # Put a wall flash above its struck front face only.
+		if impact_layer < 0:
+			continue                                                                               # Hide an impact that this viewer can only see from the wall's back side.
+		sprite.z_index = impact_layer                                                            # Keep the surviving flash above its exact wall layer.
 		sprite.visible = true                                                                      # Reveal active explosion.
 		used[key] = true                                                                           # Preserve this effect node.
 	for player_index in range(player_states.size()):                                           # Replace the body briefly with a one-frame hit pose in either visible view.
@@ -2548,12 +2577,7 @@ func _update_combat_view() -> void:
 			continue                                                                                   # Leave ordinary sprite rendering intact.
 		var key := "hit_%d" % player_index                                                       # Use one cached hit sprite per player per view.
 		var sprite := _combat_sprite(key)                                                         # Fetch/create the overlay.
-		var texture: Texture2D = HIT_FRONT_TEXTURE                                                # Default to frontal hit art.
-		if String(state.get("hit_reaction", "front")) == "left":
-			texture = HIT_LEFT_TEXTURE                                                               # Use authored left hit pose.
-		elif String(state.get("hit_reaction", "front")) == "right":
-			texture = HIT_RIGHT_TEXTURE                                                             # Use authored right hit pose.
-		sprite.texture = texture                                                                   # Apply selected hit frame.
+		sprite.texture = _hit_reaction_death_frame(player_index)                                  # Use the third Cowboy death frame, never the legacy Xybots reaction art.
 		if player_index == active_player_index:                                                   # Local player already has a correct self projection.
 			sprite.position = player_sprite.position                                                  # Reuse their visible feet registration.
 			sprite.scale = player_sprite.scale                                                        # Reuse their body scale.
@@ -2563,16 +2587,20 @@ func _update_combat_view() -> void:
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
 			var target_world := _player_state_world_position(state)                                  # Project the opposing hit body into this view.
-			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18) or not _world_actor_has_clear_line_of_sight(target_world):
-				continue                                                                                 # Keep hidden opponents hidden even while hit.
-			var projection := _opponent_projection_from_current_camera(target_world)                 # Sort the hit body from its collision-safe center, matching the regular opponent sprite.
+			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18):
+				continue                                                                                 # Let the wall mask retain only genuinely uncovered hit-pose pixels.
+			var projection := _opponent_projection_from_current_camera(target_world, true)           # Keep hit characters immediately after their cell's facing walls.
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
 			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], float(projection.get("view_depth", 0.0))) # Match hit bodies to their owning team's world-sprite LOD.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
-			opponent_sprite.visible = false                                                          # Replace the opponent frame rather than drawing a second body over it.
+			var view: Dictionary = player_views[active_player_index] if active_player_index >= 0 and active_player_index < player_views.size() else {}
+			var opponents: Dictionary = view.get("opponent_sprites", {})
+			var target_sprite: AnimatedSprite2D = opponents.get(player_index, opponent_sprite)
+			if target_sprite != null:
+				target_sprite.visible = false                                                         # Hide the exact normal body replaced by this reaction; the legacy opponent reference can point at a different target in larger matches.
 		sprite.visible = true                                                                      # Reveal the reaction.
 		used[key] = true                                                                           # Preserve the sprite.
 	_hide_unused_combat_sprites(used)                                                          # Hide stale bullets, impacts, and hit art.
@@ -2594,9 +2622,9 @@ func _gun_animation_texture() -> Texture2D:
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
 func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0) -> void:
 	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
-	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16) or not _world_actor_has_clear_line_of_sight(world_position)): # Keep remote collectibles in front of the camera fan and behind no blocking edge; same-cell targets do not cross a wall.
+	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16)): # Keep remote collectibles inside the camera fan; normal back-to-front Canvas drawing resolves wall coverage.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
-	var projection := _opponent_projection_from_current_camera(world_position)                  # Reuse the stable world-to-view projection shared with opponents.
+	var projection := _opponent_projection_from_current_camera(world_position, true)            # Keep coins and guns immediately after camera-facing walls in their own cell.
 	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
 	if actor_height <= 0.0:
 		return                                                                                    # Avoid degenerate or behind-camera projections.
@@ -2848,8 +2876,8 @@ func _render_bound_player_context() -> void:                                    
 			view_slot_overlay.visible = false
 		if is_instance_valid(perspective_extents_overlay):
 			perspective_extents_overlay.visible = false
-		# Build this view's wall-depth texture before giving world sprites their
-		# per-pixel occlusion uniforms for the same camera pose.
+		# Build this view's wall layers before placing world sprites into the same
+		# back-to-front Canvas draw scale.
 		coordinate_renderer.render_bound_player_context(get_process_delta_time())
 		var player_started_us := Time.get_ticks_usec()
 		_position_player()                                                                        # Keep the active player's sprite synchronized with movement and authored transition frames.
@@ -3449,8 +3477,8 @@ func _add_view_pickup_collection_ellipse() -> void:
 	var local_state := _effective_player_state(active_player_index)                            # Read this camera owner's collision-safe body state.
 	if local_state.is_empty():                                                                  # Wait until the camera has a valid player state.
 		return
-	_add_view_local_display_collision_circle(Color(1.0, 0.84, 0.10, 0.96))                    # Gold shows the local camera's display-space body footprint, so it always encloses the sprite the player controls.
-	_add_view_player_collision_circle(local_state, Color(0.10, 0.90, 1.0, 0.96), true)         # Cyan shows the shared world capsule exactly as opponents, pickups, and combat perceive it.
+	_add_view_player_collision_circle(local_state, Color(1.0, 0.84, 0.10, 0.96), true)         # Gold shows the local capsule through the same world projection used for diagonal collision.
+	_add_view_player_collision_circle(local_state, Color(0.10, 0.90, 1.0, 0.96), true)         # Cyan independently verifies the same shared gameplay capsule.
 	for player_index in range(player_states.size()):                                           # Add only opponents that this camera can genuinely see.
 		if player_index == active_player_index or player_index >= player_joined.size() or not player_joined[player_index]:
 			continue
@@ -6875,6 +6903,19 @@ func _position_player() -> void:                                                
 		player_sprite.visible = false                                                             # Prevent later positioning code from restoring the fallen last frame.
 		return                                                                                    # Do not update or redraw the body until reverse Death starts at respawn.
 	player_sprite.visible = true                                                              # Restore the local actor after temporary 45-degree validation views hide it.
+	if _is_turn_45_view():                                                                     # A stable diagonal camera has no cardinal self-view projection to preserve.
+		var diagonal_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+		if diagonal_renderer != null and diagonal_renderer.has_method("runtime_project_world_point_for_current_pose"):
+			var diagonal_projection: Variant = diagonal_renderer.call("runtime_project_world_point_for_current_pose", _current_player_world_position(), 0.36, true)
+			if diagonal_projection is Dictionary and bool(diagonal_projection.get("visible", false)):
+				var diagonal_height := float(diagonal_projection.get("actor_height", NEAREST_ACTOR_LOD_HEIGHT))
+				var diagonal_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite)
+				var diagonal_scale := diagonal_height / diagonal_source_height
+				player_sprite.scale = Vector2.ONE * diagonal_scale
+				player_sprite.position = Vector2(float(diagonal_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5)), _sprite_center_y_for_feet(player_sprite, float(diagonal_projection.get("feet_y", VIEWPORT_SIZE.y)), diagonal_scale))
+				_apply_runtime_world_sprite_style(player_sprite, diagonal_scale, active_player_index)
+				player_sprite.z_index = LOCAL_CHARACTER_LAYER
+				return                                                                                # Keep the visible local body registered to the same world footprint as diagonal collision.
 	var display_local_position := _translation_display_local_position()                         # Let the actor travel smoothly through authored forward or side camera frames without changing collision or the source-map graph.
 	var depth := clampf(display_local_position.y, 0.0, 1.0)                                    # Preserve the authored self-camera depth path; it intentionally differs from a remote world projection during forward/back transitions.
 	var projection := _self_actor_projection_at_local_depth(depth)                              # Restore the calibrated local floor/feet projection that keeps motion smooth through Fwd and Right frames.
@@ -6945,7 +6986,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 		return                                                                                    # Return without projecting anything.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
-	var projection := _opponent_projection_from_current_camera(target_world)                    # Sort from the collision-safe player center; the capsule is for movement, not draw depth.
+	var projection := _opponent_projection_from_current_camera(target_world, true)              # Paint the opponent after its own camera-facing cell walls.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
@@ -6956,9 +6997,6 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
-	if not _projectile_owner_has_clear_path_to_player(active_player_index, target_index, false): # Use the identical stable cell-edge authority as final damage so a combat-blocked opponent can never remain visible.
-		opponent_sprite.visible = false                                                           # Prevent feet-only leaks and transient turn-frame flashes through a blocking edge.
-		return                                                                                    # Keep visual and combat wall authority identical before any sprite/z-order work.
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
@@ -7023,7 +7061,7 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 
 
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
-func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictionary:          # Project world art from its collision-safe center point.
+func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_cell_walls := false) -> Dictionary: # Project world art from its collision-safe center point.
 	# The coordinate compositor owns the live in-between camera pose.  Use its
 	# exact wall/floor projection for every remote world object so actors,
 	# pickups, bullets, and impacts travel continuously with a transition rather
@@ -7041,13 +7079,15 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 		var runtime_projection: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", target_world)
 		if runtime_projection is Dictionary and bool(runtime_projection.get("visible", false)):
 			var runtime_depth := float(runtime_projection.get("view_depth", 0.0))
-			var sort_depth := runtime_depth                                                          # Collision owns capsule separation; draw order uses the center that collision keeps on the correct side of every wall.
+			var runtime_camera_origin: Vector2 = runtime_projection.get("camera_origin", Vector2.ZERO)
+			var runtime_forward: Vector2 = runtime_projection.get("forward", _view_forward_vector()).normalized()
+			var sort_depth := _world_cell_draw_depth(target_world, runtime_camera_origin, runtime_forward) if draw_after_cell_walls else runtime_depth # Characters use cell groups; pickups/effects retain their exact physical depth.
 			var runtime_result: Dictionary = runtime_projection.duplicate()
 			# Both the remote body's position and stepped size come from the live
 			# coordinate renderer, so its camera pose remains authoritative.
 			runtime_result["scale_view_depth"] = runtime_depth
 			runtime_result["sort_view_depth"] = sort_depth
-			runtime_result["z_index"] = _character_layer_for_view_depth(sort_depth)
+			runtime_result["z_index"] = _character_layer_for_view_depth(sort_depth) + (2 if draw_after_cell_walls else 0) # A character follows only its own cell's wall group; nearer wall cells remain in front.
 			return runtime_result
 	var origin := _runtime_camera_origin_for_visibility()                                      # Use the identical staged camera origin used for renderer visibility and actor culling.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact live heading used by the coordinate walls, including NE/NW halfway poses.
@@ -7075,13 +7115,38 @@ func _opponent_projection_from_current_camera(target_world: Vector2) -> Dictiona
 	var scale_projection := _corridor_projection_at_view_depth(scale_view_depth)               # Sample only actor scale from the protected near-camera depth.
 	actor_height = float(scale_projection["actor_height"])                                    # Replace actor height while keeping true feet and screen-side position.
 	var screen_y := feet_y - actor_height * 0.5                                                 # Keep a legacy centered y value for debugging; final sprite registration uses feet_y.
-	var sort_depth := view_depth                                                                # Keep fallback draw ordering centered on the same collision-safe body point.
-	var character_layer := _character_layer_for_view_depth(sort_depth)                         # Use center depth so walls between the camera and body always win.
+	var sort_depth := _world_cell_draw_depth(target_world, origin, forward) if draw_after_cell_walls else view_depth # Preserve exact depth for non-character world objects.
+	var character_layer := _character_layer_for_view_depth(sort_depth) + (2 if draw_after_cell_walls else 0) # Keep characters immediately above their cell's walls.
 	var corridor_width := maxf(float(corridor["right_x"]) - float(corridor["left_x"]), 1.0)    # Measure how many screen pixels represent one visible tile width at this depth.
 	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "scale_view_depth": scale_view_depth, "view_depth": view_depth, "sort_view_depth": sort_depth, "z_index": character_layer, "corridor_width": corridor_width} # Return projected geometry plus the distinct physical sort depth.
 
 
 
+
+# _world_cell_draw_depth: Groups an actor with the camera-facing walls in its
+# source cell using distance from the camera point, not only forward-axis depth.
+# This makes an off-axis wall between the camera and a side-cell actor win the
+# painter's order while same-cell walls still paint immediately before the actor.
+func _world_cell_draw_depth(world_position: Vector2, camera_origin: Vector2, _forward: Vector2) -> float:
+	var cell := _world_cell_for_draw_depth(world_position, camera_origin)
+	var cell_center := Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5)
+	return clampf(cell_center.distance_to(camera_origin), 0.0, WORLD_DRAW_DEPTH_RANGE)
+
+
+# _world_cell_for_draw_depth: Gives a point resting exactly on a thin grid wall
+# to the camera-side cell. This keeps a shot/effect traveling along that wall
+# in the same post-wall group as the visible wall surface instead of letting
+# floating-point floor selection place it on the hidden side.
+func _world_cell_for_draw_depth(world_position: Vector2, camera_origin: Vector2) -> Vector2i:
+	var sample := world_position
+	const WALL_LINE_EPSILON := 0.001
+	var vertical_line := roundi(sample.x)
+	if absf(sample.x - float(vertical_line)) <= WALL_LINE_EPSILON:
+		sample.x += WALL_LINE_EPSILON if camera_origin.x >= float(vertical_line) else -WALL_LINE_EPSILON
+	var horizontal_line := roundi(sample.y)
+	if absf(sample.y - float(horizontal_line)) <= WALL_LINE_EPSILON:
+		sample.y += WALL_LINE_EPSILON if camera_origin.y >= float(horizontal_line) else -WALL_LINE_EPSILON
+	return Vector2i(floori(sample.x), floori(sample.y))
 # _side_entry_projection_at_view_depth: Samples a side-entry floor wedge for actors outside the main corridor span.
 func _side_entry_projection_at_view_depth(view_depth: float, side_sign: float) -> Dictionary: # Declare this function.
 	var first_cell: Dictionary = SIDE_PERSPECTIVE_CELL_EXTENTS[0]                              # Read the nearest measured side square.
@@ -7244,6 +7309,20 @@ func _world_position_is_in_active_player_cell(target_world: Vector2) -> bool:
 
 
 
+# _world_point_has_clear_camera_line: Tests a point-sized visual such as a
+# travelling bullet against the exact live camera point. Unlike body visibility,
+# a bullet needs only one ray and may be hidden as soon as a wall is between it
+# and this view.
+func _world_point_has_clear_camera_line(target_world: Vector2) -> bool:
+	var origin := _runtime_camera_origin_for_visibility()
+	var to_target := target_world - origin
+	var target_distance := to_target.length()
+	if target_distance <= 0.002:
+		return true
+	var wall_distance := _nearest_projectile_wall_distance(origin, to_target / target_distance, maxf(target_distance - 0.002, 0.0))
+	return wall_distance > target_distance - 0.002 + PROJECTILE_WALL_EPSILON
+
+
 # _world_actor_has_clear_line_of_sight: Uses the same physical player-body wall path as combat, rather than the renderer's rear-biased camera cheat point.
 func _world_actor_has_clear_line_of_sight(target_world: Vector2) -> bool:
 	var origin := _current_player_world_position()                                             # Start at the observing player's collision-safe body center, not the visual camera's rear offset.
@@ -7255,7 +7334,6 @@ func _world_actor_has_clear_line_of_sight(target_world: Vector2) -> bool:
 	var body_clearance := 0.005                                                                # Leave only numerical tolerance at the target body surface.
 	var wall_distance := _nearest_projectile_wall_distance(origin, ray_direction, target_distance - body_clearance) # Reuse exact movement-edge DDA plus wall-segment collision already proven for combat.
 	return wall_distance > target_distance - body_clearance + PROJECTILE_WALL_EPSILON          # Hide the entire opponent when any solid edge lies before their body center.
-
 
 
 # _camera_fan_half_width_at_depth: Returns the top-down camera cone half-width for one forward depth.
@@ -7702,6 +7780,26 @@ func _death_animation_for(direction: String, frames: SpriteFrames) -> StringName
 	if frames != null and frames.has_animation(exact):
 		return exact
 	return &"DeathN" if frames != null and frames.has_animation(&"DeathN") else &""
+
+
+# _hit_reaction_death_frame: Uses frame three of the existing directional
+# Cowboy death renders for the brief non-lethal bullet reaction. The local
+# camera always sees its North render; a remote player is rendered from the
+# current viewer's world-facing camera direction.
+func _hit_reaction_death_frame(player_index: int) -> Texture2D:
+	var frames: SpriteFrames = null
+	var death_animation: StringName = &"DeathN"
+	if player_index == active_player_index:
+		frames = player_sprite.sprite_frames if player_sprite != null else null
+	else:
+		var view: Dictionary = player_views[active_player_index] if active_player_index >= 0 and active_player_index < player_views.size() else {}
+		var opponents: Dictionary = view.get("opponent_sprites", {})
+		var target_sprite: AnimatedSprite2D = opponents.get(player_index, opponent_sprite)
+		frames = target_sprite.sprite_frames if target_sprite != null else null
+		death_animation = _death_animation_for(_direction_string_for_facing(facing), frames)
+	if frames == null or death_animation.is_empty() or not frames.has_animation(death_animation):
+		return null
+	return frames.get_frame_texture(death_animation, mini(2, frames.get_frame_count(death_animation) - 1))
 
 
 
