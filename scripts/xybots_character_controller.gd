@@ -157,7 +157,9 @@ const COIN_TEXTURES := [                                                        
 const HEART_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Heart/Heart.tres")    # Use the user-authored SpriteFrames asset for world health pickups.
 const HEART_MAP_SPAWN_CHANCE := 0.20                                                          # Replace roughly one fifth of round-start coin cells with health pickups for testing.
 const HEART_DROP_CHANCE := 0.45                                                               # Make kill drops frequent enough to exercise health recovery during playtests.
-const GUN_TEXTURE := preload("res://assets/Items/Gun/Gun.png")                              # Use the authored machine-gun pickup art in world space and HUD.
+const GUN_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Gun/Gun.tres")          # Use the user-authored eight-frame rotating gun resource for the world powerup.
+const GUN_HUD_TEXTURE := preload("res://assets/Items/Gun/gun_01.png")                        # Keep the held-powerup HUD indicator as the requested fixed front frame.
+const GUN_HUD_SIZE := Vector2(10.0, 10.0)                                                     # Render the 20x20 source at exactly half size to match the health meter's compact presentation.
 const XBOX_STICK_DEADZONE := 0.22                                                            # Ignore small Xbox-stick drift around its physical center.
 const XBOX_TURN_THRESHOLD := 0.62                                                            # Require a deliberate right-stick push before issuing one turn input.
 const DEBUG_MAP_CELL_SIZE := 16.0                                                           # Fit the temporary 9x9 diagnostic grid inside its own side panel.
@@ -774,7 +776,7 @@ var combat_respawn_labels: Array[Label] = []                                    
 var combat_coin_labels: Array[Label] = []                                                     # Store one per-player score readout inside the lower-right of each view.
 var combat_coin_icons: Array[TextureRect] = []                                                # Store one authored coin icon beside each score readout.
 var combat_ammo_labels: Array[Label] = []                                                     # Store the temporary rapid-fire ammo counter for each local view.
-var combat_ammo_icons: Array[TextureRect] = []                                                # Store the gun icon only while its player is armed.
+var combat_ammo_icons: Array[TextureRect] = []                                                # Store the fixed gun icon only while its player is armed.
 var world_coins: Array[Dictionary] = []                                                       # Keep uncollected map and dropped coins in shared world coordinates.
 var world_hearts: Array[Dictionary] = []                                                      # Keep rare one-health drops in the same shared world space as coins and guns.
 var vending_machine: Dictionary = {}                                                          # Store one wall-attached shop per generated maze.
@@ -896,6 +898,7 @@ func _setup_deathmatch_overlays() -> void:
 		join_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		join_label.add_theme_font_override("font", pixel_hud_font)
 		join_label.add_theme_font_size_override("font_size", 6)
+		join_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Keep the join prompt sharp when its player viewport is scaled.
 		join_label.size = Vector2(VIEWPORT_SIZE.x, 30.0)
 		join_label.z_index = 501
 		hud.add_child(join_label)
@@ -904,6 +907,7 @@ func _setup_deathmatch_overlays() -> void:
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		name_label.add_theme_font_override("font", pixel_hud_font)
 		name_label.add_theme_font_size_override("font_size", 5)
+		name_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Match the hard pixel edges of the HUD item icons.
 		name_label.add_theme_color_override("font_shadow_color", Color.BLACK)
 		name_label.add_theme_constant_override("shadow_offset_x", 1)
 		name_label.add_theme_constant_override("shadow_offset_y", 1)
@@ -918,6 +922,7 @@ func _setup_deathmatch_overlays() -> void:
 		team_label.scroll_active = false
 		team_label.add_theme_font_override("normal_font", pixel_hud_font)
 		team_label.add_theme_font_size_override("normal_font_size", 4)
+		team_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Keep colored team labels from inheriting linear texture filtering.
 		team_label.add_theme_color_override("font_shadow_color", Color.BLACK)
 		team_label.add_theme_constant_override("shadow_offset_x", 1)
 		team_label.add_theme_constant_override("shadow_offset_y", 1)
@@ -1675,6 +1680,7 @@ func _setup_combat_hud() -> void:
 		coin_label.name = "CombatCoinScoreP%d" % (player_index + 1)                            # Keep the UI easy to inspect in the remote scene tree.
 		coin_label.add_theme_font_override("font", pixel_hud_font)                             # Keep score digits deliberately aliased.
 		coin_label.add_theme_font_size_override("font_size", 5)
+		coin_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Render score glyphs with the same hard sampling as their coin icon.
 		coin_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.22, 1.0))        # Give the objective a clear gold arcade color.
 		coin_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep numbers readable over bright floors.
 		coin_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
@@ -1685,9 +1691,10 @@ func _setup_combat_hud() -> void:
 		combat_coin_labels.append(coin_label)                                                   # Retain it for per-frame text and placement.
 		var ammo_icon := TextureRect.new()                                                       # Create the temporary pickup icon for the bottom-center ammo counter.
 		ammo_icon.name = "CombatAmmoIconP%d" % (player_index + 1)                              # Keep the temporary readout identifiable in the scene tree.
-		ammo_icon.texture = GUN_TEXTURE                                                          # Use the authored machine-gun pickup sprite as the icon.
-		ammo_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE                                  # Use its explicit compact source-pixel rectangle.
-		ammo_icon.size = Vector2(7.0, 5.0)                                                       # Keep the temporary gun marker at roughly half its former size.
+		ammo_icon.texture = GUN_HUD_TEXTURE                                                      # Keep the HUD's held-gun indicator fixed on gun_01.png.
+		ammo_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Prevent interpolation so the gun's pixels stay as hard-edged as the heart meter.
+		ammo_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE                                  # Use the explicit authored source-pixel rectangle.
+		ammo_icon.size = GUN_HUD_SIZE                                                             # Draw the requested HUD frame at half its authored size.
 		ammo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE                                    # Never interfere with the debug menu.
 		ammo_icon.z_index = 200                                                                 # Draw with other HUD controls.
 		ammo_icon.visible = false                                                               # Hide until this player has the temporary weapon.
@@ -1697,6 +1704,7 @@ func _setup_combat_hud() -> void:
 		ammo_label.name = "CombatAmmoP%d" % (player_index + 1)                                  # Keep the temporary UI identifiable in the scene tree.
 		ammo_label.add_theme_font_override("font", pixel_hud_font)                             # Keep ammunition digits deliberately aliased.
 		ammo_label.add_theme_font_size_override("font_size", 5)
+		ammo_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Render the ammo counter as crisply as its adjacent gun icon.
 		ammo_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.72, 1.0))        # Use a pale brass color that reads as ammunition.
 		ammo_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep counter readable over every floor texture.
 		ammo_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
@@ -1715,6 +1723,7 @@ func _setup_combat_hud() -> void:
 		timer_label.add_theme_font_override("font", pixel_hud_font)                            # Keep the timer crisp instead of vector-smoothed.
 		timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		timer_label.add_theme_font_size_override("font_size", 5)
+		timer_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                           # Avoid filtering while the logical timer is scaled onto the display.
 		timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.28, 1.0))
 		timer_label.add_theme_color_override("font_shadow_color", Color.BLACK)
 		timer_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -1884,7 +1893,7 @@ func _update_combat_hud() -> void:
 				var coins := int(state.get("coins", 0))
 				var heart_color := "#ffffff" if coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH else "#5c5c5c"
 				var gun_color := "#ffffff" if coins >= 10 else "#5c5c5c"
-				shop.text = "[center][color=%s]PRESS A: BUY [img=5x5]res://assets/Items/Heart/heart.png[/img] $5[/color]\n[font_size=1] [/font_size]\n[color=%s]PRESS B: BUY [img=5x5]res://assets/Items/Gun/Gun.png[/img] $10[/color][/center]" % [heart_color, gun_color]
+				shop.text = "[center][color=%s]PRESS A: BUY [img=5x5]res://assets/Items/Heart/heart.png[/img] $5[/color]\n[font_size=1] [/font_size]\n[color=%s]PRESS B: BUY [img=5x5]res://assets/Items/Gun/gun_01.png[/img] $10[/color][/center]" % [heart_color, gun_color] # Show the same fixed cowboy-gun frame advertised by the HUD.
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -1921,10 +1930,10 @@ func _update_combat_hud() -> void:
 			var ammo_label := combat_ammo_labels[player_index]
 			var rounds := int(state.get("machine_gun_ammo", 0))
 			if is_instance_valid(ammo_icon) and is_instance_valid(ammo_label):
-				ammo_icon.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 66.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 8.0) * viewport_node.scale.y)
-				ammo_icon.scale = viewport_node.scale
 				ammo_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 54.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
 				ammo_label.scale = viewport_node.scale
+				ammo_icon.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - GUN_HUD_SIZE.x - 55.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - GUN_HUD_SIZE.y - 2.0) * viewport_node.scale.y) # Put the half-size gun one logical pixel left of the ammo count and two pixels above the viewport edge.
+				ammo_icon.scale = viewport_node.scale
 				ammo_label.text = str(rounds)
 				ammo_icon.visible = rounds > 0
 				ammo_label.visible = rounds > 0
@@ -2472,7 +2481,7 @@ func _update_combat_view() -> void:
 		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), HEART_SPRITE_FRAMES.get_frame_texture(&"Heart", 0), heart_position, used, 0.18, 0.65) # Render the user-authored heart SpriteFrames item as a compact floor pickup.
 	if not machine_gun_pickup.is_empty():                                                       # Draw the contested rapid-fire pickup only while it remains unclaimed.
 		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared Vector2 directly instead of reconstructing it from a Variant.
-		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), GUN_TEXTURE, gun_position, used, 0.10) # Keep the pickup at a readable floor-level height.
+		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), _gun_animation_texture(), gun_position, used, 0.10) # Cycle the authored Gun.tres rotation at its configured speed.
 	for shot in active_projectiles:                                                             # Render every shared projectile from this camera.
 		var world_position: Vector2 = shot["position"]                                           # Read shared-world shot position.
 		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10) or not _world_actor_has_clear_line_of_sight(world_position):
@@ -2550,6 +2559,19 @@ func _update_combat_view() -> void:
 		sprite.visible = true                                                                      # Reveal the reaction.
 		used[key] = true                                                                           # Preserve the sprite.
 	_hide_unused_combat_sprites(used)                                                          # Hide stale bullets, impacts, and hit art.
+
+
+# _gun_animation_texture: Samples the authored looping Gun animation for the in-world powerup.
+func _gun_animation_texture() -> Texture2D:
+	var frame_count := GUN_SPRITE_FRAMES.get_frame_count(&"Gun")                              # Read the actual imported resource so all eight user-authored frames participate.
+	if frame_count == 0:
+		return null                                                                               # Avoid an invalid lookup if the resource is being edited or fails to import.
+	var animation_speed := GUN_SPRITE_FRAMES.get_animation_speed(&"Gun")                      # Honor Gun.tres's configured 5 FPS rather than duplicating that timing in code.
+	if animation_speed <= 0.0:
+		return GUN_SPRITE_FRAMES.get_frame_texture(&"Gun", 0)                                   # Leave a deliberately paused future resource on its first valid frame.
+	var frame_duration := 1.0 / animation_speed
+	var frame_index := int(Time.get_ticks_msec() / (frame_duration * 1000.0)) % frame_count    # Keep every visible world instance synchronized as one rotating powerup.
+	return GUN_SPRITE_FRAMES.get_frame_texture(&"Gun", frame_index)                            # Return the current authored cowboy-gun angle.
 
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
@@ -6762,7 +6784,7 @@ func _position_player() -> void:                                                
 	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Continue to derive lateral registration from the local floor polygon.
 	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
 	var actor_height := NEAREST_ACTOR_LOD_HEIGHT                                               # The local actor always occupies the nearest camera cell, so use the same protected largest LOD as a same-cell opponent.
-	var source_body_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") else _sprite_body_height_to_foot(player_sprite) # Keep directional death sheets at normal body scale despite unusual visible bounds.
+	var source_body_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite) # Keep Death and breathing Idle sheets at one stable projected scale despite their changing alpha bounds.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the calibrated self-view feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
@@ -6830,7 +6852,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
-	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") else _sprite_body_height_to_foot(opponent_sprite) # Keep directional death sheets from inflating in an opponent camera too.
+	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") or String(opponent_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(opponent_sprite) # Keep Death and breathing Idle sheets at one stable projected scale in every camera.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
