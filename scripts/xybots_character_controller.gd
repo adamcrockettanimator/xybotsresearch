@@ -63,6 +63,10 @@ const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                        
 const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
 const IDLE_FRAMES := "res://assets/Characters/Cowboy2_Idle_8Dir/Cowboy2_Idle_8Dir.tres"     # Load the twelve-frame eight-direction Cowboy 2 idle set alongside the run SpriteFrames.
 const DEATH_FRAMES := "res://assets/Characters/Cowboy2_Death_8Dir/Cowboy2_Death_8Dir.tres"  # Load the preliminary eight-camera death reaction alongside run and idle SpriteFrames.
+const DUAL_WIELD_RUN_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Forward_8Dir/Cowboy2_DualWield_Run_Forward_8Dir.tres" # Add the separate dual-pistol forward run without replacing the normal run, strafe, or idle resources.
+const DUAL_WIELD_RUN_LEFT_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Left_8Dir/Cowboy2_DualWield_Run_Left_8Dir.tres" # Add the separate dual-pistol left run without replacing normal or dual-forward clips.
+const DUAL_WIELD_RUN_RIGHT_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Right_8Dir/Cowboy2_DualWield_Run_Right_8Dir.tres" # Add the separate dual-pistol right run without replacing normal or other dual-wield clips.
+const DUAL_WIELD_IDLE_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Idle_8Dir/Cowboy2_DualWield_Idle_8Dir.tres" # Add the separate dual-pistol idle loops without replacing normal idle art.
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
 
 const FAR_FLOOR_Y := 0.30                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -114,8 +118,8 @@ const ACTION_P2_FIRE := "xybots_p2_fire"                                        
 const PLAYER_MAX_HEALTH := 10                                                                  # Start every player with ten visible health hatches.
 const PLAYER_STARTING_HEALTH := 3                                                              # Spawn with a vulnerable three hearts; pickups can build health to the ten-heart cap.
 const PISTOL_FIRE_INTERVAL := 0.32                                                            # Keep the infinite-ammo pistol deliberate rather than machine-gun fast.
-const MACHINE_GUN_FIRE_INTERVAL := 0.12                                                       # Keep the pickup clearly faster than the pistol without making it a blur.
-const MACHINE_GUN_AMMO := 20                                                                  # Keep the rapid-fire pickup powerful without allowing a prolonged dominant streak.
+const DUAL_WIELD_FIRE_INTERVAL := PISTOL_FIRE_INTERVAL * 0.5                                  # Fire alternating dual pistols at exactly twice the normal pistol rate.
+const DUAL_WIELD_AMMO := 12                                                                   # Give every dual-wield pickup the requested twelve alternating pistol rounds.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const DEFAULT_COMBAT_ROUND_SECONDS := 101.60                                                  # Match the Godot importer waveform's 101.60 s end of audible song content, excluding the MP3 container tail.
 const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
@@ -1312,7 +1316,11 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 	else:
 		sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                        # Retain the prior player resource as a safe fallback if an asset is missing.
 	_add_idle_animations(sprite.sprite_frames)                                                   # Give every player and opponent the same directional idle clips as the primary player.
+	_add_dual_wield_idle_animations(sprite.sprite_frames)                                       # Add the powered-up idle loops beside, not instead of, the normal idle clips.
 	_add_death_animations(sprite.sprite_frames)                                                  # Give every player and opponent the preliminary directional death clips.
+	_add_dual_wield_forward_animations(sprite.sprite_frames)                                    # Add the temporary forward-only dual-pistol runs without replacing the base movement set.
+	_add_dual_wield_left_animations(sprite.sprite_frames)                                       # Add the temporary left-strafe dual-pistol runs without replacing the base movement set.
+	_add_dual_wield_right_animations(sprite.sprite_frames)                                      # Add the temporary right-strafe dual-pistol runs without replacing the base movement set.
 	sprite.centered = true                                                                      # Register the sprite from its center like the original player node.
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                  # Preserve the source sprite pixels when scaled.
 	sprite.z_index = 10 if sprite_name == "PlayerSprite" else 9                                 # Give characters a default layer before runtime depth sorting.
@@ -1481,7 +1489,7 @@ func _spawn_machine_gun_pickup() -> void:
 	if candidates.is_empty():                                                                 # Keep a safe fallback for an unusually tiny diagnostic map.
 		return
 	var chosen: Vector2i = candidates[randi() % candidates.size()]                           # Let each new pickup contest a different area of the maze.
-	machine_gun_pickup = {"id": next_combat_visual_id, "position": Vector2(float(chosen.x) + 0.5, float(chosen.y) + 0.5), "ammo": MACHINE_GUN_AMMO} # Keep the pickup and its remaining magazine in shared world coordinates.
+	machine_gun_pickup = {"id": next_combat_visual_id, "position": Vector2(float(chosen.x) + 0.5, float(chosen.y) + 0.5), "ammo": DUAL_WIELD_AMMO} # Keep the pickup and its requested twelve dual-pistol rounds in shared world coordinates.
 	next_combat_visual_id += 1                                                                # Reserve its visual cache key.
 	machine_gun_respawn_timer = 0.0                                                          # Stop the absent-pickup timer once the gun is visible.
 
@@ -1539,7 +1547,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			if bool(state.get("is_dying", false)) or (player_index == 1 and not player_two_joined):
 				continue
 			if _player_can_collect_pickup(state, pickup_position):
-				state["machine_gun_ammo"] = int(machine_gun_pickup.get("ammo", MACHINE_GUN_AMMO)) # Preserve a dropped gun's remaining rounds rather than refilling it.
+				state["machine_gun_ammo"] = int(machine_gun_pickup.get("ammo", DUAL_WIELD_AMMO)) # Preserve a dropped dual-wield pickup's remaining rounds rather than refilling it.
 				player_states[player_index] = state
 				_play_pickup_sound(machine_gun_pickup_player)                                        # Announce the contested weapon pickup once, not once per viewport.
 				machine_gun_pickup = {}                                                           # Consume the shared map pickup.
@@ -2047,7 +2055,15 @@ func _process_combat(delta: float) -> void:
 func _spawn_pistol_shot(player_index: int) -> void:
 	var state := player_states[player_index]                                                    # Read the completed movement state.
 	var direction := _view_forward_vector_for_state(state).normalized()                         # Shoot directly along the visible camera/player aim heading.
+	var dual_wield_rounds := int(state.get("machine_gun_ammo", 0))                             # Read the optional dual-pistol powerup state once before choosing this shot's muzzle.
+	var dual_wield_barrel_sign := 0.0                                                           # Retain the chosen muzzle side so the local screen-space effect can avoid applying a second offset to the right pistol.
 	var body_origin := _player_state_world_position(state)                                      # Keep the simulation rooted at the player's actual collision center, never beyond a wall.
+	if dual_wield_rounds > 0:
+		var muzzle_side := Vector2(-direction.y, direction.x)                                     # Build a horizontal perpendicular so the two pistols fire from opposite sides of the body.
+		var barrel_sign := -1.0 if dual_wield_rounds % 2 == 0 else 1.0                           # Alternate left and right muzzle origins deterministically across all twelve remaining-round values.
+		dual_wield_barrel_sign = barrel_sign                                                       # Carry this exact side through to the screen-space shot effect.
+		var muzzle_side_distance := 0.12 if barrel_sign < 0.0 else 0.04                           # Match the authored pose: the right pistol sits much nearer the body center than the left pistol.
+		body_origin += muzzle_side * muzzle_side_distance * barrel_sign                           # Offset only the visible/simulated muzzle; the player's collision center remains unchanged.
 	var desired_muzzle_distance := 0.34                                                          # Preserve the authored visual separation between body and pistol muzzle when the lane is clear.
 	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance) # Check the short body-to-muzzle segment before placing the bullet.
 	var muzzle_distance := minf(desired_muzzle_distance, maxf(muzzle_wall_distance - PROJECTILE_WALL_EPSILON, 0.0)) # Clamp the muzzle just in front of a wall instead of spawning a shot on its far side.
@@ -2058,17 +2074,16 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var visual_distance := wall_distance                                                           # Prefer the wall endpoint unless a body is closer.
 	if not player_hit.is_empty() and float(player_hit.get("distance", maximum_distance)) < visual_distance:
 		visual_distance = float(player_hit["distance"])                                            # End at the nearer target body.
-	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "visual_target_position": origin + direction * visual_distance, "visual_total_distance": maxf(visual_distance, 0.001), "direction": direction, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair so the rendered shot travels in a single straight line.
+	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "visual_target_position": origin + direction * visual_distance, "visual_total_distance": maxf(visual_distance, 0.001), "direction": direction, "dual_wield_barrel_sign": dual_wield_barrel_sign, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered shot travels in a single straight line.
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
 	if gunshot_player != null:
 		gunshot_player.pitch_scale = randf_range(0.78, 1.22)
 		gunshot_player.play()
-	var machine_gun_rounds := int(state.get("machine_gun_ammo", 0))                            # Read the optional temporary weapon state once at fire time.
-	if machine_gun_rounds > 0:                                                                  # Consume rapid-fire rounds only while the pickup remains armed.
-		var remaining_rounds := machine_gun_rounds - 1                                            # Spend one round while retaining the exact amount for a later dropped pickup.
+	if dual_wield_rounds > 0:                                                                   # Consume one alternating pistol round only while the dual-wield pickup remains armed.
+		var remaining_rounds := dual_wield_rounds - 1                                             # Spend one round while retaining the exact amount for a later dropped pickup.
 		state["machine_gun_ammo"] = remaining_rounds
-		state["fire_cooldown"] = MACHINE_GUN_FIRE_INTERVAL                                       # Apply the faster machine-gun cadence without altering damage.
+		state["fire_cooldown"] = DUAL_WIELD_FIRE_INTERVAL                                        # Apply the requested twice-normal cadence while alternating the two pistol muzzle origins.
 		if remaining_rounds <= 0:
 			machine_gun_respawn_timer = MACHINE_GUN_RESPAWN_SECONDS                                # Respawn a fresh contested gun only after the current magazine is exhausted.
 	else:
@@ -2498,8 +2513,10 @@ func _update_combat_view() -> void:
 		var spawn_height := float(spawn_projection["actor_height"])                              # Use the start depth for a screen-space gun point.
 		var target_height := float(target_projection["actor_height"])                            # Use endpoint depth for the naturally shrinking terminal sprite.
 		var muzzle_position := Vector2(float(spawn_projection["screen_x"]), float(spawn_projection["feet_y"]) - spawn_height * 0.72) # Put the first point at the raised gun/crosshair rather than the chest.
-		if int(shot["owner"]) == active_player_index:                                            # The bound player's sprite is always camera-facing, so its gun sits slightly screen-right.
-			muzzle_position.x += spawn_height * 0.13                                                 # Register the path's first point with the visible self-player gun/crosshair.
+		if int(shot["owner"]) == active_player_index:                                            # The bound player's normal single pistol remains slightly screen-right.
+			var dual_wield_barrel_sign := float(shot.get("dual_wield_barrel_sign", 0.0))            # Read the fired pistol side recorded at spawn time.
+			if dual_wield_barrel_sign <= 0.0:
+				muzzle_position.x += spawn_height * 0.13                                             # Keep the established normal/left-pistol correction, which already registers against the body art.
 		var target_position := Vector2(float(target_projection["screen_x"]), float(target_projection["feet_y"]) - target_height * 0.72) # Build the matching terminal point at the same gun-height convention.
 		var traveled_distance := world_position.distance_to(spawn_world)                          # Measure actual world distance traveled so frame-rate does not affect the visual rate.
 		var travel_fraction := clampf(traveled_distance / maxf(float(shot.get("visual_total_distance", traveled_distance)), 0.001), 0.0, 1.0) # Convert physical travel into one normalized fixed path fraction.
@@ -2943,7 +2960,7 @@ func _update_scoreboard_shop_input() -> void:
 				_play_pickup_sound(heart_pickup_player)                                               # Reuse the health cue for a successful vending-machine heart purchase.
 			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10:
 				state["coins"] = coins - 10
-				state["machine_gun_ammo"] = MACHINE_GUN_AMMO
+				state["machine_gun_ammo"] = DUAL_WIELD_AMMO
 				player_states[player_index] = state
 				_play_pickup_sound(machine_gun_pickup_player)                                         # Reuse the weapon cue for a successful vending-machine gun purchase.
 		was_shop_heart_pressed[player_index] = heart_pressed
@@ -4681,7 +4698,11 @@ func _setup_player_animation() -> void:                                         
 		player_sprite.sprite_frames = SpriteFrames.new()                                          # Update player sprite rendering or animation state.
 
 	_add_idle_animations(player_sprite.sprite_frames)                                          # Add the twelve-frame directional idle clips to the primary player's run resource.
+	_add_dual_wield_idle_animations(player_sprite.sprite_frames)                              # Add the dual-pistol idle loops alongside normal idle clips.
 	_add_death_animations(player_sprite.sprite_frames)                                         # Add the preliminary directional death clips to the primary player's run resource.
+	_add_dual_wield_forward_animations(player_sprite.sprite_frames)                            # Add the dual-pistol forward runs alongside the existing animations.
+	_add_dual_wield_left_animations(player_sprite.sprite_frames)                               # Add the dual-pistol left runs alongside the existing animations.
+	_add_dual_wield_right_animations(player_sprite.sprite_frames)                              # Add the dual-pistol right runs alongside the existing animations.
 	_cache_animations()                                                                        # Call a helper function as part of the current controller step.
 	player_sprite.centered = true                                                              # Update player sprite rendering or animation state.
 	player_sprite.z_index = 10                                                                 # Update player sprite rendering or animation state.
@@ -4697,6 +4718,25 @@ func _add_idle_animations(frames: SpriteFrames) -> void:
 		return
 	for animation in idle_source.get_animation_names():
 		if not String(animation).begins_with("Idle"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, idle_source.get_animation_loop(animation))
+		frames.set_animation_speed(animation, idle_source.get_animation_speed(animation))
+		for frame_index in idle_source.get_frame_count(animation):
+			frames.add_frame(animation, idle_source.get_frame_texture(animation, frame_index), idle_source.get_frame_duration(animation, frame_index))
+
+
+# _add_dual_wield_idle_animations: Copies all eight powered-up idle directions into a mutable character resource.
+func _add_dual_wield_idle_animations(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	var idle_source := load(DUAL_WIELD_IDLE_FRAMES) as SpriteFrames
+	if idle_source == null:
+		return
+	for animation in idle_source.get_animation_names():
+		if not String(animation).begins_with("IdleDual"):
 			continue
 		if frames.has_animation(animation):
 			frames.remove_animation(animation)
@@ -4724,6 +4764,63 @@ func _add_death_animations(frames: SpriteFrames) -> void:
 		frames.set_animation_speed(animation, death_source.get_animation_speed(animation))
 		for frame_index in death_source.get_frame_count(animation):
 			frames.add_frame(animation, death_source.get_frame_texture(animation, frame_index), death_source.get_frame_duration(animation, frame_index))
+
+
+# _add_dual_wield_forward_animations: Copies only the currently available dual-pistol forward runs into a mutable character resource.
+func _add_dual_wield_forward_animations(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	var dual_wield_source := load(DUAL_WIELD_RUN_FRAMES) as SpriteFrames
+	if dual_wield_source == null:
+		return
+	for animation in dual_wield_source.get_animation_names():
+		if not String(animation).begins_with("DualRun"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, dual_wield_source.get_animation_loop(animation))
+		frames.set_animation_speed(animation, dual_wield_source.get_animation_speed(animation))
+		for frame_index in dual_wield_source.get_frame_count(animation):
+			frames.add_frame(animation, dual_wield_source.get_frame_texture(animation, frame_index), dual_wield_source.get_frame_duration(animation, frame_index))
+
+
+# _add_dual_wield_left_animations: Copies the currently available dual-pistol left runs into a mutable character resource.
+func _add_dual_wield_left_animations(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	var dual_wield_source := load(DUAL_WIELD_RUN_LEFT_FRAMES) as SpriteFrames
+	if dual_wield_source == null:
+		return
+	for animation in dual_wield_source.get_animation_names():
+		if not String(animation).begins_with("DualRunLeft"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, dual_wield_source.get_animation_loop(animation))
+		frames.set_animation_speed(animation, dual_wield_source.get_animation_speed(animation))
+		for frame_index in dual_wield_source.get_frame_count(animation):
+			frames.add_frame(animation, dual_wield_source.get_frame_texture(animation, frame_index), dual_wield_source.get_frame_duration(animation, frame_index))
+
+
+# _add_dual_wield_right_animations: Copies the currently available dual-pistol right runs into a mutable character resource.
+func _add_dual_wield_right_animations(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	var dual_wield_source := load(DUAL_WIELD_RUN_RIGHT_FRAMES) as SpriteFrames
+	if dual_wield_source == null:
+		return
+	for animation in dual_wield_source.get_animation_names():
+		if not String(animation).begins_with("DualRunRight"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, dual_wield_source.get_animation_loop(animation))
+		frames.set_animation_speed(animation, dual_wield_source.get_animation_speed(animation))
+		for frame_index in dual_wield_source.get_frame_count(animation):
+			frames.add_frame(animation, dual_wield_source.get_frame_texture(animation, frame_index), dual_wield_source.get_frame_duration(animation, frame_index))
 
 
 
@@ -7427,14 +7524,42 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 	var other_world_aim := String(other_state.get("world_aim_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world aim direction.
 	var relative_run := _view_relative_dir(other_world_run, facing)                            # Convert run direction into this viewer's animation space.
 	var relative_aim := _view_relative_dir(other_world_aim, facing)                            # Convert aim direction into this viewer's animation space.
+	var moving_backward := moving and bool(other_state.get("run_animation_reversed", false))  # Reuse the player view's authoritative straight-backward decision instead of mistaking it for a strafe.
 	var animation := _idle_animation_for(relative_aim, opponent_sprite.sprite_frames) if not moving else _best_opponent_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Pick a directional idle when stopped, otherwise retain the existing run/aim selection.
+	if moving_backward:
+		var backward_forward_animation := StringName("Run%s_Aim%s" % [relative_aim, relative_aim]) # Use this viewer's forward-facing normal clip as the source for reverse playback.
+		if opponent_sprite.sprite_frames.has_animation(backward_forward_animation):
+			animation = backward_forward_animation
+		if int(other_state.get("machine_gun_ammo", 0)) > 0:
+			var dual_wield_backward_animation := _dual_wield_forward_animation_for(relative_aim, relative_aim, opponent_sprite.sprite_frames) # Reuse the matching dual forward clip backwards while the powerup is armed.
+			if dual_wield_backward_animation != &"":
+				animation = dual_wield_backward_animation
+	if not moving and int(other_state.get("machine_gun_ammo", 0)) > 0:
+		var dual_wield_idle := _dual_wield_idle_animation_for(relative_aim, opponent_sprite.sprite_frames) # Use the separately authored powered-up idle in this viewer's relative body direction.
+		if dual_wield_idle != &"":
+			animation = dual_wield_idle
+	if moving and not moving_backward and int(other_state.get("machine_gun_ammo", 0)) > 0:
+		var dual_wield_animation := _dual_wield_forward_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Replace only a forward run with the available dual-pistol view; unsupported strafe/idle art stays normal.
+		if dual_wield_animation == &"":
+			dual_wield_animation = _dual_wield_left_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Use the separately authored left-strafe view when this opponent's motion matches that routing.
+		if dual_wield_animation == &"":
+			dual_wield_animation = _dual_wield_right_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Use the separately authored right-strafe view for the remaining strafe-side routing.
+		if dual_wield_animation != &"":
+			animation = dual_wield_animation
 	if animation == &"":                                                                       # Skip if no usable animation exists.
 		return                                                                                    # Return without changing the opponent sprite.
-	if opponent_sprite.animation != animation:                                                 # Avoid restarting the same opponent animation every frame.
-		opponent_sprite.play(animation)                                                           # Start the selected opponent animation.
+	var playing_backward := opponent_sprite.get_playing_speed() < 0.0                          # Detect a forward-to-reverse change even when both directions share the same forward clip name.
+	if opponent_sprite.animation != animation or playing_backward != moving_backward:          # Restart only when the selected clip or its playback direction changes.
+		if moving_backward:
+			opponent_sprite.play_backwards(animation)                                               # Play the view-relative forward body clip backwards for a straight retreat.
+		else:
+			opponent_sprite.play(animation)                                                         # Start ordinary forward animation playback.
 	if moving:                                                                                 # Keep active opponents animated.
 		if not opponent_sprite.is_playing():                                                       # Resume if the sprite was paused or stopped while idle.
-			opponent_sprite.play(animation)                                                            # Play the selected opponent animation.
+			if moving_backward:
+				opponent_sprite.play_backwards(animation)                                             # Resume a paused straight retreat in reverse.
+			else:
+				opponent_sprite.play(animation)                                                       # Resume ordinary forward playback.
 	else:                                                                                      # Keep stopped opponents visibly breathing in their view-relative idle loop.
 		if not opponent_sprite.is_playing():
 			opponent_sprite.play(animation)
@@ -7461,6 +7586,38 @@ func _best_opponent_animation_for(run: String, aim: String, frames: SpriteFrames
 	return &""                                                                                 # Return no animation when the resource is unexpectedly empty.
 
 
+# _dual_wield_forward_animation_for: Resolves the temporary dual-pistol art only for movement straight along the aim direction.
+func _dual_wield_forward_animation_for(run: String, aim: String, frames: SpriteFrames) -> StringName:
+	if frames == null or run != aim:
+		return &""
+	var animation := StringName("DualRun" + aim)
+	return animation if frames.has_animation(animation) else &""
+
+
+# _dual_wield_left_animation_for: Resolves the authored left-strafe art using the same mirrored direction rule as Cowboy2_Run_Left_8Dir.
+func _dual_wield_left_animation_for(run: String, aim: String, frames: SpriteFrames) -> StringName:
+	if frames == null:
+		return &""
+	var screen_run := _world_vector_for_direction_string(run) * Vector2(-1.0, 1.0)             # Unmirror the retained animation labels before testing the movement side.
+	var screen_aim := _world_vector_for_direction_string(aim) * Vector2(-1.0, 1.0)             # Use the same unmirrored aim vector as the normal strafe resolver.
+	if screen_aim.cross(screen_run) >= -0.001:
+		return &""                                                                                # Reserve the opposite side for the future dual-wield right-run batch.
+	var animation := StringName("DualRunLeft" + aim)
+	return animation if frames.has_animation(animation) else &""
+
+
+# _dual_wield_right_animation_for: Resolves the authored right-strafe art using the opposite mirrored direction rule from Cowboy2_Run_Right.
+func _dual_wield_right_animation_for(run: String, aim: String, frames: SpriteFrames) -> StringName:
+	if frames == null:
+		return &""
+	var screen_run := _world_vector_for_direction_string(run) * Vector2(-1.0, 1.0)             # Unmirror the retained animation labels before testing the movement side.
+	var screen_aim := _world_vector_for_direction_string(aim) * Vector2(-1.0, 1.0)             # Use the same unmirrored aim vector as the normal strafe resolver.
+	if screen_aim.cross(screen_run) <= 0.001:
+		return &""                                                                                # Forward/backward and the left side are resolved by their dedicated dual-wield sets.
+	var animation := StringName("DualRunRight" + aim)
+	return animation if frames.has_animation(animation) else &""
+
+
 # _strafe_animation_for: Chooses left/right strafe art from the run direction relative to aim.
 func _strafe_animation_for(run: String, aim: String, frames: SpriteFrames) -> StringName:
 	var run_index := ANIMATION_DIRECTIONS.find(run)
@@ -7485,7 +7642,14 @@ func _strafe_animation_for(run: String, aim: String, frames: SpriteFrames) -> St
 
 # _play_best_animation: Chooses and starts the best available player animation for the current movement state.
 func _play_best_animation(is_moving: bool) -> void:                                         # Declare this function.
-	var animation := &"RunN_AimN" if run_animation_reversed else _best_animation_for(run_dir, aim_dir, is_moving) # Reuse forward art backwards for straight local-backward movement.
+	var normal_animation := &"RunN_AimN" if run_animation_reversed else _best_animation_for(run_dir, aim_dir, is_moving) # Reuse forward art backwards for straight local-backward movement.
+	var dual_wield_armed := active_player_index >= 0 and active_player_index < player_states.size() and int(player_states[active_player_index].get("machine_gun_ammo", 0)) > 0 # Read the current player's held powerup without changing its round count.
+	var dual_wield_animation := _dual_wield_forward_animation_for(DIR_N, DIR_N, player_sprite.sprite_frames) if run_animation_reversed else _dual_wield_forward_animation_for(run_dir, aim_dir, player_sprite.sprite_frames) # Backward movement reuses the available forward dual-pistol run in reverse; strafes fall back to normal until their art exists.
+	if dual_wield_animation == &"" and not run_animation_reversed:
+		dual_wield_animation = _dual_wield_left_animation_for(run_dir, aim_dir, player_sprite.sprite_frames) # Switch only the authored left strafe to dual wield; the unavailable right strafe stays normal.
+	if dual_wield_animation == &"" and not run_animation_reversed:
+		dual_wield_animation = _dual_wield_right_animation_for(run_dir, aim_dir, player_sprite.sprite_frames) # Switch the remaining authored right strafe to dual wield.
+	var animation := dual_wield_animation if is_moving and dual_wield_armed and dual_wield_animation != &"" else normal_animation
 	if animation == &"":                                                                       # Run the following block only when this condition is true.
 		return                                                                                    # Return to the caller without producing a value.
 	if animation == last_animation and run_animation_reversed == last_animation_reversed and player_sprite.is_playing(): # Avoid restarting unless playback direction changed.
@@ -7502,6 +7666,11 @@ func _play_best_animation(is_moving: bool) -> void:                             
 # _play_idle_animation: Plays the camera-forward idle; the local player's body always faces their own camera.
 func _play_idle_animation() -> void:
 	var idle_animation := _idle_animation_for(DIR_N, player_sprite.sprite_frames)
+	var dual_wield_armed := active_player_index >= 0 and active_player_index < player_states.size() and int(player_states[active_player_index].get("machine_gun_ammo", 0)) > 0 # Select the dual-pistol idle only while this player retains powerup rounds.
+	if dual_wield_armed:
+		var dual_wield_idle := _dual_wield_idle_animation_for(DIR_N, player_sprite.sprite_frames)
+		if dual_wield_idle != &"":
+			idle_animation = dual_wield_idle
 	if idle_animation == &"":
 		return
 	player_sprite.speed_scale = 1.0
@@ -7517,6 +7686,14 @@ func _idle_animation_for(direction: String, frames: SpriteFrames) -> StringName:
 	if frames != null and frames.has_animation(exact):
 		return exact
 	return &"IdleN" if frames != null and frames.has_animation(&"IdleN") else &""
+
+
+# _dual_wield_idle_animation_for: Resolves a stopped powered-up body's authored directional idle loop.
+func _dual_wield_idle_animation_for(direction: String, frames: SpriteFrames) -> StringName:
+	var exact := StringName("IdleDual" + direction)
+	if frames != null and frames.has_animation(exact):
+		return exact
+	return &"IdleDualN" if frames != null and frames.has_animation(&"IdleDualN") else &""
 
 
 # _death_animation_for: Resolves a visible opponent's body direction to the matching preliminary death render.
