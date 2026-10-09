@@ -117,6 +117,12 @@ const ACTION_FIRE := "xybots_fire"                                              
 const ACTION_P2_FIRE := "xybots_p2_fire"                                                     # Name the player-two pistol fire action.
 const PLAYER_MAX_HEALTH := 10                                                                  # Start every player with ten visible health hatches.
 const PLAYER_STARTING_HEALTH := 3                                                              # Spawn with a vulnerable three hearts; pickups can build health to the ten-heart cap.
+const CAMERA_BLOOD_DROPS_PER_HEALTH := 5                                                      # Add and remove this exact number of close-screen blood blobs per damage or recovered heart.
+const CAMERA_BLOOD_MAX_SIZE := 9                                                              # Keep every close blood blob inside the requested nine-by-nine-pixel maximum footprint.
+const CAMERA_BLOOD_SHAPE_VARIANTS := 16                                                       # Reuse many small deterministic irregular blob masks so screen damage never repeats a single decal shape.
+const PLAYER_BLOOD_PIXEL_COLOR := Color(0.35, 0.005, 0.005, 1.0)                            # Keep player-body blood fifty percent darker than the other bright-red blood effects.
+const PLAYER_BLOOD_PIXELS_PER_HEALTH := 10                                                    # Build ten individual stenciled body pixels per hit, independently from the larger close-screen blood blobs.
+const PLAYER_BLOOD_PATTERN_PIXELS := [Vector2(-6, -14), Vector2(-2, -13), Vector2(3, -12), Vector2(7, -9), Vector2(-8, -7), Vector2(-3, -5), Vector2(2, -6), Vector2(6, -3), Vector2(-5, 1), Vector2(3, 2)] # Define one source-pixel wound pattern that rotates between cardinal facings.
 const PISTOL_FIRE_INTERVAL := 0.32                                                            # Keep the infinite-ammo pistol deliberate rather than machine-gun fast.
 const DUAL_WIELD_FIRE_INTERVAL := PISTOL_FIRE_INTERVAL * 0.5                                  # Fire alternating dual pistols at exactly twice the normal pistol rate.
 const DUAL_WIELD_AMMO := 12                                                                   # Give every dual-wield pickup the requested twelve alternating pistol rounds.
@@ -137,28 +143,76 @@ const PLAYER_CAPSULE_RADIUS := 0.10                                             
 const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
 const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
 const PROJECTILE_WALL_GUARD_RADIUS := 0.12                                                    # Give thin source-map edges a gameplay thickness so diagonal corner grazes cannot hit an unseen body.
-const IMPACT_DURATION := 0.22                                                                 # Keep the two authored explosion frames on screen briefly.
+const PROJECTILE_TRAIL_EMIT_SPACING := 0.05                                                   # Deposit closer smoke squares so the lingering vector reads as a continuous smoky line instead of separated dots.
+const PROJECTILE_TRAIL_LIFETIME := 0.5                                                       # Let the older smoke pixels linger briefly in world space after the bullet passes.
+const PROJECTILE_RED_PIXEL_COUNT := 1                                                        # Choose how many red squares form the projectile head; the first remains at the exact collision point.
+const PROJECTILE_RED_PIXEL_SIZE := 1.0                                                       # Choose the fixed screen-pixel size of every red head square.
+const PROJECTILE_RED_PIXEL_SPACING := 0.025                                                  # Space additional red head squares behind the leading red square in world units.
+const PROJECTILE_ORANGE_PIXEL_COUNT := 2                                                    # Choose how many orange squares form the first hot tail band.
+const PROJECTILE_ORANGE_PIXEL_SIZE := 1.0                                                    # Choose the fixed screen-pixel size of every orange tail square.
+const PROJECTILE_ORANGE_PIXEL_SPACING := 0.070                                               # Space orange squares behind the preceding red group in world units.
+const PROJECTILE_YELLOW_PIXEL_COUNT := 3                                                     # Choose how many yellow squares form the second hot tail band.
+const PROJECTILE_YELLOW_PIXEL_SIZE := 1.0                                                    # Choose the fixed screen-pixel size of every yellow tail square.
+const PROJECTILE_YELLOW_PIXEL_SPACING := 0.070                                               # Space yellow squares behind the preceding orange group in world units.
+const PROJECTILE_SMOKE_PIXELS := 1                                                           # Choose the fixed screen-pixel size of every cooled grey smoke square.
+const WALL_DEBRIS_COUNT := 10                                                                 # Emit a compact spray of square wood chunks for every real wall hit.
+const WALL_DEBRIS_LIFETIME := 1.20                                                            # Leave enough time for each chunk to complete its fall and one bounce before reaching the ground-rest phase.
+const WALL_DEBRIS_GRAVITY := 4.0                                                              # Pull the screen-height simulation down quickly enough to read as falling splinters.
+const WALL_DEBRIS_BOUNCE := 0.34                                                              # Retain a small one-time upward rebound when a chunk reaches the floor.
+const WALL_DEBRIS_GROUND_FADE_SECONDS := 0.24                                                 # Fade a chunk only after it visibly settles on the projected floor.
+const WALL_DEBRIS_LARGE_NEAR_CHANCE := 0.65                                                   # Favor two-pixel chunks that launch slowly and remain close to the impact point.
+const WALL_DEBRIS_LARGE_FAR_CHANCE := 0.14                                                    # Keep fast-flying distant splinters predominantly one pixel.
+const WALL_DEBRIS_LARGE_MAX_VIEW_DEPTH := 3.0                                                 # Limit distant wall damage to one-pixel chunks once it is more than three camera-grid cells away.
+const WALL_DEBRIS_ROTATION_INCREMENT := PI * 0.5                                               # Render spinning splinters only at crisp quarter turns so their pixel silhouettes never become diagonal.
+const WALL_DEBRIS_VISUAL_FPS := 14.0                                                          # Match the authored GunSmoke cadence so splinter translation advances as deliberate pixel-animation frames.
+const WALL_DEBRIS_VISUAL_FRAME_DURATION := 1.0 / WALL_DEBRIS_VISUAL_FPS                       # Hold each snapped world sample until the next visual frame instead of interpolating it every render tick.
+const WALL_BULLET_HOLE_DURATION := 5.0                                                        # Leave the one-pixel black wall decal visible long enough to read after the impact.
+const WALL_BULLET_HOLE_MAX_VIEW_DEPTH := 3.0                                                  # Do not draw oversized one-pixel wall decals beyond three camera-grid cells.
+const GUN_SMOKE_DURATION := 6.0 / 14.0                                                        # Match the replacement six-frame GunSmoke animation at its authored 14 FPS.
+const GUN_SMOKE_SCALE_MULTIPLIER := 2.0                                                       # Compensate for the authored muzzle-smoke frames being roughly half their intended visible size while retaining depth scaling.
+const MUZZLE_SMOKE_PARTICLE_COUNT := 11                                                       # Build the black-powder cloud from individual irregular puffs, each on its own small card rather than fixed multi-lobe clusters.
+const MUZZLE_SMOKE_CLOUD_SIZE := 32                                                           # Generate every individual puff at the full 32-pixel close-range resolution so varied sizes never need to magnify coarse source texels.
+const MUZZLE_SMOKE_CLOUD_VARIANTS := 8                                                        # Vary individual puff silhouettes so rotation and translation continuously reshuffle the visible turbulent shape.
+const MUZZLE_SMOKE_ROTATION_INCREMENT := PI * 0.5                                             # Let puffs spin only through crisp quarter turns, retaining pixel-grid silhouettes without diagonal filtering.
+const DEBUG_DRAW_MUZZLE_SMOKE_CARDS := false                                                  # The temporary card inspector has served its purpose; leave it ready but hidden during normal smoke viewing.
+const MUZZLE_SMOKE_LIFETIME_MIN := 0.55                                                       # Let the freshest barrel smoke stay thick long enough to momentarily obscure the shooter.
+const MUZZLE_SMOKE_LIFETIME_MAX := 1.15                                                       # Give the diffuse outer smoke enough time to billow and dissipate in the air.
+const MUZZLE_SMOKE_VISUAL_FRAME_DURATION := 1.0 / 14.0                                        # Advance rendered smoke puffs at the same deliberate pixel-animation cadence as splinters.
+const WALL_IMPACT_SMOKE_MIN_CARDS := 3                                                        # Use three overlapping material-dust masses so a strike reads at range.
+const WALL_IMPACT_SMOKE_MAX_CARDS := 3                                                        # Keep the burst capped at three cards so it stays distinct from the broad muzzle-smoke cloud.
+const WALL_IMPACT_SMOKE_LIFETIME := 0.72                                                      # Let the brief material-dust burst read before the retained bullet hole and splinters take over.
+const BLOOD_SPLATTER_PARTICLE_COUNT := 12                                                     # Emit a readable spray of one-pixel blood droplets whenever a projectile strikes a character.
+const BLOOD_SPLATTER_FLIGHT_LIFETIME := 1.10                                                  # Give airborne droplets enough time to reach a wall or floor before they expire in open space.
+const BLOOD_SPLATTER_STUCK_LIFETIME := 1.0                                                    # Keep every captured red wall/floor mark visible for roughly one full second before its final fade.
+const BLOOD_SPLATTER_GRAVITY := 3.6                                                           # Pull the non-bouncing droplets down to the floor after their short exit spray.
+const BLOOD_SPLATTER_VISUAL_FRAME_DURATION := 1.0 / 14.0                                     # Hold blood translation on the same intentional pixel-animation cadence as the rest of combat VFX.
 const HIT_REACTION_DURATION := 0.20                                                           # Keep the one-frame hit pose readable without freezing movement.
-const DEATH_FALL_SECONDS := 0.70                                                              # Let the nine-frame death animation read clearly before the respawn countdown begins.
+const DEATH_FALL_SECONDS := 1                                                              # Let the nine-frame death animation read clearly before the respawn countdown begins.
 const DEATH_COUNTDOWN_SECONDS := 3.0                                                         # Hold the defeated player down long enough to show 3, 2, 1.
 const DEATH_RESPAWN_SECONDS := 0.70                                                          # Play the same authored death frames backwards when the player returns.
-const SHOT_N_TEXTURE := preload("res://assets/Effects/Shot_N.png")                          # Use the authored distance-facing pistol shot sprite.
-const SHOT_E_TEXTURE := preload("res://assets/Effects/Shot_E.png")                          # Use the authored side-on pistol shot sprite.
-const SHOT_EXPLOSION_1_TEXTURE := preload("res://assets/Effects/ShotExplosion/Shot_explosion_1.png") # Use the first authored impact frame.
-const SHOT_EXPLOSION_2_TEXTURE := preload("res://assets/Effects/ShotExplosion/Shot_explosion_2.png") # Use the second authored impact frame.
+const GUN_SMOKE_A_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Effects/GunSmoke/GunSmoke_A.tres") # Play the first authored gunsmoke variant at a fired barrel.
+const GUN_SMOKE_B_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Effects/GunSmoke/GunSmoke_B.tres") # Play the second authored gunsmoke variant at a fired barrel.
+const GUN_SMOKE_ANIMATION: StringName = &"gunsmoke"                                         # Keep the effect animation name verified in one shared constant.
 const HIT_FRONT_TEXTURE := preload("res://assets/frames/Hit/Hit_Front.png")                 # Use the authored head-on hit pose.
 const HIT_LEFT_TEXTURE := preload("res://assets/frames/Hit/Hit_Left.png")                   # Use the authored left-side hit pose.
 const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")                 # Use the authored right-side hit pose.
 const WORLD_SPRITE_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_lod.gdshader") # Apply the same coarse GPU pixel language and depth bands to every projected world sprite.
 const WORLD_SPRITE_TEAM2_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_team2_lod.gdshader") # Use the explicit green/orange Team 2 costume variant.
-const COIN_TEXTURE := preload("res://assets/Items/Coin/Coin_02.png")                        # Use the front-facing authored coin frame for the compact HUD icon.
-const COIN_TEXTURES := [                                                                      # Cycle the authored coin frames so world pickups visibly spin.
-	preload("res://assets/Items/Coin/Coin_01.png"),
-	preload("res://assets/Items/Coin/Coin_02.png"),
-	preload("res://assets/Items/Coin/Coin_03.png"),
-	preload("res://assets/Items/Coin/Coin_04.png"),
-]
+const PROCEDURAL_CLOUD_LOD_SHADER := preload("res://scripts/procedural_cloud_lod.gdshader")  # Reduce procedural cloud-mask detail with the same depth bands while retaining independent material tinting.
+const PLAYER_BLOOD_DECAL_SHADER := preload("res://scripts/player_blood_decal.gdshader")      # Stencil world-body blood blobs by the alpha of the exact currently displayed character frame.
+const COIN_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Coin/Coin_Sprites.tres") # Use the authored eight-pixel coin animation as the near in-world LOD source.
+const COIN_HUD_TEXTURE: Texture2D = preload("res://assets/Items/Coin/blendercoin_03.png")  # Keep the score HUD on the explicitly requested full-detail third Blender coin frame.
+const COIN_SPRITE_FRAMES_6: SpriteFrames = preload("res://assets/Items/Coin/Coin_Sprites_6x6.tres") # Use the authored six-pixel coin silhouette at medium world distance.
+const COIN_SPRITE_FRAMES_4: SpriteFrames = preload("res://assets/Items/Coin/Coin_Sprites_4x4.tres") # Use the authored four-pixel coin silhouette at far world distance.
+const COIN_SPRITE_FRAMES_3: SpriteFrames = preload("res://assets/Items/Coin/Coin_Sprites_3x3.tres") # Use the authored three-pixel coin silhouette at very far world distance.
+const COIN_SPRITE_FRAMES_2: SpriteFrames = preload("res://assets/Items/Coin/Coin_Sprites_2x2.tres") # Use the authored two-pixel coin silhouette at the furthest world distance.
+const COIN_ANIMATION: StringName = &"coin_spin"                                               # Keep the resource animation name in one verified constant.
 const HEART_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Heart/Heart.tres")    # Use the user-authored SpriteFrames asset for world health pickups.
+const HEART_SPRITE_FRAMES_7: SpriteFrames = preload("res://assets/Items/Heart/Heart_Sprites_7x7.tres") # Use the authored seven-pixel heart silhouette at the first remote depth band.
+const HEART_SPRITE_FRAMES_6: SpriteFrames = preload("res://assets/Items/Heart/Heart_Sprites_6x6.tres") # Use the authored six-pixel heart silhouette at medium distance.
+const HEART_SPRITE_FRAMES_5: SpriteFrames = preload("res://assets/Items/Heart/Heart_Sprites_5x5.tres") # Use the authored five-pixel heart silhouette at far distance.
+const HEART_SPRITE_FRAMES_4: SpriteFrames = preload("res://assets/Items/Heart/Heart_Sprites_4x4.tres") # Use the authored four-pixel heart silhouette at very far distance.
+const HEART_SPRITE_FRAMES_3: SpriteFrames = preload("res://assets/Items/Heart/Heart_Sprites_3x3.tres") # Use the authored three-pixel heart silhouette at the furthest visible depth.
 const HEART_MAP_SPAWN_CHANCE := 0.20                                                          # Replace roughly one fifth of round-start coin cells with health pickups for testing.
 const HEART_DROP_CHANCE := 0.45                                                               # Make kill drops frequent enough to exercise health recovery during playtests.
 const GUN_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Gun/Gun.tres")          # Use the user-authored eight-frame rotating gun resource for the world powerup.
@@ -774,7 +828,12 @@ var player_states: Array[Dictionary] = []                                       
 var player_views: Array[Dictionary] = []                                                     # Store per-player playfield, map, wall, and sprite node references.
 var coordinate_renderers: Array[Node] = []                                                    # Store one optional Blender-coordinate compositor for each local player view.
 var active_projectiles: Array[Dictionary] = []                                                # Store shared-world pistol shots until they hit a wall, player, or lifetime limit.
-var active_impacts: Array[Dictionary] = []                                                    # Store short-lived wall/player impact flashes in shared world space.
+var active_projectile_trails: Array[Dictionary] = []                                          # Store stationary shared-world bullet particles independently of the moving hit simulation.
+var active_wall_debris: Array[Dictionary] = []                                                # Store shared-world square splinters through their arc, one bounce, and fade.
+var active_wall_bullet_holes: Array[Dictionary] = []                                          # Store short-lived black one-pixel wall strike decals independently of moving debris.
+var active_wall_impact_smokes: Array[Dictionary] = []                                         # Store compact procedural dust cards at wall contacts separately from muzzle smoke.
+var active_muzzle_smoke_particles: Array[Dictionary] = []                                    # Store shared-world procedural square smoke puffs emitted from each fired barrel.
+var active_blood_splatters: Array[Dictionary] = []                                           # Store red one-pixel character-hit droplets until each one sticks and fades from a wall or floor.
 var combat_health_bars: Array[Node2D] = []                                                    # Store one visible health meter for each split-screen player.
 var combat_respawn_blackouts: Array[ColorRect] = []                                           # Store one full-view blackout panel for each defeated player's own camera.
 var combat_respawn_labels: Array[Label] = []                                                  # Store one readable death/countdown label for each local view.
@@ -782,9 +841,17 @@ var combat_coin_labels: Array[Label] = []                                       
 var combat_coin_icons: Array[TextureRect] = []                                                # Store one authored coin icon beside each score readout.
 var combat_ammo_labels: Array[Label] = []                                                     # Store the temporary rapid-fire ammo counter for each local view.
 var combat_ammo_icons: Array[TextureRect] = []                                                # Store the fixed gun icon only while its player is armed.
+var combat_camera_blood_layers: Array[Node2D] = []                                            # Store one screen-space blood-decal layer per player camera.
+var combat_camera_blood_droplets: Array = []                                                  # Store each player's accumulated close-screen blood blob nodes in pickup-removable order.
+var combat_player_blood_decals: Array = []                                                    # Store each player's world-body blood decal descriptions, rendered in every camera that sees that character.
 var world_coins: Array[Dictionary] = []                                                       # Keep uncollected map and dropped coins in shared world coordinates.
 var world_hearts: Array[Dictionary] = []                                                      # Keep rare one-health drops in the same shared world space as coins and guns.
 var vending_machine: Dictionary = {}                                                          # Store one wall-attached shop per generated maze.
+var projectile_pixel_texture: ImageTexture = null                                             # Lazily create one white texel, then tint and scale it into every crisp bullet/trail particle.
+var wall_debris_shape_textures: Dictionary = {}                                               # Cache tiny generated white masks for one-pixel, domino, block, and L-shaped wood chunks.
+var muzzle_smoke_cloud_textures: Dictionary = {}                                              # Cache procedural low-resolution cloud cards keyed by their stable silhouette variant.
+var muzzle_smoke_card_debug_texture: ImageTexture = null                                      # Cache the temporary card-outline overlay used to inspect the cloud-particle makeup.
+var camera_blood_blob_textures: Dictionary = {}                                               # Cache procedural opaque red-blob masks for the close player-camera damage overlay.
 var machine_gun_pickup: Dictionary = {}                                                       # Keep the one active machine-gun pickup in shared world coordinates.
 var machine_gun_respawn_timer := 0.0                                                          # Count down only while no contested machine-gun pickup exists.
 var combat_total_coin_value := 0                                                              # Preserve the round's original coin total for score labels even after drops.
@@ -1330,12 +1397,12 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 	respawn_label.name = "OpponentRespawnCountdown"                                            # Keep the label easy to find without sharing it with the local HUD timer.
 	respawn_label.add_theme_font_override("font", pixel_hud_font)                            # Match the existing hard-edged HUD lettering.
 	respawn_label.add_theme_font_size_override("font_size", 8)                               # Stay smaller than the coin, heart, and gun pickup presentation.
-	respawn_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.18, 1.0))        # Use a readable arcade-yellow countdown over the fallen body.
+	respawn_label.add_theme_color_override("font_color", Color(1.0, 0.12, 0.08, 1.0))        # Match the local blackout's clear arcade-red countdown color over the fallen body.
 	respawn_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep the numeral legible against every death frame.
 	respawn_label.add_theme_constant_override("shadow_offset_x", 1)                          # Use one source pixel of hard shadow horizontally.
 	respawn_label.add_theme_constant_override("shadow_offset_y", 1)                          # Use one source pixel of hard shadow vertically.
 	respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER                           # Center the one-digit counter over the body.
-	respawn_label.position = Vector2(-4.0, -28.0)                                              # Anchor the small label above the sprite origin in source-pixel space.
+	respawn_label.position = Vector2(-4.0, -8.0)                                               # Hold the numeral close to the body rather than floating above the death sprite.
 	respawn_label.size = Vector2(8.0, 8.0)                                                     # Keep the label compact before normal character depth scaling.
 	respawn_label.mouse_filter = Control.MOUSE_FILTER_IGNORE                                   # Never interfere with gameplay input.
 	respawn_label.z_index = 1                                                                  # Draw just above its owning opponent sprite.
@@ -1537,6 +1604,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			var collector := player_states[collected_by]
 			collector["health"] = mini(PLAYER_MAX_HEALTH, int(collector.get("health", 0)) + 1)
 			player_states[collected_by] = collector
+			_clear_camera_blood_for_heart(collected_by)                                             # Heal the injured player's own camera by exactly the same blob count added for one lost health hatch.
 			_play_pickup_sound(heart_pickup_player)                                                  # Confirm the health pickup once for the whole shared match.
 		else:
 			remaining_hearts.append(heart)
@@ -1634,6 +1702,9 @@ func _setup_combat_hud() -> void:
 	combat_coin_icons.clear()                                                                   # Rebuild the score icons with the other view-specific combat UI.
 	combat_ammo_labels.clear()                                                                  # Rebuild the machine-gun readouts with the other view-specific combat UI.
 	combat_ammo_icons.clear()                                                                   # Rebuild the matching gun icons with the other view-specific combat UI.
+	combat_camera_blood_layers.clear()                                                          # Rebuild one close-screen blood layer per local player camera.
+	combat_camera_blood_droplets.clear()                                                        # Reset all accumulated blood references for the new HUD set.
+	combat_player_blood_decals.clear()                                                          # Reset all per-character blood-decal descriptions for the new combat round.
 	for player_index in range(player_views.size()):                                             # Create one meter per local player.
 		var view := player_views[player_index]                                                     # Read the already-created clipped player view.
 		var hud_layer: CanvasLayer = view.get("hud_layer", canvas_layer)                          # Put each player's HUD into their own native window.
@@ -1653,6 +1724,14 @@ func _setup_combat_hud() -> void:
 		meter.z_index = 200                                                                       # Keep the HUD above all camera content.
 		hud_layer.add_child(meter)                                                                # Put it on this player's own UI layer.
 		combat_health_bars.append(meter)                                                         # Retain it for per-frame updates and layout.
+		var camera_blood_layer := Node2D.new()                                                    # Keep camera blood separate from world combat sprites and ordinary compact HUD controls.
+		camera_blood_layer.name = "CameraBloodP%d" % (player_index + 1)                          # Make the player-specific close-screen overlay easy to inspect in the scene tree.
+		camera_blood_layer.z_index = 190                                                          # Obscure the player's world view while leaving score, health, and countdown HUD above it.
+		camera_blood_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                     # Preserve hard, immediate close-range blood pixels at the screen scale.
+		hud_layer.add_child(camera_blood_layer)                                                   # Keep each accumulation local to its owner's native camera window.
+		combat_camera_blood_layers.append(camera_blood_layer)                                     # Retain it for screen-position/scaling updates.
+		combat_camera_blood_droplets.append([])                                                   # Begin this player's overlay clean at round start.
+		combat_player_blood_decals.append([])                                                     # Begin this player's body sprite clean at round start.
 		var blackout := ColorRect.new()                                                           # Create a solid cover for this player's own camera during the respawn count.
 		blackout.name = "CombatRespawnBlackoutP%d" % (player_index + 1)                          # Keep it identifiable in the remote scene tree.
 		blackout.color = Color.BLACK                                                              # Make the unavailable player's whole playfield unambiguously black.
@@ -1678,7 +1757,7 @@ func _setup_combat_hud() -> void:
 		combat_respawn_labels.append(respawn_label)                                              # Retain it for per-frame updates and layout.
 		var coin_icon := TextureRect.new()                                                       # Create a compact authored coin marker for this view's lower-right score.
 		coin_icon.name = "CombatCoinIconP%d" % (player_index + 1)                              # Keep the UI easy to inspect in the remote scene tree.
-		coin_icon.texture = COIN_TEXTURE                                                         # Use the requested front-facing coin frame.
+		coin_icon.texture = _coin_hud_texture()                                                 # Sample the authored coin resource instead of a separately preloaded legacy PNG.
 		coin_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE                                  # Let the explicit source-pixel size control the icon.
 		coin_icon.size = Vector2(4.0, 4.0)
 		coin_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE                                    # Never interfere with the debug menu.
@@ -1866,6 +1945,9 @@ func _update_combat_hud() -> void:
 		if viewport_node != null:
 			meter.position = viewport_node.position + Vector2(5.0, VIEWPORT_SIZE.y * viewport_node.scale.y - 8.0 * viewport_node.scale.y) # Keep the compact meter comfortably inside the lower-left of its camera.
 			meter.scale = viewport_node.scale                                                         # Preserve integer nearest-neighbor scaling for pixel hearts.
+			if player_index < combat_camera_blood_layers.size() and is_instance_valid(combat_camera_blood_layers[player_index]):
+				combat_camera_blood_layers[player_index].position = viewport_node.position             # Anchor the damage overlay to this camera's logical top-left corner.
+				combat_camera_blood_layers[player_index].scale = viewport_node.scale                    # Keep blob pixels registered to the same enlarged logical grid as the view below them.
 		var state := player_states[player_index]                                                   # Read current combat data.
 		if viewport_node != null and player_index < player_join_overlays.size():
 			var join_overlay := player_join_overlays[player_index]
@@ -2038,18 +2120,147 @@ func _process_combat(delta: float) -> void:
 			var wall_edge_key := _nearest_projectile_wall_edge_key(origin, direction, step_distance) if hit_player_index < 0 else "" # Retain the actual struck wall so its flash can share that wall's cell layer in every view.
 			_spawn_impact(impact_position, direction, hit_player_index, wall_edge_key)              # Show the two-frame authored impact art.
 			if hit_player_index >= 0:                                                               # Apply damage only for body collisions.
+				var target_was_dying := bool(player_states[hit_player_index].get("is_dying", false)) # Avoid treating a rejected hit against an already-defeated body as a new killing shot.
 				_apply_projectile_hit(hit_player_index, direction, int(shot["owner"]))                 # Revalidate the complete owner-to-target path before changing health.
+				var killing_shot := not target_was_dying and bool(player_states[hit_player_index].get("is_dying", false)) # Only the hit that actually starts death may leave persistent floor blood.
+				_spawn_blood_splatter(impact_position, direction, hit_player_index, killing_shot)      # Throw blood through the struck body after the hit result determines whether its floor drops persist.
 			continue                                                                                   # Remove the consumed projectile.
 		shot["position"] = origin + direction * step_distance                                    # Move unhindered shot to its new shared world position.
+		_emit_projectile_trail_particles(shot, Vector2(shot["position"]))                         # Leave stationary pixels behind the moving collision point without changing its speed or path.
 		shot["lifetime"] = lifetime                                                               # Save remaining life.
 		remaining_shots.append(shot)                                                              # Retain it for subsequent frames.
 	active_projectiles = remaining_shots                                                        # Replace the active list after safe iteration.
-	var remaining_impacts: Array[Dictionary] = []                                               # Rebuild impacts after their short two-frame lifetime.
-	for impact in active_impacts:                                                               # Advance every current wall/player impact.
-		impact["timer"] = float(impact["timer"]) - delta                                        # Reduce its visible duration.
-		if float(impact["timer"]) > 0.0:                                                        # Keep only impacts that still have visible time.
-			remaining_impacts.append(impact)                                                         # Retain the impact.
-	active_impacts = remaining_impacts                                                          # Drop expired flashes.
+	var remaining_projectile_trails: Array[Dictionary] = []                                    # Age retained trail particles separately so they can hang in space after the bullet advances.
+	for trail in active_projectile_trails:
+		trail["timer"] = float(trail.get("timer", 0.0)) - delta                                 # Let the cooling particle fade out on its own short visual lifetime.
+		trail["position"] = Vector2(trail.get("position", Vector2.ZERO)) + Vector2(trail.get("drift_velocity", Vector2.ZERO)) * delta # Let each particle subtly float away from the exact trail line while it hangs in space.
+		if float(trail["timer"]) > 0.0:
+			remaining_projectile_trails.append(trail)                                                  # Keep only particles that still have visible lifetime.
+	active_projectile_trails = remaining_projectile_trails                                     # Release expired visual-only trail state.
+	var remaining_blood_splatters: Array[Dictionary] = []                                      # Advance one-pixel character-hit droplets until their first wall/floor contact, then hold them as stuck marks.
+	for blood in active_blood_splatters:
+		var persistent_killing_shot_mark := bool(blood.get("persistent_killing_shot", false)) and bool(blood.get("stuck", false)) # Keep every surface mark from a killing shot through that victim's blackout countdown.
+		if not persistent_killing_shot_mark:
+			blood["timer"] = float(blood.get("timer", 0.0)) - delta                              # Age flying drops and ordinary wall/floor marks with their short visual lifetime.
+			if float(blood["timer"]) <= 0.0:
+				continue                                                                               # Remove transient blood only after its landing mark has had time to read.
+		if not bool(blood.get("stuck", false)):
+			var horizontal_velocity: Vector2 = blood.get("horizontal_velocity", Vector2.ZERO)      # Preserve the blood spray's mostly bullet-forward direction plus small side variation.
+			var horizontal_distance := horizontal_velocity.length() * delta                          # Limit the wall query to this exact physics tick so a droplet cannot tunnel through thin maze edges.
+			if horizontal_distance > 0.000001:
+				var horizontal_direction := horizontal_velocity.normalized()                            # Raycast in the actual spray direction rather than assuming the original bullet direction.
+				var wall_distance := _nearest_projectile_wall_distance(Vector2(blood.get("position", Vector2.ZERO)), horizontal_direction, horizontal_distance) # Find the first wall surface touched by this droplet.
+				if wall_distance <= horizontal_distance:
+					blood["position"] = Vector2(blood.get("position", Vector2.ZERO)) + horizontal_direction * maxf(wall_distance, 0.0) # Register the droplet on the exact wall contact point.
+					blood["stuck"] = true                                                               # Blood never bounces; the first wall surface permanently captures it.
+					blood["stuck_surface"] = "wall"                                                    # Retain wall-only layering metadata for the render pass.
+					blood["wall_edge_key"] = _nearest_projectile_wall_edge_key(Vector2(blood.get("position", Vector2.ZERO)) - horizontal_direction * 0.001, horizontal_direction, 0.01) # Retain the touched front face when the visual wall lookup can resolve it.
+					blood["timer"] = INF if bool(blood.get("persistent_killing_shot", false)) else BLOOD_SPLATTER_STUCK_LIFETIME # A killing shot's wall drops remain until respawn begins; every other wall mark retains the normal one-second lifetime.
+				else:
+					blood["position"] = Vector2(blood.get("position", Vector2.ZERO)) + horizontal_velocity * delta # Continue the flying spray only while it remains in open world space.
+			var vertical_velocity := float(blood.get("vertical_velocity", 0.0)) - BLOOD_SPLATTER_GRAVITY * delta # Pull blood down in a compact arc, without a bounce impulse.
+			var height := float(blood.get("height", 0.72)) + vertical_velocity * delta              # Advance the droplet toward the visible projected floor.
+			if height <= 0.0:
+				height = 0.0                                                                             # Clamp at the floor exactly once.
+				blood["stuck"] = true                                                                   # The floor captures blood immediately; it does not rebound like wood debris.
+				blood["stuck_surface"] = "floor"                                                       # Render this landed one-pixel mark at the floor anchor.
+				blood["timer"] = INF if bool(blood.get("persistent_killing_shot", false)) else BLOOD_SPLATTER_STUCK_LIFETIME # A killing shot's floor drops remain until respawn begins; every other landing retains the normal one-second mark lifetime.
+				vertical_velocity = 0.0                                                                  # Prevent any later motion after floor contact.
+			blood["vertical_velocity"] = vertical_velocity                                            # Preserve the falling arc until a surface captures it.
+			blood["height"] = height                                                                  # Preserve the final floor height or current airborne height.
+		var visual_step_timer := float(blood.get("visual_step_timer", 0.0)) - delta                # Give the visible blood arc the same stepped cadence as smoke and splinters.
+		if visual_step_timer <= 0.0:
+			blood["display_position"] = blood["position"]                                           # Capture one world position for the full rendered pixel-animation frame.
+			blood["display_height"] = blood["height"]                                               # Capture matching vertical movement for the stepped arc.
+			visual_step_timer = BLOOD_SPLATTER_VISUAL_FRAME_DURATION                                 # Hold this visible sample until the next effect frame.
+		blood["visual_step_timer"] = visual_step_timer                                            # Preserve the shared per-droplet visible-frame clock.
+		remaining_blood_splatters.append(blood)                                                    # Retain flying and stuck droplets until their individual timers expire.
+	active_blood_splatters = remaining_blood_splatters                                          # Drop expired blood marks only after simulation and rendering have both completed.
+	var remaining_wall_debris: Array[Dictionary] = []                                          # Advance square splinters through their shared world-space arc and one bounce.
+	for debris in active_wall_debris:
+		debris["timer"] = float(debris.get("timer", 0.0)) - delta                                # Let settled chunks fade out after the short requested effect lifetime.
+		if float(debris["timer"]) <= 0.0:
+			continue                                                                                   # Remove particles only after their full arc/rest presentation has completed.
+		if bool(debris.get("settled", false)):
+			remaining_wall_debris.append(debris)                                                        # Hold the chunk visibly on the floor while its short grounded fade timer expires.
+			continue                                                                                   # Do not move or apply gravity after the second floor contact.
+		var horizontal_velocity: Vector2 = debris.get("horizontal_velocity", Vector2.ZERO)       # Read the direction away from the struck wall plus the small splinter spread.
+		debris["position"] = Vector2(debris.get("position", Vector2.ZERO)) + horizontal_velocity * delta # Advance the chunk away from the physical impact point in shared maze space.
+		debris["rotation"] = float(debris.get("rotation", 0.0)) + float(debris.get("angular_velocity", 0.0)) * delta # Spin the square chunk while it is airborne or bouncing.
+		var vertical_velocity := float(debris.get("vertical_velocity", 0.0)) - WALL_DEBRIS_GRAVITY * delta # Apply a simple visual gravity to the chunk's screen-height state.
+		var height := float(debris.get("height", 0.0)) + vertical_velocity * delta                # Advance its height above the projected floor.
+		if height <= 0.0:
+			height = 0.0                                                                             # Keep the chunk on the floor after contact instead of letting it sink below it.
+			if not bool(debris.get("bounced", false)):
+				vertical_velocity = absf(vertical_velocity) * WALL_DEBRIS_BOUNCE                        # Bounce once with visibly reduced energy.
+				debris["bounced"] = true                                                               # Prevent repeated artificial bouncing.
+				debris["horizontal_velocity"] = horizontal_velocity * 0.42                             # Lose most lateral energy on the floor impact so the chunk comes to rest.
+				debris["angular_velocity"] = float(debris.get("angular_velocity", 0.0)) * 0.38        # Let the first bounce bleed most of the spin energy too.
+			else:
+				vertical_velocity = 0.0                                                                 # Hold the chunk at rest until its fade timer expires.
+				debris["horizontal_velocity"] = Vector2.ZERO                                            # Stop the chunk at its visible floor contact instead of letting it fade while still sliding.
+				debris["angular_velocity"] = 0.0                                                        # Leave the square at its final landed rotation during its grounded fade.
+				debris["settled"] = true                                                                # Begin the explicit grounded-rest phase after the one allowed bounce.
+				debris["timer"] = WALL_DEBRIS_GROUND_FADE_SECONDS                                       # Restart a short timer used only to fade the resting chunk.
+		debris["vertical_velocity"] = vertical_velocity                                            # Save the current upward/downward arc velocity.
+		debris["height"] = height                                                                  # Save the current height above the projected floor.
+		var visual_step_timer := float(debris.get("visual_step_timer", 0.0)) - delta              # Count down independently of physics so the rendered chunk has a deliberate low-frame-rate cadence.
+		if visual_step_timer <= 0.0:
+			debris["display_position"] = debris["position"]                                         # Capture one shared-world position for this whole visible pixel-animation frame.
+			debris["display_height"] = height                                                        # Capture the matching arc height so falling is stepped along with horizontal travel.
+			visual_step_timer = WALL_DEBRIS_VISUAL_FRAME_DURATION                                     # Begin holding this hard-snapped sample until the next frame.
+		debris["visual_step_timer"] = visual_step_timer                                            # Preserve the visible-frame clock without compromising continuous collision-free physics.
+		remaining_wall_debris.append(debris)                                                        # Retain the active or resting chunk for both player views.
+	active_wall_debris = remaining_wall_debris                                                  # Drop only chunks whose effect lifetime has expired.
+	var remaining_wall_bullet_holes: Array[Dictionary] = []                                    # Age wall decals separately from the short debris movement.
+	for hole in active_wall_bullet_holes:
+		hole["timer"] = float(hole.get("timer", 0.0)) - delta                                    # Count down the retained black impact mark.
+		if float(hole["timer"]) > 0.0:
+			remaining_wall_bullet_holes.append(hole)                                                   # Keep the decal visible until its independent lifetime completes.
+	active_wall_bullet_holes = remaining_wall_bullet_holes                                     # Remove expired wall marks.
+	var remaining_wall_impact_smokes: Array[Dictionary] = []                                  # Advance each compact wall-dust card independently of muzzle smoke.
+	for smoke in active_wall_impact_smokes:
+		smoke["timer"] = float(smoke.get("timer", 0.0)) - delta                                  # Age the individual dust card from dense contact debris into transparency.
+		if float(smoke["timer"]) > 0.0:
+			var elapsed := WALL_IMPACT_SMOKE_LIFETIME - float(smoke["timer"])                      # Use elapsed life for a stable restrained dust drift.
+			var velocity: Vector2 = smoke.get("velocity", Vector2.ZERO)                            # Read the short push away from the struck wall.
+			velocity += Vector2(smoke.get("turbulence", Vector2.ZERO)) * sin(elapsed * 8.0 + float(smoke.get("id", 0))) * delta # Add a tiny individual billow rather than moving every card identically.
+			velocity *= 1.0 - minf(delta * 1.6, 0.22)                                                # Let impact dust quickly lose its explosive momentum.
+			smoke["velocity"] = velocity
+			smoke["position"] = Vector2(smoke.get("position", Vector2.ZERO)) + velocity * delta  # Keep all card motion in shared world space.
+			smoke["rotation"] = float(smoke.get("rotation", 0.0)) + float(smoke.get("angular_velocity", 0.0)) * delta # Let each card turn independently like loose dust.
+			var visual_step_timer := float(smoke.get("visual_step_timer", 0.0)) - delta
+			if visual_step_timer <= 0.0:
+				smoke["display_position"] = smoke["position"]
+				smoke["display_rotation"] = snappedf(float(smoke["rotation"]), MUZZLE_SMOKE_ROTATION_INCREMENT) # Retain the smoke system's clean pixel-grid quarter turns.
+				visual_step_timer = MUZZLE_SMOKE_VISUAL_FRAME_DURATION
+			smoke["visual_step_timer"] = visual_step_timer
+			remaining_wall_impact_smokes.append(smoke)                                                # Retain only wall-contact clouds with visible frames remaining.
+	active_wall_impact_smokes = remaining_wall_impact_smokes                                   # Drop the completed cloud event after its authored animation duration.
+	var remaining_muzzle_smoke_particles: Array[Dictionary] = []                               # Advance the shared-world black-powder puffs independently from the projectile.
+	for particle in active_muzzle_smoke_particles:
+		particle["timer"] = float(particle.get("timer", 0.0)) - delta                            # Age the puff from opaque fresh smoke into transparent dissipated smoke.
+		if float(particle["timer"]) <= 0.0:
+			continue                                                                                   # Release only particles whose individual billow lifetime has completed.
+		var elapsed := float(particle.get("lifetime", 0.0)) - float(particle["timer"])           # Use elapsed life as a stable phase for the preselected turbulence direction.
+		var velocity: Vector2 = particle.get("velocity", Vector2.ZERO)                           # Read the initial sideward blast plus its evolving airy drift.
+		var turbulence: Vector2 = particle.get("turbulence", Vector2.ZERO)                       # Reuse a per-puff random direction so the cloud has variety without noisy frame-to-frame randomness.
+		velocity += turbulence * sin(elapsed * 8.0 + float(particle.get("id", 0))) * delta        # Nudge every puff through a very subtle billow instead of a straight mathematical line.
+		velocity *= 1.0 - minf(delta * 0.70, 0.18)                                                 # Bleed the explosive launch speed away as black-powder smoke disperses.
+		particle["velocity"] = velocity                                                            # Preserve the softened motion for the next shared physics tick.
+		particle["position"] = Vector2(particle.get("position", Vector2.ZERO)) + velocity * delta # Move most puffs sideways from the barrel, with the small turbulent curl layered on top.
+		particle["height"] = maxf(0.34, float(particle.get("height", 0.72)) + float(particle.get("vertical_velocity", 0.0)) * delta) # Let the cloud slowly rise without ever sinking into the projected floor.
+		particle["rotation"] = float(particle.get("rotation", 0.0)) + float(particle.get("angular_velocity", 0.0)) * delta # Advance a unique turbulent spin under the held pixel-animation frame.
+		particle["angular_velocity"] = float(particle.get("angular_velocity", 0.0)) * (1.0 - minf(delta * 0.55, 0.12)) # Let rotation gradually settle as the powder loses its explosive energy.
+		var visual_step_timer := float(particle.get("visual_step_timer", 0.0)) - delta            # Hold each screen-visible smoke state for a complete low-frame-rate pixel-animation frame.
+		if visual_step_timer <= 0.0:
+			particle["display_position"] = particle["position"]                                    # Capture the current billow position rather than rendering every sub-pixel physics update.
+			particle["display_height"] = particle["height"]                                        # Keep vertical drift stepped with horizontal smoke motion.
+			particle["display_rotation"] = snappedf(float(particle["rotation"]), MUZZLE_SMOKE_ROTATION_INCREMENT) # Display only quarter-turn rotation steps so turbulence never produces filtered diagonal smoke pixels.
+			visual_step_timer = MUZZLE_SMOKE_VISUAL_FRAME_DURATION                                   # Begin the next visible hold interval.
+		particle["visual_step_timer"] = visual_step_timer                                         # Retain the per-puff visible-frame clock.
+		remaining_muzzle_smoke_particles.append(particle)                                          # Keep this drifting puff for both local views.
+	active_muzzle_smoke_particles = remaining_muzzle_smoke_particles                            # Drop only fully dissipated puffs.
 	_update_combat_hud()                                                                        # Refresh health fills and their split-screen placement.
 
 
@@ -2070,13 +2281,15 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance) # Check the short body-to-muzzle segment before placing the bullet.
 	var muzzle_distance := minf(desired_muzzle_distance, maxf(muzzle_wall_distance - PROJECTILE_WALL_EPSILON, 0.0)) # Clamp the muzzle just in front of a wall instead of spawning a shot on its far side.
 	var origin := body_origin + direction * muzzle_distance                                      # Start the projectile at the safe, wall-bounded muzzle point.
+	var smoke_origin := body_origin + direction * minf(muzzle_distance, .2)                    # Anchor smoke halfway down the gameplay muzzle segment so it reads at the visible raised barrel rather than in front of the projectile.
 	var maximum_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME                               # Determine a stable visual end point for the complete projectile lifetime.
 	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
 	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance) # Include a player already directly in this firing lane.
 	var visual_distance := wall_distance                                                           # Prefer the wall endpoint unless a body is closer.
 	if not player_hit.is_empty() and float(player_hit.get("distance", maximum_distance)) < visual_distance:
 		visual_distance = float(player_hit["distance"])                                            # End at the nearer target body.
-	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "visual_target_position": origin + direction * visual_distance, "visual_total_distance": maxf(visual_distance, 0.001), "direction": direction, "dual_wield_barrel_sign": dual_wield_barrel_sign, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered shot travels in a single straight line.
+	_spawn_muzzle_smoke_particles(smoke_origin, direction, player_index, dual_wield_barrel_sign) # Emit procedural square-pixel black-powder smoke at the visible barrel, distinct from the farther collision-safe projectile origin.
+	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "visual_target_position": origin + direction * visual_distance, "visual_total_distance": maxf(visual_distance, 0.001), "last_trail_distance": 0.0, "direction": direction, "dual_wield_barrel_sign": dual_wield_barrel_sign, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered particle travels in a single straight line.
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
 	if gunshot_player != null:
@@ -2091,6 +2304,37 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	else:
 		state["fire_cooldown"] = PISTOL_FIRE_INTERVAL                                            # Keep the regular pistol infinite-ammo and deliberately slower.
 	player_states[player_index] = state                                                        # Save the armed cooldown.
+
+
+# _spawn_muzzle_smoke_particles: Emits a wide, opaque black-powder cloud from the visible fired barrel without using the authored muzzle-smoke sheets.
+func _spawn_muzzle_smoke_particles(smoke_origin: Vector2, direction: Vector2, owner: int, dual_wield_barrel_sign: float) -> void:
+	var lateral := Vector2(-direction.y, direction.x)                                          # Build the visible left/right emission axis perpendicular to the barrel direction.
+	for particle_index in range(MUZZLE_SMOKE_PARTICLE_COUNT):
+		var lateral_sign := -1.0 if randf() < 0.5 else 1.0                                       # Throw equal groups to either side so the antique powder burst blooms sideways from the barrel.
+		var lateral_velocity := lateral * lateral_sign * randf_range(0.035, 0.21)                # Keep the sideward burst close to the barrel so powder hangs in front of the firing player instead of racing away.
+		var forward_velocity := direction * randf_range(-0.025, 0.04)                           # Retain only a faint forward/backward irregularity beneath the deliberately slow lateral drift.
+		var lifetime := randf_range(MUZZLE_SMOKE_LIFETIME_MIN, MUZZLE_SMOKE_LIFETIME_MAX)        # Let each puff thin at a different time around the cloud's edge.
+		var base_scale := randf_range(0.38, 0.96)                                                 # Vary puffs by downscaling the 32-pixel source, never by magnifying it beyond native texel density.
+		var initial_position := smoke_origin + lateral * randf_range(-0.020, 0.020)              # Start tightly at the barrel before the restrained sideways drift opens the cloud.
+		var initial_height := randf_range(0.66, 0.84)                                            # Keep the initial visible height identical to the physical barrel-height puff state.
+		var smoke_tone := randf_range(0.74, 1.0)                                                 # Mix soft grey outer puffs through thick white powder without an image texture.
+		var initial_rotation := float(randi() % 4) * MUZZLE_SMOKE_ROTATION_INCREMENT              # Begin every irregular puff on a clean but varied quarter-turn orientation.
+		active_muzzle_smoke_particles.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "velocity": lateral_velocity + forward_velocity, "turbulence": Vector2(randf_range(-0.035, 0.035), randf_range(-0.035, 0.035)), "height": initial_height, "display_height": initial_height, "vertical_velocity": randf_range(0.02, 0.08), "rotation": initial_rotation, "display_rotation": initial_rotation, "angular_velocity": randf_range(-7.0, 7.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "base_scale": base_scale, "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "tone": smoke_tone, "opacity": randf_range(0.58, 1.0), "lifetime": lifetime, "timer": lifetime, "owner": owner, "dual_wield_barrel_sign": dual_wield_barrel_sign}) # Keep each separately rotating irregular puff in shared world coordinates for the same result in both player views.
+		next_combat_visual_id += 1                                                               # Reserve an independent cached Sprite2D for this one procedural puff.
+
+
+# _emit_projectile_trail_particles: Samples the already-authoritative bullet path, leaving visible vector particles without adding simulation objects or collision work.
+func _emit_projectile_trail_particles(shot: Dictionary, current_position: Vector2) -> void:
+	var spawn_position: Vector2 = shot.get("spawn_position", current_position)                 # Use the immutable physical muzzle point as the trail-distance origin.
+	var direction: Vector2 = shot.get("direction", Vector2.ZERO)                              # Reuse the frozen firing direction so every particle stays exactly behind its bullet.
+	var traveled_distance := current_position.distance_to(spawn_position)                       # Measure actual movement rather than assuming a particular frame rate.
+	var emitted_distance := float(shot.get("last_trail_distance", 0.0))                        # Resume from the last deposited particle for this shared shot.
+	while emitted_distance + PROJECTILE_TRAIL_EMIT_SPACING <= traveled_distance:
+		emitted_distance += PROJECTILE_TRAIL_EMIT_SPACING                                           # Advance one fixed world-space interval along the real flight vector.
+		var drift_velocity := Vector2(randf_range(-0.025, 0.025), randf_range(-0.025, 0.025))      # Give each hanging particle a very subtle random float away from the exact flight line.
+		active_projectile_trails.append({"id": next_combat_visual_id, "position": spawn_position + direction * emitted_distance, "drift_velocity": drift_velocity, "timer": PROJECTILE_TRAIL_LIFETIME, "variant": "A" if randf() < 0.5 else "B"}) # Keep the particle deterministic for both camera views and reserve an authored smoke variant for its final band.
+		next_combat_visual_id += 1                                                                  # Give this independently cached visual particle a unique key.
+	shot["last_trail_distance"] = emitted_distance                                               # Persist the exact emission boundary in the projectile dictionary.
 
 
 # _nearest_projectile_wall_distance: Finds the first physical maze edge struck inside one projectile segment.
@@ -2211,10 +2455,46 @@ func _ray_circle_hit_distance(origin: Vector2, direction: Vector2, circle_center
 	return near_distance if near_distance >= 0.0 else -b + root                                # Use the exiting point only when the ray starts inside the body.
 
 
-# _spawn_impact: Records a short impact visual at an actual shared-world collision point.
+# _spawn_blood_splatter: Emits one-pixel red droplets through a struck character along the bullet path, optionally retaining every killing-shot surface mark through its respawn countdown.
+func _spawn_blood_splatter(world_position: Vector2, direction: Vector2, victim_player_index := -1, persist_killing_shot := false) -> void:
+	var shot_direction := direction.normalized()                                                # Preserve the real projectile trajectory so an entry from the back exits toward the character's front.
+	var lateral := Vector2(-shot_direction.y, shot_direction.x)                                # Spread a smaller portion of the spray sideways around that forward-biased exit path.
+	for particle_index in range(BLOOD_SPLATTER_PARTICLE_COUNT):
+		var forward_speed := randf_range(0.32, 0.92)                                              # Make most droplets continue in the same direction as the bullet after passing through the target.
+		if randf() < 0.18:
+			forward_speed *= -randf_range(0.12, 0.38)                                               # Permit a restrained minority of back-spray without reversing the overall visual trajectory.
+		var horizontal_velocity := shot_direction * forward_speed + lateral * randf_range(-0.20, 0.20) # Combine strong bullet-direction exit with a narrow natural sideways burst.
+		var initial_position := world_position + shot_direction * 0.025                          # Start just beyond the entering contact so the spray reads as exiting the struck character.
+		var initial_height := randf_range(0.56, 0.88)                                            # Release droplets around the raised body hit point rather than from the floor.
+		active_blood_splatters.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "horizontal_velocity": horizontal_velocity, "direction": horizontal_velocity.normalized(), "height": initial_height, "display_height": initial_height, "vertical_velocity": randf_range(-0.45, 1.05), "visual_step_timer": BLOOD_SPLATTER_VISUAL_FRAME_DURATION, "stuck": false, "stuck_surface": "", "wall_edge_key": "", "victim_player_index": victim_player_index, "persistent_killing_shot": persist_killing_shot, "timer": BLOOD_SPLATTER_FLIGHT_LIFETIME}) # Keep every blood drop as a literal one-pixel world particle until it sticks to its first surface.
+		next_combat_visual_id += 1                                                               # Give each cached red pixel a stable per-view visual key.
+
+
+# _spawn_impact: Emits only wall-strike debris and a decal at an actual shared-world collision point; player hits retain their existing body reaction without a wall effect.
 func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index: int, wall_edge_key := "") -> void:
-	active_impacts.append({"id": next_combat_visual_id, "position": world_position, "direction": direction, "timer": IMPACT_DURATION, "hit_player": hit_player_index, "wall_edge_key": wall_edge_key}) # Keep the impact world-space so both cameras agree, with a wall key only for wall strikes.
-	next_combat_visual_id += 1                                                                  # Reserve a stable visual key.
+	if hit_player_index >= 0 or wall_edge_key.is_empty():
+		return                                                                                    # A body strike uses its dedicated hit reaction; only a physical wall dislodges wood splinters and receives a decal.
+	var away_from_wall := -direction.normalized()                                               # Send debris back into the side from which the bullet arrived.
+	var tangent := Vector2(-away_from_wall.y, away_from_wall.x)                                # Spread square chunks along the struck wall as well as straight back from it.
+	for smoke_card_index in range(randi_range(WALL_IMPACT_SMOKE_MIN_CARDS, WALL_IMPACT_SMOKE_MAX_CARDS)):
+		var dust_position := world_position + away_from_wall * 0.006                              # Separate the card slightly from the wall face so it never appears buried in the texture.
+		var dust_velocity := away_from_wall * randf_range(0.018, 0.080) + tangent * randf_range(-0.045, 0.045) # Keep wall dust close to the impact while allowing a small irregular sideways burst.
+		active_wall_impact_smokes.append({"id": next_combat_visual_id, "position": dust_position, "display_position": dust_position, "velocity": dust_velocity, "turbulence": Vector2(randf_range(-0.018, 0.018), randf_range(-0.018, 0.018)), "rotation": float(randi() % 4) * MUZZLE_SMOKE_ROTATION_INCREMENT, "display_rotation": 0.0, "angular_velocity": randf_range(-6.0, 6.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "base_scale": randf_range(0.90, 1.35), "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "color_sample_index": randi() % 4, "opacity": randf_range(0.72, 0.95), "direction": direction, "wall_edge_key": wall_edge_key, "sample_position": world_position, "timer": WALL_IMPACT_SMOKE_LIFETIME}) # Give every impact dust puff a visibly larger card, sampled wall tint, and mild turbulent motion.
+		next_combat_visual_id += 1                                                                # Give each wall-dust card a stable cache identity.
+	active_wall_bullet_holes.append({"id": next_combat_visual_id, "position": world_position, "direction": direction, "wall_edge_key": wall_edge_key, "timer": WALL_BULLET_HOLE_DURATION}) # Retain one black square at the exact wall contact.
+	next_combat_visual_id += 1                                                                  # Reserve a stable decal key.
+	for chunk_index in range(WALL_DEBRIS_COUNT):
+		var lateral_spread := randf_range(-0.72, 0.72)                                             # Let some chunks peel strongly sideways along the wall instead of every splinter following the same path.
+		var horizontal_velocity := away_from_wall * randf_range(0.06, 0.82) + tangent * lateral_spread # Mix short/far backward throws with broad side throws.
+		var launch_speed := horizontal_velocity.length()                                           # Use actual launch speed as a proxy for how close this chunk will remain to the impact.
+		var near_fraction := 1.0 - clampf(launch_speed / 1.05, 0.0, 1.0)                          # Slow chunks receive a stronger near-impact weighting.
+		var large_chance := lerpf(WALL_DEBRIS_LARGE_FAR_CHANCE, WALL_DEBRIS_LARGE_NEAR_CHANCE, near_fraction) # Make two-pixel chunks increasingly likely near the impact point.
+		var large_shapes := ["domino_h", "domino_v", "block", "l"]                           # Keep every non-dot candidate within a two-by-two footprint.
+		var shape := String(large_shapes[randi() % large_shapes.size()]) if randf() < large_chance else "dot" # Choose a nearby chunk shape or a single-pixel distant splinter.
+		var color_variation := Color(randf_range(0.88, 1.08), randf_range(0.82, 1.02), randf_range(0.74, 0.96), 1.0) # Add a subtle warm brightness/color variation over the sampled wall texel.
+		var initial_position := world_position + away_from_wall * 0.008                            # Start just off the struck wall so every visible splinter begins on its own side of the impact face.
+		active_wall_debris.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "horizontal_velocity": horizontal_velocity, "height": 0.72, "display_height": 0.72, "visual_step_timer": WALL_DEBRIS_VISUAL_FRAME_DURATION, "vertical_velocity": randf_range(-0.42, 1.55), "rotation": randf_range(-PI, PI), "angular_velocity": randf_range(-14.0, 14.0), "shape": shape, "color_sample_index": randi() % 4, "color_variation": color_variation, "bounced": false, "timer": WALL_DEBRIS_LIFETIME, "wall_edge_key": wall_edge_key, "direction": direction, "sample_position": world_position}) # Vary upward/downward launch, spin, shape, and a selected nearby wall texel while the visible position advances at pixel-animation cadence.
+		next_combat_visual_id += 1                                                                # Give every square particle a stable cache identity in both player views.
 
 
 # _impact_layer_for_current_view: Keeps a wall-hit flash above the rendered wall that received it.
@@ -2225,6 +2505,25 @@ func _impact_layer_for_current_view(wall_edge_key: String, projectile_direction:
 	if not is_instance_valid(renderer) or not renderer.has_method("runtime_wall_impact_layer"):
 		return fallback_layer                                                                     # Keep the normal layer until a renderer is available.
 	return int(renderer.call("runtime_wall_impact_layer", wall_edge_key, projectile_direction)) # Let the renderer accept only the struck front face from this camera.
+
+
+# _wall_impact_colors_for_current_view: Returns four sampled wood colors from the active wall texture around the real contact point.
+func _wall_impact_colors_for_current_view(wall_edge_key: String, world_position: Vector2) -> Array[Color]:
+	var fallback_colors: Array[Color] = [Color(0.45, 0.28, 0.12, 1.0), Color(0.38, 0.22, 0.09, 1.0), Color(0.52, 0.33, 0.15, 1.0), Color(0.31, 0.18, 0.07, 1.0)] # Keep a four-color wood fallback for unavailable renderers.
+	if active_player_index < 0 or active_player_index >= coordinate_renderers.size():
+		return fallback_colors                                                                     # Preserve a visible wood-colored fallback before a local renderer is available.
+	var renderer := coordinate_renderers[active_player_index]
+	if not is_instance_valid(renderer) or not renderer.has_method("runtime_wall_impact_colors"):
+		return fallback_colors                                                                     # Keep debris visible if an alternate renderer does not expose its active source image.
+	var sampled: Variant = renderer.call("runtime_wall_impact_colors", wall_edge_key, world_position)
+	if sampled is Array and sampled.size() >= 4:
+		var colors: Array[Color] = []
+		for item in sampled:
+			if item is Color:
+				colors.append(item)                                                                    # Copy only actual Color values from the renderer's dynamic call result.
+		if colors.size() >= 4:
+			return colors                                                                           # Return the complete 2×2 wall-color patch for per-chunk selection.
+	return fallback_colors                                                                      # Fall back only if the renderer supplied an incomplete or malformed patch.
 
 
 # _projectile_owner_has_clear_path_to_player: Final gameplay authority for combat line-of-sight, using the same cell-edge wall ownership as movement.
@@ -2295,6 +2594,131 @@ func _point_to_segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) 
 	return point.distance_squared_to(a + segment * blend)                                      # Return squared distance for guard-radius comparison.
 
 
+# _camera_blood_blob_texture: Builds a small irregular opaque mask for a close camera-blood droplet, never larger than the requested nine-pixel square.
+func _camera_blood_blob_texture(variant: int) -> ImageTexture:
+	var normalized_variant := posmod(variant, CAMERA_BLOOD_SHAPE_VARIANTS)                     # Keep all random callers inside the cached set of close-screen blob silhouettes.
+	var cached: ImageTexture = camera_blood_blob_textures.get(normalized_variant, null)
+	if cached != null:
+		return cached                                                                             # Reuse the generated low-resolution decal mask without allocating during damage.
+	var rng := RandomNumberGenerator.new()                                                     # Seed each shape deterministically so its random blob form is stable on every view refresh.
+	rng.seed = 12889 + normalized_variant * 3571                                               # Separate each reusable close-screen decal into a distinct irregular silhouette.
+	var image := Image.create(CAMERA_BLOOD_MAX_SIZE, CAMERA_BLOOD_MAX_SIZE, false, Image.FORMAT_RGBA8) # Bound every source mask to the explicit nine-by-nine-pixel maximum.
+	image.fill(Color(1.0, 1.0, 1.0, 0.0))                                                       # Leave all pixels outside the blood blob completely transparent.
+	var blobs: Array[Dictionary] = []                                                           # Combine a few tiny overlapping clots into one irregular, non-geometric blood mark.
+	for blob_index in range(rng.randi_range(1, 3)):
+		blobs.append({"center": Vector2(rng.randf_range(1.2, 7.8), rng.randf_range(1.2, 7.8)), "radius": rng.randf_range(0.65, 2.75)}) # Keep every random lobe safely inside the nine-pixel source card.
+	for y in range(CAMERA_BLOOD_MAX_SIZE):
+		for x in range(CAMERA_BLOOD_MAX_SIZE):
+			var point := Vector2(float(x) + 0.5, float(y) + 0.5)                                   # Test each authored source pixel independently for a crisp blob outline.
+			var density := 0.0                                                                     # Merge the small clots into a varied single close-screen splatter.
+			for blob in blobs:
+				density = maxf(density, clampf(1.0 - point.distance_to(Vector2(blob["center"])) / float(blob["radius"]), 0.0, 1.0)) # Retain only hard nearest-neighbor source pixels inside the random blob form.
+			if density > 0.38:
+				image.set_pixel(x, y, Color.WHITE)                                                    # Tint the opaque shape red at render time while retaining a transparent background.
+	var texture := ImageTexture.create_from_image(image)                                       # Upload the complete small blob mask once for all player views.
+	camera_blood_blob_textures[normalized_variant] = texture                                   # Cache this stable mask for future damage events.
+	return texture                                                                              # Return the one-to-nine-pixel irregular blood shape.
+
+
+# _add_camera_blood_for_damage: Builds close red GUI splatters on only the injured player's view, favoring the lower screen.
+func _add_camera_blood_for_damage(player_index: int) -> void:
+	if player_index < 0 or player_index >= combat_camera_blood_layers.size() or player_index >= combat_camera_blood_droplets.size():
+		return                                                                                    # Avoid UI work before the per-player HUD has been created.
+	var layer := combat_camera_blood_layers[player_index]                                      # Keep the damage overlay local to this player's camera window.
+	if not is_instance_valid(layer):
+		return                                                                                    # Safely ignore an editor-reloaded or released HUD layer.
+	var droplets: Array = combat_camera_blood_droplets[player_index]                           # Preserve existing injuries so additional hits visibly build up the overlay.
+	for drop_index in range(CAMERA_BLOOD_DROPS_PER_HEALTH):
+		var droplet := Sprite2D.new()                                                             # Use a native Sprite2D inside the HUD canvas for a literal close-screen pixel blob.
+		droplet.texture = _camera_blood_blob_texture(randi() % CAMERA_BLOOD_SHAPE_VARIANTS)      # Pick an irregular opaque mark rather than a circle or repeated decal.
+		droplet.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                # Preserve its hand-pixel silhouette at the enlarged player-view scale.
+		droplet.position = Vector2(randf_range(4.0, VIEWPORT_SIZE.x - 4.0), randf_range(VIEWPORT_SIZE.y * 0.56, VIEWPORT_SIZE.y - 5.0)).round() # Bias close blood toward the lower camera while retaining a broad natural spread.
+		droplet.self_modulate = Color(0.66, 0.012, 0.012, randf_range(0.58, 0.92))               # Keep every close drop visibly red, with modest opacity variety from fresh to thin blood.
+		layer.add_child(droplet)                                                                   # Draw above the player's world but beneath compact HUD information.
+		droplets.append(droplet)                                                                   # Retain the newest decal so a recovered heart can remove the exact matching amount.
+	combat_camera_blood_droplets[player_index] = droplets                                      # Save the expanded per-player damage overlay.
+	_add_player_blood_decals(player_index)                                                      # Mirror this same health-loss event onto the injured character's visible body in every world view.
+
+
+# _add_player_blood_decals: Adds individual source-pixel blood marks in the injured character's sprite space for every player view that can see them.
+func _add_player_blood_decals(player_index: int) -> void:
+	if player_index < 0 or player_index >= combat_player_blood_decals.size():
+		return                                                                                    # Avoid body-decal state before the player HUD/combat presentation has been initialized.
+	var decals: Array = combat_player_blood_decals[player_index]                               # Preserve earlier wounds so the sprite presentation accumulates with the camera blood.
+	for decal_index in range(PLAYER_BLOOD_PIXELS_PER_HEALTH):
+		decals.append({"pattern_slot": randi() % PLAYER_BLOOD_PATTERN_PIXELS.size(), "alpha": randf_range(0.72, 1.0)}) # Retain only a pattern slot so the same physical injury adopts the appropriate cardinal-layout position when the character turns.
+	combat_player_blood_decals[player_index] = decals                                          # Save the matching set of player-body wounds.
+
+
+# _player_blood_offset_for_cardinal_facing: Rotates one deterministic source-pixel wound pattern between four cardinal character directions.
+func _player_blood_offset_for_cardinal_facing(decal: Dictionary, state: Dictionary) -> Vector2:
+	var pattern_slot := posmod(int(decal.get("pattern_slot", 0)), PLAYER_BLOOD_PATTERN_PIXELS.size()) # Resolve one persistent injury into its matching base-layout pixel.
+	var base_offset: Vector2 = PLAYER_BLOOD_PATTERN_PIXELS[pattern_slot]                       # Use the North-oriented source-pixel pattern as the canonical layout.
+	var facing_direction := String(state.get("world_aim_dir", _direction_string_for_facing(int(state.get("facing", 0))))) # Read the shared facing that changes as the player turns around the maze.
+	if facing_direction == DIR_E or facing_direction == DIR_NE or facing_direction == DIR_SE:
+		return Vector2(-base_offset.y, base_offset.x)                                             # Rotate the pattern clockwise for East-facing character art.
+	if facing_direction == DIR_S or facing_direction == DIR_SE or facing_direction == DIR_SW:
+		return -base_offset                                                                       # Rotate the pattern 180 degrees for South-facing character art.
+	if facing_direction == DIR_W or facing_direction == DIR_NW or facing_direction == DIR_SW:
+		return Vector2(base_offset.y, -base_offset.x)                                             # Rotate the pattern counter-clockwise for West-facing character art.
+	return base_offset                                                                          # Preserve the canonical pattern for North-facing character art.
+
+
+# _clear_camera_blood_for_heart: Removes exactly one damage event's worth of close-screen blood when a player recovers one health point.
+func _clear_camera_blood_for_heart(player_index: int) -> void:
+	if player_index < 0 or player_index >= combat_camera_blood_droplets.size():
+		return                                                                                    # Heart collection can occur only after HUD creation, but retain a safe setup guard.
+	var droplets: Array = combat_camera_blood_droplets[player_index]                           # Read this player's accumulated damage marks only; other players retain their own injuries.
+	for drop_index in range(CAMERA_BLOOD_DROPS_PER_HEALTH):
+		if droplets.is_empty():
+			break                                                                                   # A healthy player simply has no close-screen blood left to clean away.
+		var droplet: Sprite2D = droplets.pop_back()                                               # Remove the most recently added injury mark so healing visibly reverses recent damage buildup.
+		if is_instance_valid(droplet):
+			droplet.queue_free()                                                                     # Release the transient UI node; no world asset or persistent data is removed.
+	combat_camera_blood_droplets[player_index] = droplets                                      # Save the reduced overlay after this one-heart recovery.
+	_clear_player_blood_for_heart(player_index)                                                 # Remove the matching one-health batch from the character's visible wound decals.
+
+
+# _clear_player_blood_for_heart: Removes one damage event's worth of world-body blood marks whenever a heart restores one health.
+func _clear_player_blood_for_heart(player_index: int) -> void:
+	if player_index < 0 or player_index >= combat_player_blood_decals.size():
+		return                                                                                    # Retain a safe initialization guard for rare early setup calls.
+	var decals: Array = combat_player_blood_decals[player_index]                               # Read only the healed player's stored body marks.
+	for decal_index in range(PLAYER_BLOOD_PIXELS_PER_HEALTH):
+		if decals.is_empty():
+			break                                                                                   # A fully cleaned character simply has no marks left to remove.
+		decals.pop_back()                                                                         # Remove the newest injury mark, matching the close-screen overlay's recovery behavior.
+	combat_player_blood_decals[player_index] = decals                                          # Save the reduced visible-wound stack.
+
+
+# _clear_camera_blood_overlay: Removes only one player's close-screen injury marks, leaving their world-body decal state untouched until full respawn restoration.
+func _clear_camera_blood_overlay(player_index: int) -> void:
+	if player_index < 0 or player_index >= combat_camera_blood_droplets.size():
+		return                                                                                    # Avoid UI work if a respawn occurs during initial scene setup or editor reload.
+	var droplets: Array = combat_camera_blood_droplets[player_index]                           # Read only this respawning player's camera overlay.
+	for droplet in droplets:
+		if is_instance_valid(droplet):
+			droplet.queue_free()                                                                     # Remove the temporary visual node; no gameplay/world data is affected.
+	combat_camera_blood_droplets[player_index] = []                                            # Leave the returning player with a completely clean camera.
+
+
+# _clear_all_camera_blood: Removes every close-screen injury mark and body decal when that player's respawn fully restores their health state.
+func _clear_all_camera_blood(player_index: int) -> void:
+	_clear_camera_blood_overlay(player_index)                                                  # The later full reset reuses the countdown's GUI-only cleanup.
+	if player_index < combat_player_blood_decals.size():
+		combat_player_blood_decals[player_index] = []                                            # Clear the matching character decal descriptions when respawn restores their body and health.
+
+
+# _clear_killing_shot_blood: Removes the persistent wall and floor marks created by one defeated player as their body begins its actual respawn.
+func _clear_killing_shot_blood(player_index: int) -> void:
+	var remaining_blood: Array[Dictionary] = []                                                # Rebuild the shared blood list without only this victim's retained killing-shot marks.
+	for blood in active_blood_splatters:
+		var is_this_victims_persistent_mark := bool(blood.get("persistent_killing_shot", false)) and int(blood.get("victim_player_index", -1)) == player_index and bool(blood.get("stuck", false)) # Preserve airborne blood and every other player's surface marks.
+		if not is_this_victims_persistent_mark:
+			remaining_blood.append(blood)
+	active_blood_splatters = remaining_blood
+
+
 # _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
 func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1) -> void:
 	if owner_index >= 0 and not _projectile_owner_has_clear_path_to_player(owner_index, player_index): # Make wall blocking decisive at the final damage boundary.
@@ -2311,6 +2735,7 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 	state["hit_timer"] = HIT_REACTION_DURATION                                                 # Hold that pose long enough to read.
 	state["health"] = maxi(int(state.get("health", PLAYER_MAX_HEALTH)) - 1, 0)                # Remove one hatch.
 	player_states[player_index] = state                                                        # Save the immediate hit result.
+	_add_camera_blood_for_damage(player_index)                                                  # Add one health-loss worth of lower-screen close blood to only the injured player's camera.
 	if int(state["health"]) <= 0:                                                             # Begin an explicit fall, three-second count, and reverse-animation respawn.
 		state["deaths"] = int(state.get("deaths", 0)) + 1
 		player_states[player_index] = state
@@ -2402,9 +2827,11 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 	if phase == "fall" and timer >= DEATH_FALL_SECONDS:                                       # Let the complete death animation finish before counting down.
 		phase = "countdown"                                                                      # Hold the final Death frame at the old location.
 		timer = 0.0                                                                                # Start the three-second count exactly at three.
+		_clear_camera_blood_overlay(int(state.get("player_index", 0)))                           # The blackout countdown starts with a clean camera, while world/body blood remains visible through the death hold.
 	elif phase == "countdown" and timer >= DEATH_COUNTDOWN_SECONDS:                          # After 3, 2, 1, relocate the still-fallen sprite.
 		phase = "respawn"                                                                        # Begin playing Death backwards at the chosen safe corner.
 		timer = 0.0                                                                                # Start the reverse animation on its fully fallen pose.
+		_clear_killing_shot_blood(int(state.get("player_index", 0)))                             # Remove the fatal wall and floor spray as this character actually leaves the old death location.
 		var fresh_respawn := _combat_respawn_destination(int(state.get("player_index", 0)))     # Re-evaluate just before re-entry so enemies cannot camp the cell chosen at death time.
 		state["death_respawn_cell"] = fresh_respawn["cell"]
 		state["death_respawn_facing"] = fresh_respawn["facing"]
@@ -2431,6 +2858,7 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 		state["death_phase"] = ""                                                               # Clear the staged-respawn marker.
 		state["death_timer"] = 0.0                                                               # Reset timer for the next defeat.
 		state["health"] = PLAYER_STARTING_HEALTH                                                 # Return with the same three-heart baseline as the start of a round.
+		_clear_all_camera_blood(int(state.get("player_index", 0)))                               # A completed respawn returns the player to a clean, healthy camera view.
 		state["last_animation"] = &""                                                          # Force the normal idle animation to restart cleanly next frame.
 		return state                                                                               # Do not overwrite the cleared phase below.
 	state["death_phase"] = phase                                                              # Save the current or newly entered phase.
@@ -2456,6 +2884,108 @@ func _combat_sprite(key: String) -> Sprite2D:
 	return node                                                                                 # Return the cached visual node.
 
 
+# _render_world_projectile_pixel: Projects one fixed world-space projectile point into the active view as a colored square particle.
+func _render_world_projectile_pixel(key: String, world_position: Vector2, color: Color, z_layer: int, pixel_size: float, used: Dictionary) -> void:
+	if not _world_actor_overlaps_current_camera_fan(world_position, 0.06) or not _world_point_has_clear_camera_line(world_position):
+		return                                                                                    # Let a point disappear naturally when its real maze position leaves the view or moves behind a wall.
+	var projection := _opponent_projection_from_current_camera(world_position, true, true)     # Project this exact shared world point through the live camera without the actor-only local-cell depth clamp.
+	var sprite := _combat_sprite(key)                                                          # Reuse the view-local cached sprite for this world-space particle.
+	sprite.texture = _projectile_pixel_texture()                                                # Draw every hot projectile element from the same one-texel source.
+	sprite.material = null                                                                      # Preserve the exact fire color rather than applying a world-character palette shader.
+	sprite.self_modulate = color                                                                # Color the red head, orange inner tail, or yellow outer tail at this point in the vector.
+	sprite.position = _projectile_screen_position(projection)                                  # Use the continuous-height projectile anchor so crossing the local-cell LOD boundary cannot bend the vector.
+	sprite.scale = Vector2.ONE * pixel_size                                                     # Keep the red head a modest two pixels while orange/yellow stay crisp one-pixel accents.
+	sprite.z_index = z_layer                                                                    # Keep the red head readable while still honoring the prior camera-to-point wall culling.
+	sprite.visible = true                                                                       # Reveal this visible world-space particle.
+	used[key] = true                                                                            # Preserve it through stale-node cleanup this frame.
+
+
+# _projectile_screen_position: Projects a bullet/trail point at a stable world height, independent of the deliberately stepped character LOD size.
+func _projectile_screen_position(projection: Dictionary) -> Vector2:
+	var continuous_height := float(projection.get("continuous_actor_height", projection.get("actor_height", 0.0))) # Prefer the renderer's non-quantized height; retain the legacy fallback only if an alternate renderer omits it.
+	return Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - continuous_height * 0.72).round() # Keep the physical raised bullet height continuous while snapping only the final screen pixel.
+
+
+# _projectile_pixel_texture: Creates the single neutral texel used as the exact-color source for all bullet and hot-trail particles.
+func _projectile_pixel_texture() -> ImageTexture:
+	if projectile_pixel_texture != null:
+		return projectile_pixel_texture                                                           # Reuse the one runtime texture rather than allocating during combat rendering.
+	var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)                                # Build a true one-square-pixel source image for nearest-neighbor scaling.
+	image.fill(Color.WHITE)                                                                     # Tint each individual Sprite2D through self_modulate at render time.
+	projectile_pixel_texture = ImageTexture.create_from_image(image)                           # Upload it once for every split-screen view's particle cache.
+	return projectile_pixel_texture                                                             # Return the initialized white texel.
+
+
+# _muzzle_smoke_cloud_texture: Builds one low-resolution alpha-noise cloud card with a white opaque core and a broken transparent pixel edge.
+func _muzzle_smoke_cloud_texture(variant: int) -> ImageTexture:
+	var normalized_variant := posmod(variant, MUZZLE_SMOKE_CLOUD_VARIANTS)                     # Keep every caller safely inside the small reusable silhouette set.
+	var cached: ImageTexture = muzzle_smoke_cloud_textures.get(normalized_variant, null)
+	if cached != null:
+		return cached                                                                             # Reuse the generated card rather than allocating texture data during every shot.
+	var rng := RandomNumberGenerator.new()                                                     # Seed this card once so its noisy silhouette is stable across both player views.
+	rng.seed = 6143 + normalized_variant * 7919                                                # Give each variant a deliberately different, deterministic cloud profile.
+	var card_center := float(MUZZLE_SMOKE_CLOUD_SIZE) * 0.5                                    # Seed one off-center dominant mass so the card reads as one drifting puff, not a fixed bouquet of balls.
+	var blobs: Array[Dictionary] = [{"center": Vector2(card_center + rng.randf_range(-2.8, 2.8), card_center + rng.randf_range(-2.8, 2.8)), "radius": rng.randf_range(8.8, 13.2)}]
+	for blob_index in range(3):
+		blobs.append({"center": Vector2(rng.randf_range(6.0, 26.0), rng.randf_range(6.0, 26.0)), "radius": rng.randf_range(4.0, 9.6)}) # Distort its outline with only a few nearby lobes, leaving one coherent turbulent puff per card.
+	var image := Image.create(MUZZLE_SMOKE_CLOUD_SIZE, MUZZLE_SMOKE_CLOUD_SIZE, false, Image.FORMAT_RGBA8) # Keep the source intentionally low resolution so every edge resolves as pixels.
+	image.fill(Color(1.0, 1.0, 1.0, 0.0))                                                       # Leave the card fully transparent outside its noisy powder silhouette.
+	for y in range(MUZZLE_SMOKE_CLOUD_SIZE):
+		for x in range(MUZZLE_SMOKE_CLOUD_SIZE):
+			var point := Vector2(float(x) + 0.5, float(y) + 0.5)                                   # Sample at each source pixel center for a crisp, stable mask.
+			var density := 0.0                                                                     # Accumulate overlapping cloud lobe influence into one opaque core.
+			for blob in blobs:
+				var center: Vector2 = blob["center"]
+				var radius := float(blob["radius"])
+				density = maxf(density, clampf(1.0 - point.distance_to(center) / radius, 0.0, 1.0)) # Preserve lumpy cloud edges while allowing lobe intersections to remain fully dense.
+			var local_noise := rng.randf_range(-0.15, 0.11)                                        # Break up every puff's density independently, avoiding the regular opaque-center/transparent-edge look.
+			var alpha := snappedf(clampf((density + local_noise - 0.16) / 0.72, 0.0, 1.0), 0.20)  # Use hard, irregular alpha bands with no directional pattern that could create diagonal streaks.
+			if alpha > 0.0:
+				image.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))                                  # Leave color neutral so individual puffs can be white or pale grey at render time.
+	var texture := ImageTexture.create_from_image(image)                                       # Upload the generated card only after its complete alpha mask is authored.
+	muzzle_smoke_cloud_textures[normalized_variant] = texture                                  # Cache by variant so every later cloud is effectively free to reuse.
+	return texture                                                                              # Return the nearest-filtered card for one smoke puff.
+
+
+# _muzzle_smoke_card_debug_outline_texture: Builds a transparent 32-pixel card border and center cross for temporary particle-layout inspection.
+func _muzzle_smoke_card_debug_outline_texture() -> ImageTexture:
+	if muzzle_smoke_card_debug_texture != null:
+		return muzzle_smoke_card_debug_texture                                                    # Reuse the one inspection overlay across every visible puff and camera.
+	var image := Image.create(MUZZLE_SMOKE_CLOUD_SIZE, MUZZLE_SMOKE_CLOUD_SIZE, false, Image.FORMAT_RGBA8) # Match the exact source dimensions of every generated cloud card.
+	image.fill(Color(1.0, 1.0, 1.0, 0.0))                                                       # Keep only the layout marks visible so the smoke cloud itself remains readable underneath.
+	var midpoint := int(MUZZLE_SMOKE_CLOUD_SIZE / 2)                                            # Mark the actual sprite origin, not an approximate visual center.
+	for coordinate in range(MUZZLE_SMOKE_CLOUD_SIZE):
+		image.set_pixel(coordinate, 0, Color.WHITE)                                               # Draw the top card edge.
+		image.set_pixel(coordinate, MUZZLE_SMOKE_CLOUD_SIZE - 1, Color.WHITE)                    # Draw the bottom card edge.
+		image.set_pixel(0, coordinate, Color.WHITE)                                               # Draw the left card edge.
+		image.set_pixel(MUZZLE_SMOKE_CLOUD_SIZE - 1, coordinate, Color.WHITE)                    # Draw the right card edge.
+	for offset in range(-2, 3):
+		image.set_pixel(midpoint + offset, midpoint, Color.WHITE)                                # Draw a short horizontal origin crossbar.
+		image.set_pixel(midpoint, midpoint + offset, Color.WHITE)                                # Draw a short vertical origin crossbar.
+	muzzle_smoke_card_debug_texture = ImageTexture.create_from_image(image)                    # Upload the temporary outline once at the same pixel resolution as the smoke.
+	return muzzle_smoke_card_debug_texture                                                      # Return it for the separate overlaid debug Sprite2D.
+
+
+# _wall_debris_shape_texture: Builds and caches tiny white masks for square, domino, block, and L-shaped splinters without adding image assets.
+func _wall_debris_shape_texture(shape: String) -> ImageTexture:
+	var cached: ImageTexture = wall_debris_shape_textures.get(shape, null)
+	if cached != null:
+		return cached                                                                             # Reuse the generated procedural mask for every matching chunk.
+	var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)                                 # No shape exceeds the requested two-by-two pixel footprint.
+	image.fill(Color(1.0, 1.0, 1.0, 0.0))                                                       # Leave every unused texel transparent.
+	var filled_pixels: Array[Vector2i] = [Vector2i(0, 0)]                                      # Keep the default shape as one square pixel.
+	match shape:
+		"domino_h": filled_pixels = [Vector2i(0, 0), Vector2i(1, 0)]
+		"domino_v": filled_pixels = [Vector2i(0, 0), Vector2i(0, 1)]
+		"block": filled_pixels = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
+		"l": filled_pixels = [Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1)]
+	for pixel in filled_pixels:
+		image.set_pixelv(pixel, Color.WHITE)                                                      # Use white source texels so the sampled wood color can tint every opaque pixel.
+	var texture := ImageTexture.create_from_image(image)                                        # Upload the small procedural shape once.
+	wall_debris_shape_textures[shape] = texture                                                  # Cache by semantic shape name for later impacts.
+	return texture                                                                               # Return the hard-edged generated splinter mask.
+
+
 # _runtime_world_sprite_texel_stride: Recreates the supplied eight-level run
 # reference procedurally.  The measured authored reductions are 1.00, .90,
 # .79, .64, .57, .50, .40, and .29.  Their inverse gives the source-pixel grid
@@ -2476,7 +3006,7 @@ func _runtime_world_sprite_texel_stride(world_view_depth: float) -> float:
 
 
 # _apply_runtime_world_sprite_style: Gives a world-projected sprite its own GPU material, with no object distance darkening.
-func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0, world_view_depth := 0.0) -> void:
+func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0, world_view_depth := 0.0, use_texel_lod := true) -> void:
 	if sprite == null:
 		return
 	var resolved_team_index: int = int(PLAYER_TEAMS[team_index]) if team_index >= 0 and team_index < PLAYER_TEAMS.size() else team_index # Normalize player indices to their team so normal and hit sprites always share one palette.
@@ -2487,7 +3017,7 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 		material.shader = expected_shader
 		sprite.material = material
 	sprite.self_modulate = Color.WHITE                                                        # Let the selected shader preserve Team 1 or remap Team 2 costume swatches.
-	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth)) # Quantize source pixels from discrete perspective depth bands.
+	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth) if use_texel_lod else 1.0) # Keep authored coin LOD textures exact while other world sprites retain shader sampling reduction.
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
 
 
@@ -2513,64 +3043,191 @@ func _hide_unused_combat_sprites(used_keys: Dictionary) -> void:
 # _update_combat_view: Projects shots, impact flashes, and temporary hit sprites through the same camera model as opponents.
 func _update_combat_view() -> void:
 	var used: Dictionary = {}                                                                   # Track which cached sprites are active in this camera this frame.
-	var coin_frame := int(Time.get_ticks_msec() / 120) % COIN_TEXTURES.size()                  # Advance all world coins together through their authored spin frames.
+	var coin_frame_index := _coin_animation_frame_index()                                      # Keep every coin on the same authored spin frame while allowing each depth to choose its own authored silhouette.
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
-		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), COIN_TEXTURES[coin_frame], coin_position, used, 0.16, 0.5) # Keep spinning coins at roughly half their former world size.
+		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), null, coin_position, used, 0.16, 1, true, coin_frame_index) # Use each coin's exact authored LOD frame instead of shader-derived pixel grouping.
+	var heart_frame_index := _heart_animation_frame_index()                                    # Keep every heart on the same authored pulse frame while allowing each depth to choose its own silhouette.
 	for heart in world_hearts:
 		var heart_position: Vector2 = heart.get("position", Vector2.ZERO)
-		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), HEART_SPRITE_FRAMES.get_frame_texture(&"Heart", 0), heart_position, used, 0.18, 0.65) # Render the user-authored heart SpriteFrames item as a compact floor pickup.
+		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), null, heart_position, used, 0.18, 1, false, 0, true, heart_frame_index) # Use each heart's exact authored LOD pulse frame only in the world pickup view.
 	if not machine_gun_pickup.is_empty():                                                       # Draw the contested rapid-fire pickup only while it remains unclaimed.
 		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared Vector2 directly instead of reconstructing it from a Variant.
 		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), _gun_animation_texture(), gun_position, used, 0.10) # Cycle the authored Gun.tres rotation at its configured speed.
+	for particle in active_muzzle_smoke_particles:                                              # Project every individual procedural barrel-smoke puff instead of one authored cloud sprite.
+		var smoke_world_position: Vector2 = particle.get("display_position", particle.get("position", Vector2.ZERO)) # Render the latest held pixel-animation sample, not sub-frame physics interpolation.
+		if not _world_actor_overlaps_current_camera_fan(smoke_world_position, 0.10) or not _world_point_has_clear_camera_line(smoke_world_position):
+			continue                                                                               # Keep smoke hidden outside this camera's real field of view or behind an intervening wall.
+		var smoke_projection := _opponent_projection_from_current_camera(smoke_world_position, true, true) # Use the unbounded world-effect projection so drifting smoke does not stop on a camera-cell seam.
+		var smoke_key := "muzzle_smoke_%d" % int(particle.get("id", -1))                        # Cache this individual square puff separately from the impact's authored wall cloud.
+		var smoke_sprite := _combat_sprite(smoke_key)                                            # Reuse a hard-edged Sprite2D for this particle in the current view.
+		var smoke_height := float(smoke_projection.get("continuous_actor_height", smoke_projection.get("actor_height", 0.0))) # Preserve continuous world depth for the smoke's raised barrel anchor.
+		var smoke_position := Vector2(float(smoke_projection["screen_x"]), float(smoke_projection["feet_y"]) - smoke_height * float(particle.get("display_height", particle.get("height", 0.72)))) # Place the puff in the shared world air volume rather than flat on the floor.
+		if int(particle.get("owner", -1)) == active_player_index and float(particle.get("dual_wield_barrel_sign", 0.0)) <= 0.0:
+			smoke_position.x += smoke_height * 0.13                                                # Keep the normal/left local barrel aligned with the same screen correction as its projectile.
+		var lifetime := maxf(float(particle.get("lifetime", MUZZLE_SMOKE_LIFETIME_MAX)), 0.001) # Normalize this puff's fade against its own intentionally varied life.
+		var remaining_fraction := clampf(float(particle.get("timer", 0.0)) / lifetime, 0.0, 1.0) # Retain opacity while fresh, then thin away as turbulence disperses the cloud.
+		var smoke_alpha := minf(float(particle.get("opacity", 1.0)), remaining_fraction / 0.60) # Keep thick inner powder opaque and let the outer edge fade smoothly through transparency.
+		var smoke_tone := float(particle.get("tone", 1.0))                                      # Read the preselected white-to-light-grey density variation.
+		smoke_sprite.texture = _muzzle_smoke_cloud_texture(int(particle.get("cloud_variant", 0))) # Draw an irregular low-resolution alpha-noise cloud card instead of a rigid square pixel.
+		smoke_sprite.material = null                                                              # Preserve exact white/grey particle colors without a palette shader.
+		smoke_sprite.self_modulate = Color(smoke_tone, smoke_tone, smoke_tone, smoke_alpha)       # Overlapping opaque white puffs form the dense center while transparent grey puffs form thinning edges.
+		smoke_sprite.position = smoke_position.round()                                            # Keep the whole procedural cloud locked to the screen pixel grid.
+		var billow_progress := 1.0 - remaining_fraction                                          # Expand the card gradually as its powder loses density and disperses into the air.
+		var world_scale := clampf(smoke_height / 42.0, 0.30, 1.0)                                # Preserve perspective: a nearby puff is roughly 32 pixels while a remote one recedes naturally.
+		smoke_sprite.scale = Vector2.ONE * float(particle.get("base_scale", 0.6)) * lerpf(0.72, 1.0, billow_progress) * world_scale # Let puffs billow without ever enlarging their 32-pixel source beyond native texel density.
+		smoke_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                          # Keep the 32-by-32 cloud noise sharp and aliased rather than smoothly filtered.
+		smoke_sprite.rotation = float(particle.get("display_rotation", 0.0))                    # Rotate each irregular puff through held 90-degree pixel-grid steps so the card reads as turbulent, not merely translated.
+		smoke_sprite.z_index = WORLD_EFFECT_FOREGROUND_LAYER + 1                                 # Let dense fresh smoke briefly pass in front of the firing body as requested.
+		smoke_sprite.visible = true                                                               # Reveal this procedural puff.
+		used[smoke_key] = true                                                                    # Preserve it until its individual lifetime expires.
+		if DEBUG_DRAW_MUZZLE_SMOKE_CARDS:
+			var card_debug_sprite := _combat_sprite("%s_card_debug" % smoke_key)                  # Draw a separate transparent overlay so inspecting bounds never changes the cloud's alpha mask.
+			card_debug_sprite.texture = _muzzle_smoke_card_debug_outline_texture()                 # Show this particle's full 32-by-32 card rectangle and centered origin cross.
+			card_debug_sprite.material = null                                                       # Preserve the literal debug color rather than applying a world-character palette shader.
+			card_debug_sprite.self_modulate = Color(1.0, 0.10, 0.75, 0.85)                         # Use bright magenta so the diagnostic card borders are unmistakable over white smoke.
+			card_debug_sprite.position = smoke_sprite.position                                      # Match the exact snapped cloud position.
+			card_debug_sprite.scale = smoke_sprite.scale                                            # Match the card's complete billow and perspective scale.
+			card_debug_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                   # Keep the diagnostic rectangle as crisp pixel lines.
+			card_debug_sprite.rotation = 0.0                                                        # Keep bounds axis aligned with the smoke card.
+			card_debug_sprite.z_index = smoke_sprite.z_index + 1                                   # Draw the inspection mark over its cloud, never hidden inside it.
+			card_debug_sprite.visible = true                                                        # Reveal this temporary diagnostic overlay.
+			used["%s_card_debug" % smoke_key] = true                                               # Retain it through stale-node cleanup only while the debug toggle remains enabled.
+	for trail in active_projectile_trails:                                                      # Render the hanging vector particles before their red lead particle.
+		var trail_world_position: Vector2 = trail.get("position", Vector2.ZERO)                    # Read the one fixed world-space point deposited by the moving bullet.
+		if not _world_actor_overlaps_current_camera_fan(trail_world_position, 0.06) or not _world_point_has_clear_camera_line(trail_world_position):
+			continue                                                                                   # Keep the full trail occluded by the same camera-to-point wall test as the bullet.
+		var trail_projection := _opponent_projection_from_current_camera(trail_world_position, true, true) # Project the stationary particle through this viewer's live camera without the actor-only local-cell depth clamp.
+		var trail_key := "shot_trail_%d" % int(trail["id"])                                      # Cache the particle separately from the moving head.
+		var trail_sprite := _combat_sprite(trail_key)                                               # Reuse one nearest-neighbor sprite for this shared particle in this view.
+		trail_sprite.material = null                                                                # Preserve exact fire/smoke colors rather than applying a character palette shader.
+		trail_sprite.texture = _projectile_pixel_texture()                                          # Make the lingering trail simple square smoke particles instead of tiny animated image sprites.
+		trail_sprite.self_modulate = Color(0.62, 0.62, 0.62, clampf(float(trail.get("timer", 0.0)) / PROJECTILE_TRAIL_LIFETIME * 0.60, 0.0, 0.60)) # Fade the grey smoke from its initial reduced transparency.
+		trail_sprite.scale = Vector2.ONE * PROJECTILE_SMOKE_PIXELS                                 # Keep the drifting smoke visibly larger while preserving its hard-edged pixel language.
+		trail_sprite.position = _projectile_screen_position(trail_projection)                     # Use the same continuous-height world anchor as the bullet and hot particles.
+		trail_sprite.z_index = WORLD_EFFECT_FOREGROUND_LAYER - 1                                    # Keep the lead bullet legible over its cooling trail without bypassing wall culling.
+		trail_sprite.visible = true                                                                  # Reveal this live particle.
+		used[trail_key] = true                                                                       # Preserve it through stale-node cleanup.
 	for shot in active_projectiles:                                                             # Render every shared projectile from this camera.
 		var world_position: Vector2 = shot["position"]                                           # Read shared-world shot position.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.10) or not _world_point_has_clear_camera_line(world_position):
-			continue                                                                                   # Do not draw a point shot after a real wall lies between it and this camera.
-		var projection := _opponent_projection_from_current_camera(world_position, true)          # Keep the moving shot immediately after the camera-facing walls in its current cell.
-		var key := "shot_%d" % int(shot["id"])                                                  # Build a stable cached visual name.
-		var sprite := _combat_sprite(key)                                                         # Fetch/create the shot sprite.
-		var side := absf((world_position - _camera_grid_origin()).dot(_view_right_vector()))      # Pick the side shot only for strongly oblique travel.
-		sprite.texture = SHOT_E_TEXTURE if side > 0.7 else SHOT_N_TEXTURE                         # Use the two authored shot styles.
-		var spawn_world: Vector2 = shot.get("spawn_position", world_position)                   # Recover the immutable muzzle origin saved at fire time.
-		var target_world: Vector2 = shot.get("visual_target_position", world_position)          # Recover the immutable visual endpoint saved at fire time.
-		var spawn_projection := _opponent_projection_from_current_camera(spawn_world)             # Project the start once through this viewer's current camera.
-		var target_projection := _opponent_projection_from_current_camera(target_world)           # Project the corresponding collision/range endpoint through the same camera.
-		var spawn_height := float(spawn_projection["actor_height"])                              # Use the start depth for a screen-space gun point.
-		var target_height := float(target_projection["actor_height"])                            # Use endpoint depth for the naturally shrinking terminal sprite.
-		var muzzle_position := Vector2(float(spawn_projection["screen_x"]), float(spawn_projection["feet_y"]) - spawn_height * 0.72) # Put the first point at the raised gun/crosshair rather than the chest.
-		if int(shot["owner"]) == active_player_index:                                            # The bound player's normal single pistol remains slightly screen-right.
-			var dual_wield_barrel_sign := float(shot.get("dual_wield_barrel_sign", 0.0))            # Read the fired pistol side recorded at spawn time.
-			if dual_wield_barrel_sign <= 0.0:
-				muzzle_position.x += spawn_height * 0.13                                             # Keep the established normal/left-pistol correction, which already registers against the body art.
-		var target_position := Vector2(float(target_projection["screen_x"]), float(target_projection["feet_y"]) - target_height * 0.72) # Build the matching terminal point at the same gun-height convention.
-		var traveled_distance := world_position.distance_to(spawn_world)                          # Measure actual world distance traveled so frame-rate does not affect the visual rate.
-		var travel_fraction := clampf(traveled_distance / maxf(float(shot.get("visual_total_distance", traveled_distance)), 0.001), 0.0, 1.0) # Convert physical travel into one normalized fixed path fraction.
-		sprite.position = muzzle_position.lerp(target_position, travel_fraction)                  # Keep every displayed bullet position on the one straight muzzle-to-target screen line.
-		var start_scale := clampf(spawn_height / 40.0, 0.28, 1.0)                                 # Read the sprite size at the muzzle.
-		var end_scale := clampf(target_height / 40.0, 0.28, 1.0)                                  # Read the sprite size at the endpoint.
-		sprite.scale = Vector2.ONE * lerpf(start_scale, end_scale, travel_fraction)               # Scale smoothly along the same linear journey.
-		_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Match projectile source sampling to its world depth.
-		sprite.z_index = WORLD_EFFECT_FOREGROUND_LAYER                                             # Hold one foreground layer for the full shot path so wall-cell transitions cannot make it flicker out.
-		sprite.visible = true                                                                      # Reveal this valid projectile.
-		used[key] = true                                                                           # Preserve it through stale-node hiding.
-	for impact in active_impacts:                                                               # Render each short explosion similarly.
-		var world_position: Vector2 = impact["position"]                                        # Read collision world point.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.12):
-			continue                                                                                   # Let the per-pixel wall mask hide covered impact pixels.
-		var projection := _opponent_projection_from_current_camera(world_position, true)          # Keep the impact immediately after the camera-facing walls in its contact cell.
-		var key := "impact_%d" % int(impact["id"])                                              # Build a stable effect key.
-		var sprite := _combat_sprite(key)                                                         # Fetch/create the impact sprite.
-		sprite.texture = SHOT_EXPLOSION_1_TEXTURE if float(impact["timer"]) > IMPACT_DURATION * 0.5 else SHOT_EXPLOSION_2_TEXTURE # Flip through authored two-frame impact art.
-		sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - float(projection["actor_height"]) * 0.48) # Center effect at visible impact height.
-		sprite.scale = Vector2.ONE * clampf(float(projection["actor_height"]) / 34.0, 0.35, 1.2) # Keep close impacts readable.
-		_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Match impact source sampling to its world depth.
-		var impact_layer := _impact_layer_for_current_view(String(impact.get("wall_edge_key", "")), Vector2(impact.get("direction", Vector2.ZERO)), int(projection["z_index"]) + 3) # Put a wall flash above its struck front face only.
-		if impact_layer < 0:
-			continue                                                                               # Hide an impact that this viewer can only see from the wall's back side.
-		sprite.z_index = impact_layer                                                            # Keep the surviving flash above its exact wall layer.
-		sprite.visible = true                                                                      # Reveal active explosion.
-		used[key] = true                                                                           # Preserve this effect node.
+		var shot_direction: Vector2 = shot.get("direction", Vector2.ZERO)                         # Reuse the actual collision direction for the close world-space comet tail.
+		for red_index in range(PROJECTILE_RED_PIXEL_COUNT):
+			var red_key := "shot_%d" % int(shot["id"]) if red_index == 0 else "shot_red_%d_%d" % [int(shot["id"]), red_index] # Keep the lead key stable while giving extra red head pixels their own cache entries.
+			var red_world_position := world_position - shot_direction * (float(red_index) * PROJECTILE_RED_PIXEL_SPACING) # Keep the first red pixel on the real collision point and space any extra red pixels behind it.
+			_render_world_projectile_pixel(red_key, red_world_position, Color(1.0, 0.04, 0.02, 1.0), WORLD_EFFECT_FOREGROUND_LAYER, PROJECTILE_RED_PIXEL_SIZE, used) # Render the configurable red head group in world space.
+		var red_tail_distance := maxf(float(PROJECTILE_RED_PIXEL_COUNT - 1) * PROJECTILE_RED_PIXEL_SPACING, 0.0) # Measure the end of the configurable red group before beginning orange.
+		var orange_start_distance := red_tail_distance + PROJECTILE_ORANGE_PIXEL_SPACING           # Let orange spacing control the gap from the red group as well as between orange pixels.
+		for orange_index in range(PROJECTILE_ORANGE_PIXEL_COUNT):
+			var orange_key := "shot_orange_%d_%d" % [int(shot["id"]), orange_index]                # Cache every configurable orange particle independently.
+			var orange_distance := orange_start_distance + float(orange_index) * PROJECTILE_ORANGE_PIXEL_SPACING # Continue the orange group at its own world-space spacing.
+			var orange_world_position := world_position - shot_direction * orange_distance            # Place orange directly behind the red group in shared world coordinates.
+			_render_world_projectile_pixel(orange_key, orange_world_position, Color(1.0, 0.33, 0.03, 1.0), WORLD_EFFECT_FOREGROUND_LAYER - 1, PROJECTILE_ORANGE_PIXEL_SIZE, used) # Render the configurable orange group.
+		var orange_tail_distance := orange_start_distance + maxf(float(PROJECTILE_ORANGE_PIXEL_COUNT - 1) * PROJECTILE_ORANGE_PIXEL_SPACING, 0.0) # Measure the end of orange before beginning yellow.
+		var yellow_start_distance := orange_tail_distance + PROJECTILE_YELLOW_PIXEL_SPACING         # Let yellow spacing control the gap from orange as well as between yellow pixels.
+		for yellow_index in range(PROJECTILE_YELLOW_PIXEL_COUNT):
+			var yellow_key := "shot_yellow_%d_%d" % [int(shot["id"]), yellow_index]                # Cache every configurable yellow particle independently.
+			var yellow_distance := yellow_start_distance + float(yellow_index) * PROJECTILE_YELLOW_PIXEL_SPACING # Continue the yellow group at its own world-space spacing.
+			var yellow_world_position := world_position - shot_direction * yellow_distance            # Place yellow directly behind the orange group in shared world coordinates.
+			_render_world_projectile_pixel(yellow_key, yellow_world_position, Color(1.0, 0.82, 0.10, 0.88), WORLD_EFFECT_FOREGROUND_LAYER - 1, PROJECTILE_YELLOW_PIXEL_SIZE, used) # Render the configurable yellow group.
+	for smoke in active_wall_impact_smokes:                                                     # Render each small procedural dust card in addition to the square wall debris.
+		var impact_smoke_world_position: Vector2 = smoke.get("display_position", smoke.get("position", Vector2.ZERO)) # Render the held pixel-animation position rather than sub-frame drift.
+		if not _world_actor_overlaps_current_camera_fan(impact_smoke_world_position, 0.08) or not _world_point_has_clear_camera_line(impact_smoke_world_position):
+			continue                                                                                   # Keep the impact cloud hidden behind real intervening wall geometry.
+		var impact_smoke_projection := _opponent_projection_from_current_camera(impact_smoke_world_position, true) # Project the cloud at the same visible front wall face as the contact.
+		var impact_smoke_layer := _impact_layer_for_current_view(String(smoke.get("wall_edge_key", "")), Vector2(smoke.get("direction", Vector2.ZERO)), int(impact_smoke_projection.get("z_index", 0)) + 3) # Reject the wall back face and keep the cloud near its contact layer.
+		if impact_smoke_layer < 0:
+			continue                                                                                   # This view sees only the opposite side of the struck wall.
+		var impact_smoke_sprite := _combat_sprite("wall_smoke_%d" % int(smoke["id"]))           # Cache each procedural impact card independently from muzzle smoke and square particles.
+		impact_smoke_sprite.texture = _muzzle_smoke_cloud_texture(int(smoke.get("cloud_variant", 0))) # Reuse the tested low-resolution irregular cloud card system, not the authored GunSmoke sheets.
+		var wall_colors := _wall_impact_colors_for_current_view(String(smoke.get("wall_edge_key", "")), Vector2(smoke.get("sample_position", impact_smoke_world_position))) # Sample the same nearby wall texels used by splinters.
+		var wall_color: Color = wall_colors[posmod(int(smoke.get("color_sample_index", 0)), wall_colors.size())] # Give each card one sampled wall color from the local contact patch.
+		var dust_color := wall_color                                                               # Use the actual sampled wall texel so impact dust reads as wall material, not pale muzzle smoke.
+		var remaining_fraction := clampf(float(smoke.get("timer", 0.0)) / WALL_IMPACT_SMOKE_LIFETIME, 0.0, 1.0) # Fade the card as the compact impact dust disperses.
+		dust_color.a = minf(float(smoke.get("opacity", 0.84)), remaining_fraction / 0.70)         # Keep enough initial opacity for the material burst to read at a distance.
+		var cloud_material := impact_smoke_sprite.material as ShaderMaterial                       # Keep an independent material per cached card so split-screen depth can select its own mask stride.
+		if cloud_material == null or cloud_material.shader != PROCEDURAL_CLOUD_LOD_SHADER:
+			cloud_material = ShaderMaterial.new()
+			cloud_material.shader = PROCEDURAL_CLOUD_LOD_SHADER
+			impact_smoke_sprite.material = cloud_material
+		var world_texel_stride := _runtime_world_sprite_texel_stride(float(impact_smoke_projection.get("view_depth", 0.0))) # Start from the exact depth band that defines surrounding world art.
+		cloud_material.set_shader_parameter("texel_stride", ceilf(maxf(world_texel_stride * 1.65, 2.0))) # Deliberately make impact dust one coarser integer pixel tier than surrounding art so its larger cards remain chunky at range.
+		cloud_material.set_shader_parameter("tint_color", dust_color)                            # Preserve the direct sampled wall color and the particle's independent fade.
+		impact_smoke_sprite.self_modulate = Color.WHITE                                            # Leave tinting entirely to the cloud shader so it cannot be overwritten by CanvasItem modulation.
+		impact_smoke_sprite.position = _projectile_screen_position(impact_smoke_projection)        # Anchor the cloud at the bullet-height contact point rather than on the floor.
+		var impact_smoke_height := float(impact_smoke_projection.get("continuous_actor_height", impact_smoke_projection.get("actor_height", 0.0))) # Read continuous perspective scale so the cloud does not snap at the local-cell boundary.
+		impact_smoke_sprite.scale = Vector2.ONE * float(smoke.get("base_scale", 1.12)) * clampf(impact_smoke_height / 42.0, 0.30, 1.0) # Make the three-card burst large enough to read as a violent material poof at distance.
+		impact_smoke_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                    # Retain the muzzle smoke's crisp low-resolution cloud pixels.
+		impact_smoke_sprite.rotation = float(smoke.get("display_rotation", 0.0))                 # Let individual cards turn in stepped pixel-grid increments instead of reading as one static sprite.
+		impact_smoke_sprite.z_index = impact_smoke_layer                                           # Draw over the struck face but beneath the later square debris motion.
+		impact_smoke_sprite.visible = true                                                         # Reveal this frame of the short impact cloud.
+		used["wall_smoke_%d" % int(smoke["id"])] = true                                         # Preserve it until its shared cloud event expires.
+	for hole in active_wall_bullet_holes:                                                       # Render the retained one-pixel black mark directly on the struck wall face.
+		var hole_world_position: Vector2 = hole.get("position", Vector2.ZERO)                    # Read the exact collision point saved when the projectile hit the wall.
+		if not _world_actor_overlaps_current_camera_fan(hole_world_position, 0.06) or not _world_point_has_clear_camera_line(hole_world_position):
+			continue                                                                                   # Never leak the decal through a wall that occludes the real physical contact point.
+		var hole_projection := _opponent_projection_from_current_camera(hole_world_position, true) # Project the physical contact point immediately after its facing wall.
+		if float(hole_projection.get("view_depth", INF)) > WALL_BULLET_HOLE_MAX_VIEW_DEPTH:
+			continue                                                                                   # Keep the single-pixel mark from becoming an oversized distant decal beyond three grid cells.
+		var hole_layer := _impact_layer_for_current_view(String(hole.get("wall_edge_key", "")), Vector2(hole.get("direction", Vector2.ZERO)), int(hole_projection.get("z_index", 0)) + 3) # Retain the struck front face's layering and reject its back face.
+		if hole_layer < 0:
+			continue                                                                                   # This camera only sees the wall's opposite side.
+		var hole_sprite := _combat_sprite("wall_hole_%d" % int(hole["id"]))                     # Cache the decal separately from every moving chunk.
+		hole_sprite.texture = _projectile_pixel_texture()                                          # Use the same generated neutral texel; no decal image asset is required.
+		hole_sprite.material = null                                                                # Keep the decal a literal opaque black square.
+		hole_sprite.self_modulate = Color.BLACK                                                    # Mark the impact point as the requested one-pixel bullet hole.
+		hole_sprite.position = _projectile_screen_position(hole_projection)                       # Register the decal at the same stable physical bullet height used at contact.
+		hole_sprite.scale = Vector2.ONE                                                           # Keep the decal exactly one logical pixel.
+		hole_sprite.z_index = hole_layer                                                          # Draw just above the face that the bullet struck.
+		hole_sprite.visible = true                                                                # Reveal the retained mark.
+		used["wall_hole_%d" % int(hole["id"])] = true                                            # Preserve it until its independent timer expires.
+	for blood in active_blood_splatters:                                                        # Render every flying or surface-stuck one-pixel blood droplet from this camera's world view.
+		var blood_world_position: Vector2 = blood.get("display_position", blood.get("position", Vector2.ZERO)) # Use the held particle position so blood travels with stepped pixel-animation motion.
+		if not _world_actor_overlaps_current_camera_fan(blood_world_position, 0.04) or not _world_point_has_clear_camera_line(blood_world_position):
+			continue                                                                               # Keep blood behind a genuine intervening wall hidden from this viewer.
+		var blood_projection := _opponent_projection_from_current_camera(blood_world_position, true, true) # Project the droplet as a free world effect without an actor-only near-cell clamp.
+		var blood_layer := WORLD_EFFECT_FOREGROUND_LAYER                                         # Draw free/floor droplets as foreground world particles.
+		if String(blood.get("stuck_surface", "")) == "wall":
+			blood_layer = _impact_layer_for_current_view(String(blood.get("wall_edge_key", "")), Vector2(blood.get("direction", Vector2.ZERO)), int(blood_projection.get("z_index", 0)) + 4) # Restrict a wall-stuck droplet to the wall face that captured it.
+			if blood_layer < 0:
+				continue                                                                               # This camera sees the opposite wall face, so its blood mark must remain hidden.
+		var blood_sprite := _combat_sprite("blood_%d" % int(blood.get("id", -1)))              # Cache each literal red pixel independently from projectiles and debris.
+		var blood_height_scale := float(blood_projection.get("continuous_actor_height", blood_projection.get("actor_height", 0.0))) # Use the same continuous perspective scale as all other raised world effects.
+		blood_sprite.texture = _projectile_pixel_texture()                                       # Draw a true one-pixel source; blood uses no splinter, cloud, or texture asset.
+		blood_sprite.material = null                                                              # Preserve the requested literal red color without shader palette adjustments.
+		blood_sprite.self_modulate = Color(0.82, 0.015, 0.015, clampf(float(blood.get("timer", 0.0)) / 0.32, 0.0, 1.0)) # Keep blood solid red until its final short fade from the contacted surface.
+		blood_sprite.position = Vector2(float(blood_projection["screen_x"]), float(blood_projection["feet_y"]) - blood_height_scale * float(blood.get("display_height", blood.get("height", 0.0)))).round() # Keep airborne blood raised and floor-stuck blood exactly on the projected ground.
+		blood_sprite.scale = Vector2.ONE                                                         # Enforce the requested single-pixel particle size at every stage.
+		blood_sprite.rotation = 0.0                                                              # A one-pixel blood drop needs no rotation or splinter-like shape treatment.
+		blood_sprite.z_index = blood_layer                                                       # Respect wall-face ordering for stuck blood while keeping free droplets legible.
+		blood_sprite.visible = true                                                              # Reveal this active blood pixel.
+		used["blood_%d" % int(blood.get("id", -1))] = true                                    # Preserve it through stale-node cleanup until its timer ends.
+	for debris in active_wall_debris:                                                           # Render every square splinter in its shared arc/rest state.
+		var debris_world_position: Vector2 = debris.get("display_position", debris.get("position", Vector2.ZERO)) # Render only the latest visual-frame sample, rather than smoothly interpolating the physical splinter point.
+		if not _world_actor_overlaps_current_camera_fan(debris_world_position, 0.08) or not _world_point_has_clear_camera_line(debris_world_position):
+			continue                                                                                   # Keep chunks behind a real intervening wall hidden from this camera.
+		var debris_projection := _opponent_projection_from_current_camera(debris_world_position, true, true) # Project its continuous world movement through the live effect camera path.
+		var debris_layer := _impact_layer_for_current_view(String(debris.get("wall_edge_key", "")), Vector2(debris.get("direction", Vector2.ZERO)), int(debris_projection.get("z_index", 0)) + 4) # Keep debris visible only from the struck wall side.
+		if debris_layer < 0:
+			continue                                                                                   # This camera is behind the struck wall face.
+		var debris_sprite := _combat_sprite("wall_debris_%d" % int(debris["id"]))               # Cache the image-free square particle by its shared ID.
+		var debris_shape := String(debris.get("shape", "dot"))                                   # Read the near-impact procedural splinter silhouette chosen at spawn.
+		if float(debris_projection.get("view_depth", INF)) > WALL_DEBRIS_LARGE_MAX_VIEW_DEPTH:
+			debris_shape = "dot"                                                                     # Keep all distant splinters to one pixel beyond three grid cells.
+		debris_sprite.texture = _wall_debris_shape_texture(debris_shape)                           # Draw a generated dot, domino, block, or L mask with no authored texture asset.
+		debris_sprite.material = null                                                              # Preserve the sampled wall color exactly.
+		var wood_colors := _wall_impact_colors_for_current_view(String(debris.get("wall_edge_key", "")), Vector2(debris.get("sample_position", debris_world_position))) # Read the four real wall texels surrounding the actual contact.
+		var wood_color: Color = wood_colors[posmod(int(debris.get("color_sample_index", 0)), wood_colors.size())] # Give this chunk its assigned color from the 2×2 texture patch.
+		var color_variation: Color = debris.get("color_variation", Color.WHITE)                  # Read this chunk's subtle warm color variation chosen at impact time.
+		wood_color = Color(wood_color.r * color_variation.r, wood_color.g * color_variation.g, wood_color.b * color_variation.b, wood_color.a) # Vary sampled wood color slightly without replacing the impacted texture's palette.
+		wood_color.a = clampf(float(debris.get("timer", 0.0)) / WALL_DEBRIS_GROUND_FADE_SECONDS, 0.0, 1.0) if bool(debris.get("settled", false)) else 1.0 # Keep chunks fully visible through the fall/bounce, then fade only once they are visibly resting on the ground.
+		debris_sprite.self_modulate = wood_color                                                   # Tint the square chunk with the sampled texel color.
+		var debris_height_scale := float(debris_projection.get("continuous_actor_height", debris_projection.get("actor_height", 1.0))) # Use continuous projection scale so the arc cannot snap at a character LOD boundary.
+		debris_sprite.position = Vector2(float(debris_projection["screen_x"]), float(debris_projection["feet_y"]) - debris_height_scale * float(debris.get("display_height", debris.get("height", 0.0)))).round() # Render the stepped arc sample on whole screen pixels, matching the game's low-frame-rate pixel motion.
+		debris_sprite.scale = Vector2.ONE                                                         # The procedural mask itself defines the requested one- or two-pixel footprint.
+		debris_sprite.rotation = snappedf(float(debris.get("rotation", 0.0)), WALL_DEBRIS_ROTATION_INCREMENT) # Let the underlying splinter spin freely but display it only at clean 90-degree pixel-grid turns.
+		debris_sprite.z_index = debris_layer                                                      # Draw above the struck front face without bypassing its view-side test.
+		debris_sprite.visible = true                                                              # Reveal this active/resting chunk.
+		used["wall_debris_%d" % int(debris["id"])] = true                                       # Preserve it until the shared debris simulation expires.
 	for player_index in range(player_states.size()):                                           # Replace the body briefly with a one-frame hit pose in either visible view.
 		var state := player_states[player_index]                                                   # Read the player's latest hit state.
 		if float(state.get("hit_timer", 0.0)) <= 0.0:                                            # Skip normal unhurt players.
@@ -2603,7 +3260,148 @@ func _update_combat_view() -> void:
 				target_sprite.visible = false                                                         # Hide the exact normal body replaced by this reaction; the legacy opponent reference can point at a different target in larger matches.
 		sprite.visible = true                                                                      # Reveal the reaction.
 		used[key] = true                                                                           # Preserve the sprite.
+	var active_view: Dictionary = player_views[active_player_index] if active_player_index >= 0 and active_player_index < player_views.size() else {} # Read this camera's exact body and hit-sprite cache.
+	var visible_opponents: Dictionary = active_view.get("opponent_sprites", {})                # Resolve the correct normal body for each remote player in larger matches.
+	var visual_nodes: Dictionary = active_view.get("combat_nodes", {})                         # Prefer a visible hit-reaction body as the blood-decal anchor when it temporarily replaces normal art.
+	for target_index in range(combat_player_blood_decals.size()):                               # Overlay every accumulated wound mark on the character it belongs to, in every camera that can see that character.
+		var decals: Array = combat_player_blood_decals[target_index]                               # Read this target's persistent wound stack.
+		if decals.is_empty():
+			continue                                                                                   # Leave healthy/cleansed characters free of world-body blood sprites.
+		if target_index >= player_states.size():
+			continue                                                                                   # Skip an incomplete player slot until it has authoritative facing state.
+		var target_state: Dictionary = player_states[target_index]                                 # Use the injured character's current facing to select its cardinal wound pattern.
+		var body_sprite: Node2D = player_sprite if target_index == active_player_index else visible_opponents.get(target_index, null) # Select this view's real player or opponent sprite.
+		var hit_sprite: Sprite2D = visual_nodes.get("hit_%d" % target_index, null)                # A just-hit player temporarily has a separate reaction body at the correct projected anchor.
+		if hit_sprite != null and hit_sprite.visible:
+			body_sprite = hit_sprite                                                                  # Keep decals attached to the shown hit frame instead of a deliberately hidden normal body.
+		if body_sprite == null or not body_sprite.visible:
+			continue                                                                                   # Do not reveal a decal in a view where the owning character is genuinely invisible or occluded.
+		for decal_index in range(decals.size()):
+			var decal: Dictionary = decals[decal_index]                                               # Read this mark's fixed random shape, body-space offset, and opacity.
+			var decal_key := "player_blood_%d_%d" % [target_index, decal_index]                     # Keep one reusable overlay sprite per target decal and local view.
+			var decal_sprite := _combat_sprite(decal_key)                                            # Draw the red blob in the same clipped combat layer as the visible character.
+			var body_texture: Texture2D = null                                                        # Read the exact animated frame currently forming the visible character silhouette.
+			if body_sprite is AnimatedSprite2D:
+				var animated_body := body_sprite as AnimatedSprite2D
+				if animated_body.sprite_frames != null:
+					body_texture = animated_body.sprite_frames.get_frame_texture(animated_body.animation, animated_body.frame) # Match the live normal animation frame's alpha exactly.
+			elif body_sprite is Sprite2D:
+				body_texture = (body_sprite as Sprite2D).texture                                       # Match the one-frame hit-reaction replacement's alpha exactly.
+			if body_texture == null:
+				continue                                                                               # Do not draw an unstenciled mark if an edited sprite temporarily has no frame texture.
+			var body_texture_size := Vector2(body_texture.get_size())                                # Convert the stored source-pixel offset into this exact frame's normalized UV space.
+			if body_texture_size.x <= 0.0 or body_texture_size.y <= 0.0:
+				continue                                                                               # Avoid invalid UV math for an incomplete imported frame.
+			decal_sprite.texture = body_texture                                                      # Use the full character frame solely as the shader's alpha stencil, not as visible artwork.
+			var decal_material := decal_sprite.material as ShaderMaterial                            # Give every independently placed blood mark its own center/shape parameters.
+			if decal_material == null or decal_material.shader != PLAYER_BLOOD_DECAL_SHADER:
+				decal_material = ShaderMaterial.new()
+				decal_material.shader = PLAYER_BLOOD_DECAL_SHADER
+				decal_sprite.material = decal_material                                                 # Replace any old world-palette material with the alpha-stencil blood shader.
+			var blood_offset := _player_blood_offset_for_cardinal_facing(decal, target_state)        # Move the same injury to its direction-specific source pixel layout when the character turns.
+			var blood_center := Vector2(0.5, 0.5) + blood_offset / body_texture_size                # Position this one-pixel mark in the active cardinal character frame rather than as a free rectangular sprite.
+			decal_material.set_shader_parameter("blood_mask", _projectile_pixel_texture())          # Use a literal one-pixel source mask; body marks are never blobs or scaled cards.
+			decal_material.set_shader_parameter("blood_center", blood_center)                       # Tell the shader where this single pixel sits inside the current character frame UVs.
+			decal_material.set_shader_parameter("blood_size", Vector2(1.0 / body_texture_size.x, 1.0 / body_texture_size.y)) # Preserve exactly one character-source texel of blood at any actor distance.
+			decal_material.set_shader_parameter("blood_color", Color(PLAYER_BLOOD_PIXEL_COLOR.r, PLAYER_BLOOD_PIXEL_COLOR.g, PLAYER_BLOOD_PIXEL_COLOR.b, float(decal.get("alpha", 0.8)))) # Keep body blood fifty percent darker than the brighter world and camera blood effects.
+			decal_sprite.self_modulate = Color.WHITE                                                  # Let the blood shader control color/alpha without a leftover palette tint.
+			decal_sprite.position = body_sprite.position                                               # Align the full-frame stencil sprite exactly with the rendered actor center.
+			decal_sprite.scale = body_sprite.scale                                                    # Keep stencil UVs and visible body pixels registered at the same world depth scale.
+			decal_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                          # Preserve each irregular pixel blob without filtering.
+			decal_sprite.rotation = 0.0                                                              # Keep blood marks in the source sprite's axis-aligned pixel language.
+			decal_sprite.z_index = body_sprite.z_index + 4                                           # Keep a wound readable over the body and its brief hit-reaction replacement.
+			decal_sprite.visible = true                                                              # Reveal this accumulated injury mark.
+			used[decal_key] = true                                                                    # Preserve it until a heart or respawn removes the underlying decal description.
 	_hide_unused_combat_sprites(used)                                                          # Hide stale bullets, impacts, and hit art.
+
+
+# _coin_hud_texture: Returns the fixed full-detail Blender coin requested for the compact score icon.
+func _coin_hud_texture() -> Texture2D:
+	return COIN_HUD_TEXTURE                                                                     # Keep the HUD independent from the depth-selected world coin LOD assets.
+
+
+# _coin_animation_frame_index: Resolves one shared frame index from the canonical near-coin resource.
+func _coin_animation_frame_index() -> int:
+	var frame_count := COIN_SPRITE_FRAMES.get_frame_count(COIN_ANIMATION)                     # Keep the animation clock in one resource while every LOD uses matching four-frame artwork.
+	if frame_count == 0:
+		return 0                                                                                  # Leave a safe frame index available while the resource is being edited or fails to import.
+	var animation_speed := COIN_SPRITE_FRAMES.get_animation_speed(COIN_ANIMATION)             # Honor Coin_Sprites.tres's configured playback speed instead of duplicating it in code.
+	if animation_speed <= 0.0:
+		return 0                                                                                  # Leave a deliberately paused future resource on its first valid frame.
+	var frame_duration := 1.0 / animation_speed
+	return int(Time.get_ticks_msec() / (frame_duration * 1000.0)) % frame_count                # Keep every visible world coin synchronized through one authored spin cycle.
+
+
+# _coin_sprite_frames_for_depth: Selects the hand-drawn coin silhouette that matches the existing world-depth bands.
+func _coin_sprite_frames_for_depth(world_view_depth: float) -> SpriteFrames:
+	if world_view_depth < 1.46:
+		return COIN_SPRITE_FRAMES                                                               # Preserve the eight-pixel coin around the active camera and nearest lane.
+	if world_view_depth < 2.46:
+		return COIN_SPRITE_FRAMES_6                                                             # Replace the previous 1.27/1.56 shader grouping with authored six-pixel art.
+	if world_view_depth < 2.96:
+		return COIN_SPRITE_FRAMES_4                                                             # Replace the previous 1.75 shader grouping with authored four-pixel art.
+	if world_view_depth < 3.63:
+		return COIN_SPRITE_FRAMES_3                                                             # Cover the former 2.0/2.5 stride bands with authored three-pixel art.
+	return COIN_SPRITE_FRAMES_2                                                               # Use the explicit two-pixel silhouette beyond the final perspective band.
+
+
+# _coin_animation_texture: Returns the current frame from the depth-selected authored coin animation.
+func _coin_animation_texture(world_view_depth: float, frame_index: int) -> Texture2D:
+	var frames := _coin_sprite_frames_for_depth(world_view_depth)
+	var frame_count := frames.get_frame_count(COIN_ANIMATION)
+	if frame_count == 0:
+		return null                                                                               # Avoid an invalid texture lookup if an authored LOD resource is incomplete.
+	return frames.get_frame_texture(COIN_ANIMATION, posmod(frame_index, frame_count))          # Keep all LODs in phase even if a future resource has a different frame count.
+
+
+# _heart_animation_frame_index: Resolves one shared frame index from the canonical eight-pixel heart resource.
+func _heart_animation_frame_index() -> int:
+	var frame_count := HEART_SPRITE_FRAMES.get_frame_count(&"Heart")                          # Keep the animation clock in one resource while every LOD uses matching four-frame artwork.
+	if frame_count == 0:
+		return 0                                                                                  # Leave a safe frame index available while the resource is temporarily incomplete during editing.
+	var animation_speed := HEART_SPRITE_FRAMES.get_animation_speed(&"Heart")                  # Honor Heart.tres's own playback speed rather than duplicating it in code.
+	if animation_speed <= 0.0:
+		return 0                                                                                  # Leave an intentionally paused future resource on its first valid frame.
+	var frame_duration := 1.0 / animation_speed
+	return int(Time.get_ticks_msec() / (frame_duration * 1000.0)) % frame_count                # Synchronize all visible world hearts through the authored pulse cycle.
+
+
+# _heart_sprite_frames_for_depth: Selects the hand-drawn heart silhouette that matches the existing world-depth bands.
+func _heart_sprite_frames_for_depth(world_view_depth: float) -> SpriteFrames:
+	if world_view_depth < 1.46:
+		return HEART_SPRITE_FRAMES                                                              # Preserve the eight-pixel heart around the active camera and nearest lane.
+	if world_view_depth < 1.96:
+		return HEART_SPRITE_FRAMES_7                                                            # Replace the first remote shader grouping with authored seven-pixel art.
+	if world_view_depth < 2.46:
+		return HEART_SPRITE_FRAMES_6                                                            # Replace the next remote band with authored six-pixel art.
+	if world_view_depth < 2.96:
+		return HEART_SPRITE_FRAMES_5                                                            # Use authored five-pixel art at far distance.
+	if world_view_depth < 3.29:
+		return HEART_SPRITE_FRAMES_4                                                            # Use authored four-pixel art at very far distance.
+	return HEART_SPRITE_FRAMES_3                                                              # Use the explicit three-pixel silhouette at the furthest visible depth.
+
+
+# _heart_animation_texture: Returns the current frame from the depth-selected authored heart animation.
+func _heart_animation_texture(world_view_depth: float, frame_index: int) -> Texture2D:
+	var frames := _heart_sprite_frames_for_depth(world_view_depth)
+	var frame_count := frames.get_frame_count(&"Heart")
+	if frame_count == 0:
+		return null                                                                               # Avoid an invalid texture lookup if an authored LOD resource is incomplete.
+	return frames.get_frame_texture(&"Heart", posmod(frame_index, frame_count))               # Keep all heart LODs in phase even if a future resource has a different frame count.
+
+
+# _gun_smoke_texture: Samples the non-looping authored gunsmoke sequence from its remaining shared lifetime.
+func _gun_smoke_texture(remaining_time: float, variant: String) -> Texture2D:
+	var frames := GUN_SMOKE_B_SPRITE_FRAMES if variant == "B" else GUN_SMOKE_A_SPRITE_FRAMES  # Select the one variant assigned when the shared shot was fired.
+	var frame_count := frames.get_frame_count(GUN_SMOKE_ANIMATION)                             # Read the exact authored frame count so later edits do not require code changes.
+	if frame_count == 0:
+		return null                                                                               # Avoid an invalid lookup while the effect resource is being edited.
+	var animation_speed := frames.get_animation_speed(GUN_SMOKE_ANIMATION)                     # Honor the selected resource's playback speed.
+	if animation_speed <= 0.0:
+		return frames.get_frame_texture(GUN_SMOKE_ANIMATION, 0)                                  # Keep an intentionally paused future effect on its first valid frame.
+	var elapsed_time := maxf(GUN_SMOKE_DURATION - remaining_time, 0.0)                         # Convert the countdown stored in shared combat state into animation time.
+	var frame_index := mini(int(floorf(elapsed_time * animation_speed)), frame_count - 1)      # Hold the final smoke image until the event's duration expires.
+	return frames.get_frame_texture(GUN_SMOKE_ANIMATION, frame_index)                          # Return the corresponding authored smoke frame.
 
 
 # _gun_animation_texture: Samples the authored looping Gun animation for the in-world powerup.
@@ -2620,7 +3418,7 @@ func _gun_animation_texture() -> Texture2D:
 
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
-func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0) -> void:
+func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0, use_authored_coin_lod := false, coin_frame_index := 0, use_authored_heart_lod := false, heart_frame_index := 0) -> void:
 	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
 	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16)): # Keep remote collectibles inside the camera fan; normal back-to-front Canvas drawing resolves wall coverage.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
@@ -2628,11 +3426,19 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
 	if actor_height <= 0.0:
 		return                                                                                    # Avoid degenerate or behind-camera projections.
+	var world_view_depth := float(projection.get("view_depth", 0.0))                          # Reuse the projected depth for authored LOD choice and shader configuration.
+	var render_texture: Texture2D = texture                                                     # Preserve the supplied texture for pickups that do not have authored LOD frames.
+	if use_authored_coin_lod:
+		render_texture = _coin_animation_texture(world_view_depth, coin_frame_index)             # Select an exact authored coin texture only after its true camera depth is known.
+	elif use_authored_heart_lod:
+		render_texture = _heart_animation_texture(world_view_depth, heart_frame_index)           # Select an exact authored heart texture only after its true camera depth is known.
+	if render_texture == null:
+		return                                                                                    # Skip the pickup safely if its edited resource has no valid animation frame.
 	var sprite := _combat_sprite(key)                                                          # Fetch/create this pickup's per-view cached sprite.
-	sprite.texture = texture                                                                    # Use the authored coin or gun pixel art.
+	sprite.texture = render_texture                                                             # Use the authored coin LOD, heart, or gun pixel art.
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
-	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, float(projection.get("view_depth", 0.0))) # Keep pickups on the same depth-driven source-pixel grid.
+	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, world_view_depth, not (use_authored_coin_lod or use_authored_heart_lod)) # Keep non-LOD pickups on the shader grid while authored coin and heart LODs remain unmodified.
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
@@ -2985,6 +3791,7 @@ func _update_scoreboard_shop_input() -> void:
 				state["coins"] = coins - 5
 				state["health"] = mini(PLAYER_MAX_HEALTH, int(state.get("health", 0)) + 1)
 				player_states[player_index] = state
+				_clear_camera_blood_for_heart(player_index)                                             # Treat a purchased heart as the same one-health recovery, removing one matching set of close-screen blood drops.
 				_play_pickup_sound(heart_pickup_player)                                               # Reuse the health cue for a successful vending-machine heart purchase.
 			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10:
 				state["coins"] = coins - 10
@@ -7061,7 +7868,7 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 
 
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
-func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_cell_walls := false) -> Dictionary: # Project world art from its collision-safe center point.
+func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_cell_walls := false, use_unclamped_effect_projection := false) -> Dictionary: # Project world art from its collision-safe center point.
 	# The coordinate compositor owns the live in-between camera pose.  Use its
 	# exact wall/floor projection for every remote world object so actors,
 	# pickups, bullets, and impacts travel continuously with a transition rather
@@ -7076,7 +7883,8 @@ func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_
 		if fallback_renderer != null and fallback_renderer.has_method("runtime_project_world_point_for_current_pose"):
 			coordinate_renderer = fallback_renderer
 	if coordinate_renderer != null:
-		var runtime_projection: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", target_world)
+		var projection_method := "runtime_project_world_effect_point_for_current_pose" if use_unclamped_effect_projection and coordinate_renderer.has_method("runtime_project_world_effect_point_for_current_pose") else "runtime_project_world_point_for_current_pose" # Use raw point depth only for a moving world effect; actors retain their protected near-cell display projection.
+		var runtime_projection: Variant = coordinate_renderer.call(projection_method, target_world)
 		if runtime_projection is Dictionary and bool(runtime_projection.get("visible", false)):
 			var runtime_depth := float(runtime_projection.get("view_depth", 0.0))
 			var runtime_camera_origin: Vector2 = runtime_projection.get("camera_origin", Vector2.ZERO)
@@ -8379,7 +9187,12 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 func _regenerate_runtime_map(restart_round_music := false) -> void:                         # Declare this function.
 	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
 	active_projectiles.clear()                                                                 # Remove shots that belonged to the old maze topology.
-	active_impacts.clear()                                                                     # Remove old-wall impact flashes with the old map.
+	active_projectile_trails.clear()                                                           # Remove hanging projectile particles that belonged to the old maze topology.
+	active_wall_debris.clear()                                                                 # Remove moving wall splinters that belonged to the old maze topology.
+	active_wall_bullet_holes.clear()                                                           # Remove retained wall decals that belonged to the old maze topology.
+	active_wall_impact_smokes.clear()                                                          # Remove wall-contact GunSmoke clouds that belonged to the old maze topology.
+	active_muzzle_smoke_particles.clear()                                                       # Remove procedural barrel smoke that belonged to the old maze topology.
+	active_blood_splatters.clear()                                                              # Remove character-hit blood particles that belonged to the old maze topology.
 	was_regenerate_map_pressed = true                                                          # Keep the regenerate key from firing again until released.
 	_mark_debug_map_static_layers_dirty()                                                      # Make every local map rebuild its retained maze walls after the topology changes.
 	if TEMP_GRID_AUDIT:                                                                        # Keep R scoped to the single-player 9x9 audit map.

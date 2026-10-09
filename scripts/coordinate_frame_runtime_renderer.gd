@@ -1055,6 +1055,32 @@ func runtime_wall_impact_layer(edge_key: String, projectile_direction: Vector2) 
 	return -1
 
 
+# runtime_wall_impact_colors: Samples a 2×2 texel patch around the real wall contact so splinters can use nearby wood-color variation.
+func runtime_wall_impact_colors(edge_key: String, hit_position: Vector2) -> Array[Color]:
+	var fallback_colors: Array[Color] = [Color(0.45, 0.28, 0.12, 1.0), Color(0.38, 0.22, 0.09, 1.0), Color(0.52, 0.33, 0.15, 1.0), Color(0.31, 0.18, 0.07, 1.0)] # Keep four usable wood tones while the runtime image is unavailable.
+	if wall_source_image == null:
+		return fallback_colors                                                                     # Fall back only while the runtime source image is unavailable.
+	for entry in last_wall_entries:
+		if String(entry.get("edge_key", "")) != edge_key:
+			continue                                                                                 # Sample only the exact physical wall face that received this impact.
+		var world_a: Vector2 = entry.get("world_a", Vector2.ZERO)
+		var world_b: Vector2 = entry.get("world_b", Vector2.ZERO)
+		var edge_vector := world_b - world_a
+		if edge_vector.length_squared() <= 0.000001:
+			break                                                                                    # Do not divide by a malformed zero-length edge.
+		var u := clampf((hit_position - world_a).dot(edge_vector) / edge_vector.length_squared(), 0.0, 1.0) # Convert the actual contact point into the wall texture's left-to-right coordinate.
+		var texture_x := clampi(roundi(u * float(wall_source_image.get_width() - 1)), 0, wall_source_image.get_width() - 1)
+		var texture_y := clampi(roundi(float(wall_source_image.get_height() - 1) * 0.58), 0, wall_source_image.get_height() - 1) # Sample the stable mid-wall bullet-height band; the top-down hit has no independent vertical coordinate.
+		var sampled_colors: Array[Color] = []
+		for offset in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
+			var sample_x := clampi(texture_x + offset.x, 0, wall_source_image.get_width() - 1)
+			var sample_y := clampi(texture_y + offset.y, 0, wall_source_image.get_height() - 1)
+			var sampled_color := wall_source_image.get_pixel(sample_x, sample_y)
+			sampled_colors.append(sampled_color if sampled_color.a > 0.01 else fallback_colors[sampled_colors.size()]) # Retain all four nearby texel colors, replacing only transparent samples.
+		return sampled_colors                                                                     # Let each chunk choose one actual color from the contact patch.
+	return fallback_colors                                                                      # Keep four visible wood-color fallbacks if this frame's wall face is not retained.
+
+
 # _visible_floor_cells: Produces one projected quad per real maze cell using
 # the exact same camera origin and yaw basis as _visible_wall_entries.  The
 # authored red dots are therefore a diagnostic of this data, not a fragile
@@ -1818,7 +1844,7 @@ func runtime_camera_origin_for_current_pose() -> Vector2:
 # runtime_project_world_point_for_current_pose: a shared bridge for players,
 # pickups, projectiles, and impacts.  Its camera pose is exactly the pose used
 # by the wall, floor, and ceiling quads for all authored transition frames.
-func runtime_project_world_point_for_current_pose(world_position: Vector2, object_height := WORLD_ACTOR_HEIGHT, allow_protected_near_debug := false) -> Dictionary:
+func runtime_project_world_point_for_current_pose(world_position: Vector2, object_height := WORLD_ACTOR_HEIGHT, allow_protected_near_debug := false, protect_near_display := true) -> Dictionary:
 	if controller == null:
 		return {"visible": false}
 	var forward: Vector2 = controller._view_forward_vector().normalized()
@@ -1832,7 +1858,7 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 		return {"visible": false, "view_depth": raw_depth, "view_side": local.x}
 	# Keep world movement continuous.  Discrete LOD bands affect only the source
 	# pixel grid; they must never make an opponent jog in place then lurch.
-	var display_local := Vector2(local.x, maxf(raw_depth, WORLD_ACTOR_PROTECTED_DISPLAY_DEPTH))
+	var display_local := Vector2(local.x, maxf(raw_depth, WORLD_ACTOR_PROTECTED_DISPLAY_DEPTH) if protect_near_display else raw_depth) # Keep actors stable in the protected near cell, but let explicitly world-space effects continue through it.
 	var feet := _project_view_point(display_local, 0.0)
 	var head := _project_view_point(display_local, object_height)
 	var visual_depth := maxf(raw_depth - TEMPLATE_CAMERA_REAR_OFFSET, 0.0)
@@ -1853,6 +1879,11 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 		"forward": forward,
 		"right": right,
 	}
+
+
+# runtime_project_world_effect_point_for_current_pose: Projects a point-sized world effect through the live camera without the actor-only near-cell display clamp.
+func runtime_project_world_effect_point_for_current_pose(world_position: Vector2) -> Dictionary:
+	return runtime_project_world_point_for_current_pose(world_position, WORLD_ACTOR_HEIGHT, false, false) # Preserve the same camera, walls, and far clip while allowing a bullet/trail to cross the local cell continuously.
 
 
 func _depth_light(depth: float) -> float:
