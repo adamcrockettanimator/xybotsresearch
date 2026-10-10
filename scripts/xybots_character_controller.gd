@@ -234,17 +234,19 @@ const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(8.0, 8.0)                          
 const CARDINAL_SLOT_GUIDE_MAP_SCALE := 1.0                                                   # Keep authored guide coordinates in their native maze-cell scale; they may extend beyond the panel.
 const DEBUG_VIEW_CONE_DEPTH := 5.5                                                           # Match the coordinate renderer's farthest usable depth so actors do not vanish before the sixth-cell test band.
 const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Match the top-down cone width from the Wall_Grid reference image.
-const CAMERA_REAR_OFFSET := 0.46                                                             # Place the cell-locked camera just in front of the rear wall for the current facing.
+const DEFAULT_CAMERA_REAR_OFFSET := 0.46                                                     # Preserve the authored rear-camera placement as the live tuning reset value.
+const NEAR_VIEW_TUNING_CONFIG_PATH := "user://near_view_tuning.cfg"                         # Persist deliberately saved F3 near-view values outside the project and reload them on the next launch.
 const LOCAL_TILE_WORLD_HALF_EXTENT := 0.5                                                    # Convert one normalized in-tile offset into one full square half-width in world-grid units.
-const SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                                # Keep the self-view body scale sampled from visible S0 space, not the camera-plane crop edge.
-const LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                                  # Keep the local feet anchor inside the projected floor-zone polygon.
-const LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                                  # Keep the local feet slightly inside the front edge of the projected floor-zone polygon.
-const NEAREST_ACTOR_LOD_HEIGHT := 48.0                                                       # Match the coordinate renderer's protected largest actor LOD; heads should sit near the center of the 120-pixel view, not crowd the ceiling.
+const DEFAULT_SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                        # Preserve the authored protected self-scale depth as a live tuning reset value.
+const DEFAULT_LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                          # Preserve the authored lateral feet safety margin as a live tuning reset value.
+const DEFAULT_LOCAL_FEET_DEPTH_MARGIN_PIXELS := 4.0                                          # Preserve the authored front feet safety margin as a live tuning reset value.
+const DEFAULT_NEAREST_ACTOR_LOD_HEIGHT := 48.0                                               # Preserve the authored nearest-body height as a live tuning reset value.
 const CHARACTER_NEAREST_LAYER := 3125                                                        # Match the near end of the higher-precision shared back-to-front world draw scale.
 const LOCAL_CHARACTER_LAYER := 3500                                                          # The local first-person body is nearest to its own camera and remains above world geometry.
 const WORLD_EFFECT_FOREGROUND_LAYER := 3400                                                  # Keep travelling combat effects continuously visible above camera-facing wall art until their real collision.
 const WORLD_DRAW_DEPTH_RANGE := 6.25                                                        # Cover the coordinate renderer's useful 5.5-cell view plus its far clip margin.
 const WORLD_DRAW_DEPTH_SCALE := 500.0                                                       # Preserve sub-centicell actor-versus-wall depth differences without exceeding Godot's normal Canvas z range.
+const SAME_CELL_ACTOR_SORT_SPAN := 80.0                                                     # Reserve a small depth range inside one wall-cell layer so same-cell actors and future props sort by real camera distance.
 const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
 const LOCAL_REAR_CAMERA_SCALE_BOOST := 0.20                                                   # Enlarge the local body near the camera after cropping hides the lower frame.
 const DEBUG_WALL_LABELS_ENABLED := false                                                    # Hide renderer-selected wall labels while the blue slot-grid audit is being checked.
@@ -708,11 +710,34 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_pickup_range_debug := false                                                 # Show the same-cell front/back pickup ellipse on the top-down source map.
 @export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
+@export var show_near_view_tuning_debug := false                                             # Show raw-versus-clamped local anchors in every player view plus their shared top-down truth guides.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
 @export var walk_through_walls_cheat := false                                                # Let a deliberate debug cheat bypass only player movement collision, including the outer map boundary.
 @export_range(0.0, 900.0, 0.001, "or_greater") var combat_round_duration_seconds := DEFAULT_COMBAT_ROUND_SECONDS # Let the inspector use zero for an infinite test round or tune the music-length match.
+
+@export_group("Near View Live Tuning")                                                       # Keep first-person camera-clamp controls editable in the Remote inspector while the game runs.
+@export var experimental_forward_cell_play_space := false                                     # Kept disabled: the accepted experiment keeps the player in the original near/source cell, never the cell ahead.
+@export var use_near_cell_motion_envelope := true                                            # Keep the local body in the current near cell and use its own extended rear-edge display envelope; never translate it into another grid cell.
+@export_range(0.0, 48.0, 1.0) var near_rear_exit_pixels := 24.0                             # Let the body feet travel this far below the authored near floor edge at the south boundary, creating a natural partial exit.
+@export_range(0.0, 48.0, 1.0) var near_rear_side_exit_pixels := 22.0                        # Flare the south-west/south-east screen limits by this amount so each rear corner can partially leave the frame.
+@export_range(0.50, 1.0, 0.01) var side_transition_trigger_offset := 0.90                    # Start an open lateral crossing at this normalized physical offset; 0.90 is the accepted current tuning.
+@export_range(0.50, 1.0, 0.01) var side_transition_entry_offset := 0.90                      # Place the body this far inside the destination cell after a lateral crossing; 0.90 is the accepted current tuning.
+@export_range(0.0, 1.0, 0.01) var near_body_scale_depth_offset := 0.0                       # Sample body size from a monotonic local depth range; the accepted tuning uses the unshifted local curve.
+@export_range(1.0, 4.0, 0.01) var near_camera_crop_zoom := 1.0                              # Keep the fixed wireframe at its authored framing by default; crop remains an optional visual-only experiment.
+@export_range(0.0, 160.0, 0.1) var near_camera_crop_focus_x := 80.0                         # Center the dormant optional crop on the authored frame.
+@export_range(0.0, 120.0, 0.1) var near_camera_crop_focus_y := 60.0                         # Center the dormant optional crop on the authored frame.
+@export_range(0.20, 0.70, 0.01) var near_camera_rear_offset := DEFAULT_CAMERA_REAR_OFFSET    # Move the world camera fore/aft inside its cell; affects screen projection, view cone, and world-space VFX anchors.
+@export_range(0.50, 1.50, 0.01) var near_self_scale_multiplier := 1.0                        # Scale the real world-projected local body without changing collision, pickup, or VFX positions.
+@export_range(48.0, 192.0, 1.0) var near_body_height_cap_pixels := 96.0                     # Stop the local billboard from growing without bound at the camera plane; additional close travel is conveyed by crop/exit instead.
+@export_range(0.0, 96.0, 1.0) var near_side_keep_pixels := 0.0                              # Keep this many screen pixels of a body visible at either side; zero leaves the raw world projection entirely unmodified.
+@export_range(0.0, 96.0, 1.0) var near_bottom_keep_pixels := 0.0                            # Keep this many top-of-PNG screen pixels visible when an elevated camera looks down past the local player; zero lets it naturally leave the bottom.
+@export_range(0.20, 1.20, 0.01) var near_self_min_actor_scale_view_depth := DEFAULT_SELF_MIN_ACTOR_SCALE_VIEW_DEPTH # Retained legacy opponent fallback setting; not part of the local world-truth deviation controls.
+@export_range(0.0, 20.0, 0.1) var near_feet_side_margin_pixels := DEFAULT_LOCAL_FEET_FLOOR_MARGIN_PIXELS # Retained legacy cardinal-clamp value for compatibility while the local body now uses exit allowances.
+@export_range(0.0, 20.0, 0.1) var near_feet_depth_margin_pixels := DEFAULT_LOCAL_FEET_DEPTH_MARGIN_PIXELS # Retained legacy cardinal-clamp value for compatibility while the local body now uses exit allowances.
+@export_range(28.0, 72.0, 1.0) var near_actor_height_pixels := DEFAULT_NEAREST_ACTOR_LOD_HEIGHT # Retained legacy fixed-body height for compatibility while the local body now uses continuous world scale.
+@export_range(0.50, 1.50, 0.01) var diagonal_move_distance_multiplier := 1.0                 # Retained movement diagnostic; not a near-view projection control.
 
 @export_group("3D Diagnostic Camera")                                                       # Group the editable 3D diagnostic camera controls in the Godot inspector.
 @export_range(45.0, 110.0, 1.0) var diagnostic_3d_camera_fov := 78.0                         # Let the user tune the 3D diagnostic camera field of view.
@@ -894,7 +919,10 @@ var heart_pickup_player: AudioStreamPlayer
 var machine_gun_pickup_player: AudioStreamPlayer
 var next_combat_visual_id := 1                                                                  # Give shared shots and impacts stable keys inside each split-screen view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
+var debug_menu_canvas: CanvasLayer                                                           # Keep the F3 controls on their own highest-priority canvas instead of whichever player HUD is currently bound.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
+var debug_menu_tuning_spins: Dictionary = {}                                                 # Store live near-view SpinBoxes so F3 tuning never depends on the Remote debugger.
+var near_view_debug_last_map_frame := -1                                                     # Throttle the optional dynamic top-down diagnostic so it does not create a large Remote-debugger packet.
 var debug_menu_open := false                                                                 # Track whether the debug-menu panel is currently visible.
 var debug_combat_hit_label: Label                                                            # Show the most recent final combat line-of-sight verdict only inside the F3 menu.
 var last_projectile_hit_debug := "No final projectile hit check yet."                        # Preserve the exact wall/cell evidence from the latest attempted damage event.
@@ -935,6 +963,7 @@ func _ready() -> void:                                                          
 	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
 	_setup_deathmatch_overlays()
+	_load_near_view_tuning()                                                                   # Restore only the user's deliberately saved F3 near-view values before building controls and first rendering the views.
 	_setup_debug_menu()                                                                        # Create the shared on-screen menu for toggling diagnostic overlays.
 	_load_slot_graph_tuner_overrides()                                                         # Restore saved slot-vector adjustments before the first render.
 	if enable_3d_diagnostic:                                                                   # Only create the deprecated 3D diagnostic when explicitly requested.
@@ -1053,10 +1082,14 @@ func _input(event: InputEvent) -> void:                                         
 
 # _setup_debug_menu: Builds a shared on-screen menu for the current overlay diagnostics.
 func _setup_debug_menu() -> void:
+	debug_menu_canvas = CanvasLayer.new()                                                     # Create one dedicated UI plane that is independent of the per-player HUD canvas binding.
+	debug_menu_canvas.name = "DebugOverlayCanvas"                                             # Make the always-on-top diagnostic surface easy to find in the scene tree.
+	debug_menu_canvas.layer = 1000                                                            # Draw above all player HUDs, combat overlays, top-down maps, guide labels, and the end-round canvas.
+	add_child(debug_menu_canvas)                                                               # Keep the menu in the root scene so rebinding P1/P2 HUD contexts cannot change its draw order.
 	debug_menu_panel = PanelContainer.new()                                                    # Create one UI panel above both local player views.
 	debug_menu_panel.name = "DebugOverlayMenu"                                                # Give the panel a clear scene-tree name for editor inspection.
 	debug_menu_panel.z_index = 700                                                            # Keep F3 controls above the high-priority ray map while inspecting it.
-	debug_menu_panel.position = Vector2(12.0, 92.0)                                            # Place the menu below the existing runtime status text.
+	debug_menu_panel.position = Vector2(DEBUG_MAP_PANEL_SIZE.x + 20.0, 12.0)                  # Keep F3 controls beside the 160px top-down truth map instead of covering the local player/camera markers.
 	debug_menu_panel.custom_minimum_size = Vector2(268.0, 0.0)                                # Keep labels readable without covering the entire game window.
 	debug_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP                                  # Prevent mouse clicks on the menu from passing to the playfield.
 	debug_menu_panel.visible = false                                                           # Start closed so the prototype view stays uncluttered.
@@ -1065,7 +1098,7 @@ func _setup_debug_menu() -> void:
 	pixel_theme.set_font("font", "Button", pixel_hud_font)                                 # Disable smoothing on the JSON-save button.
 	pixel_theme.set_font("font", "CheckBox", pixel_hud_font)                               # Disable smoothing on all debug toggles.
 	debug_menu_panel.theme = pixel_theme                                                       # Apply the one local theme without changing Godot's editor UI.
-	canvas_layer.add_child(debug_menu_panel)                                                   # Put the menu on the same UI layer as the status text and source maps.
+	debug_menu_canvas.add_child(debug_menu_panel)                                              # Put the menu on the dedicated highest-priority debug canvas.
 
 	var content := VBoxContainer.new()                                                         # Stack the title, option rows, and usage hint vertically.
 	content.add_theme_constant_override("separation", 4)                                     # Keep the compact debug controls easy to scan.
@@ -1080,6 +1113,20 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "rays", "Ray Casts")                                     # Add the raycast inspection overlay toggle.
 	_add_debug_menu_check(content, "pickup_range", "Pickup Range")                         # Show the true same-cell pickup footprint for tuning.
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
+	_add_debug_menu_check(content, "near_view_tuning", "Near View Truth Guides")             # Show raw world truth versus the optional screen-retention presentation in both player views and the shared top-down map.
+	_add_debug_menu_tuning_spin(content, "rear_exit", "Rear exit", 0.0, 48.0, 1.0)            # Tune the south-edge partial body exit without changing the fixed camera or wireframe geometry.
+	_add_debug_menu_tuning_spin(content, "rear_side_exit", "Rear side exit", 0.0, 48.0, 1.0) # Tune only the south-west/south-east corner flare of the near-cell body path.
+	_add_debug_menu_tuning_spin(content, "side_trigger", "Side trigger", 0.50, 1.0, 0.01) # Choose where an open left/right edge begins its authored crossing relative to the closed-wall capsule stop.
+	_add_debug_menu_tuning_spin(content, "side_entry", "Side entry", 0.50, 1.0, 0.01)     # Choose how far inside the destination cell a lateral crossing places the body before stable near-cell presentation resumes.
+	_add_debug_menu_tuning_spin(content, "body_scale_depth", "Body scale depth", 0.0, 1.0, 0.01) # Tune the monotonic local-depth size sample without moving the camera or body floor anchor.
+	_add_debug_menu_tuning_spin(content, "crop_zoom", "Crop zoom", 1.0, 4.0, 0.01)            # Enlarge the cell-ahead area inside the fixed 160x120 output crop.
+	_add_debug_menu_tuning_spin(content, "crop_x", "Crop focus X", 0.0, 160.0, 0.1)           # Let the experiment center the complete forward cell horizontally.
+	_add_debug_menu_tuning_spin(content, "crop_y", "Crop focus Y", 0.0, 120.0, 0.1)           # Let the experiment center the complete forward cell vertically.
+	_add_debug_menu_tuning_spin(content, "camera", "Camera rear", 0.20, 0.70, 0.01)          # Expose the real world camera fore/aft position.
+	_add_debug_menu_tuning_spin(content, "scale", "Player scale", 0.50, 1.50, 0.01)          # Scale only the rendered local body after its world-truth projection.
+	_add_debug_menu_tuning_spin(content, "size_cap", "Near size cap", 48.0, 192.0, 1.0)      # Stop the near-camera billboard from growing into an impossible uphill giant.
+	_add_debug_menu_tuning_spin(content, "side_keep", "Side keep", 0.0, 96.0, 1.0)           # Optionally retain an edge strip after a body naturally reaches a side of the viewport.
+	_add_debug_menu_tuning_spin(content, "bottom_keep", "Bottom keep", 0.0, 96.0, 1.0)       # Optionally retain only the top PNG strip after a body naturally travels beneath the elevated camera.
 	_add_debug_menu_check(content, "slot_grid", "Slot Grid (F2)")                           # Add the existing F2 quick-toggle as a menu option.
 	_add_debug_menu_check(content, "render_walls", "Render Walls")                          # Let floor/grid tuning run without opaque wall art covering the player view.
 	_add_debug_menu_check(content, "walk_through_walls", "Walk Through Walls (Cheat)")      # Allow deliberate out-of-bounds coordinate exploration without changing projectile or visibility collision.
@@ -1101,6 +1148,10 @@ func _setup_debug_menu() -> void:
 	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
 	save_tuner.pressed.connect(_save_slot_graph_tuner_overrides)                              # Save edits only when deliberately requested.
 	content.add_child(save_tuner)                                                              # Place save beneath the tuner toggle.
+	var save_near_view := Button.new()                                                         # Provide an explicit persistence action for the F3 near-view controls.
+	save_near_view.text = "Save Near View Tuning"                                             # Make it clear this saves the current live camera/body values, not level or wall data.
+	save_near_view.pressed.connect(_save_near_view_tuning)                                    # Never overwrite the tuning file except through this deliberate button press.
+	content.add_child(save_near_view)                                                          # Keep the save action beside the existing slot-graph save control.
 
 	var hint := Label.new()                                                                    # Provide the close hotkey inside the panel itself.
 	hint.text = "F3 closes this menu"                                                         # Make the invocation/close behavior discoverable at runtime.
@@ -1117,6 +1168,109 @@ func _add_debug_menu_check(parent: VBoxContainer, option_key: String, label_text
 	check.toggled.connect(_set_debug_option.bind(option_key))                                 # Apply user clicks through the shared option setter.
 	parent.add_child(check)                                                                    # Add the checkbox to the menu's vertical stack.
 	debug_menu_checks[option_key] = check                                                     # Save the node so keyboard toggles can refresh it later.
+
+
+
+# _add_debug_menu_tuning_spin: Adds one F3-side live numerical control for near-camera investigation.
+func _add_debug_menu_tuning_spin(parent: VBoxContainer, option_key: String, label_text: String, minimum: float, maximum: float, step: float) -> void:
+	var row := HBoxContainer.new()                                                             # Keep a compact descriptive label and one editable value on a single menu row.
+	var label := Label.new()                                                                   # Name the physical/display parameter instead of exposing a source-code identifier.
+	label.text = label_text                                                                    # Use the short human-readable label in the diagnostic panel.
+	label.custom_minimum_size = Vector2(122.0, 0.0)                                           # Keep every SpinBox aligned for quick A/B changes.
+	row.add_child(label)                                                                      # Add the parameter label before its value control.
+	var spin := SpinBox.new()                                                                  # Use Godot's built-in typed numeric field with small arrow buttons.
+	spin.min_value = minimum                                                                  # Constrain the control to the same safe range as its exported runtime field.
+	spin.max_value = maximum                                                                  # Prevent accidental extreme values from making the near camera unusable.
+	spin.step = step                                                                          # Match the source field's intended adjustment increment.
+	spin.value = _near_view_tuning_value(option_key)                                          # Initialize from the current live state.
+	spin.custom_minimum_size = Vector2(92.0, 0.0)                                             # Leave room for decimals while fitting the existing F3 panel.
+	spin.value_changed.connect(_set_near_view_tuning_value.bind(option_key))                  # Apply each arrow/key adjustment immediately, without a game restart.
+	row.add_child(spin)                                                                       # Place the editable value beside its label.
+	parent.add_child(row)                                                                      # Add this control to the F3 diagnostic stack.
+	debug_menu_tuning_spins[option_key] = spin                                                # Retain it so keyboard/menu refreshes reflect Inspector or code changes too.
+
+
+
+# _near_view_tuning_value: Reads one live near-view parameter for its F3 SpinBox.
+func _near_view_tuning_value(option_key: String) -> float:
+	match option_key:
+		"rear_exit": return near_rear_exit_pixels
+		"rear_side_exit": return near_rear_side_exit_pixels
+		"side_trigger": return side_transition_trigger_offset
+		"side_entry": return side_transition_entry_offset
+		"body_scale_depth": return near_body_scale_depth_offset
+		"crop_zoom": return near_camera_crop_zoom
+		"crop_x": return near_camera_crop_focus_x
+		"crop_y": return near_camera_crop_focus_y
+		"camera": return near_camera_rear_offset
+		"scale": return near_self_scale_multiplier
+		"size_cap": return near_body_height_cap_pixels
+		"side_keep": return near_side_keep_pixels
+		"bottom_keep": return near_bottom_keep_pixels
+	return 0.0
+
+
+
+# _set_near_view_tuning_value: Applies one F3 live-tuning change and redraws the affected views immediately.
+func _set_near_view_tuning_value(value: float, option_key: String) -> void:
+	match option_key:
+		"rear_exit": near_rear_exit_pixels = value
+		"rear_side_exit": near_rear_side_exit_pixels = value
+		"side_trigger": side_transition_trigger_offset = value
+		"side_entry": side_transition_entry_offset = value
+		"body_scale_depth": near_body_scale_depth_offset = value
+		"crop_zoom": near_camera_crop_zoom = value
+		"crop_x": near_camera_crop_focus_x = value
+		"crop_y": near_camera_crop_focus_y = value
+		"camera": near_camera_rear_offset = value
+		"scale": near_self_scale_multiplier = value
+		"size_cap": near_body_height_cap_pixels = value
+		"side_keep": near_side_keep_pixels = value
+		"bottom_keep": near_bottom_keep_pixels = value
+	near_view_debug_last_map_frame = -1                                                      # Force one fresh top-down truth redraw after a parameter changes.
+	_render_all_player_views()                                                                # Make the screen-space effect visible at the exact adjustment moment.
+
+
+
+# _load_near_view_tuning: Restores only a prior deliberate F3 save; missing or malformed entries retain their code defaults.
+func _load_near_view_tuning() -> void:
+	var config := ConfigFile.new()                                                            # Keep near-view preference data isolated from the scene and project settings.
+	if config.load(NEAR_VIEW_TUNING_CONFIG_PATH) != OK:                                      # First launch simply uses the checked-in defaults.
+		return
+	near_rear_exit_pixels = clampf(float(config.get_value("near_view", "rear_exit", near_rear_exit_pixels)), 0.0, 48.0)
+	near_rear_side_exit_pixels = clampf(float(config.get_value("near_view", "rear_side_exit", near_rear_side_exit_pixels)), 0.0, 48.0)
+	side_transition_trigger_offset = clampf(float(config.get_value("near_view", "side_trigger", side_transition_trigger_offset)), 0.50, 1.0)
+	side_transition_entry_offset = clampf(float(config.get_value("near_view", "side_entry", side_transition_entry_offset)), 0.50, 1.0)
+	near_body_scale_depth_offset = clampf(float(config.get_value("near_view", "body_scale_depth", near_body_scale_depth_offset)), 0.0, 1.0)
+	near_camera_crop_zoom = clampf(float(config.get_value("near_view", "crop_zoom", near_camera_crop_zoom)), 1.0, 4.0)
+	near_camera_crop_focus_x = clampf(float(config.get_value("near_view", "crop_x", near_camera_crop_focus_x)), 0.0, 160.0)
+	near_camera_crop_focus_y = clampf(float(config.get_value("near_view", "crop_y", near_camera_crop_focus_y)), 0.0, 120.0)
+	near_camera_rear_offset = clampf(float(config.get_value("near_view", "camera_rear", near_camera_rear_offset)), 0.20, 0.70)
+	near_self_scale_multiplier = clampf(float(config.get_value("near_view", "player_scale", near_self_scale_multiplier)), 0.50, 1.50)
+	near_body_height_cap_pixels = clampf(float(config.get_value("near_view", "near_size_cap", near_body_height_cap_pixels)), 48.0, 192.0)
+	near_side_keep_pixels = clampf(float(config.get_value("near_view", "side_keep", near_side_keep_pixels)), 0.0, 96.0)
+	near_bottom_keep_pixels = clampf(float(config.get_value("near_view", "bottom_keep", near_bottom_keep_pixels)), 0.0, 96.0)
+
+
+# _save_near_view_tuning: Persists the complete F3 near-view control set only after the user presses its explicit button.
+func _save_near_view_tuning() -> void:
+	var config := ConfigFile.new()                                                            # Write a small Godot config in the user's app-data directory.
+	config.set_value("near_view", "rear_exit", near_rear_exit_pixels)
+	config.set_value("near_view", "rear_side_exit", near_rear_side_exit_pixels)
+	config.set_value("near_view", "side_trigger", side_transition_trigger_offset)
+	config.set_value("near_view", "side_entry", side_transition_entry_offset)
+	config.set_value("near_view", "body_scale_depth", near_body_scale_depth_offset)
+	config.set_value("near_view", "crop_zoom", near_camera_crop_zoom)
+	config.set_value("near_view", "crop_x", near_camera_crop_focus_x)
+	config.set_value("near_view", "crop_y", near_camera_crop_focus_y)
+	config.set_value("near_view", "camera_rear", near_camera_rear_offset)
+	config.set_value("near_view", "player_scale", near_self_scale_multiplier)
+	config.set_value("near_view", "near_size_cap", near_body_height_cap_pixels)
+	config.set_value("near_view", "side_keep", near_side_keep_pixels)
+	config.set_value("near_view", "bottom_keep", near_bottom_keep_pixels)
+	var save_result := config.save(NEAR_VIEW_TUNING_CONFIG_PATH)                             # Replace only this user-owned tuning file with the requested current snapshot.
+	if save_result != OK:
+		push_warning("Could not save near-view tuning to %s (error %d)." % [NEAR_VIEW_TUNING_CONFIG_PATH, save_result])
 
 
 
@@ -1142,6 +1296,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_pickup_range_debug                                                         # Return the same-cell collectible footprint diagnostic state.
 		"extents":
 			return show_perspective_extents_overlay                                                # Return the measured floor/actor extent overlay state.
+		"near_view_tuning":
+			return show_near_view_tuning_debug                                                     # Return whether live near-camera clamp guides are visible.
 		"slot_grid":
 			return show_slot_grid_debug                                                            # Return the blue wall-slot audit overlay state.
 		"render_walls":
@@ -1193,6 +1349,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 				show_top_down_source_overlay = true                                                  # The ellipse is meaningful only on the top-down source map.
 		"extents":
 			show_perspective_extents_overlay = enabled                                             # Show or hide projected floor and actor-boundary guides.
+		"near_view_tuning":
+			show_near_view_tuning_debug = enabled                                                  # Show raw/clamped local anchors in every player view and the shared top-down map.
+			if enabled:
+				show_top_down_source_overlay = true                                                  # The clamp is meaningful only alongside its world-space ground truth.
 		"slot_grid":
 			show_slot_grid_debug = enabled                                                         # Show or hide the blue numbered wall-slot audit grid.
 		"render_walls":
@@ -1244,6 +1404,10 @@ func _refresh_debug_menu() -> void:
 		var check: CheckBox = debug_menu_checks[option_key]                                      # Read the checkbox stored for this menu key.
 		if check != null:                                                                        # Skip a node only if it has been freed during scene teardown.
 			check.set_pressed_no_signal(_debug_option_value(String(option_key)))                   # Reflect the current flag without recursively redrawing.
+	for option_key in debug_menu_tuning_spins:                                                 # Keep F3 values synchronized after a Remote/inspector edit or map reset.
+		var spin: SpinBox = debug_menu_tuning_spins[option_key]                                  # Read the control retained for this stable tuning key.
+		if spin != null:
+			spin.set_value_no_signal(_near_view_tuning_value(String(option_key)))                  # Update without recursively rerendering during a UI refresh.
 	if debug_combat_hit_label != null:                                                         # Refresh the latest combat result whenever F3 is opened.
 		debug_combat_hit_label.text = "LAST COMBAT LOS\n" + last_projectile_hit_debug          # Keep gameplay diagnostics out of the normal split-screen HUD.
 
@@ -1533,6 +1697,8 @@ func _reset_combat_round() -> void:
 # _advance_combat_round: Runs the shared round timer and freezes only objective scoring when time expires.
 func _advance_combat_round(delta: float) -> void:
 	if not match_started or combat_round_complete or combat_round_duration_seconds <= 0.0:    # Do not start the clock until the first player joins.
+		return
+	if show_near_view_tuning_debug:                                                            # Keep an extended clamp-tuning session from silently ending the active round while all gameplay remains live.
 		return
 	combat_round_time_remaining = maxf(combat_round_time_remaining - delta, 0.0)            # Count down in real time rather than from either camera's animation state.
 	if combat_round_time_remaining <= 0.0:
@@ -2069,7 +2235,9 @@ func _update_combat_hud() -> void:
 				if timer_view != null:
 					timer_label.position = timer_view.position + Vector2((VIEWPORT_SIZE.x * timer_view.scale.x - timer_label.size.x * timer_view.scale.x) * 0.5, 3.0)
 					timer_label.scale = timer_view.scale
-				if combat_round_duration_seconds <= 0.0:
+				if show_near_view_tuning_debug:
+					timer_label.text = "TUNE"                                                       # Make the intentional timer pause visible in every player's own HUD.
+				elif combat_round_duration_seconds <= 0.0:
 					timer_label.text = "∞"
 				else:
 					var displayed_seconds := maxi(0, ceili(combat_round_time_remaining))
@@ -2134,9 +2302,10 @@ func _process_combat(delta: float) -> void:
 			_spawn_impact(impact_position, direction, hit_player_index, wall_edge_key)              # Show the two-frame authored impact art.
 			if hit_player_index >= 0:                                                               # Apply damage only for body collisions.
 				var target_was_dying := bool(player_states[hit_player_index].get("is_dying", false)) # Avoid treating a rejected hit against an already-defeated body as a new killing shot.
-				_apply_projectile_hit(hit_player_index, direction, int(shot["owner"]))                 # Revalidate the complete owner-to-target path before changing health.
-				var killing_shot := not target_was_dying and bool(player_states[hit_player_index].get("is_dying", false)) # Only the hit that actually starts death may leave persistent floor blood.
-				_spawn_blood_splatter(impact_position, direction, hit_player_index, killing_shot)      # Throw blood through the struck body after the hit result determines whether its floor drops persist.
+				var damage_applied := _apply_projectile_hit(hit_player_index, direction, int(shot["owner"])) # Revalidate the complete owner-to-target path before changing health or emitting a confirmed-body effect.
+				if damage_applied:                                                                     # Blood belongs only to a confirmed health-changing hit, never a blocked gameplay path.
+					var killing_shot := not target_was_dying and bool(player_states[hit_player_index].get("is_dying", false)) # Only the hit that actually starts death may leave persistent floor blood.
+					_spawn_blood_splatter(impact_position, direction, hit_player_index, killing_shot)  # Throw blood through the struck body only after the final authority accepts the hit.
 			continue                                                                                   # Remove the consumed projectile.
 		shot["position"] = origin + direction * step_distance                                    # Move unhindered shot to its new shared world position.
 		shot["lifetime"] = lifetime                                                               # Save remaining life.
@@ -2565,25 +2734,20 @@ func _projectile_owner_has_clear_path_to_player(owner_index: int, target_index: 
 	if not _is_open_cell(owner_cell) or not _is_open_cell(target_cell):                         # Treat invalid cell state as blocked rather than permitting a speculative hit.
 		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  INVALID CELL  BLOCKED" % [owner_index + 1, owner_cell, target_index + 1, target_cell]) # Expose stale player-state cells directly.
 		return false                                                                               # Keep combat contained by the maze footprint.
-	var cell_delta := target_cell - owner_cell                                                  # Identify the direct shared edge when players occupy neighboring cells.
-	if abs(cell_delta.x) + abs(cell_delta.y) == 1:                                             # Adjacent players can only shoot through their one shared edge.
-		var shared_edge_blocked := _has_wall_edge(owner_cell, cell_delta)                         # Ask the exact movement wall table whether that edge is open.
-		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  ADJ %s  EDGE=%s  %s" % [owner_index + 1, owner_cell, target_index + 1, target_cell, cell_delta, "WALL" if shared_edge_blocked else "OPEN", "BLOCKED" if shared_edge_blocked else "ALLOWED"]) # Make a visual/combat-map mismatch unambiguous.
-		return not shared_edge_blocked                                                            # Let the shared cell edge be decisive for adjacent players.
-	var owner_world := Vector2(float(owner_cell.x) + 0.5, float(owner_cell.y) + 0.5)           # Trace longer shots from stable cell centers so facing changes cannot move the gameplay line across a wall.
-	var target_world := Vector2(float(target_cell.x) + 0.5, float(target_cell.y) + 0.5)        # Use the same canonical center for the target.
-	var path := target_world - owner_world                                                      # Build the top-down segment joining the two actual bodies.
+	var owner_world := _player_state_world_position(player_states[owner_index])                # Revalidate along the same real in-cell body path used when the projectile initially found this target.
+	var target_world := _player_state_world_position(player_states[target_index])              # Do not replace a visible corner-to-corner shot with a different cell-centre ray.
+	var path := target_world - owner_world                                                      # Build the top-down segment joining the two actual collision bodies.
 	var path_distance := path.length()                                                          # Preserve its real world length for the cell-edge trace.
 	if path_distance <= PROJECTILE_PLAYER_RADIUS:                                               # Bodies already overlapping cannot have a wall between their collision centers.
 		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  OVERLAP  ALLOWED" % [owner_index + 1, owner_cell, target_index + 1, target_cell]) # Record the exceptional close-contact case.
 		return true                                                                                # Keep close-quarter combat responsive.
-	var wall_distance := _projectile_topology_wall_distance(owner_world, path / path_distance, path_distance) # Walk the exact movement-map edges between the two centers.
-	if wall_distance <= path_distance + PROJECTILE_WALL_EPSILON:                               # A crossed movement edge blocks the ordinary centerline route.
+	var target_contact_distance := maxf(path_distance - PROJECTILE_PLAYER_RADIUS, 0.0)          # Stop at the target's near collision surface so a wall beyond the visible body cannot reject the hit.
+	var wall_distance := _nearest_projectile_wall_distance(owner_world, path / path_distance, target_contact_distance) # Reuse the identical finite wall-segment test already used by the projectile's body collision.
+	if wall_distance <= target_contact_distance + PROJECTILE_WALL_EPSILON:                     # A crossed movement edge blocks the real body-to-body route.
 		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  TRACE %.3f/%.3f  WALL  BLOCKED" % [owner_index + 1, owner_cell, target_index + 1, target_cell, wall_distance, path_distance]) # Show whether the topological trace itself found a wall.
 		return false                                                                               # Reject the hit before any health mutation.
-	var grazes_wall := _projectile_path_grazes_wall(owner_world, target_world)                  # Check the conservative thick-wall guard after the exact cell-edge trace.
-	if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  TRACE %.3f/%.3f  GUARD=%s  %s" % [owner_index + 1, owner_cell, target_index + 1, target_cell, wall_distance, path_distance, "WALL" if grazes_wall else "CLEAR", "BLOCKED" if grazes_wall else "ALLOWED"]) # Retain all gameplay inputs needed to diagnose a surprising damage event.
-	return not grazes_wall                                                                       # Also reject a diagonal route that only clears a mathematically zero-width wall corner.
+	if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  ACTUAL TRACE %.3f/%.3f  CLEAR  ALLOWED" % [owner_index + 1, owner_cell, target_index + 1, target_cell, wall_distance, path_distance]) # Report the exact projectile/body segment rather than a wider unrelated wall-proximity approximation.
+	return true                                                                                  # The projectile's exact finite-wall and topology checks already accepted this real body-to-body line.
 
 
 # _set_projectile_hit_debug: Records final gameplay LOS evidence without putting debug text into live player HUDs.
@@ -2749,12 +2913,12 @@ func _clear_killing_shot_blood(player_index: int) -> void:
 
 
 # _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
-func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1) -> void:
+func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1) -> bool:
 	if owner_index >= 0 and not _projectile_owner_has_clear_path_to_player(owner_index, player_index): # Make wall blocking decisive at the final damage boundary.
-		return                                                                                    # Do not permit health, score, or death updates through a movement-blocking edge.
+		return false                                                                              # Do not permit health, score, death, or body-blood updates through a movement-blocking edge.
 	var state := player_states[player_index]                                                    # Read the target's current state.
 	if bool(state.get("is_dying", false)):                                                     # Ignore stray simultaneous bullets once this player is already down.
-		return                                                                                    # Keep one death sequence and one countdown per defeat.
+		return false                                                                              # Keep one death sequence and one countdown per defeat.
 	var target_forward := _view_forward_vector_for_state(state).normalized()                   # Use target facing to choose front/side impact art.
 	var target_right := Vector2(-target_forward.y, target_forward.x).normalized()              # Build target-local right.
 	var incoming := -shot_direction                                                             # The impact direction points from bullet toward target.
@@ -2774,6 +2938,7 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 			player_states[owner_index] = owner
 			_maybe_drop_heart_for_kill(player_index)                                                # A kill can leave a rare one-health recovery item at the defeat location.
 		_begin_combat_death(player_index)                                                          # Choose a safe corner now while preserving the fallen body at its old location.
+	return true                                                                                 # Let the caller render blood only when this exact call changed the target's health.
 
 
 # _begin_combat_death: Stores a safe respawn destination while leaving the defeated body visible at its old location.
@@ -3180,7 +3345,7 @@ func _update_combat_view() -> void:
 		smoke_sprite.scale = Vector2.ONE * float(particle.get("base_scale", 0.6)) * lerpf(0.72, 1.0, billow_progress) * world_scale # Let puffs billow without ever enlarging their 32-pixel source beyond native texel density.
 		smoke_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                          # Keep the 32-by-32 cloud noise sharp and aliased rather than smoothly filtered.
 		smoke_sprite.rotation = float(particle.get("display_rotation", 0.0))                    # Rotate each irregular puff through held 90-degree pixel-grid steps so the card reads as turbulent, not merely translated.
-		smoke_sprite.z_index = WORLD_EFFECT_FOREGROUND_LAYER + 1                                 # Let dense fresh smoke briefly pass in front of the firing body as requested.
+		smoke_sprite.z_index = _world_actor_draw_layer(smoke_world_position)                    # Sort smoke by its real muzzle point so it can sit behind/over a body naturally instead of overriding all actors as foreground UI.
 		smoke_sprite.visible = true                                                               # Reveal this procedural puff.
 		muzzle_smoke_render_cache[smoke_render_cache_key] = {"visual_frame": smoke_visual_frame, "visible": true} # Keep this complete card state until its visible puff sample changes.
 		used[smoke_key] = true                                                                    # Preserve it until its individual lifetime expires.
@@ -3720,6 +3885,7 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 
 # _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
+	_ensure_forward_cell_experiment_position()                                                 # Keep this opt-in experiment's real capsule in the cell ahead before reading input or rendering a new pose.
 	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)): # Let the explicit death sequence own the body and camera while down.
 		character_is_moving = false                                                               # Prevent normal locomotion from competing with the authored Death frames.
 		_play_combat_death_animation(player_sprite, player_states[active_player_index], &"DeathN") # The local player always sees the camera-forward north death render.
@@ -3796,6 +3962,7 @@ func _process_player_context(delta: float) -> void:                             
 
 # _render_bound_player_context: Redraws the currently bound player's wall view, self sprite, opponent sprite, and map.
 func _render_bound_player_context() -> void:                                              # Declare this function.
+	_apply_near_camera_crop()                                                                  # Apply the live crop to all camera content, including the coordinate-world renderer and local player sprite.
 	var legacy_render_started_us := Time.get_ticks_usec()                                      # Time the inherited sprite/map/debug pass before the coordinate compositor replaces its environment.
 	var coordinate_renderer: Node = null                                                        # Resolve this view's optional replacement compositor before spending time on legacy artwork.
 	if active_player_index < coordinate_renderers.size():                                      # Only resolve a slot that has been registered for this local player.
@@ -3811,7 +3978,7 @@ func _render_bound_player_context() -> void:                                    
 		show_perspective_extents_overlay = false
 		if is_instance_valid(view_slot_overlay) and not show_pickup_range_debug:                  # Preserve collision diagnostics while the coordinate renderer owns normal slot art.
 			view_slot_overlay.visible = false
-		if is_instance_valid(perspective_extents_overlay):
+		if is_instance_valid(perspective_extents_overlay) and not show_near_view_tuning_debug:
 			perspective_extents_overlay.visible = false
 		# Build this view's wall layers before placing world sprites into the same
 		# back-to-front Canvas draw scale.
@@ -3825,6 +3992,8 @@ func _render_bound_player_context() -> void:                                    
 		var combat_started_us := Time.get_ticks_usec()
 		_update_combat_view()                                                                      # Project shared pistol shots, impacts, and hit poses through this same camera.
 		var combat_elapsed_us := Time.get_ticks_usec() - combat_started_us
+		if show_near_view_tuning_debug:                                                        # The coordinate compositor returns before the legacy debug refresh, so explicitly redraw the live clamp overlay in every player view.
+			_update_perspective_extents_overlay()
 		var map_started_us := Time.get_ticks_usec()
 		_update_debug_map_overlay()                                                               # Retain the shared top-down map, including both player markers and cones.
 		var map_elapsed_us := Time.get_ticks_usec() - map_started_us
@@ -4020,6 +4189,16 @@ func _ensure_viewport_clipper(view_root: Node2D) -> Node2D:                     
 	return content                                                                             # Return the content node used for later runtime children.
 
 
+# _apply_near_camera_crop: Zooms and re-centers the complete camera composition inside its existing 160x120 rectangular clip.
+func _apply_near_camera_crop() -> void:
+	if maze_content == null:                                                                   # Do not touch a view before its clipper/content tree has been built.
+		return
+	var zoom := near_camera_crop_zoom                                                          # Keep the crop available for the normal near-cell view; it only changes the camera composition, never world positions.
+	var focus := Vector2(near_camera_crop_focus_x, near_camera_crop_focus_y)                  # Treat the controls as a source pixel that remains at the output frame center.
+	maze_content.scale = Vector2.ONE * zoom                                                    # Enlarge every world-rendered child together so walls, actor, and effects stay registered.
+	maze_content.position = VIEWPORT_SIZE * 0.5 - focus * zoom                                # Translate the enlarged source point back to the fixed clip center.
+
+
 
 # _setup_environment_layer: Creates the runtime floor, straight-wall, and legacy slot sprites used to compose the environment.
 func _setup_environment_layer() -> void:                                                    # Declare this function.
@@ -4093,13 +4272,35 @@ func _setup_view_slot_overlay() -> void:                                        
 func _update_perspective_extents_overlay() -> void:                                        # Declare this function.
 	if perspective_extents_overlay == null:                                                    # Skip when this player view has no extent overlay.
 		return                                                                                    # Return without drawing anything.
-	perspective_extents_overlay.visible = show_perspective_extents_overlay                     # Apply the inspector toggle to this player's overlay.
+	perspective_extents_overlay.visible = show_perspective_extents_overlay or show_near_view_tuning_debug # Keep the shared overlay alive for either measured extents or live clamp guides.
+	if show_near_view_tuning_debug and not show_perspective_extents_overlay:                  # The compact live guide is intentionally rebuilt only when its pixel-relevant state changes.
+		var signature := _near_view_guide_signature()
+		if String(perspective_extents_overlay.get_meta("near_view_signature", "")) == signature:
+			return                                                                                # Reuse existing guide nodes; this avoids flooding Godot's Remote debugger during a long tuning session.
+		perspective_extents_overlay.set_meta("near_view_signature", signature)
+	else:
+		perspective_extents_overlay.set_meta("near_view_signature", "")                       # Force a correct rebuild after this diagnostic is toggled back on.
 	for child in perspective_extents_overlay.get_children():                                   # Remove the previous frame's guide primitives.
 		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip nodes already queued by an earlier redraw.
 			perspective_extents_overlay.remove_child(child)                                          # Detach it now so same-frame redraws cannot double up visually.
 			child.queue_free()                                                                       # Queue this old debug primitive for safe end-of-frame cleanup.
-	if not show_perspective_extents_overlay:                                                   # Avoid rebuilding hidden guide geometry.
+	if not show_perspective_extents_overlay and not show_near_view_tuning_debug:              # Avoid rebuilding hidden guide geometry.
 		return                                                                                    # Return after clearing stale children.
+	if show_perspective_extents_overlay:                                                       # Draw the full measured-square audit only when it was explicitly requested.
+		_draw_perspective_extent_cells()
+	if show_near_view_tuning_debug:                                                            # Draw the more focused raw-versus-clamped self-view diagnostic independently.
+		_add_near_view_clamp_guides()
+
+
+
+# _near_view_guide_signature: Returns only the pixel-relevant local display state, so stationary guide frames reuse their existing nodes.
+func _near_view_guide_signature() -> String:
+	return "%d:%d:%d:%d:%d:%d:%d:%d" % [active_player_index, roundi(player_sprite.position.x), roundi(player_sprite.position.y), roundi(near_camera_rear_offset * 100.0), roundi(near_self_scale_multiplier * 100.0), roundi(near_body_height_cap_pixels), roundi(near_side_keep_pixels), roundi(near_bottom_keep_pixels)] # Rebuild only when a world-truth anchor or one explicit view deviation changes visibly.
+
+
+
+# _draw_perspective_extent_cells: Draws the original calibrated square, actor, and opponent guides.
+func _draw_perspective_extent_cells() -> void:
 	var colors: Array[Color] = [                                                               # Define one readable color per projected square.
 		Color(1.0, 0.15, 0.15, 0.34),                                                            # Use red for the current camera square.
 		Color(1.0, 0.75, 0.0, 0.30),                                                             # Use amber for the next square.
@@ -4127,6 +4328,28 @@ func _update_perspective_extents_overlay() -> void:                             
 	_add_perspective_sprite_bounds(player_sprite, Color(0.0, 0.95, 1.0, 0.95), "P")          # Draw the local player's actual projected sprite bounds and feet point.
 	if opponent_sprite != null and opponent_sprite.visible:                                  # Draw the opponent marker only when this view can currently see the opponent.
 		_add_perspective_sprite_bounds(opponent_sprite, Color(1.0, 0.0, 0.85, 0.95), "O")       # Draw the opponent's projected sprite bounds and feet point.
+
+
+
+# _add_near_view_clamp_guides: Shows exactly where local input would project without safety clamping and where it is actually rendered.
+func _add_near_view_clamp_guides() -> void:
+	var truth_projection := _self_world_truth_projection()                                    # Start from the same unmodified world point that controls collision, pickup, and VFX truth.
+	if not bool(truth_projection.get("visible", false)):
+		return
+	var raw_feet := Vector2(float(truth_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5)), float(truth_projection.get("feet_y", VIEWPORT_SIZE.y))) # Show the real world-projected feet anchor in red.
+	var displayed_feet := Vector2(player_sprite.position.x, player_sprite.position.y + (_sprite_foot_anchor_y(player_sprite) - _sprite_texture_height(player_sprite) * 0.5) * player_sprite.scale.y) # Convert the final centered sprite back into a directly comparable rendered feet anchor.
+	_add_perspective_extent_line(raw_feet, displayed_feet, Color(1.0, 0.35, 0.05, 0.95), 1.0) # Connect true world feet to the final presentation feet only when a deliberate retention adjustment occurred.
+	_add_perspective_extent_line(raw_feet + Vector2(-3.0, -3.0), raw_feet + Vector2(3.0, 3.0), Color(1.0, 0.20, 0.10, 1.0), 1.5) # Draw the raw point as a red X.
+	_add_perspective_extent_line(raw_feet + Vector2(-3.0, 3.0), raw_feet + Vector2(3.0, -3.0), Color(1.0, 0.20, 0.10, 1.0), 1.5)
+	_add_perspective_extent_line(displayed_feet + Vector2(-3.0, 0.0), displayed_feet + Vector2(3.0, 0.0), Color(0.10, 1.0, 0.85, 1.0), 1.5) # Draw the final displayed feet as a cyan cross.
+	_add_perspective_extent_line(displayed_feet + Vector2(0.0, -3.0), displayed_feet + Vector2(0.0, 3.0), Color(0.10, 1.0, 0.85, 1.0), 1.5)
+	if near_side_keep_pixels > 0.0:                                                            # Draw only a real nonzero side-retention boundary; zero deliberately means no clamp.
+		_add_perspective_extent_line(Vector2(near_side_keep_pixels, 0.0), Vector2(near_side_keep_pixels, VIEWPORT_SIZE.y), Color(1.0, 0.85, 0.10, 0.70), 1.0)
+		_add_perspective_extent_line(Vector2(VIEWPORT_SIZE.x - near_side_keep_pixels, 0.0), Vector2(VIEWPORT_SIZE.x - near_side_keep_pixels, VIEWPORT_SIZE.y), Color(1.0, 0.85, 0.10, 0.70), 1.0)
+	if near_bottom_keep_pixels > 0.0:                                                          # Mark the top-PNG strip that the optional bottom retention holds on screen.
+		_add_perspective_extent_line(Vector2(0.0, VIEWPORT_SIZE.y - near_bottom_keep_pixels), Vector2(VIEWPORT_SIZE.x, VIEWPORT_SIZE.y - near_bottom_keep_pixels), Color(1.0, 0.35, 0.10, 0.70), 1.0)
+	_add_perspective_extent_label("WORLD feet red  /  VIEW feet cyan", Vector2(4.0, 10.0), Color(1.0, 0.9, 0.35, 1.0)) # Explain the two positions in-screen.
+	_add_perspective_extent_label("CAP %dpx  KEEP side %dpx  bottom %dpx" % [roundi(near_body_height_cap_pixels), roundi(near_side_keep_pixels), roundi(near_bottom_keep_pixels)], Vector2(4.0, 20.0), Color(1.0, 0.9, 0.35, 1.0)) # Surface the three deliberate presentation deviations.
 
 
 
@@ -4931,14 +5154,19 @@ func _update_debug_map_overlay() -> void:                                       
 		return                                                                                    # Return without drawing the map.
 	var show_ray_diagnostic := show_raycast_debug                                               # Ray inspection explicitly overrides the normal clean-minimap presentation.
 	var show_pickup_diagnostic := show_pickup_range_debug                                      # Pickup tuning uses the same source-map panel without enabling ray clutter.
-	if not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic:          # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
+	if not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic and not show_near_view_tuning_debug: # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
 		debug_map_overlay.visible = false                                                         # Keep blue guides, cones, and slot labels out of normal local play.
 		_update_match_minimap_overlay()                                                          # Keep the map replacement synchronized with movement and orientation.
 		return                                                                                    # Skip all legacy diagnostic geometry.
 	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the one source-map diagnostic panel.
-	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic) and is_shared_match_map # Focused diagnostics may reveal the source map without the full audit.
-	if not (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic) or not is_shared_match_map: # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
+	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug) and is_shared_match_map # Focused diagnostics may reveal the source map without the full audit.
+	if not (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug) or not is_shared_match_map: # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
 		return                                                                                    # Return without drawing the map.
+	if show_near_view_tuning_debug and not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic: # The live clamp map is useful at a stepped diagnostic cadence, not as a node-rebuild every render frame.
+		var current_frame := Engine.get_process_frames()
+		if near_view_debug_last_map_frame >= 0 and current_frame - near_view_debug_last_map_frame < 6:
+			return                                                                                # Reuse the current 10 Hz map image until the next diagnostic step.
+		near_view_debug_last_map_frame = current_frame                                          # Record the successful live-diagnostic redraw frame.
 
 	if not is_instance_valid(debug_map_static_layer) or not is_instance_valid(debug_map_dynamic_layer): # Recover safely if an older scene tree lacks the retained-map children.
 		return                                                                                    # The next normal setup will recreate the top-down map layers.
@@ -4976,6 +5204,7 @@ func _update_debug_map_overlay() -> void:                                       
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
 	var camera_center := _debug_map_world_position(_camera_grid_origin())                        # Convert the actual visibility-camera origin into overlay coordinates.
 	_add_debug_view_cone(camera_center)                                                         # Draw the camera/view cone from the same backed-up origin used by ray casting.
+	_add_debug_near_view_tuning_map_guides()                                                    # Draw cardinal screen-clamp rails in world space when live near-view tuning is enabled.
 	_add_debug_other_player_view_cones()                                                        # Draw each other joined player's camera cone on this shared source-of-truth map.
 	_add_debug_all_wall_slot_numbers()                                                         # Draw the independent blue slot-number audit on every local slot candidate.
 	_add_debug_raycast_rays()                                                                   # Draw sampled raycast lines and first-hit points so visibility can be inspected.
@@ -5079,6 +5308,17 @@ func _debug_map_player_position() -> Vector2:                                   
 
 
 
+# _add_debug_near_view_tuning_map_guides: Marks the unmodified world player/camera relationship; screen-exit allowances deliberately have no fake top-down geometry.
+func _add_debug_near_view_tuning_map_guides() -> void:
+	if not show_near_view_tuning_debug:                                                        # Keep the regular source map clean unless the dedicated clamp diagnostic is enabled.
+		return
+	var player_marker := _debug_map_world_position(_current_player_world_position())          # Use the exact shared collision/VFX position as the top-down source of truth.
+	var camera_marker := _debug_map_world_position(_camera_grid_origin())                     # Show the real camera origin separately from the player's physical position.
+	_add_debug_line(camera_marker, player_marker, Color(1.0, 0.85, 0.10, 0.95), 2.0)          # Connect camera to player so camera-rear adjustment is immediately visible.
+	_add_debug_player_marker(player_marker, Color(1.0, 0.15, 0.10, 0.98))                     # Mark the real player/collision/VFX point in red.
+
+
+
 # _add_debug_view_cone: Draws the cell-locked camera cone on top of the source-of-truth map.
 func _add_debug_view_cone(origin: Vector2) -> void:                                        # Declare this function.
 	_add_debug_view_cone_for_basis(origin, _view_forward_vector(), Color(0.0, 0.75, 1.0, 0.22), Color(0.0, 0.95, 1.0, 0.75)) # Draw the active player's cyan cone.
@@ -5126,7 +5366,7 @@ func _camera_grid_origin_for_state(state: Dictionary) -> Vector2:
 	var state_cell: Vector2i = state.get("grid_position", Vector2i.ZERO)                    # Read the saved player's current cell.
 	var forward := _view_forward_vector_for_state(state).normalized()                         # Use the saved visible camera heading rather than the currently bound player's heading.
 	var cell_center := Vector2(float(state_cell.x) + 0.5, float(state_cell.y) + 0.5)          # Rebuild the fixed rotation point at the middle of that cell.
-	return cell_center - forward * CAMERA_REAR_OFFSET                                         # Match the normal renderer's rear-biased camera placement.
+	return cell_center - forward * near_camera_rear_offset                                    # Match the normal renderer's live-tuned rear-biased camera placement.
 
 
 
@@ -7012,7 +7252,7 @@ func _runtime_camera_origin_for_visibility() -> Vector2:
 # _camera_grid_origin_for_forward: Returns the fixed camera origin for a supplied world-grid forward vector.
 func _camera_grid_origin_for_forward(forward: Vector2) -> Vector2:                         # Declare this function.
 	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Compute the rotation center of the current grid cell.
-	var origin := cell_center - forward.normalized() * CAMERA_REAR_OFFSET                      # Start at the normal rear-biased camera point just inside the wall behind the viewer.
+	var origin := cell_center - forward.normalized() * near_camera_rear_offset                 # Start at the live-tuned rear-biased camera point just inside the wall behind the viewer.
 	if _is_strafe_view() and pending_grid_delta != Vector2i.ZERO:                              # Keep every strafe diagnostic and visibility calculation at the same interpolated world camera position.
 		origin += Vector2(pending_grid_delta) * _strafe_camera_progress()                        # Travel along the actual cardinal destination vector so local left/right rotates correctly for N, S, E, and W.
 	return origin                                                                               # Return the shared camera origin used by the cone, rays, slot graph, and wall selection.
@@ -7604,6 +7844,9 @@ func _read_manual_strafe_step_input() -> bool:
 
 # _move_inside_tile: Moves the player locally, crossing open edges at trigger thresholds and sliding to wall contact on blocked edges.
 func _move_inside_tile(movement: Vector2, delta: float) -> void:                            # Declare this function.
+	if experimental_forward_cell_play_space:                                                   # Keep the camera's source cell fixed while this experiment lets the actor explore only the cell one step ahead.
+		_move_inside_forward_camera_cell(movement, delta)
+		return
 	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into right/forward physical tile-offset movement.
 	var tile_offset := _local_position_to_tile_offset(local_floor_position)                     # Convert current local art position into normalized physical tile offset.
 	tile_offset += physical_movement * MOVE_UNITS_PER_SECOND * delta                           # Move in physical tile space so every direction uses the same ground speed.
@@ -7631,10 +7874,10 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 			tile_offset.y = -1.0                                                                      # Clamp the physical offset to the back wall contact.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the back wall contact.
 			last_blocked_direction = "back"                                                          # Report the blocked back edge in the debug status.
-	elif physical_movement.x < 0.0 and tile_offset.x <= -1.0:                                  # Handle crossing or blocking at the camera-left physical edge.
+	elif physical_movement.x < 0.0 and tile_offset.x <= -side_transition_trigger_offset:      # Begin a left crossing at the live contact boundary selected for open left edges.
 		if _can_player_cross_edge(grid_position, _left_vector()):                                 # Check whether the camera-left tile edge is open or the deliberate player cheat is active.
-			tile_offset.x = -1.0                                                                      # Hold the physical offset at the left edge during the transition.
-			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local left edge.
+			tile_offset.x = -side_transition_trigger_offset                                            # Hold the display/capsule start at the live open-edge trigger while the authored side frames carry it through the opening.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player at the identical local X a blocked left wall would produce.
 			_sync_player_world_position_from_local_pose()                                               # Advance the physical capsule with the transition start, not merely the sprite.
 			_try_cross_tile("strafe_left", _left_vector(), "left")                                   # Start the left strafe tile-crossing transition.
 			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
@@ -7642,10 +7885,10 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 			tile_offset.x = -1.0                                                                      # Clamp the physical offset to the left wall contact.
 			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the blocked player at the left wall contact.
 			last_blocked_direction = "left"                                                          # Report the blocked left edge in the debug status.
-	elif physical_movement.x > 0.0 and tile_offset.x >= 1.0:                                   # Handle crossing or blocking at the camera-right physical edge.
+	elif physical_movement.x > 0.0 and tile_offset.x >= side_transition_trigger_offset:       # Begin a right crossing at the live contact boundary selected for open right edges.
 		if _can_player_cross_edge(grid_position, -_left_vector()):                                # Check whether the camera-right tile edge is open or the deliberate player cheat is active.
-			tile_offset.x = 1.0                                                                       # Hold the physical offset at the right edge during the transition.
-			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player on the matching local right edge.
+			tile_offset.x = side_transition_trigger_offset                                             # Hold the display/capsule start at the live open-edge trigger while the authored side frames carry it through the opening.
+			local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Register the player at the identical local X a blocked right wall would produce.
 			_sync_player_world_position_from_local_pose()                                               # Advance the physical capsule with the transition start, not merely the sprite.
 			_try_cross_tile("strafe_right", -_left_vector(), "right")                                # Start the right strafe tile-crossing transition.
 			return                                                                                    # Stop before the stale pre-crossing offset can overwrite the new-cell entry point.
@@ -7664,9 +7907,12 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 
 # _move_inside_tile_diagonal: Moves through the world using the active 45-degree camera axes and real grid-edge collision.
 func _move_inside_tile_diagonal(movement: Vector2, delta: float) -> void:                   # Declare this function.
+	if experimental_forward_cell_play_space:                                                   # Use the same bounded forward-cell motion for diagonal views instead of reassigning the camera to the capsule's cell.
+		_move_inside_forward_camera_cell(movement, delta)
+		return
 	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into camera-right/camera-forward movement.
 	var world_position := _constrain_player_world_position_to_camera_cell(_current_player_world_position()) # Diagonal local axes form a diamond, so keep ordinary movement inside the source-map cell rather than allowing a side push to leak into a wall.
-	var world_delta := (_view_right_vector() * physical_movement.x + _view_forward_vector() * physical_movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta # Convert the visible diagonal input into world-grid travel.
+	var world_delta := (_view_right_vector() * physical_movement.x + _view_forward_vector() * physical_movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * diagonal_move_distance_multiplier * delta # Convert visible diagonal input into independently live-tunable world-grid travel.
 	last_blocked_direction = ""                                                               # Clear stale feedback before applying this frame's collision checks.
 	if _try_move_diagonal_corner_direct(world_position, world_delta):                          # Let a genuine diagonal crossing land in its diagonal cell without briefly visiting a side-adjacent camera cell.
 		return                                                                                    # Keep the world/grid state already committed by the diagonal-corner helper.
@@ -7759,6 +8005,34 @@ func _current_player_world_position() -> Vector2:                               
 	return player_world_position                                                               # Movement, pickups, combat, visibility, and debug all use this one center.
 
 
+# _forward_experiment_cell: Returns the map cell displayed immediately in front of the camera's ordinary near/source cell.
+func _forward_experiment_cell() -> Vector2i:
+	var forward := _view_forward_vector().normalized()                                        # Use the active cardinal or diagonal camera heading so the experiment remains view-relative.
+	return grid_position + Vector2i(roundi(forward.x), roundi(forward.y))                     # The nearest whole grid cell in that heading is the isolated play space.
+
+
+# _ensure_forward_cell_experiment_position: Rehomes a newly spawned or newly turned player into the complete cell ahead without moving the camera's source cell.
+func _ensure_forward_cell_experiment_position() -> void:
+	if not experimental_forward_cell_play_space or is_transitioning or forward_step != 0 or strafe_step != 0: # Never interfere with an authored camera transition.
+		return
+	var play_cell := _forward_experiment_cell()                                                # Resolve the one cell this experiment intentionally exposes as the player's whole play area.
+	if Vector2i(floori(player_world_position.x), floori(player_world_position.y)) == play_cell: # Retain the exact free position while the player stays in the intended cell.
+		return
+	var centered := Vector2(float(play_cell.x) + 0.5, float(play_cell.y) + 0.5)                # Start a new experiment pose at the actual center of the forward cell.
+	_set_player_world_position_in_camera_cell(centered, grid_position)                        # Preserve the near/source camera cell while committing the authoritative capsule to the forward cell.
+
+
+# _move_inside_forward_camera_cell: Moves only inside the full source-map cell ahead of the camera, with no near-view screen retention or camera-cell reassignment.
+func _move_inside_forward_camera_cell(movement: Vector2, delta: float) -> void:
+	var play_cell := _forward_experiment_cell()                                                # Keep the experiment bounded to one entire logical grid cell rather than crossing the camera's near cell.
+	var world_delta := (_view_right_vector() * movement.x - _view_forward_vector() * movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta # Map local input directly into the displayed cell's world axes.
+	var candidate := player_world_position + world_delta                                      # Move the single authoritative capsule used by combat, pickups, and opponent rendering.
+	var radius := 0.0 if walk_through_walls_cheat else PLAYER_CAPSULE_RADIUS                  # The experiment removes near-view limits, not the optional real wall-collision radius.
+	candidate.x = clampf(candidate.x, float(play_cell.x) + radius, float(play_cell.x + 1) - radius) # Keep all free X travel inside the complete forward cell.
+	candidate.y = clampf(candidate.y, float(play_cell.y) + radius, float(play_cell.y + 1) - radius) # Keep all free Y travel inside the complete forward cell.
+	_set_player_world_position_in_camera_cell(candidate, grid_position)                       # Do not promote the player cell to the camera cell; that separation is the experiment.
+
+
 # _sync_player_world_position_from_local_pose: Updates the capsule after deliberate local movement; turns and display cheats never call this implicitly.
 func _sync_player_world_position_from_local_pose() -> void:
 	player_world_position = _world_position_from_state_fields(grid_position, local_floor_position, {"facing": facing, "turn_45_direction": turn_45_direction, "turn_step": turn_step})
@@ -7788,6 +8062,9 @@ func _constrain_tile_offset_to_player_capsule(tile_offset: Vector2) -> Vector2:
 func _constrain_player_world_position_to_camera_cell(world_position: Vector2) -> Vector2:
 	if walk_through_walls_cheat:                                                               # Keep the exploratory cheat completely unrestricted, including beyond the map border.
 		return world_position                                                                     # Do not alter the intentionally out-of-bounds player point.
+	if experimental_forward_cell_play_space:                                                   # Keep turns and diagnostic reprojection inside the experiment's full forward cell rather than forcing the capsule back into the near/source cell.
+		var play_cell := _forward_experiment_cell()
+		return Vector2(clampf(world_position.x, float(play_cell.x) + PLAYER_CAPSULE_RADIUS, float(play_cell.x + 1) - PLAYER_CAPSULE_RADIUS), clampf(world_position.y, float(play_cell.y) + PLAYER_CAPSULE_RADIUS, float(play_cell.y + 1) - PLAYER_CAPSULE_RADIUS))
 	const CELL_EDGE_EPSILON := 0.0001                                                          # Retain a stable floori ownership while allowing the player to touch a blocked edge visually.
 	var constrained := Vector2(clampf(world_position.x, float(grid_position.x) + CELL_EDGE_EPSILON, float(grid_position.x + 1) - CELL_EDGE_EPSILON), clampf(world_position.y, float(grid_position.y) + CELL_EDGE_EPSILON, float(grid_position.y + 1) - CELL_EDGE_EPSILON)) # Clip the 45-degree local diamond against the physical cell rectangle before it can leak through a diagonal side wall.
 	if _has_wall_edge(grid_position, Vector2i(1, 0)):
@@ -7804,6 +8081,9 @@ func _constrain_player_world_position_to_camera_cell(world_position: Vector2) ->
 
 # _set_player_world_position_for_current_view: Stores a valid world point as local coordinates under the active cardinal or halfway-turn camera.
 func _set_player_world_position_for_current_view(world_position: Vector2) -> void:          # Declare this function.
+	if experimental_forward_cell_play_space:                                                   # The experiment deliberately separates the capsule cell from its retained camera/source cell.
+		_set_player_world_position_in_camera_cell(world_position, grid_position)
+		return
 	grid_position = Vector2i(floori(world_position.x), floori(world_position.y))               # Assign the source-map cell actually containing this point.
 	_set_player_world_position_in_camera_cell(world_position, grid_position)                   # Re-express the point using the cell selected from its true world ownership.
 
@@ -7843,32 +8123,55 @@ func _position_player() -> void:                                                
 		player_sprite.visible = false                                                             # Prevent later positioning code from restoring the fallen last frame.
 		return                                                                                    # Do not update or redraw the body until reverse Death starts at respawn.
 	player_sprite.visible = true                                                              # Restore the local actor after temporary 45-degree validation views hide it.
-	if _is_turn_45_view():                                                                     # A stable diagonal camera has no cardinal self-view projection to preserve.
+	var truth_projection := _self_world_truth_projection()                                    # Keep the raw world result available for the alternate world-truth diagnostic path.
+	if not use_near_cell_motion_envelope and bool(truth_projection.get("visible", false)):
+		var projected_height := float(truth_projection.get("continuous_actor_height", truth_projection.get("actor_height", near_actor_height_pixels))) * near_self_scale_multiplier # Start from the literal world-projected height before any optional near-camera presentation limit.
+		var truth_height := projected_height if experimental_forward_cell_play_space else minf(projected_height, near_body_height_cap_pixels) # The forward-cell experiment removes the normal near-body cap; its crop is the only framing control.
+		var truth_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite)
+		var truth_scale := truth_height / truth_source_height
+		var truth_screen_x := float(truth_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5))   # Keep the actual projected world X; do not pin the player to a screen edge.
+		var truth_feet_y := float(truth_projection.get("feet_y", VIEWPORT_SIZE.y))              # Let the elevated-camera projection continue beneath the player instead of holding their feet at the bottom.
+		player_sprite.scale = Vector2.ONE * truth_scale
+		var truth_center := Vector2(truth_screen_x, _sprite_center_y_for_feet(player_sprite, truth_feet_y, truth_scale)) # Build the unmodified billboard location from real world truth.
+		player_sprite.position = _near_view_retained_sprite_center(player_sprite, truth_center, truth_scale) # Optionally retain a small top/edge strip only after natural viewport travel would fully remove it.
+		_apply_runtime_world_sprite_style(player_sprite, truth_scale, active_player_index, float(truth_projection.get("view_depth", 0.0)))
+		player_sprite.z_index = _world_actor_draw_layer(_current_player_world_position())
+		return                                                                                # Let the clipped viewport crop every remaining body pixel naturally; no hidden cardinal or diagonal clamp remains.
+	if _is_turn_45_view() and not use_near_cell_motion_envelope:                              # Retain this raw diagonal fallback only when the near-cell envelope is deliberately disabled.
 		var diagonal_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
 		if diagonal_renderer != null and diagonal_renderer.has_method("runtime_project_world_point_for_current_pose"):
 			var diagonal_projection: Variant = diagonal_renderer.call("runtime_project_world_point_for_current_pose", _current_player_world_position(), 0.36, true)
 			if diagonal_projection is Dictionary and bool(diagonal_projection.get("visible", false)):
-				var diagonal_height := float(diagonal_projection.get("actor_height", NEAREST_ACTOR_LOD_HEIGHT))
+				var diagonal_height := float(diagonal_projection.get("actor_height", near_actor_height_pixels))
 				var diagonal_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite)
 				var diagonal_scale := diagonal_height / diagonal_source_height
 				player_sprite.scale = Vector2.ONE * diagonal_scale
 				player_sprite.position = Vector2(float(diagonal_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5)), _sprite_center_y_for_feet(player_sprite, float(diagonal_projection.get("feet_y", VIEWPORT_SIZE.y)), diagonal_scale))
 				_apply_runtime_world_sprite_style(player_sprite, diagonal_scale, active_player_index)
-				player_sprite.z_index = LOCAL_CHARACTER_LAYER
+				player_sprite.z_index = _world_actor_draw_layer(_current_player_world_position())
 				return                                                                                # Keep the visible local body registered to the same world footprint as diagonal collision.
 	var display_local_position := _translation_display_local_position()                         # Let the actor travel smoothly through authored forward or side camera frames without changing collision or the source-map graph.
-	var depth := clampf(display_local_position.y, 0.0, 1.0)                                    # Preserve the authored self-camera depth path; it intentionally differs from a remote world projection during forward/back transitions.
-	var projection := _self_actor_projection_at_local_depth(depth)                              # Restore the calibrated local floor/feet projection that keeps motion smooth through Fwd and Right frames.
-	var screen_ratio_x := _self_screen_side_ratio_for_projection(display_local_position.x, projection) # Continue to derive lateral registration from the local floor polygon.
-	var screen_x := lerpf(float(projection["left_x"]), float(projection["right_x"]), screen_ratio_x) # Project side movement through the measured floor-zone trapezoid.
-	var actor_height := NEAREST_ACTOR_LOD_HEIGHT                                               # The local actor always occupies the nearest camera cell, so use the same protected largest LOD as a same-cell opponent.
+	var projection := _near_cell_motion_projection(display_local_position)                    # Project the real near-cell local motion into the fixed wireframe's own deliberately extended rear envelope.
+	var screen_x := float(projection["screen_x"])                                             # Keep the body on the envelope's continuous side trajectory, including only the desired rear-corner exit.
+	var actor_height := float(projection["actor_height"])                                    # Preserve the existing live-tunable near body size without changing the world camera.
 	var source_body_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite) # Keep Death and breathing Idle sheets at one stable projected scale despite their changing alpha bounds.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the calibrated self-view feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
 	_apply_runtime_world_sprite_style(player_sprite, sprite_scale, active_player_index)         # Use this player's authored or Team 2 palette without distance darkening.
-	player_sprite.z_index = LOCAL_CHARACTER_LAYER                                              # Keep the local body above wall art; the clipped viewport trims anything outside the camera frame.
+	player_sprite.z_index = _world_actor_draw_layer(_current_player_world_position())          # Use the real same-cell camera-depth tie-breaker instead of forcing the local player in front of every body or prop.
+
+
+
+# _self_world_truth_projection: Projects the local capsule through the coordinate camera for the optional raw-world diagnostic path.
+func _self_world_truth_projection() -> Dictionary:
+	var renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+	if renderer != null and renderer.has_method("runtime_project_world_point_for_current_pose"):
+		var result: Variant = renderer.call("runtime_project_world_point_for_current_pose", _current_player_world_position(), 0.36, true, false)
+		if result is Dictionary:
+			return result
+	return _opponent_projection_from_current_camera(_current_player_world_position(), true, true) # Keep a safe world-oriented fallback during early renderer setup.
 
 # _forward_display_local_position: Smoothly moves the rendered actor across Fwd 1 and Fwd 2 while the physical crossing remains safely edge-locked.
 func _forward_display_local_position() -> Vector2:
@@ -7926,21 +8229,22 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 		return                                                                                    # Return without projecting anything.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
-	var projection := _opponent_projection_from_current_camera(target_world, true)              # Paint the opponent after its own camera-facing cell walls.
+	var target_in_viewer_near_cell := use_near_cell_motion_envelope and _world_position_is_in_active_player_cell(target_world) # The local and remote body must share the same tuned near-cell presentation whenever they physically occupy this viewer's source cell.
+	var projection := _near_cell_motion_projection(_near_cell_local_position_for_world(target_world)) if target_in_viewer_near_cell else _opponent_projection_from_current_camera(target_world, true) # Use the identical near envelope for same-cell actors; retain the live coordinate renderer for every other cell.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
-	var actor_height := float(projection["actor_height"])                                      # Read the measured opponent body height at this depth.
+	var actor_height := float(projection["actor_height"])                                      # Preserve the established opponent LOD scale; the local near-cell envelope uses this same nearest-size floor.
 	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") or String(opponent_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(opponent_sprite) # Keep Death and breathing Idle sheets at one stable projected scale in every camera.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
-	if not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width):            # Cull only after the whole opponent body leaves the fan.
+	if not target_in_viewer_near_cell and not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width): # The near-envelope path owns same-cell framing; other cells retain true camera-fan culling.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
-	var character_layer := int(projection["z_index"])                                                  # Read the opponent's wall-relative character layer.
+	var character_layer := _world_actor_draw_layer(target_world)                               # Share the exact same cell layer and within-cell camera-depth tie-breaker as the local player.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
 	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0))) # Match opponents to the same depth-driven source-pixel grid.
@@ -8052,7 +8356,7 @@ func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_
 		screen_x = lerpf(corridor_edge_x, float(side_projection["outer_x"]), side_travel)          # Let the actor move continuously from corridor edge to side-frame edge.
 		feet_y = lerpf(float(corridor["feet_y"]), float(side_projection["feet_y"]), side_travel)   # Blend feet registration from corridor floor to side-entry floor without popping.
 	var actor_height := float(corridor["actor_height"])                                       # Read actor height from the same measured perspective sample as the floor.
-	var scale_view_depth := maxf(view_depth, SELF_MIN_ACTOR_SCALE_VIEW_DEPTH)                 # Keep near-camera opponents scaled like the local player body.
+	var scale_view_depth := maxf(view_depth, near_self_min_actor_scale_view_depth)            # Keep near-camera opponents scaled like the live-tuned local player body.
 	var scale_projection := _corridor_projection_at_view_depth(scale_view_depth)               # Sample only actor scale from the protected near-camera depth.
 	actor_height = float(scale_projection["actor_height"])                                    # Replace actor height while keeping true feet and screen-side position.
 	var screen_y := feet_y - actor_height * 0.5                                                 # Keep a legacy centered y value for debugging; final sprite registration uses feet_y.
@@ -8118,19 +8422,47 @@ func _corridor_projection_at_view_depth(view_depth: float) -> Dictionary:       
 
 # _self_actor_projection_at_local_depth: Projects the first-person body while avoiding camera-plane scale blowups.
 func _self_actor_projection_at_local_depth(local_depth: float) -> Dictionary:              # Declare this function.
-	var feet_view_depth := _clamped_self_feet_view_depth(_view_depth_for_local_floor_depth(local_depth)) # Convert the real local position into camera-space depth while keeping rendered feet inside S0.
+	var raw_view_depth := _view_depth_for_local_floor_depth(local_depth)                       # Convert real local near-cell travel into the fixed wireframe's depth coordinate.
+	var feet_view_depth := raw_view_depth if use_near_cell_motion_envelope else _clamped_self_feet_view_depth(raw_view_depth) # The envelope uses the complete authored near-cell span; the legacy path keeps its old front safety margin.
 	var feet_projection := _corridor_projection_at_view_depth(feet_view_depth)                # Sample the true projected floor location where the player's feet stand.
 	var projection := feet_projection.duplicate()                                             # Start from the true feet projection so X and feet Y stay in the real square.
-	projection["actor_height"] = NEAREST_ACTOR_LOD_HEIGHT                                    # The local body is in the protected nearest cell: never interpolate its scale inside that cell.
-	projection["scale_view_depth"] = SELF_MIN_ACTOR_SCALE_VIEW_DEPTH                         # Retain a stable diagnostic value for callers that inspect self scale depth.
+	projection["actor_height"] = near_actor_height_pixels                                     # The local body remains constant-sized inside its cell, with a live-tunable protected height.
+	projection["scale_view_depth"] = near_self_min_actor_scale_view_depth                    # Retain the live protected scale depth for callers that inspect self scale.
 	return projection                                                                         # Return the combined self-view projection.
+
+
+# _near_cell_motion_projection: Maps real local near-cell travel into the fixed wireframe's nearest floor trapezoid, then extends only its camera-side edge for the requested partial exits.
+func _near_cell_motion_projection(local_position: Vector2) -> Dictionary:
+	var local_depth := clampf(local_position.y, FORWARD_WALL_CONTACT_Y, BACKWARD_WALL_CONTACT_Y) # Use the established real near-cell forward/back interval; this never changes the capsule or camera.
+	var base_projection := _self_actor_projection_at_local_depth(local_depth)                 # Start from the old near-cell floor mapping that already follows the authored wireframe exactly.
+	var scale_depth := _view_depth_for_local_floor_depth(local_depth) + near_body_scale_depth_offset # Map only the local north/south coordinate through one monotonic scale curve; never read a transition or another player's world pose.
+	var scale_projection := _corridor_projection_at_view_depth(scale_depth)                   # Reuse the measured authored perspective samples instead of inventing a camera or a new wireframe.
+	var rear_amount := clampf(-_forward_axis_to_signed_unit(local_depth), 0.0, 1.0)            # Fade the extra allowance in only while the player moves from home toward the south/camera-side edge.
+	var side_ratio := clampf(local_position.x, STRAFE_LEFT_WALL_CONTACT_X, STRAFE_RIGHT_WALL_CONTACT_X) # Preserve the actual in-cell left/right motion without any independent screen clamp.
+	var left_x := float(base_projection["left_x"]) - near_rear_side_exit_pixels * rear_amount # Let the rear-left corner pass naturally beyond the fixed viewport's left edge.
+	var right_x := float(base_projection["right_x"]) + near_rear_side_exit_pixels * rear_amount # Let the rear-right corner pass naturally beyond the fixed viewport's right edge.
+	return {
+		"screen_x": lerpf(left_x, right_x, side_ratio),                                      # Interpolate the real local side position across the extended rear trapezoid.
+		"feet_y": float(base_projection["feet_y"]) + near_rear_exit_pixels * rear_amount, # Let the camera-side feet leave beneath the crop instead of pinning the sprite.
+		"actor_height": maxf(float(scale_projection["actor_height"]), 48.0) * near_self_scale_multiplier, # Preserve monotonic local perspective while never falling below the opponent's shared nearest-cell size.
+	}
+
+
+
+# _near_cell_local_position_for_world: Expresses a same-cell world body in the active viewer's local near-grid basis so self and opponent share one envelope.
+func _near_cell_local_position_for_world(world_position: Vector2) -> Vector2:
+	var cell_center := Vector2(float(grid_position.x) + 0.5, float(grid_position.y) + 0.5)     # Use this viewer's source-cell centre, never the remote player's facing or local coordinates.
+	var relative := world_position - cell_center                                                # Measure the other body in the same shared world space used by movement and combat.
+	var local_right := relative.dot(_view_right_vector()) / LOCAL_TILE_WORLD_HALF_EXTENT       # Convert world camera-right displacement to the authored local X axis.
+	var local_forward := relative.dot(_view_forward_vector()) / LOCAL_TILE_WORLD_HALF_EXTENT   # Convert world forward displacement to the authored local depth axis.
+	return Vector2(_signed_unit_to_axis(local_right, HOME_LOCAL_FLOOR_POSITION.x, STRAFE_LEFT_WALL_CONTACT_X, STRAFE_RIGHT_WALL_CONTACT_X), _signed_forward_unit_to_axis(local_forward)) # Reuse the exact asymmetric local-axis conversion used for the viewer's own body.
 
 
 
 # _self_screen_side_ratio_for_projection: Keeps local feet visually inside the projected floor while preserving physical tile movement.
 func _self_screen_side_ratio_for_projection(local_x: float, projection: Dictionary) -> float: # Declare this function.
 	var floor_width := maxf(float(projection["right_x"]) - float(projection["left_x"]), 1.0)    # Measure the visible floor span for the feet line.
-	var side_margin := clampf(LOCAL_FEET_FLOOR_MARGIN_PIXELS / floor_width, 0.0, 0.25)          # Convert the pixel foot margin into normalized side padding.
+	var side_margin := clampf(near_feet_side_margin_pixels / floor_width, 0.0, 0.25)            # Convert the live pixel foot margin into normalized side padding.
 	return clampf(local_x, side_margin, 1.0 - side_margin)                                      # Clamp the rendered feet anchor while leaving local_floor_position unchanged.
 
 
@@ -8140,7 +8472,7 @@ func _clamped_self_feet_view_depth(view_depth: float) -> float:                 
 	var first_cell: Dictionary = PERSPECTIVE_CELL_EXTENTS[0]                                  # Read the current camera square calibration.
 	var depth_span := maxf(float(first_cell["far_depth"]) - float(first_cell["near_depth"]), 0.001) # Measure the current square depth span.
 	var feet_span := maxf(absf(float(first_cell["near_feet_y"]) - float(first_cell["far_feet_y"])), 1.0) # Measure the current square feet-line pixel span.
-	var front_margin_depth := depth_span * LOCAL_FEET_DEPTH_MARGIN_PIXELS / feet_span          # Convert the desired front-edge pixel margin into camera-space depth.
+	var front_margin_depth := depth_span * near_feet_depth_margin_pixels / feet_span            # Convert the live front-edge pixel margin into camera-space depth.
 	var max_self_depth := float(first_cell["far_depth"]) - front_margin_depth                  # Stop the rendered self feet just inside the S0 front edge.
 	return minf(view_depth, max_self_depth)                                                    # Return the clamped self-view feet depth.
 
@@ -8174,7 +8506,7 @@ func _perspective_square_sample_at_view_depth(view_depth: float) -> Dictionary: 
 # _view_depth_for_local_floor_depth: Converts local art-space y into physical camera-space depth.
 func _view_depth_for_local_floor_depth(local_depth: float) -> float:                       # Declare this function.
 	var forward_offset := _forward_axis_to_signed_unit(local_depth)                           # Convert local y into forward-positive physical tile offset.
-	return CAMERA_REAR_OFFSET + forward_offset * LOCAL_TILE_WORLD_HALF_EXTENT                 # Return the same camera-space depth used by world-space opponent projection.
+	return near_camera_rear_offset + forward_offset * LOCAL_TILE_WORLD_HALF_EXTENT             # Return the same live-tuned camera-space depth used by world-space opponent projection.
 
 
 
@@ -8191,6 +8523,20 @@ func _front_wall_height_at_view_depth(view_depth: float) -> float:              
 # _character_layer_for_view_depth: Places every projected world object on one shared back-to-front depth scale.
 func _character_layer_for_view_depth(view_depth: float) -> int:                             # Declare this function.
 	return roundi((WORLD_DRAW_DEPTH_RANGE - clampf(view_depth, 0.0, WORLD_DRAW_DEPTH_RANGE)) * WORLD_DRAW_DEPTH_SCALE) # Nearer geometry receives the later Canvas draw layer.
+
+
+# _world_actor_draw_layer: Returns a wall-cell layer plus a bounded real-depth tie-breaker so bodies/props inside one cell paint in their actual front-to-back order.
+func _world_actor_draw_layer(world_position: Vector2) -> int:
+	var camera_origin := _runtime_camera_origin_for_visibility()                               # Use the same live camera origin as wall visibility and all world projections.
+	var forward := _view_forward_vector().normalized()                                         # Measure front/back in the current cardinal or diagonal camera basis.
+	var cell := _world_cell_for_draw_depth(world_position, camera_origin)                      # Keep the broad painter group attached to the same source-map cell as its camera-facing walls.
+	var cell_center := Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5)                       # Use the cell centre as a neutral tie-break reference.
+	var within_cell_depth := (world_position - cell_center).dot(forward)                       # Positive means farther forward from the camera; negative means nearer/camera-side.
+	var cell_depth := _world_cell_draw_depth(world_position, camera_origin, forward)           # Preserve existing across-cell wall layering before applying the small in-cell adjustment.
+	var cell_layer := _character_layer_for_view_depth(cell_depth) + 2                          # Match the pickup rule: this is the first wall-safe layer after the cell's camera-facing wall group.
+	var camera_side_amount := clampf(0.5 - within_cell_depth, 0.0, 1.0)                        # Map the cell's far edge to zero and its camera-side edge to one without ever subtracting from the wall-safe layer.
+	var within_cell_layer := roundi(camera_side_amount * SAME_CELL_ACTOR_SORT_SPAN)            # Give the camera-side body a later positive sublayer so it draws over a farther body in the same cell.
+	return cell_layer + within_cell_layer                                                       # Never let same-cell sorting move a body behind its own walls; other cells remain separated by the larger world-depth spacing.
 
 
 # _opponent_camera_side_margin_from_projection: Converts projected sprite width into camera-space fan overlap.
@@ -8301,6 +8647,27 @@ func _sprite_center_y_for_feet(sprite: AnimatedSprite2D, feet_y: float, sprite_s
 	var texture_height := _sprite_texture_height(sprite)                                        # Read the current frame height including transparent padding.
 	var foot_anchor_y := _sprite_foot_anchor_y(sprite)                                         # Read the real foot/shadow anchor row inside the current frame pixels.
 	return feet_y - (foot_anchor_y - texture_height * 0.5) * sprite_scale                       # Move the centered sprite so its foot anchor lands on the projected floor point.
+
+
+
+# _near_view_retained_sprite_center: Applies only the optional presentation guard after a real elevated-camera projection has naturally taken the sprite beyond the viewport.
+func _near_view_retained_sprite_center(sprite: AnimatedSprite2D, world_truth_center: Vector2, sprite_scale: float) -> Vector2:
+	var displayed_center := world_truth_center                                                   # Start from literal world truth: zero on both keep controls produces no screen-space change at all.
+	var half_width := _sprite_texture_width(sprite) * sprite_scale * 0.5                        # Use the whole PNG rectangle so the viewport itself clips the original pixels without inventing a different body shape.
+	var top_offset := -_sprite_texture_height(sprite) * sprite_scale * 0.5                      # The top PNG row is the last row that should remain when the player passes beneath the raised camera.
+	if near_side_keep_pixels > 0.0:                                                             # A nonzero side keep deliberately prevents a complete horizontal exit; zero retains raw world truth.
+		var raw_left := displayed_center.x - half_width                                           # Measure the left edge of the world-projected PNG.
+		var raw_right := displayed_center.x + half_width                                          # Measure the right edge of the world-projected PNG.
+		if raw_right < near_side_keep_pixels:                                                     # The player has completely left through the left edge, so preserve only the rightmost strip.
+			displayed_center.x += near_side_keep_pixels - raw_right
+		elif raw_left > VIEWPORT_SIZE.x - near_side_keep_pixels:                                 # The player has completely left through the right edge, so preserve only the leftmost strip.
+			displayed_center.x -= raw_left - (VIEWPORT_SIZE.x - near_side_keep_pixels)
+	if near_bottom_keep_pixels > 0.0:                                                           # A nonzero bottom keep deliberately retains only the PNG's top strip after natural under-camera travel.
+		var raw_top := displayed_center.y + top_offset                                            # Measure the source PNG's top edge, not the feet or collision capsule.
+		var last_visible_top := VIEWPORT_SIZE.y - near_bottom_keep_pixels                         # Keep exactly this much of the top of the PNG inside the bottom edge.
+		if raw_top > last_visible_top:                                                            # The raw world projection would have completely left the screen below the camera.
+			displayed_center.y -= raw_top - last_visible_top                                        # Shift only enough to hold the requested top strip; legs/back still leave first by ordinary viewport clipping.
+	return displayed_center                                                                      # Return the direct presentation result; collision, pickup, VFX, and all world coordinates remain untouched.
 
 
 
@@ -9044,9 +9411,9 @@ func _reset_local_position_after_transition(sequence_name: String) -> void:     
 		"backward":                                                                               # Handle a backward cell crossing.
 			local_floor_position.y = FORWARD_WALL_CONTACT_Y                                          # Enter the new cell from its front edge instead of snapping to center.
 		"strafe_left":                                                                            # Handle a camera-left cell crossing.
-			local_floor_position.x = _side_limits_for_depth(local_floor_position.y).y                # Enter the new cell from its camera-right side instead of snapping to center.
+			local_floor_position.x = _tile_offset_to_local_position(Vector2(side_transition_entry_offset, 0.0)).x # Enter at the separately tunable camera-right destination offset, never at the raw offscreen edge.
 		"strafe_right":                                                                           # Handle a camera-right cell crossing.
-			local_floor_position.x = _side_limits_for_depth(local_floor_position.y).x                # Enter the new cell from its camera-left side instead of snapping to center.
+			local_floor_position.x = _tile_offset_to_local_position(Vector2(-side_transition_entry_offset, 0.0)).x # Enter at the separately tunable camera-left destination offset, never at the raw offscreen edge.
 		"turn_left", "turn_right":                                                                # Start this block.
 			local_floor_position = _rotated_local_position_for_turn(sequence_name)                   # Preserve the player's tile offset while rotating it into the new camera frame.
 	_sync_player_world_position_from_local_pose()                                                # Rebuild the one physical capsule from the newly committed cell/basis after any completed transition.
