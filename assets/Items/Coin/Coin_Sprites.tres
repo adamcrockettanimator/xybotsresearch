@@ -1,9 +1,9 @@
 [gd_resource type="SpriteFrames" format=3 uid="uid://dvnjpk40jdqow"]
 
-[ext_resource type="Texture2D" uid="uid://cpysw6f84qnm3" path="res://assets/Items/Coin/Coin_01.png" id="1_7mo3j"]
-[ext_resource type="Texture2D" uid="uid://br3ghrwpyhmm4" path="res://assets/Items/Coin/Coin_02.png" id="2_w1qlu"]
-[ext_resource type="Texture2D" uid="uid://c2be8h4ts30kr" path="res://assets/Items/Coin/Coin_03.png" id="3_kqyu2"]
-[ext_resource type="Texture2D" uid="uid://bnsthkraiu18y" path="res://assets/Items/Coin/Coin_04.png" id="4_nfkif"]
+[ext_resource type="Texture2D" uid="uid://dy2504vs2mu" path="res://assets/Items/Coin/CoinSmall_01.png" id="1_7mo3j"]
+[ext_resource type="Texture2D" uid="uid://bfopmajxf18o6" path="res://assets/Items/Coin/CoinSmall_02.png" id="2_w1qlu"]
+[ext_resource type="Texture2D" uid="uid://b8epv8fd24q1e" path="res://assets/Items/Coin/CoinSmall_03.png" id="3_kqyu2"]
+[ext_resource type="Texture2D" uid="uid://dwt41l7d834o5" path="res://assets/Items/Coin/CoinSmall_04.png" id="4_nfkif"]
 
 [resource]
 animations = [{

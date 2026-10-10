@@ -1,0 +1,34 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://8lo7vhfwos8u"]
+
+[ext_resource type="Texture2D" uid="uid://dn6ikvvjik6lr" path="res://assets/Effects/GunSmoke/Gunsmoke_01.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://dqsybjul4x0d0" path="res://assets/Effects/GunSmoke/Gunsmoke_02.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://b0meb56jr17fv" path="res://assets/Effects/GunSmoke/Gunsmoke_03.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://4ovhmqbfhdxj" path="res://assets/Effects/GunSmoke/Gunsmoke_04.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://dgq88e05kdsxd" path="res://assets/Effects/GunSmoke/Gunsmoke_05.png" id="5"]
+[ext_resource type="Texture2D" uid="uid://cekbuwl5urdvi" path="res://assets/Effects/GunSmoke/Gunsmoke_06.png" id="6"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6")
+}],
+"loop": 0,
+"name": &"gunsmoke",
+"speed": 14.0
+}]

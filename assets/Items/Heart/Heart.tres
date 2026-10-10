@@ -1,12 +1,24 @@
 [gd_resource type="SpriteFrames" format=3 uid="uid://d3qsbchlgep8"]
 
-[ext_resource type="Texture2D" uid="uid://cb8mi1276582" path="res://assets/Items/Heart/heart.png" id="1_stp5n"]
+[ext_resource type="Texture2D" uid="uid://gy7ykb7v4ogx" path="res://assets/Items/Heart/heart8x8_1.png" id="1_nea7p"]
+[ext_resource type="Texture2D" uid="uid://dlv4dhobe1o2k" path="res://assets/Items/Heart/heart8x8_2.png" id="2_fud6o"]
+[ext_resource type="Texture2D" uid="uid://btlty0dqfx2jt" path="res://assets/Items/Heart/heart8x8_3.png" id="3_sp1dv"]
+[ext_resource type="Texture2D" uid="uid://dyph8wru6lqbs" path="res://assets/Items/Heart/heart8x8_4.png" id="4_o0es5"]
 
 [resource]
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": ExtResource("1_stp5n")
+"texture": ExtResource("1_nea7p")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_fud6o")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_sp1dv")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_o0es5")
 }],
 "loop": 1,
 "name": &"Heart",
