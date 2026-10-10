@@ -188,6 +188,13 @@ var profile_pending_player_us := 0
 var profile_pending_opponents_us := 0
 var profile_pending_combat_us := 0
 var profile_pending_map_us := 0
+var profile_pending_vfx_muzzle_smoke_us := 0
+var profile_pending_vfx_trails_us := 0
+var profile_pending_vfx_trail_smoke_us := 0
+var profile_pending_vfx_projectile_hot_us := 0
+var profile_pending_vfx_wall_dust_us := 0
+var profile_pending_vfx_blood_us := 0
+var profile_pending_vfx_debris_us := 0
 var profile_floor_raster_us := 0
 var profile_ceiling_raster_us := 0
 var profile_wall_raster_us := 0
@@ -210,6 +217,22 @@ var profile_upload_sum_us := 0
 var profile_rebuild_sum_us := 0
 var profile_total_peak_us := 0
 var profile_rebuild_peak_us := 0
+var profile_render_cpu_sum_ms := 0.0
+var profile_render_gpu_sum_ms := 0.0
+var profile_frame_setup_cpu_sum_ms := 0.0
+var profile_projectile_count_sum := 0
+var profile_trail_count_sum := 0
+var profile_muzzle_smoke_count_sum := 0
+var profile_wall_dust_count_sum := 0
+var profile_debris_count_sum := 0
+var profile_blood_count_sum := 0
+var profile_vfx_muzzle_smoke_sum_us := 0
+var profile_vfx_trails_sum_us := 0
+var profile_vfx_trail_smoke_sum_us := 0
+var profile_vfx_projectile_hot_sum_us := 0
+var profile_vfx_wall_dust_sum_us := 0
+var profile_vfx_blood_sum_us := 0
+var profile_vfx_debris_sum_us := 0
 
 func _ready() -> void:
 	call_deferred("_initialize")
@@ -222,6 +245,7 @@ func _initialize() -> void:
 	if target_player_index < 0 or target_player_index >= controller.player_views.size():
 		push_error("Coordinate-frame renderer was attached before player %d exists." % target_player_index)
 		return
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true) # Enable per-viewport CPU/GPU render timings for the automatic runtime CSV; this is separate from the editor-only Profiler capture.
 	if target_player_index == 0:
 		_reset_profile_log()
 	show_quad_outlines = false
@@ -405,13 +429,24 @@ func record_legacy_render_breakdown(player_us: int, opponents_us: int, combat_us
 	profile_pending_legacy_us = profile_pending_player_us + profile_pending_opponents_us + profile_pending_combat_us + profile_pending_map_us
 
 
+# record_combat_vfx_breakdown: Accepts the current camera's measured render-pass costs so the CSV can identify the expensive effect family without modifying any effect.
+func record_combat_vfx_breakdown(vfx_profile: Dictionary) -> void:
+	profile_pending_vfx_muzzle_smoke_us = maxi(0, int(vfx_profile.get("muzzle_smoke_us", 0)))
+	profile_pending_vfx_trails_us = maxi(0, int(vfx_profile.get("trails_us", 0)))
+	profile_pending_vfx_trail_smoke_us = maxi(0, int(vfx_profile.get("trail_smoke_us", 0)))
+	profile_pending_vfx_projectile_hot_us = maxi(0, int(vfx_profile.get("projectile_hot_us", 0)))
+	profile_pending_vfx_wall_dust_us = maxi(0, int(vfx_profile.get("wall_dust_us", 0)))
+	profile_pending_vfx_blood_us = maxi(0, int(vfx_profile.get("blood_us", 0)))
+	profile_pending_vfx_debris_us = maxi(0, int(vfx_profile.get("debris_us", 0)))
+
+
 # _reset_profile_log: Starts a fresh, easily inspectable CSV for the current run.
 func _reset_profile_log() -> void:
 	var file := FileAccess.open(PROFILE_LOG_PATH, FileAccess.WRITE)
 	if file == null:
 		push_warning("Could not create coordinate runtime profile log: %s" % ProjectSettings.globalize_path(PROFILE_LOG_PATH))
 		return
-	file.store_line("elapsed_s,player,samples,avg_total_ms,peak_total_ms,avg_legacy_ms,avg_player_ms,avg_opponents_ms,avg_combat_ms,avg_map_ms,avg_background_ms,avg_floor_ms,avg_ceiling_ms,avg_wall_ms,avg_upload_ms,avg_rebuild_ms,peak_rebuild_ms")
+	file.store_line("elapsed_s,player,samples,avg_total_ms,peak_total_ms,avg_legacy_ms,avg_player_ms,avg_opponents_ms,avg_combat_ms,avg_map_ms,avg_background_ms,avg_floor_ms,avg_ceiling_ms,avg_wall_ms,avg_upload_ms,avg_rebuild_ms,peak_rebuild_ms,avg_render_cpu_ms,avg_render_gpu_ms,avg_frame_setup_cpu_ms,avg_projectiles,avg_trails,avg_muzzle_smoke,avg_wall_dust,avg_debris,avg_blood,avg_vfx_muzzle_smoke_ms,avg_vfx_trails_ms,avg_vfx_trail_smoke_ms,avg_vfx_projectile_hot_ms,avg_vfx_wall_dust_ms,avg_vfx_blood_ms,avg_vfx_debris_ms")
 	file.close()
 	print("Coordinate runtime profile log: %s" % ProjectSettings.globalize_path(PROFILE_LOG_PATH))
 
@@ -436,6 +471,23 @@ func _profile_record_frame(total_us: int) -> void:
 	profile_rebuild_sum_us += profile_rebuild_us
 	profile_total_peak_us = maxi(profile_total_peak_us, total_us)
 	profile_rebuild_peak_us = maxi(profile_rebuild_peak_us, profile_rebuild_us)
+	var viewport_rid := get_viewport().get_viewport_rid()                                      # Read the exact local viewport rather than an editor-only profiler session.
+	profile_render_cpu_sum_ms += RenderingServer.viewport_get_measured_render_time_cpu(viewport_rid) # Capture engine render-thread CPU work for this player view.
+	profile_render_gpu_sum_ms += RenderingServer.viewport_get_measured_render_time_gpu(viewport_rid) # Capture GPU frame time for this view when the active renderer supports it.
+	profile_frame_setup_cpu_sum_ms += RenderingServer.get_frame_setup_time_cpu()                # Record shared CPU render preparation alongside the viewport-local timings.
+	profile_projectile_count_sum += controller.active_projectiles.size()                        # Correlate timing changes with the live visual workload rather than guessing from gunfire alone.
+	profile_trail_count_sum += controller.active_projectile_trails.size()
+	profile_muzzle_smoke_count_sum += controller.active_muzzle_smoke_particles.size()
+	profile_wall_dust_count_sum += controller.active_wall_impact_smokes.size()
+	profile_debris_count_sum += controller.active_wall_debris.size()
+	profile_blood_count_sum += controller.active_blood_splatters.size()
+	profile_vfx_muzzle_smoke_sum_us += profile_pending_vfx_muzzle_smoke_us
+	profile_vfx_trails_sum_us += profile_pending_vfx_trails_us
+	profile_vfx_trail_smoke_sum_us += profile_pending_vfx_trail_smoke_us
+	profile_vfx_projectile_hot_sum_us += profile_pending_vfx_projectile_hot_us
+	profile_vfx_wall_dust_sum_us += profile_pending_vfx_wall_dust_us
+	profile_vfx_blood_sum_us += profile_pending_vfx_blood_us
+	profile_vfx_debris_sum_us += profile_pending_vfx_debris_us
 	if now_us - profile_window_start_us < PROFILE_LOG_INTERVAL_USEC:
 		return
 	_append_profile_sample(float(now_us - profile_window_start_us) / 1_000_000.0)
@@ -455,6 +507,22 @@ func _profile_record_frame(total_us: int) -> void:
 	profile_rebuild_sum_us = 0
 	profile_total_peak_us = 0
 	profile_rebuild_peak_us = 0
+	profile_render_cpu_sum_ms = 0.0
+	profile_render_gpu_sum_ms = 0.0
+	profile_frame_setup_cpu_sum_ms = 0.0
+	profile_projectile_count_sum = 0
+	profile_trail_count_sum = 0
+	profile_muzzle_smoke_count_sum = 0
+	profile_wall_dust_count_sum = 0
+	profile_debris_count_sum = 0
+	profile_blood_count_sum = 0
+	profile_vfx_muzzle_smoke_sum_us = 0
+	profile_vfx_trails_sum_us = 0
+	profile_vfx_trail_smoke_sum_us = 0
+	profile_vfx_projectile_hot_sum_us = 0
+	profile_vfx_wall_dust_sum_us = 0
+	profile_vfx_blood_sum_us = 0
+	profile_vfx_debris_sum_us = 0
 
 
 # _append_profile_sample: Writes averages and spikes so quiet and moving poses are both diagnosable.
@@ -466,7 +534,8 @@ func _append_profile_sample(elapsed_seconds: float) -> void:
 	if file == null:
 		return
 	file.seek_end()
-	file.store_line("%.3f,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f" % [elapsed_seconds, target_player_index + 1, profile_sample_count, profile_total_sum_us / divisor, float(profile_total_peak_us) / 1000.0, profile_legacy_sum_us / divisor, profile_player_sum_us / divisor, profile_opponents_sum_us / divisor, profile_combat_sum_us / divisor, profile_map_sum_us / divisor, profile_background_sum_us / divisor, profile_floor_sum_us / divisor, profile_ceiling_sum_us / divisor, profile_wall_sum_us / divisor, profile_upload_sum_us / divisor, profile_rebuild_sum_us / divisor, float(profile_rebuild_peak_us) / 1000.0])
+	var sample_divisor := float(profile_sample_count)
+	file.store_line("%.3f,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f" % [elapsed_seconds, target_player_index + 1, profile_sample_count, profile_total_sum_us / divisor, float(profile_total_peak_us) / 1000.0, profile_legacy_sum_us / divisor, profile_player_sum_us / divisor, profile_opponents_sum_us / divisor, profile_combat_sum_us / divisor, profile_map_sum_us / divisor, profile_background_sum_us / divisor, profile_floor_sum_us / divisor, profile_ceiling_sum_us / divisor, profile_wall_sum_us / divisor, profile_upload_sum_us / divisor, profile_rebuild_sum_us / divisor, float(profile_rebuild_peak_us) / 1000.0, profile_render_cpu_sum_ms / sample_divisor, profile_render_gpu_sum_ms / sample_divisor, profile_frame_setup_cpu_sum_ms / sample_divisor, float(profile_projectile_count_sum) / sample_divisor, float(profile_trail_count_sum) / sample_divisor, float(profile_muzzle_smoke_count_sum) / sample_divisor, float(profile_wall_dust_count_sum) / sample_divisor, float(profile_debris_count_sum) / sample_divisor, float(profile_blood_count_sum) / sample_divisor, profile_vfx_muzzle_smoke_sum_us / divisor, profile_vfx_trails_sum_us / divisor, profile_vfx_trail_smoke_sum_us / divisor, profile_vfx_projectile_hot_sum_us / divisor, profile_vfx_wall_dust_sum_us / divisor, profile_vfx_blood_sum_us / divisor, profile_vfx_debris_sum_us / divisor])
 	file.close()
 
 func _input(event: InputEvent) -> void:
