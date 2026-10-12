@@ -30,7 +30,7 @@ window/mode=0
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/muzzle_anchor_editor/plugin.cfg")
 
 [filesystem]
 

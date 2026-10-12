@@ -67,6 +67,7 @@ const DUAL_WIELD_RUN_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Fo
 const DUAL_WIELD_RUN_LEFT_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Left_8Dir/Cowboy2_DualWield_Run_Left_8Dir.tres" # Add the separate dual-pistol left run without replacing normal or dual-forward clips.
 const DUAL_WIELD_RUN_RIGHT_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Right_8Dir/Cowboy2_DualWield_Run_Right_8Dir.tres" # Add the separate dual-pistol right run without replacing normal or other dual-wield clips.
 const DUAL_WIELD_IDLE_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Idle_8Dir/Cowboy2_DualWield_Idle_8Dir.tres" # Add the separate dual-pistol idle loops without replacing normal idle art.
+const MUZZLE_ANCHORS: MuzzleAnchorLibrary = preload("res://assets/Characters/Cowboy2_MuzzleAnchors.tres") # Store user-authored PNG-local barrel pixels independently of SpriteFrames artwork.
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
 
 const FAR_FLOOR_Y := 0.30                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -181,11 +182,16 @@ const MUZZLE_SMOKE_CLOUD_SIZE := 32                                             
 const MUZZLE_SMOKE_CLOUD_VARIANTS := 3                                                        # Vary individual puff silhouettes so rotation and translation continuously reshuffle the visible turbulent shape.
 const MUZZLE_SMOKE_ROTATION_INCREMENT := PI * 0.5                                             # Let puffs spin only through crisp quarter turns, retaining pixel-grid silhouettes without diagonal filtering.
 const DEBUG_DRAW_MUZZLE_SMOKE_CARDS := false                                                  # The temporary card inspector has served its purpose; leave it ready but hidden during normal smoke viewing.
+const DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES := true                                                 # Temporarily compare the shared world muzzle projection (cyan) against the rendered PNG anchor (magenta) in every player camera.
+const MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS := 1.50                                               # Hold the two diagnostic crosses long enough to inspect their separation after the bullet has struck or left the camera.
 const MUZZLE_SMOKE_LIFETIME_MIN := 0.55                                                       # Let the freshest barrel smoke stay thick long enough to momentarily obscure the shooter.
 const MUZZLE_SMOKE_LIFETIME_MAX := 1.15                                                       # Give the diffuse outer smoke enough time to billow and dissipate in the air.
 const MUZZLE_SMOKE_VISUAL_FRAME_DURATION := 1.0 / 14.0                                        # Advance rendered smoke puffs at the same deliberate pixel-animation cadence as splinters.
 const MUZZLE_SMOKE_CARD_SCALE_MIN := 0.5                                                      # Smallest visible 32-pixel smoke-card scale; vary this with the maximum for a more or less turbulent cloud.
 const MUZZLE_SMOKE_CARD_SCALE_MAX := 1                                                      # Largest visible 32-pixel smoke-card scale; this does not change the card's authored texture resolution.
+const MUZZLE_SMOKE_ANCHOR_BLEND_SECONDS := 0.12                                              # Let a fresh powder puff begin at its exact PNG barrel pixel before its existing world drift takes over.
+const MUZZLE_SMOKE_SCREEN_PIXELS_PER_WORLD_UNIT := 96.0                                      # Convert powder drift into a stable logical-pixel speed without letting near-field perspective change its travel distance.
+const MUZZLE_WORLD_WIDTH := 0.32                                                              # Map a full PNG frame width to this stable physical left/right muzzle span around the player capsule.
 const WALL_IMPACT_SMOKE_MIN_CARDS := 3                                                        # Use three overlapping material-dust masses so a strike reads at range.
 const WALL_IMPACT_SMOKE_MAX_CARDS := 3                                                        # Keep the burst capped at three cards so it stays distinct from the broad muzzle-smoke cloud.
 const WALL_IMPACT_SMOKE_LIFETIME := 0.72                                                      # Let the brief material-dust burst read before the retained bullet hole and splinters take over.
@@ -886,6 +892,8 @@ var wall_debris_shape_textures: Dictionary = {}                                 
 var wall_debris_color_cache: Dictionary = {}                                                  # Cache each live splinter's sampled 2x2 wall palette per local view instead of rereading its source texture every frame.
 var wall_debris_render_cache: Dictionary = {}                                                 # Cache each splinter's per-camera projection and occlusion result until its next deliberate 14 FPS visual frame.
 var muzzle_smoke_render_cache: Dictionary = {}                                                # Cache each smoke card's per-camera projection, visibility, and Sprite2D state until its next 14 FPS display sample.
+var projectile_launch_render_cache: Dictionary = {}                                           # Store each shot's per-camera sprite-muzzle origin independently of the world projectile's collision origin.
+var muzzle_anchor_debug_markers: Array[Dictionary] = []                                      # Retain short-lived shared muzzle snapshots solely for the cyan-versus-magenta placement audit.
 var wall_impact_smoke_render_cache: Dictionary = {}                                           # Cache each wall-material card's projection, sampled tint, LOD, and visibility until its next 14 FPS display sample.
 var muzzle_smoke_cloud_textures: Dictionary = {}                                              # Cache procedural low-resolution cloud cards keyed by their stable silhouette variant.
 var muzzle_smoke_card_debug_texture: ImageTexture = null                                      # Cache the temporary card-outline overlay used to inspect the cloud-particle makeup.
@@ -1896,6 +1904,13 @@ func _setup_combat_hud() -> void:
 			content.add_child(combat_layer)                                                           # Keep effects clipped to this player's playfield.
 		view["combat_layer"] = combat_layer                                                      # Store the reusable visual layer in the view bundle.
 		view["combat_nodes"] = {}                                                                # Cache visual nodes instead of allocating them every frame.
+		var muzzle_debug_layer := Node2D.new()                                                    # Put the temporary alignment diagnostic in the camera's HUD canvas, above the complete world compositor.
+		muzzle_debug_layer.name = "MuzzleAnchorDebug"                                             # Keep the Remote scene tree legible during the placement audit.
+		muzzle_debug_layer.z_index = 205                                                          # Sit above the world, player PNGs, and combat layer but below respawn blackout/countdown UI.
+		muzzle_debug_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                     # Preserve literal one-pixel cross arms.
+		hud_layer.add_child(muzzle_debug_layer)                                                    # A CanvasLayer is the required draw-order boundary; world z values can no longer cover these diagnostic marks.
+		view["muzzle_anchor_debug_layer"] = muzzle_debug_layer                                   # Keep one overlay root per camera.
+		view["muzzle_anchor_debug_nodes"] = {}                                                   # Cache only cross pixels separately from real combat effects.
 		player_views[player_index] = view                                                         # Save the expanded view bundle.
 		var meter := preload("res://scripts/combat_health_bar.gd").new()                         # Instantiate the self-contained hatch-bar drawing script.
 		meter.name = "CombatHealthP%d" % (player_index + 1)                                      # Name the node for scene-tree inspection.
@@ -2285,6 +2300,8 @@ func _process_combat(delta: float) -> void:
 	for shot in active_projectiles:                                                             # Advance every live projectile once per shared frame.
 		var lifetime := float(shot.get("lifetime", 0.0)) - delta                                # Decrease its maximum travel lifetime.
 		if lifetime <= 0.0:                                                                        # Remove a shot that has left the playable space.
+			for view_index in range(player_views.size()):
+				projectile_launch_render_cache.erase("%d:%d" % [view_index, int(shot.get("id", -1))]) # Release the per-camera muzzle registration with the expired shared projectile.
 			continue                                                                                   # Do not retain expired projectile data.
 		var origin: Vector2 = shot["position"]                                                    # Read the current world position.
 		var direction: Vector2 = shot["direction"]                                                # Read its frozen launch direction.
@@ -2306,11 +2323,19 @@ func _process_combat(delta: float) -> void:
 				if damage_applied:                                                                     # Blood belongs only to a confirmed health-changing hit, never a blocked gameplay path.
 					var killing_shot := not target_was_dying and bool(player_states[hit_player_index].get("is_dying", false)) # Only the hit that actually starts death may leave persistent floor blood.
 					_spawn_blood_splatter(impact_position, direction, hit_player_index, killing_shot)  # Throw blood through the struck body only after the final authority accepts the hit.
+			for view_index in range(player_views.size()):
+				projectile_launch_render_cache.erase("%d:%d" % [view_index, int(shot.get("id", -1))]) # The hit consumes this projectile, so its visual muzzle state must not leak to a future ID.
 			continue                                                                                   # Remove the consumed projectile.
 		shot["position"] = origin + direction * step_distance                                    # Move unhindered shot to its new shared world position.
 		shot["lifetime"] = lifetime                                                               # Save remaining life.
 		remaining_shots.append(shot)                                                              # Retain it for subsequent frames.
 	active_projectiles = remaining_shots                                                        # Replace the active list after safe iteration.
+	var remaining_muzzle_debug_markers: Array[Dictionary] = []                                 # Age the temporary placement snapshots independently of projectile impacts.
+	for marker in muzzle_anchor_debug_markers:
+		marker["timer"] = float(marker.get("timer", 0.0)) - delta                              # Let both crosses remain readable for a short fixed interval after firing.
+		if float(marker["timer"]) > 0.0:
+			remaining_muzzle_debug_markers.append(marker)                                            # Keep only live debug snapshots; they have no gameplay authority.
+	muzzle_anchor_debug_markers = remaining_muzzle_debug_markers                                # Replace the small retained diagnostic list without touching projectile simulation.
 	active_projectile_trails.clear()                                                            # Remove the former persistent smoke-particle path; the compact tracer now belongs wholly to its live projectile.
 	var remaining_blood_splatters: Array[Dictionary] = []                                      # Advance one-pixel character-hit droplets until their first wall/floor contact, then hold them as stuck marks.
 	for blood in active_blood_splatters:
@@ -2466,13 +2491,19 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var direction := _view_forward_vector_for_state(state).normalized()                         # Shoot directly along the visible camera/player aim heading.
 	var dual_wield_rounds := int(state.get("machine_gun_ammo", 0))                             # Read the optional dual-pistol powerup state once before choosing this shot's muzzle.
 	var dual_wield_barrel_sign := 0.0                                                           # Retain the chosen muzzle side so the local screen-space effect can avoid applying a second offset to the right pistol.
+	var muzzle_hand: StringName = &"right"                                                     # Normal single-pistol animations use their right/default authored muzzle.
 	var body_origin := _player_state_world_position(state)                                      # Keep the simulation rooted at the player's actual collision center, never beyond a wall.
 	if dual_wield_rounds > 0:
 		var muzzle_side := Vector2(-direction.y, direction.x)                                     # Build a horizontal perpendicular so the two pistols fire from opposite sides of the body.
 		var barrel_sign := -1.0 if dual_wield_rounds % 2 == 0 else 1.0                           # Alternate left and right muzzle origins deterministically across all twelve remaining-round values.
 		dual_wield_barrel_sign = barrel_sign                                                       # Carry this exact side through to the screen-space shot effect.
+		muzzle_hand = &"left" if barrel_sign < 0.0 else &"right"                                 # Select the matching independently authored dual-pistol barrel pixel.
 		var muzzle_side_distance := 0.12 if barrel_sign < 0.0 else 0.04                           # Match the authored pose: the right pistol sits much nearer the body center than the left pistol.
 		body_origin += muzzle_side * muzzle_side_distance * barrel_sign                           # Offset only the visible/simulated muzzle; the player's collision center remains unchanged.
+	var authored_muzzle := _world_muzzle_anchor(player_index, _player_state_world_position(state), direction, muzzle_hand) # Resolve the selected pixel once into the shared map, never into one camera's screen space.
+	if _character_has_muzzle_anchor(player_views[player_index].get("player_sprite", null), muzzle_hand):
+		body_origin = authored_muzzle.get("position", body_origin)                                # Authored anchor replaces the heuristic left/right body offset when available.
+	var muzzle_height := float(authored_muzzle.get("height", 0.72))                            # Carry the PNG vertical location as real raised-effect height for every camera.
 	var desired_muzzle_distance := 0.34                                                          # Preserve the authored visual separation between body and pistol muzzle when the lane is clear.
 	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance) # Check the short body-to-muzzle segment before placing the bullet.
 	var muzzle_distance := minf(desired_muzzle_distance, maxf(muzzle_wall_distance - PROJECTILE_WALL_EPSILON, 0.0)) # Clamp the muzzle just in front of a wall instead of spawning a shot on its far side.
@@ -2482,12 +2513,16 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
 	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance) # Include a player already directly in this firing lane.
 	var visual_distance := wall_distance                                                           # Prefer the wall endpoint unless a body is closer.
+	var visual_target_player_index := -1                                                         # Preserve a direct incoming-shot relationship for per-camera visibility without changing collision.
 	if not player_hit.is_empty() and float(player_hit.get("distance", maximum_distance)) < visual_distance:
 		visual_distance = float(player_hit["distance"])                                            # End at the nearer target body.
-	_spawn_muzzle_smoke_particles(smoke_origin, direction, player_index, dual_wield_barrel_sign) # Emit procedural square-pixel black-powder smoke at the visible barrel, distinct from the farther collision-safe projectile origin.
-	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "visual_target_position": origin + direction * visual_distance, "visual_total_distance": maxf(visual_distance, 0.001), "last_trail_distance": 0.0, "direction": direction, "dual_wield_barrel_sign": dual_wield_barrel_sign, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered particle travels in a single straight line.
+		visual_target_player_index = int(player_hit.get("player_index", -1))                       # Record the player actually lying at the selected visual/collision endpoint.
+	_spawn_muzzle_smoke_particles(smoke_origin, direction, player_index, dual_wield_barrel_sign, muzzle_hand, muzzle_height) # Emit shared-world black-powder smoke from the same authored map point.
+	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "visual_target_position": origin + direction * visual_distance, "visual_target_player_index": visual_target_player_index, "visual_total_distance": maxf(visual_distance, 0.001), "last_trail_distance": 0.0, "direction": direction, "height": muzzle_height, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered particle travels in a single straight line.
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
+	if DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES:
+		muzzle_anchor_debug_markers.append({"id": int(shot["id"]), "owner": player_index, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "muzzle_hand": muzzle_hand, "timer": MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS}) # Snapshot the spawned shared muzzle so both camera comparisons remain visible after the shot itself is gone.
 	if gunshot_player != null:
 		gunshot_player.pitch_scale = randf_range(0.78, 1.22)
 		gunshot_player.play()
@@ -2503,7 +2538,7 @@ func _spawn_pistol_shot(player_index: int) -> void:
 
 
 # _spawn_muzzle_smoke_particles: Emits a wide, opaque black-powder cloud from the visible fired barrel without using the authored muzzle-smoke sheets.
-func _spawn_muzzle_smoke_particles(smoke_origin: Vector2, direction: Vector2, owner: int, dual_wield_barrel_sign: float) -> void:
+func _spawn_muzzle_smoke_particles(smoke_origin: Vector2, direction: Vector2, owner: int, dual_wield_barrel_sign: float, muzzle_hand: StringName, muzzle_height: float) -> void:
 	var lateral := Vector2(-direction.y, direction.x)                                          # Build the visible left/right emission axis perpendicular to the barrel direction.
 	for particle_index in range(MUZZLE_SMOKE_PARTICLE_COUNT):
 		var lateral_sign := -1.0 if randf() < 0.5 else 1.0                                       # Throw equal groups to either side so the antique powder burst blooms sideways from the barrel.
@@ -2512,10 +2547,10 @@ func _spawn_muzzle_smoke_particles(smoke_origin: Vector2, direction: Vector2, ow
 		var lifetime := randf_range(MUZZLE_SMOKE_LIFETIME_MIN, MUZZLE_SMOKE_LIFETIME_MAX)        # Let each puff thin at a different time around the cloud's edge.
 		var base_scale := randf_range(MUZZLE_SMOKE_CARD_SCALE_MIN, MUZZLE_SMOKE_CARD_SCALE_MAX)  # Vary puffs through the named card-scale range beside the rest of the muzzle-smoke tuning controls.
 		var initial_position := smoke_origin + lateral * randf_range(-0.020, 0.020)              # Start tightly at the barrel before the restrained sideways drift opens the cloud.
-		var initial_height := randf_range(0.66, 0.84)                                            # Keep the initial visible height identical to the physical barrel-height puff state.
+		var initial_height := muzzle_height + randf_range(-0.06, 0.06)                            # Keep every puff at the single shared authored barrel height, with only a small physical cloud variation.
 		var smoke_tone := randf_range(0.74, 1.0)                                                 # Mix soft grey outer puffs through thick white powder without an image texture.
 		var initial_rotation := float(randi() % 4) * MUZZLE_SMOKE_ROTATION_INCREMENT              # Begin every irregular puff on a clean but varied quarter-turn orientation.
-		active_muzzle_smoke_particles.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "velocity": lateral_velocity + forward_velocity, "turbulence": Vector2(randf_range(-0.035, 0.035), randf_range(-0.035, 0.035)), "height": initial_height, "display_height": initial_height, "vertical_velocity": randf_range(0.02, 0.08), "rotation": initial_rotation, "display_rotation": initial_rotation, "angular_velocity": randf_range(-7.0, 7.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "visual_frame": 0, "base_scale": base_scale, "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "tone": smoke_tone, "opacity": randf_range(0.58, 1.0), "lifetime": lifetime, "timer": lifetime, "owner": owner, "dual_wield_barrel_sign": dual_wield_barrel_sign}) # Keep each separately rotating irregular puff in shared world coordinates for the same result in both player views.
+		active_muzzle_smoke_particles.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "velocity": lateral_velocity + forward_velocity, "turbulence": Vector2(randf_range(-0.035, 0.035), randf_range(-0.035, 0.035)), "height": initial_height, "display_height": initial_height, "vertical_velocity": randf_range(0.02, 0.08), "rotation": initial_rotation, "display_rotation": initial_rotation, "angular_velocity": randf_range(-7.0, 7.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "visual_frame": 0, "base_scale": base_scale, "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "tone": smoke_tone, "opacity": randf_range(0.58, 1.0), "lifetime": lifetime, "timer": lifetime, "owner": owner, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand}) # Keep each separately rotating irregular puff in shared world coordinates for the same result in both player views.
 		next_combat_visual_id += 1                                                               # Reserve an independent cached Sprite2D for this one procedural puff.
 
 
@@ -3091,6 +3126,65 @@ func _render_projectile_tracer_pixel(key: String, screen_position: Vector2, colo
 	used[key] = true                                                                            # Preserve it through stale-node cleanup this frame.
 
 
+# _muzzle_anchor_debug_sprite: Returns one overlay pixel from the layer that deliberately draws above every cowboy PNG.
+func _muzzle_anchor_debug_sprite(key: String) -> Sprite2D:
+	var view := player_views[active_player_index]
+	var nodes: Dictionary = view.get("muzzle_anchor_debug_nodes", {})
+	var node: Sprite2D = nodes.get(key, null)
+	if node == null or not is_instance_valid(node):
+		node = Sprite2D.new()
+		node.centered = true
+		node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var layer: Node2D = view.get("muzzle_anchor_debug_layer", null)
+		if layer != null:
+			layer.add_child(node)
+		nodes[key] = node
+		view["muzzle_anchor_debug_nodes"] = nodes
+		player_views[active_player_index] = view
+	return node
+
+
+
+# _render_muzzle_anchor_debug_cross: Draws a five-pixel camera-local marker without changing gameplay or VFX state.
+func _render_muzzle_anchor_debug_cross(key: String, center: Vector2, color: Color, used: Dictionary) -> void:
+	var offsets := [Vector2.ZERO, Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]       # Make the origin readable at native resolution without obscuring the cowboy or projectile.
+	for pixel_index in range(offsets.size()):
+		var sprite := _muzzle_anchor_debug_sprite("%s_%d" % [key, pixel_index])                  # Keep diagnostics out of the depth-sorted combat layer entirely.
+		sprite.texture = _projectile_pixel_texture()
+		sprite.material = null
+		sprite.self_modulate = color
+		sprite.position = (center + offsets[pixel_index]).round()
+		sprite.scale = Vector2.ONE
+		sprite.z_index = 0
+		sprite.visible = true
+		used["%s_%d" % [key, pixel_index]] = true
+
+
+
+# _render_muzzle_anchor_debug_for_shot: Shows the two coordinate systems being compared for one live shot in the active camera.
+func _render_muzzle_anchor_debug_for_shot(shot: Dictionary, used: Dictionary) -> void:
+	if not DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES:
+		return
+	var shot_id := int(shot.get("id", -1))                                                     # Keep every shot marker cache independent while it is alive.
+	var shared_muzzle_world: Vector2 = shot.get("authored_muzzle_position", shot.get("spawn_position", Vector2.ZERO)) # Read the canonical world point produced from the firing PNG anchor.
+	var muzzle_height := float(shot.get("muzzle_height", shot.get("height", 0.72)))          # Lift that shared point by the normalized body height used for the shot.
+	var world_projection := _opponent_projection_from_current_camera(shared_muzzle_world, true, true) # Deliberately use the existing world-effect path; cyan is where bullet/smoke currently believe the muzzle is.
+	if bool(world_projection.get("visible", false)):
+		var projected_height := float(world_projection.get("continuous_actor_height", world_projection.get("actor_height", 0.0)))
+		var cyan_center := Vector2(float(world_projection.get("screen_x", 0.0)), float(world_projection.get("feet_y", 0.0)) - projected_height * muzzle_height)
+		_render_muzzle_anchor_debug_cross("muzzle_world_%d" % shot_id, cyan_center, Color(0.0, 0.95, 1.0, 1.0), used) # Cyan means canonical shared-world muzzle after the current effect projection.
+	var owner := int(shot.get("owner", -1))                                                    # Locate this camera's currently rendered version of the firing cowboy.
+	var owner_sprite := _character_sprite_for_current_view(owner)
+	if owner_sprite == null or not is_instance_valid(owner_sprite) or not owner_sprite.visible or owner_sprite.sprite_frames == null:
+		return                                                                                    # Do not invent a magenta point when this camera has no rendered owner PNG.
+	var muzzle_hand := StringName(shot.get("muzzle_hand", &"right"))
+	if not _character_has_muzzle_anchor(owner_sprite, muzzle_hand):
+		return
+	var magenta_center := _screen_muzzle_anchor_offset(owner, muzzle_hand, Vector2.ZERO)        # Reuse the same rendered-PNG conversion used by the existing visual muzzle path.
+	_render_muzzle_anchor_debug_cross("muzzle_png_%d" % shot_id, magenta_center, Color(1.0, 0.10, 0.85, 1.0), used) # Magenta means the authored muzzle pixel on the visible cowboy PNG.
+
+
+
 # _append_projectile_tracer_wu_point: Merges one Xiaolin Wu coverage sample into its pixel, retaining the strongest coverage if endpoint math revisits it.
 func _append_projectile_tracer_wu_point(points_by_pixel: Dictionary, pixel: Vector2i, coverage: float, progress: float, head_pixel: Vector2i) -> void:
 	if pixel == head_pixel or coverage <= 0.001:
@@ -3152,6 +3246,71 @@ func _projectile_tracer_wu_points(head_screen_position: Vector2, tail_direction:
 # _projectile_screen_position: Projects a bullet/trail point at a stable world height, independent of the deliberately stepped character LOD size.
 func _projectile_screen_position(projection: Dictionary) -> Vector2:
 	return _projectile_screen_position_continuous(projection).round()                          # Snap only the final displayed projectile point, never the direction-measurement inputs.
+
+
+# _character_sprite_for_current_view: Finds the exact animated PNG currently visible for one world player in this camera.
+func _character_sprite_for_current_view(owner: int) -> AnimatedSprite2D:
+	if owner == active_player_index:
+		return player_sprite
+	if active_player_index < 0 or active_player_index >= player_views.size():
+		return null
+	var opponents: Dictionary = player_views[active_player_index].get("opponent_sprites", {})
+	var opponent: Variant = opponents.get(owner, null)
+	return opponent as AnimatedSprite2D
+
+
+# _screen_muzzle_anchor_offset: Converts an authored PNG pixel directly into this view's displayed sprite space.
+# The gameplay ray remains wall-safe in world space; this correction only owns the visual emission point.
+func _screen_muzzle_anchor_offset(owner: int, muzzle_hand: StringName, baseline_screen_position: Vector2) -> Vector2:
+	var character := _character_sprite_for_current_view(owner)
+	if not _character_has_muzzle_anchor(character, muzzle_hand):
+		return Vector2.ZERO
+	var anchor: Variant = _muzzle_anchor_for_animation(character.animation, muzzle_hand)
+	var texture := character.sprite_frames.get_frame_texture(character.animation, character.frame)
+	if texture == null:
+		return Vector2.ZERO
+	var local_pixel := Vector2(anchor) + Vector2(0.5, 0.5) - texture.get_size() * 0.5
+	var displayed_anchor := character.position + local_pixel * character.scale
+	return displayed_anchor - baseline_screen_position
+
+
+# _character_has_muzzle_anchor: Lets authored sprite data replace, rather than stack with, the old local-barrel correction.
+func _character_has_muzzle_anchor(character: AnimatedSprite2D, muzzle_hand: StringName) -> bool:
+	return character != null and character.sprite_frames != null and _muzzle_anchor_for_animation(character.animation, muzzle_hand) is Vector2i
+
+
+# _world_muzzle_anchor: Converts one authored PNG pixel into the one shared world muzzle point used by collision and every camera.
+func _world_muzzle_anchor(owner: int, body_position: Vector2, direction: Vector2, muzzle_hand: StringName) -> Dictionary:
+	if owner < 0 or owner >= player_views.size():
+		return {"position": body_position, "height": 0.72}
+	var sprite: AnimatedSprite2D = player_views[owner].get("player_sprite", null)
+	if not _character_has_muzzle_anchor(sprite, muzzle_hand):
+		return {"position": body_position, "height": 0.72}
+	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+	var anchor: Vector2i = _muzzle_anchor_for_animation(sprite.animation, muzzle_hand)
+	if texture == null:
+		return {"position": body_position, "height": 0.72}
+	var lateral_fraction := (float(anchor.x) + 0.5 - texture.get_width() * 0.5) / maxf(float(texture.get_width()), 1.0)
+	var lateral := Vector2(-direction.y, direction.x)
+	var foot_y := _texture_foot_anchor_y(texture)
+	var body_height := maxf(_texture_body_height_to_foot(texture), 1.0)
+	var height := clampf((foot_y - float(anchor.y)) / body_height, 0.35, 1.10)
+	return {"position": body_position + lateral * lateral_fraction * MUZZLE_WORLD_WIDTH, "height": height}
+
+
+# _muzzle_anchor_for_animation: Normal moving clips use names such as RunN_AimW.
+# Their weapon direction is the Aim suffix, so a matching idle anchor remains a
+# useful authored fallback until that individual run clip gets its own anchor.
+func _muzzle_anchor_for_animation(animation_name: StringName, muzzle_hand: StringName) -> Variant:
+	var direct: Variant = MUZZLE_ANCHORS.get_anchor(animation_name, muzzle_hand)
+	if direct is Vector2i:
+		return direct
+	var animation_text := String(animation_name)
+	var aim_marker := animation_text.rfind("_Aim")
+	if aim_marker >= 0:
+		var aim_direction := animation_text.substr(aim_marker + 4)
+		return MUZZLE_ANCHORS.get_anchor(StringName("Idle" + aim_direction), muzzle_hand)
+	return null
 
 
 # _projectile_screen_position_continuous: Preserves subpixel projection data for stable live-vector direction calculations.
@@ -3294,9 +3453,27 @@ func _hide_unused_combat_sprites(used_keys: Dictionary) -> void:
 			node.visible = false                                                                     # Keep it ready for a later projectile.
 
 
+# _hide_unused_muzzle_anchor_debug_sprites: Keeps diagnostic cross pixels alive only while a retained marker uses them.
+func _hide_unused_muzzle_anchor_debug_sprites(used_keys: Dictionary) -> void:
+	var view := player_views[active_player_index]
+	var nodes: Dictionary = view.get("muzzle_anchor_debug_nodes", {})
+	for key in nodes.keys():
+		var node: Sprite2D = nodes[key]
+		if is_instance_valid(node) and not used_keys.has(key):
+			node.visible = false
+
+
+
 # _update_combat_view: Projects shots, impact flashes, and temporary hit sprites through the same camera model as opponents.
 func _update_combat_view() -> void:
 	var used: Dictionary = {}                                                                   # Track which cached sprites are active in this camera this frame.
+	var muzzle_debug_used: Dictionary = {}                                                      # Track the temporary topmost cross pixels separately from depth-sorted combat VFX.
+	var muzzle_debug_view := player_views[active_player_index]                                  # Keep the HUD diagnostic registered to this camera's actual on-window viewport rectangle.
+	var muzzle_debug_layer: Node2D = muzzle_debug_view.get("muzzle_anchor_debug_layer", null)
+	var view_node: Node2D = muzzle_debug_view.get("maze_viewport", null)
+	if muzzle_debug_layer != null and view_node != null:
+		muzzle_debug_layer.position = view_node.position                                          # Convert logical 160-by-120 cross coordinates into this view's native-window origin.
+		muzzle_debug_layer.scale = view_node.scale                                                # Match the exact integer player-view enlargement so the cross stays on its intended source pixel.
 	combat_vfx_render_profile = {"muzzle_smoke_us": 0, "trails_us": 0, "trail_smoke_us": 0, "projectile_hot_us": 0, "wall_dust_us": 0, "blood_us": 0, "debris_us": 0} # Reset this camera's small profiling payload before rendering its current effect passes.
 	var coin_frame_index := _coin_animation_frame_index()                                      # Keep every coin on the same authored spin frame while allowing each depth to choose its own authored silhouette.
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
@@ -3329,11 +3506,29 @@ func _update_combat_view() -> void:
 		var smoke_projection := _opponent_projection_from_current_camera(smoke_world_position, true, true) # Use the unbounded world-effect projection so drifting smoke does not stop on a camera-cell seam.
 		var smoke_sprite := _combat_sprite(smoke_key)                                            # Reuse a hard-edged Sprite2D for this particle in the current view.
 		var smoke_height := float(smoke_projection.get("continuous_actor_height", smoke_projection.get("actor_height", 0.0))) # Preserve continuous world depth for the smoke's raised barrel anchor.
-		var smoke_position := Vector2(float(smoke_projection["screen_x"]), float(smoke_projection["feet_y"]) - smoke_height * float(particle.get("display_height", particle.get("height", 0.72)))) # Place the puff in the shared world air volume rather than flat on the floor.
-		if int(particle.get("owner", -1)) == active_player_index and float(particle.get("dual_wield_barrel_sign", 0.0)) <= 0.0:
+		var raw_smoke_screen_position := Vector2(float(smoke_projection["screen_x"]), float(smoke_projection["feet_y"]) - smoke_height * float(particle.get("display_height", particle.get("height", 0.72)))) # Project the existing shared-world puff motion before applying its fixed sprite-origin registration.
+		var smoke_spawn_baseline := raw_smoke_screen_position                                      # Default to the physical projection when no authored character anchor exists yet.
+		var smoke_spawn_anchor := raw_smoke_screen_position + _screen_muzzle_anchor_offset(int(particle.get("owner", -1)), StringName(particle.get("muzzle_hand", &"right")), raw_smoke_screen_position) # Capture the actual displayed PNG barrel pixel once for this camera and puff.
+		var smoke_screen_velocity := Vector2.ZERO                                                  # Store drift in logical pixels so the camera's near-field projection cannot stretch it by grid position.
+		if cached_smoke_render is Dictionary and cached_smoke_render.has("spawn_baseline_screen"):
+			smoke_spawn_baseline = cached_smoke_render.get("spawn_baseline_screen", raw_smoke_screen_position) # Retain the original world projection rather than recomputing a new local-body offset after the shooter moves.
+			smoke_spawn_anchor = cached_smoke_render.get("spawn_anchor_screen", smoke_spawn_anchor) # Keep smoke born at the original gun tip, never at the feet-relative legacy position.
+			smoke_screen_velocity = cached_smoke_render.get("screen_velocity", Vector2.ZERO)         # Reuse the launch-time logical velocity for this puff's complete lifetime.
+		else:
+			var world_velocity: Vector2 = particle.get("velocity", Vector2.ZERO)                    # Retain the authored lateral/forward direction but not the depth-dependent projected magnitude.
+			var probe_world_position := smoke_world_position + world_velocity * 0.01                  # Sample a tiny world step only to determine which screen direction this camera sees.
+			var probe_projection := _opponent_projection_from_current_camera(probe_world_position, true, true)
+			var probe_height := float(probe_projection.get("continuous_actor_height", probe_projection.get("actor_height", 0.0)))
+			var probe_screen_position := Vector2(float(probe_projection["screen_x"]), float(probe_projection["feet_y"]) - probe_height * float(particle.get("display_height", particle.get("height", 0.72))))
+			var screen_direction := (probe_screen_position - raw_smoke_screen_position).normalized()
+			smoke_screen_velocity = screen_direction * world_velocity.length() * MUZZLE_SMOKE_SCREEN_PIXELS_PER_WORLD_UNIT
+			smoke_screen_velocity.y -= float(particle.get("vertical_velocity", 0.0)) * MUZZLE_SMOKE_SCREEN_PIXELS_PER_WORLD_UNIT # Preserve a small, equally scaled upward powder rise.
+		var smoke_lifetime := maxf(float(particle.get("lifetime", MUZZLE_SMOKE_LIFETIME_MAX)), 0.001) # Normalize this puff's fade against its own intentionally varied life.
+		var smoke_age := smoke_lifetime - float(particle.get("timer", 0.0))                       # Advance this visual drift from its own creation time, independent of camera depth.
+		var smoke_position := raw_smoke_screen_position                                             # Project the same shared-world puff directly; cameras may show perspective differences but never different world motion.
+		if int(particle.get("owner", -1)) == active_player_index and float(particle.get("dual_wield_barrel_sign", 0.0)) <= 0.0 and not _character_has_muzzle_anchor(_character_sprite_for_current_view(int(particle.get("owner", -1))), StringName(particle.get("muzzle_hand", &"right"))):
 			smoke_position.x += smoke_height * 0.13                                                # Keep the normal/left local barrel aligned with the same screen correction as its projectile.
-		var lifetime := maxf(float(particle.get("lifetime", MUZZLE_SMOKE_LIFETIME_MAX)), 0.001) # Normalize this puff's fade against its own intentionally varied life.
-		var remaining_fraction := clampf(float(particle.get("timer", 0.0)) / lifetime, 0.0, 1.0) # Retain opacity while fresh, then thin away as turbulence disperses the cloud.
+		var remaining_fraction := clampf(float(particle.get("timer", 0.0)) / smoke_lifetime, 0.0, 1.0) # Retain opacity while fresh, then thin away as turbulence disperses the cloud.
 		var smoke_alpha := minf(float(particle.get("opacity", 1.0)), remaining_fraction / 0.60) # Keep thick inner powder opaque and let the outer edge fade smoothly through transparency.
 		var smoke_tone := float(particle.get("tone", 1.0))                                      # Read the preselected white-to-light-grey density variation.
 		smoke_sprite.texture = _muzzle_smoke_cloud_texture(int(particle.get("cloud_variant", 0))) # Draw an irregular low-resolution alpha-noise cloud card instead of a rigid square pixel.
@@ -3347,7 +3542,7 @@ func _update_combat_view() -> void:
 		smoke_sprite.rotation = float(particle.get("display_rotation", 0.0))                    # Rotate each irregular puff through held 90-degree pixel-grid steps so the card reads as turbulent, not merely translated.
 		smoke_sprite.z_index = _world_actor_draw_layer(smoke_world_position)                    # Sort smoke by its real muzzle point so it can sit behind/over a body naturally instead of overriding all actors as foreground UI.
 		smoke_sprite.visible = true                                                               # Reveal this procedural puff.
-		muzzle_smoke_render_cache[smoke_render_cache_key] = {"visual_frame": smoke_visual_frame, "visible": true} # Keep this complete card state until its visible puff sample changes.
+		muzzle_smoke_render_cache[smoke_render_cache_key] = {"visual_frame": smoke_visual_frame, "visible": true, "spawn_baseline_screen": smoke_spawn_baseline, "spawn_anchor_screen": smoke_spawn_anchor, "screen_velocity": smoke_screen_velocity} # Keep fixed-pixel drift beside the one-time PNG muzzle registration for this puff's full lifetime.
 		used[smoke_key] = true                                                                    # Preserve it until its individual lifetime expires.
 		if DEBUG_DRAW_MUZZLE_SMOKE_CARDS:
 			var card_debug_sprite := _combat_sprite("%s_card_debug" % smoke_key)                  # Draw a separate transparent overlay so inspecting bounds never changes the cloud's alpha mask.
@@ -3367,25 +3562,32 @@ func _update_combat_view() -> void:
 	var projectile_hot_started_us := Time.get_ticks_usec()                                       # Time the live yellow/white/grey projectile vector.
 	for shot in active_projectiles:                                                              # Render the bullet and every attached tracer pixel from one shared, current projectile state.
 		var world_position: Vector2 = shot["position"]                                            # Read the authoritative collision point for this live projectile.
-		if not _world_actor_overlaps_current_camera_fan(world_position, 0.06) or not _world_point_has_clear_camera_line(world_position):
-			continue                                                                                   # Keep the complete attached vector hidden whenever the real projectile is off-camera or behind a wall.
-		var shot_direction: Vector2 = shot.get("direction", Vector2.ZERO)                         # Reuse the fixed collision direction to find the tail's on-screen direction.
+		var normally_visible := _world_actor_overlaps_current_camera_fan(world_position, 0.06) and _world_point_has_clear_camera_line(world_position) # Retain strict ordinary world/fan culling for non-threatening side shots.
+		var aimed_at_current_viewer := int(shot.get("visual_target_player_index", -1)) == active_player_index # A real player-hit endpoint should remain readable even while its physical lead begins just outside the narrow camera fan.
+		var target_world_position: Vector2 = shot.get("visual_target_position", world_position)
+		if not normally_visible and (not aimed_at_current_viewer or not _world_point_has_clear_camera_line(target_world_position)):
+			continue                                                                                   # Preserve wall occlusion; only retain an off-fan bullet when its known collision ray is truly coming into this viewer.
 		var head_projection := _opponent_projection_from_current_camera(world_position, true, true) # Project the head exactly once for this camera and live projectile.
-		var head_screen_position := _projectile_screen_position(head_projection)                    # Anchor the yellow bullet head at its stable raised world projection.
-		var probe_projection := _opponent_projection_from_current_camera(world_position - shot_direction * 0.04, true, true) # Project a small point behind the bullet to measure this vector's local screen-space direction.
-		var shot_id := int(shot.get("id", -1))                                                     # Keep every head and attached tail point stable in this view's cached Sprite2D map.
-		var raw_tail_screen_direction := (_projectile_screen_position_continuous(probe_projection) - _projectile_screen_position_continuous(head_projection)).normalized() # Measure the true subpixel projection angle before the tail is rasterized to the pixel grid.
+		var shot_id := int(shot.get("id", -1))                                                     # Keep each per-camera muzzle registration tied to this shared projectile ID.
+		var launch_cache_key := "%d:%d" % [active_player_index, shot_id]                           # Split-screen cameras need independent sprite-space origins for one physical shot.
+		var cached_launch: Variant = projectile_launch_render_cache.get(launch_cache_key, {})       # Retain the original player PNG placement even while the actor moves through the near field.
+		var projectile_height := float(shot.get("height", 0.72))
+		var head_screen_position := Vector2(float(head_projection["screen_x"]), float(head_projection["feet_y"]) - float(head_projection.get("continuous_actor_height", head_projection.get("actor_height", 0.0))) * projectile_height).round() # Project the one shared physical position directly in this camera.
+		var shot_direction: Vector2 = shot.get("direction", Vector2.ZERO)
+		var probe_projection := _opponent_projection_from_current_camera(world_position - shot_direction * 0.04, true, true)
+		var raw_tail_screen_direction := (_projectile_screen_position_continuous(probe_projection) - _projectile_screen_position_continuous(head_projection)).normalized()
 		var projected_height := float(head_projection.get("continuous_actor_height", head_projection.get("actor_height", 0.0))) # Use the same continuous perspective scale that governs world-body apparent size.
 		var tail_length_pixels := clampi(roundi(projected_height / PROJECTILE_TRACER_LENGTH_HEIGHT_DIVISOR), 1, PROJECTILE_TRACER_MAX_LENGTH_PIXELS) # Keep a distant vector to one tail pixel, then lengthen only its aliased screen-space extent as it approaches.
 		var tracer_tail_points := _projectile_tracer_wu_points(head_screen_position, raw_tail_screen_direction, tail_length_pixels) # Rasterize the actual projected angle into anti-aliased coverage pairs without changing its physical direction or length.
-		_render_projectile_tracer_pixel("shot_%d" % shot_id, head_screen_position, PROJECTILE_HEAD_COLOR, WORLD_EFFECT_FOREGROUND_LAYER, PROJECTILE_HEAD_PIXEL_SIZE, used) # Draw the independently tunable one-pixel bullet head.
+		var projectile_layer := _world_actor_draw_layer(world_position)                            # Put the travelling shot into the same camera-depth painter ordering as cowboys, pickups, and wall faces.
+		_render_projectile_tracer_pixel("shot_%d" % shot_id, head_screen_position, PROJECTILE_HEAD_COLOR, projectile_layer, PROJECTILE_HEAD_PIXEL_SIZE, used) # Let normal world depth decide whether the head is in front of or behind the firing character.
 		for tracer_index in range(tracer_tail_points.size()):
 			var tracer_point: Dictionary = tracer_tail_points[tracer_index]                           # Read this pixel's Xiaolin Wu edge coverage and physical tail distance.
 			var tracer_position: Vector2 = tracer_point.get("position", Vector2.ZERO)
 			var tail_progress := float(tracer_point.get("progress", 1.0))                           # Use physical distance from head to tail end, rather than cache order, for both tunable gradients.
 			var tail_color := PROJECTILE_TRACER_TAIL_START_COLOR.lerp(PROJECTILE_TRACER_TAIL_END_COLOR, tail_progress) # Interpolate the complete RGBA gradient selected in Godot's color pickers.
 			tail_color.a *= float(tracer_point.get("coverage", 0.0))                                # Apply only Xiaolin Wu's local anti-alias coverage after the authored RGBA gradient.
-			_render_projectile_tracer_pixel("shot_tail_%d_%d" % [shot_id, tracer_index], tracer_position, tail_color, WORLD_EFFECT_FOREGROUND_LAYER - 1, 1.0, used) # Render the separately configurable Wu-rasterized tail.
+			_render_projectile_tracer_pixel("shot_tail_%d_%d" % [shot_id, tracer_index], tracer_position, tail_color, projectile_layer, 1.0, used) # Keep the complete tracer in the same world-depth layer as its physical lead point.
 	combat_vfx_render_profile["projectile_hot_us"] = Time.get_ticks_usec() - projectile_hot_started_us # Record the complete attached live bullet vector without a separate persistent smoke path.
 	combat_vfx_render_profile["trails_us"] = Time.get_ticks_usec() - trails_started_us          # Retain the combined field for continuity with existing profile archives.
 	var wall_dust_started_us := Time.get_ticks_usec()                                          # Measure the card projection, wall-color sampling, and material updates for impact dust.
@@ -3608,7 +3810,11 @@ func _update_combat_view() -> void:
 			decal_sprite.z_index = body_sprite.z_index + 4                                           # Keep a wound readable over the body and its brief hit-reaction replacement.
 			decal_sprite.visible = true                                                              # Reveal this accumulated injury mark.
 			used[decal_key] = true                                                                    # Preserve it until a heart or respawn removes the underlying decal description.
+	if DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES:
+		for marker in muzzle_anchor_debug_markers:
+			_render_muzzle_anchor_debug_for_shot(marker, muzzle_debug_used)                         # Render the retained two-cross snapshot after all normal art, through its deliberately topmost overlay layer.
 	_hide_unused_combat_sprites(used)                                                          # Hide stale bullets, impacts, and hit art.
+	_hide_unused_muzzle_anchor_debug_sprites(muzzle_debug_used)                                # Hide only expired diagnostic pixels; regular combat cleanup never touches the overlay.
 
 
 # _coin_hud_texture: Returns the fixed full-detail Blender coin requested for the compact score icon.
@@ -9687,11 +9893,13 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 func _regenerate_runtime_map(restart_round_music := false) -> void:                         # Declare this function.
 	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
 	active_projectiles.clear()                                                                 # Remove shots that belonged to the old maze topology.
+	muzzle_anchor_debug_markers.clear()                                                        # Remove only temporary muzzle comparisons tied to discarded combat events.
 	active_projectile_trails.clear()                                                           # Remove hanging projectile particles that belonged to the old maze topology.
 	active_wall_debris.clear()                                                                 # Remove moving wall splinters that belonged to the old maze topology.
 	wall_debris_color_cache.clear()                                                            # Remove palette entries tied to the discarded impact particles and old wall textures.
 	wall_debris_render_cache.clear()                                                           # Remove cached screen-space states tied to the discarded particles and their old camera/wall visibility.
 	muzzle_smoke_render_cache.clear()                                                          # Remove cached smoke-card states tied to the discarded firing event and old camera visibility.
+	projectile_launch_render_cache.clear()                                                      # Remove per-camera PNG muzzle registrations tied to discarded projectile IDs and the old world/camera state.
 	wall_impact_smoke_render_cache.clear()                                                     # Remove cached material-card states tied to discarded wall contacts and old wall textures.
 	active_wall_bullet_holes.clear()                                                           # Remove retained wall decals that belonged to the old maze topology.
 	active_wall_impact_smokes.clear()                                                          # Remove wall-contact GunSmoke clouds that belonged to the old maze topology.

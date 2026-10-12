@@ -1,0 +1,248 @@
+[gd_resource type="Resource" script_class="MuzzleAnchorLibrary" format=3 uid="uid://cbubkexw81a2j"]
+
+[ext_resource type="Script" uid="uid://c830xcpmva2rt" path="res://scripts/muzzle_anchor_library.gd" id="1_muzzle"]
+
+[resource]
+script = ExtResource("1_muzzle")
+sprite_frames_path = "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir_Strafe.tres"
+anchors = {
+"DualRunE": {
+"left": Vector2i(2, 10),
+"right": Vector2i(0, 11)
+},
+"DualRunLeftE": {
+"left": Vector2i(6, 8),
+"right": Vector2i(3, 8)
+},
+"DualRunLeftN": {
+"left": Vector2i(12, 8),
+"right": Vector2i(24, 7)
+},
+"DualRunLeftNE": {
+"left": Vector2i(3, 8),
+"right": Vector2i(8, 7)
+},
+"DualRunLeftNW": {
+"left": Vector2i(38, 7),
+"right": Vector2i(29, 8)
+},
+"DualRunLeftS": {
+"left": Vector2i(36, 8),
+"right": Vector2i(24, 7)
+},
+"DualRunLeftSE": {
+"left": Vector2i(18, 8),
+"right": Vector2i(8, 7)
+},
+"DualRunLeftSW": {
+"left": Vector2i(45, 9),
+"right": Vector2i(38, 7)
+},
+"DualRunLeftW": {
+"left": Vector2i(43, 8),
+"right": Vector2i(44, 8)
+},
+"DualRunN": {
+"left": Vector2i(15, 9),
+"right": Vector2i(26, 8)
+},
+"DualRunNE": {
+"left": Vector2i(2, 10),
+"right": Vector2i(7, 9)
+},
+"DualRunNW": {
+"left": Vector2i(33, 10),
+"right": Vector2i(42, 10)
+},
+"DualRunRightE": {
+"left": Vector2i(0, 9),
+"right": Vector2i(2, 8)
+},
+"DualRunRightN": {
+"left": Vector2i(17, 9),
+"right": Vector2i(32, 8)
+},
+"DualRunRightNE": {
+"left": Vector2i(2, 9),
+"right": Vector2i(14, 8)
+},
+"DualRunRightNW": {
+"left": Vector2i(36, 8),
+"right": Vector2i(45, 8)
+},
+"DualRunRightS": {
+"left": Vector2i(15, 9),
+"right": Vector2i(30, 10)
+},
+"DualRunRightSE": {
+"left": Vector2i(11, 8),
+"right": Vector2i(2, 8)
+},
+"DualRunRightSW": {
+"left": Vector2i(44, 9),
+"right": Vector2i(33, 8)
+},
+"DualRunRightW": {
+"left": Vector2i(47, 8),
+"right": Vector2i(44, 8)
+},
+"DualRunS": {
+"left": Vector2i(32, 10),
+"right": Vector2i(21, 10)
+},
+"DualRunSE": {
+"left": Vector2i(14, 10),
+"right": Vector2i(5, 10)
+},
+"DualRunSW": {
+"left": Vector2i(44, 10),
+"right": Vector2i(39, 10)
+},
+"DualRunW": {
+"left": Vector2i(44, 10),
+"right": Vector2i(47, 10)
+},
+"IdleDualE": {
+"left": Vector2i(5, 7),
+"right": Vector2i(0, 8)
+},
+"IdleDualN": {
+"left": Vector2i(16, 7),
+"right": Vector2i(28, 7)
+},
+"IdleDualNE": {
+"left": Vector2i(5, 7),
+"right": Vector2i(11, 7)
+},
+"IdleDualNW": {
+"left": Vector2i(32, 6),
+"right": Vector2i(42, 7)
+},
+"IdleDualS": {
+"left": Vector2i(31, 7),
+"right": Vector2i(19, 8)
+},
+"IdleDualSE": {
+"left": Vector2i(15, 7),
+"right": Vector2i(5, 8)
+},
+"IdleDualSW": {
+"left": Vector2i(42, 7),
+"right": Vector2i(37, 8)
+},
+"IdleDualW": {
+"left": Vector2i(42, 7),
+"right": Vector2i(46, 8)
+},
+"IdleE": {
+"right": Vector2i(2, 9)
+},
+"IdleN": {
+"right": Vector2i(30, 9)
+},
+"IdleNE": {
+"right": Vector2i(12, 9)
+},
+"IdleNW": {
+"right": Vector2i(43, 9)
+},
+"IdleS": {
+"right": Vector2i(18, 9)
+},
+"IdleSE": {
+"right": Vector2i(4, 8)
+},
+"IdleSW": {
+"right": Vector2i(34, 9)
+},
+"IdleW": {
+"right": Vector2i(45, 9)
+},
+"RunE_AimE": {
+"right": Vector2i(3, 10)
+},
+"RunE_AimN": {
+"right": Vector2i(24, 7)
+},
+"RunE_AimS": {
+"right": Vector2i(15, 9)
+},
+"RunNE_AimN": {
+"right": Vector2i(13, 13)
+},
+"RunNE_AimNE": {
+"right": Vector2i(13, 12)
+},
+"RunNE_AimNW": {
+"right": Vector2i(33, 14)
+},
+"RunNE_AimSE": {
+"right": Vector2i(3, 9)
+},
+"RunNW_AimN": {
+"right": Vector2i(36, 13)
+},
+"RunNW_AimNE": {
+"right": Vector2i(15, 9)
+},
+"RunNW_AimNW": {
+"right": Vector2i(36, 13)
+},
+"RunNW_AimSW": {
+"right": Vector2i(38, 11)
+},
+"RunN_AimE": {
+"right": Vector2i(3, 9)
+},
+"RunN_AimN": {
+"right": Vector2i(27, 10)
+},
+"RunN_AimW": {
+"right": Vector2i(41, 13)
+},
+"RunSE_AimN": {
+"right": Vector2i(6, 11)
+},
+"RunSE_AimNE": {
+"right": Vector2i(14, 14)
+},
+"RunSE_AimSE": {
+"right": Vector2i(5, 11)
+},
+"RunSE_AimSW": {
+"right": Vector2i(32, 8)
+},
+"RunSW_AimN": {
+"right": Vector2i(40, 10)
+},
+"RunSW_AimNW": {
+"right": Vector2i(44, 9)
+},
+"RunSW_AimSE": {
+"right": Vector2i(7, 11)
+},
+"RunSW_AimSW": {
+"right": Vector2i(40, 10)
+},
+"RunS_AimE": {
+"right": Vector2i(6, 13)
+},
+"RunS_AimN": {
+"right": Vector2i(21, 12)
+},
+"RunS_AimS": {
+"right": Vector2i(21, 12)
+},
+"RunS_AimW": {
+"right": Vector2i(43, 9)
+},
+"RunW_AimN": {
+"right": Vector2i(32, 8)
+},
+"RunW_AimS": {
+"right": Vector2i(23, 9)
+},
+"RunW_AimW": {
+"right": Vector2i(43, 12)
+}
+}
