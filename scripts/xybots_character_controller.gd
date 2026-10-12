@@ -236,6 +236,8 @@ const XBOX_STICK_DEADZONE := 0.22                                               
 const XBOX_TURN_THRESHOLD := 0.62                                                            # Require a deliberate right-stick push before issuing one turn input.
 const DEBUG_MAP_CELL_SIZE := 16.0                                                           # Fit the temporary 9x9 diagnostic grid inside its own side panel.
 const DEBUG_MAP_PANEL_SIZE := Vector2(160.0, 160.0)                                        # Give the 9x9 source grid a square panel beside the player view.
+const DEBUG_MENU_COLUMN_WIDTH := 148.0                                                       # Fit two compact F3 control columns beside the centered four-player grid at the normal 960px window width.
+const DEBUG_MENU_SIDE_MARGIN := 4.0                                                          # Leave a small black gutter between each control column and the playfield grid.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(8.0, 8.0)                                      # Center the temporary 9x9 grid inside its 160x160 side panel.
 const CARDINAL_SLOT_GUIDE_MAP_SCALE := 1.0                                                   # Keep authored guide coordinates in their native maze-cell scale; they may extend beyond the panel.
 const DEBUG_VIEW_CONE_DEPTH := 5.5                                                           # Match the coordinate renderer's farthest usable depth so actors do not vanish before the sixth-cell test band.
@@ -717,23 +719,30 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
 @export var show_near_view_tuning_debug := false                                             # Show raw-versus-clamped local anchors in every player view plus their shared top-down truth guides.
+@export var pause_round_timer_for_debug := false                                             # Pause only the shared round clock when deliberately requested from the debug menu; guide visibility stays independent.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
 @export var walk_through_walls_cheat := false                                                # Let a deliberate debug cheat bypass only player movement collision, including the outer map boundary.
 @export_range(0.0, 900.0, 0.001, "or_greater") var combat_round_duration_seconds := DEFAULT_COMBAT_ROUND_SECONDS # Let the inspector use zero for an infinite test round or tune the music-length match.
 
+@export_group("Audio")
+@export var music_enabled := false                                                           # Keep repeated local playtests quiet by default; the F3 menu or Inspector can re-enable music deliberately.
+
 @export_group("Near View Live Tuning")                                                       # Keep first-person camera-clamp controls editable in the Remote inspector while the game runs.
 @export var experimental_forward_cell_play_space := false                                     # Kept disabled: the accepted experiment keeps the player in the original near/source cell, never the cell ahead.
 @export var use_near_cell_motion_envelope := true                                            # Keep the local body in the current near cell and use its own extended rear-edge display envelope; never translate it into another grid cell.
+@export var use_continuous_world_projection_for_near_actors := true                          # Option 1: place near-field cowboys with the same unclamped continuous world camera used by bullets, smoke, pickups, and impacts; disable only to compare the legacy cowboy-only envelope.
 @export_range(0.0, 48.0, 1.0) var near_rear_exit_pixels := 24.0                             # Let the body feet travel this far below the authored near floor edge at the south boundary, creating a natural partial exit.
 @export_range(0.0, 48.0, 1.0) var near_rear_side_exit_pixels := 22.0                        # Flare the south-west/south-east screen limits by this amount so each rear corner can partially leave the frame.
 @export_range(0.50, 1.0, 0.01) var side_transition_trigger_offset := 0.90                    # Start an open lateral crossing at this normalized physical offset; 0.90 is the accepted current tuning.
 @export_range(0.50, 1.0, 0.01) var side_transition_entry_offset := 0.90                      # Place the body this far inside the destination cell after a lateral crossing; 0.90 is the accepted current tuning.
 @export_range(0.0, 1.0, 0.01) var near_body_scale_depth_offset := 0.0                       # Sample body size from a monotonic local depth range; the accepted tuning uses the unshifted local curve.
-@export_range(1.0, 4.0, 0.01) var near_camera_crop_zoom := 1.0                              # Keep the fixed wireframe at its authored framing by default; crop remains an optional visual-only experiment.
+@export_range(0.25, 4.0, 0.01) var near_camera_crop_zoom := 1.0                             # Values below 1.0 zoom out; keep scale positive because a negative CanvasItem scale mirrors the entire camera rather than widening its view.
 @export_range(0.0, 160.0, 0.1) var near_camera_crop_focus_x := 80.0                         # Center the dormant optional crop on the authored frame.
 @export_range(0.0, 120.0, 0.1) var near_camera_crop_focus_y := 60.0                         # Center the dormant optional crop on the authored frame.
+@export_range(0.0, 80.0, 1.0) var near_overscan_pan_limit_x_pixels := 49.0                  # Allow the 320px overscan crop to follow a player toward either rear corner; 49px reaches the authored magenta/blue guide rectangles.
+@export_range(0.0, 80.0, 1.0) var near_overscan_pan_limit_y_pixels := 41.0                  # Allow the overscan crop to follow the player toward the rear wall; 41px reaches the authored magenta/blue guide rectangles.
 @export_range(0.20, 0.70, 0.01) var near_camera_rear_offset := DEFAULT_CAMERA_REAR_OFFSET    # Move the world camera fore/aft inside its cell; affects screen projection, view cone, and world-space VFX anchors.
 @export_range(0.50, 1.50, 0.01) var near_self_scale_multiplier := 1.0                        # Scale the real world-projected local body without changing collision, pickup, or VFX positions.
 @export_range(48.0, 192.0, 1.0) var near_body_height_cap_pixels := 96.0                     # Stop the local billboard from growing without bound at the camera plane; additional close travel is conveyed by crop/exit instead.
@@ -927,6 +936,7 @@ var heart_pickup_player: AudioStreamPlayer
 var machine_gun_pickup_player: AudioStreamPlayer
 var next_combat_visual_id := 1                                                                  # Give shared shots and impacts stable keys inside each split-screen view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
+var debug_menu_right_panel: PanelContainer                                                   # Store the second compact control column for four-player debugging.
 var debug_menu_canvas: CanvasLayer                                                           # Keep the F3 controls on their own highest-priority canvas instead of whichever player HUD is currently bound.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_tuning_spins: Dictionary = {}                                                 # Store live near-view SpinBoxes so F3 tuning never depends on the Remote debugger.
@@ -991,6 +1001,7 @@ func _setup_shared_audio() -> void:
 	add_child(gunshot_player)
 	coin_pickup_player = AudioStreamPlayer.new()
 	coin_pickup_player.stream = COIN_PICKUP_STREAM
+	coin_pickup_player.volume_db = -6.0                                                       # Halve the perceived coin pickup level without changing the other combat/UI cues.
 	add_child(coin_pickup_player)
 	heart_pickup_player = AudioStreamPlayer.new()
 	heart_pickup_player.stream = HEART_PICKUP_STREAM
@@ -1095,26 +1106,36 @@ func _setup_debug_menu() -> void:
 	debug_menu_canvas.layer = 1000                                                            # Draw above all player HUDs, combat overlays, top-down maps, guide labels, and the end-round canvas.
 	add_child(debug_menu_canvas)                                                               # Keep the menu in the root scene so rebinding P1/P2 HUD contexts cannot change its draw order.
 	debug_menu_panel = PanelContainer.new()                                                    # Create one UI panel above both local player views.
-	debug_menu_panel.name = "DebugOverlayMenu"                                                # Give the panel a clear scene-tree name for editor inspection.
+	debug_menu_panel.name = "DebugOverlayMenuLeft"                                            # Keep camera controls in the left compact column.
 	debug_menu_panel.z_index = 700                                                            # Keep F3 controls above the high-priority ray map while inspecting it.
-	debug_menu_panel.position = Vector2(DEBUG_MAP_PANEL_SIZE.x + 20.0, 12.0)                  # Keep F3 controls beside the 160px top-down truth map instead of covering the local player/camera markers.
-	debug_menu_panel.custom_minimum_size = Vector2(268.0, 0.0)                                # Keep labels readable without covering the entire game window.
+	debug_menu_panel.custom_minimum_size = Vector2(DEBUG_MENU_COLUMN_WIDTH, 0.0)              # Reserve a narrow side column beside the four-player view grid.
 	debug_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP                                  # Prevent mouse clicks on the menu from passing to the playfield.
 	debug_menu_panel.visible = false                                                           # Start closed so the prototype view stays uncluttered.
 	var pixel_theme := Theme.new()                                                             # Keep diagnostic controls as crisp as the retro game HUD.
 	pixel_theme.set_font("font", "Label", pixel_hud_font)                                  # Disable smoothing on the menu header and hint.
 	pixel_theme.set_font("font", "Button", pixel_hud_font)                                 # Disable smoothing on the JSON-save button.
 	pixel_theme.set_font("font", "CheckBox", pixel_hud_font)                               # Disable smoothing on all debug toggles.
+	pixel_theme.set_font("font", "LineEdit", pixel_hud_font)                                # Keep SpinBox values in the same crisp compact typeface.
+	for type_name in ["Label", "Button", "CheckBox", "SpinBox", "LineEdit"]:
+		pixel_theme.set_font_size("font_size", type_name, 7)                                  # Fit the complete two-column menu within the screen height.
 	debug_menu_panel.theme = pixel_theme                                                       # Apply the one local theme without changing Godot's editor UI.
 	debug_menu_canvas.add_child(debug_menu_panel)                                              # Put the menu on the dedicated highest-priority debug canvas.
+	debug_menu_right_panel = PanelContainer.new()
+	debug_menu_right_panel.name = "DebugOverlayMenuRight"
+	debug_menu_right_panel.z_index = 700
+	debug_menu_right_panel.custom_minimum_size = Vector2(DEBUG_MENU_COLUMN_WIDTH, 0.0)
+	debug_menu_right_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	debug_menu_right_panel.visible = false
+	debug_menu_right_panel.theme = pixel_theme
+	debug_menu_canvas.add_child(debug_menu_right_panel)
 
 	var content := VBoxContainer.new()                                                         # Stack the title, option rows, and usage hint vertically.
-	content.add_theme_constant_override("separation", 4)                                     # Keep the compact debug controls easy to scan.
+	content.add_theme_constant_override("separation", 1)                                     # Keep the compact debug controls easy to scan.
 	debug_menu_panel.add_child(content)                                                        # Place the menu content inside the bordered panel.
 
 	var title := Label.new()                                                                   # Create a concise header for the menu.
-	title.text = "DEBUG OVERLAYS"                                                             # Identify the runtime diagnostic control panel.
-	title.add_theme_font_size_override("font_size", 18)                                      # Give the header a distinct visual weight.
+	title.text = "VIEW / CAMERA"                                                              # Identify the left side column.
+	title.add_theme_font_size_override("font_size", 9)                                       # Keep a legible header without consuming a row of playfield space.
 	content.add_child(title)                                                                   # Add the header before the option rows.
 
 	_add_debug_menu_check(content, "source_map", "Map Walls")                               # Add the logical-map and wall-contact overlay toggle.
@@ -1122,49 +1143,61 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "pickup_range", "Pickup Range")                         # Show the true same-cell pickup footprint for tuning.
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
 	_add_debug_menu_check(content, "near_view_tuning", "Near View Truth Guides")             # Show raw world truth versus the optional screen-retention presentation in both player views and the shared top-down map.
+	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
 	_add_debug_menu_tuning_spin(content, "rear_exit", "Rear exit", 0.0, 48.0, 1.0)            # Tune the south-edge partial body exit without changing the fixed camera or wireframe geometry.
 	_add_debug_menu_tuning_spin(content, "rear_side_exit", "Rear side exit", 0.0, 48.0, 1.0) # Tune only the south-west/south-east corner flare of the near-cell body path.
 	_add_debug_menu_tuning_spin(content, "side_trigger", "Side trigger", 0.50, 1.0, 0.01) # Choose where an open left/right edge begins its authored crossing relative to the closed-wall capsule stop.
 	_add_debug_menu_tuning_spin(content, "side_entry", "Side entry", 0.50, 1.0, 0.01)     # Choose how far inside the destination cell a lateral crossing places the body before stable near-cell presentation resumes.
 	_add_debug_menu_tuning_spin(content, "body_scale_depth", "Body scale depth", 0.0, 1.0, 0.01) # Tune the monotonic local-depth size sample without moving the camera or body floor anchor.
-	_add_debug_menu_tuning_spin(content, "crop_zoom", "Crop zoom", 1.0, 4.0, 0.01)            # Enlarge the cell-ahead area inside the fixed 160x120 output crop.
+	_add_debug_menu_tuning_spin(content, "crop_zoom", "Crop zoom", 0.25, 4.0, 0.01)           # Values below 1.0 zoom out the complete camera composition inside the fixed 160x120 output crop.
 	_add_debug_menu_tuning_spin(content, "crop_x", "Crop focus X", 0.0, 160.0, 0.1)           # Let the experiment center the complete forward cell horizontally.
 	_add_debug_menu_tuning_spin(content, "crop_y", "Crop focus Y", 0.0, 120.0, 0.1)           # Let the experiment center the complete forward cell vertically.
+	_add_debug_menu_tuning_spin(content, "overscan_x", "Overscan X", 0.0, 80.0, 1.0)          # Limit camera-window travel toward the authored rear-left/right overscan guides.
+	_add_debug_menu_tuning_spin(content, "overscan_y", "Overscan Y", 0.0, 80.0, 1.0)          # Limit camera-window travel toward the authored rear overscan guides.
 	_add_debug_menu_tuning_spin(content, "camera", "Camera rear", 0.20, 0.70, 0.01)          # Expose the real world camera fore/aft position.
 	_add_debug_menu_tuning_spin(content, "scale", "Player scale", 0.50, 1.50, 0.01)          # Scale only the rendered local body after its world-truth projection.
 	_add_debug_menu_tuning_spin(content, "size_cap", "Near size cap", 48.0, 192.0, 1.0)      # Stop the near-camera billboard from growing into an impossible uphill giant.
 	_add_debug_menu_tuning_spin(content, "side_keep", "Side keep", 0.0, 96.0, 1.0)           # Optionally retain an edge strip after a body naturally reaches a side of the viewport.
 	_add_debug_menu_tuning_spin(content, "bottom_keep", "Bottom keep", 0.0, 96.0, 1.0)       # Optionally retain only the top PNG strip after a body naturally travels beneath the elevated camera.
-	_add_debug_menu_check(content, "slot_grid", "Slot Grid (F2)")                           # Add the existing F2 quick-toggle as a menu option.
-	_add_debug_menu_check(content, "render_walls", "Render Walls")                          # Let floor/grid tuning run without opaque wall art covering the player view.
-	_add_debug_menu_check(content, "walk_through_walls", "Walk Through Walls (Cheat)")      # Allow deliberate out-of-bounds coordinate exploration without changing projectile or visibility collision.
-	_add_debug_menu_check(content, "selected_slots", "Selected Slots")                       # Add the selected-wall comparison overlay toggle.
-	_add_debug_menu_check(content, "manual_forward", "Manual Forward")                      # Hold Fwd frames until the player deliberately presses forward again.
-	_add_debug_menu_check(content, "manual_strafe", "Manual Strafe")                        # Hold side-camera frames until the player deliberately presses sideways again.
-	_add_debug_menu_check(content, "manual_turn", "Manual Turn")                            # Hold 22/66 frames until a fresh Q/E or right-stick turn input advances them.
-	_add_debug_menu_check(content, "slot_tuner", "Slot Graph Tuner")                        # Enable current-screen graph endpoint dragging.
-	_add_debug_menu_check(content, "coordinate_integer_snap", "Integer UV Snap (H)")       # Quantize runtime-wall texture footprint without moving its projected quad.
-	_add_debug_menu_check(content, "coordinate_wall_ewa", "Wall EWA Filter (J)")           # Use mip-assisted anisotropic samples along each projected wall's compressed UV axis.
-	_add_debug_menu_check(content, "coordinate_wall_parallax", "Wall Layers (P)")           # Toggle Layer 1/Layer 2 view-dependent separation on the runtime wall pass.
-	_add_debug_menu_check(content, "coordinate_ceiling_parallax", "Ceiling Layers (C)")     # Toggle the independent two-layer ceiling pass without changing its projected geometry.
-	_add_debug_menu_check(content, "coordinate_layer_edge_clamp", "Layer Edge Clamp (L)")    # Extend offset wall-layer edge texels instead of opening transparent UV seams.
+	var right_content := VBoxContainer.new()
+	right_content.add_theme_constant_override("separation", 1)
+	debug_menu_right_panel.add_child(right_content)
+	var right_title := Label.new()
+	right_title.text = "RENDER / DEBUG"
+	right_title.add_theme_font_size_override("font_size", 9)
+	right_content.add_child(right_title)
+	_add_debug_menu_check(right_content, "slot_grid", "Slot Grid (F2)")                     # Add the existing F2 quick-toggle as a menu option.
+	_add_debug_menu_check(right_content, "render_walls", "Render Walls")                    # Let floor/grid tuning run without opaque wall art covering the player view.
+	_add_debug_menu_check(right_content, "music", "Music")                                  # Let a playtest re-enable the one-shot round music without changing the default.
+	_add_debug_menu_check(right_content, "walk_through_walls", "Walk Walls")                # Allow deliberate out-of-bounds coordinate exploration without changing projectile or visibility collision.
+	_add_debug_menu_check(right_content, "selected_slots", "Selected Slots")                 # Add the selected-wall comparison overlay toggle.
+	_add_debug_menu_check(right_content, "manual_forward", "Manual Forward")                # Hold Fwd frames until the player deliberately presses forward again.
+	_add_debug_menu_check(right_content, "manual_strafe", "Manual Strafe")                  # Hold side-camera frames until the player deliberately presses sideways again.
+	_add_debug_menu_check(right_content, "manual_turn", "Manual Turn")                      # Hold 22/66 frames until a fresh Q/E or right-stick turn input advances them.
+	_add_debug_menu_check(right_content, "slot_tuner", "Slot Tuner")                        # Enable current-screen graph endpoint dragging.
+	_add_debug_menu_check(right_content, "coordinate_integer_snap", "Integer UV (H)")       # Quantize runtime-wall texture footprint without moving its projected quad.
+	_add_debug_menu_check(right_content, "coordinate_screen_overlay", "Screen Guides")       # Screen-blend the live coordinate image over the corresponding player view.
+	_add_debug_menu_check(right_content, "coordinate_wall_ewa", "Wall EWA (J)")             # Use mip-assisted anisotropic samples along each projected wall's compressed UV axis.
+	_add_debug_menu_check(right_content, "coordinate_wall_parallax", "Wall Layers (P)")     # Toggle Layer 1/Layer 2 view-dependent separation on the runtime wall pass.
+	_add_debug_menu_check(right_content, "coordinate_ceiling_parallax", "Ceiling Layers (C)") # Toggle the independent two-layer ceiling pass without changing its projected geometry.
+	_add_debug_menu_check(right_content, "coordinate_layer_edge_clamp", "Layer Clamp (L)")  # Extend offset wall-layer edge texels instead of opening transparent UV seams.
 	debug_combat_hit_label = Label.new()                                                        # Add a compact readout for diagnosing final gameplay hit authority.
 	debug_combat_hit_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART                       # Keep the diagnostic readable inside the narrow F3 panel.
-	debug_combat_hit_label.custom_minimum_size = Vector2(250.0, 0.0)                           # Give the cell and edge details enough width to be useful.
-	content.add_child(debug_combat_hit_label)                                                   # Place combat evidence beneath the display toggles.
+	debug_combat_hit_label.custom_minimum_size = Vector2(DEBUG_MENU_COLUMN_WIDTH - 10.0, 0.0) # Keep combat evidence inside the right column.
+	right_content.add_child(debug_combat_hit_label)                                             # Place combat evidence beneath the display toggles.
 	var save_tuner := Button.new()                                                             # Provide an explicit, reversible save action.
-	save_tuner.text = "Save Slot Graph JSON"                                                  # State exactly what will be written.
+	save_tuner.text = "Save graph"                                                            # Keep the button inside the narrow column.
 	save_tuner.pressed.connect(_save_slot_graph_tuner_overrides)                              # Save edits only when deliberately requested.
-	content.add_child(save_tuner)                                                              # Place save beneath the tuner toggle.
+	right_content.add_child(save_tuner)                                                        # Place save beneath the tuner toggle.
 	var save_near_view := Button.new()                                                         # Provide an explicit persistence action for the F3 near-view controls.
-	save_near_view.text = "Save Near View Tuning"                                             # Make it clear this saves the current live camera/body values, not level or wall data.
+	save_near_view.text = "Save view"                                                         # Keep the persistence action inside the compact left column.
 	save_near_view.pressed.connect(_save_near_view_tuning)                                    # Never overwrite the tuning file except through this deliberate button press.
 	content.add_child(save_near_view)                                                          # Keep the save action beside the existing slot-graph save control.
 
 	var hint := Label.new()                                                                    # Provide the close hotkey inside the panel itself.
 	hint.text = "F3 closes this menu"                                                         # Make the invocation/close behavior discoverable at runtime.
-	hint.add_theme_font_size_override("font_size", 14)                                       # Keep the hint secondary to the controls.
-	content.add_child(hint)                                                                    # Finish the panel with the usage hint.
+	hint.add_theme_font_size_override("font_size", 7)                                        # Keep the hint secondary to the controls.
+	right_content.add_child(hint)                                                              # Finish the right column with the usage hint.
 
 
 
@@ -1184,14 +1217,14 @@ func _add_debug_menu_tuning_spin(parent: VBoxContainer, option_key: String, labe
 	var row := HBoxContainer.new()                                                             # Keep a compact descriptive label and one editable value on a single menu row.
 	var label := Label.new()                                                                   # Name the physical/display parameter instead of exposing a source-code identifier.
 	label.text = label_text                                                                    # Use the short human-readable label in the diagnostic panel.
-	label.custom_minimum_size = Vector2(122.0, 0.0)                                           # Keep every SpinBox aligned for quick A/B changes.
+	label.custom_minimum_size = Vector2(78.0, 0.0)                                            # Fit labels and values into the narrow left side column.
 	row.add_child(label)                                                                      # Add the parameter label before its value control.
 	var spin := SpinBox.new()                                                                  # Use Godot's built-in typed numeric field with small arrow buttons.
 	spin.min_value = minimum                                                                  # Constrain the control to the same safe range as its exported runtime field.
 	spin.max_value = maximum                                                                  # Prevent accidental extreme values from making the near camera unusable.
 	spin.step = step                                                                          # Match the source field's intended adjustment increment.
 	spin.value = _near_view_tuning_value(option_key)                                          # Initialize from the current live state.
-	spin.custom_minimum_size = Vector2(92.0, 0.0)                                             # Leave room for decimals while fitting the existing F3 panel.
+	spin.custom_minimum_size = Vector2(58.0, 0.0)                                             # Leave room for decimals while fitting the compact F3 panel.
 	spin.value_changed.connect(_set_near_view_tuning_value.bind(option_key))                  # Apply each arrow/key adjustment immediately, without a game restart.
 	row.add_child(spin)                                                                       # Place the editable value beside its label.
 	parent.add_child(row)                                                                      # Add this control to the F3 diagnostic stack.
@@ -1210,6 +1243,8 @@ func _near_view_tuning_value(option_key: String) -> float:
 		"crop_zoom": return near_camera_crop_zoom
 		"crop_x": return near_camera_crop_focus_x
 		"crop_y": return near_camera_crop_focus_y
+		"overscan_x": return near_overscan_pan_limit_x_pixels
+		"overscan_y": return near_overscan_pan_limit_y_pixels
 		"camera": return near_camera_rear_offset
 		"scale": return near_self_scale_multiplier
 		"size_cap": return near_body_height_cap_pixels
@@ -1230,6 +1265,8 @@ func _set_near_view_tuning_value(value: float, option_key: String) -> void:
 		"crop_zoom": near_camera_crop_zoom = value
 		"crop_x": near_camera_crop_focus_x = value
 		"crop_y": near_camera_crop_focus_y = value
+		"overscan_x": near_overscan_pan_limit_x_pixels = value
+		"overscan_y": near_overscan_pan_limit_y_pixels = value
 		"camera": near_camera_rear_offset = value
 		"scale": near_self_scale_multiplier = value
 		"size_cap": near_body_height_cap_pixels = value
@@ -1250,9 +1287,11 @@ func _load_near_view_tuning() -> void:
 	side_transition_trigger_offset = clampf(float(config.get_value("near_view", "side_trigger", side_transition_trigger_offset)), 0.50, 1.0)
 	side_transition_entry_offset = clampf(float(config.get_value("near_view", "side_entry", side_transition_entry_offset)), 0.50, 1.0)
 	near_body_scale_depth_offset = clampf(float(config.get_value("near_view", "body_scale_depth", near_body_scale_depth_offset)), 0.0, 1.0)
-	near_camera_crop_zoom = clampf(float(config.get_value("near_view", "crop_zoom", near_camera_crop_zoom)), 1.0, 4.0)
+	near_camera_crop_zoom = clampf(float(config.get_value("near_view", "crop_zoom", near_camera_crop_zoom)), 0.25, 4.0)
 	near_camera_crop_focus_x = clampf(float(config.get_value("near_view", "crop_x", near_camera_crop_focus_x)), 0.0, 160.0)
 	near_camera_crop_focus_y = clampf(float(config.get_value("near_view", "crop_y", near_camera_crop_focus_y)), 0.0, 120.0)
+	near_overscan_pan_limit_x_pixels = clampf(float(config.get_value("near_view", "overscan_x", near_overscan_pan_limit_x_pixels)), 0.0, 80.0)
+	near_overscan_pan_limit_y_pixels = clampf(float(config.get_value("near_view", "overscan_y", near_overscan_pan_limit_y_pixels)), 0.0, 80.0)
 	near_camera_rear_offset = clampf(float(config.get_value("near_view", "camera_rear", near_camera_rear_offset)), 0.20, 0.70)
 	near_self_scale_multiplier = clampf(float(config.get_value("near_view", "player_scale", near_self_scale_multiplier)), 0.50, 1.50)
 	near_body_height_cap_pixels = clampf(float(config.get_value("near_view", "near_size_cap", near_body_height_cap_pixels)), 48.0, 192.0)
@@ -1271,6 +1310,8 @@ func _save_near_view_tuning() -> void:
 	config.set_value("near_view", "crop_zoom", near_camera_crop_zoom)
 	config.set_value("near_view", "crop_x", near_camera_crop_focus_x)
 	config.set_value("near_view", "crop_y", near_camera_crop_focus_y)
+	config.set_value("near_view", "overscan_x", near_overscan_pan_limit_x_pixels)
+	config.set_value("near_view", "overscan_y", near_overscan_pan_limit_y_pixels)
 	config.set_value("near_view", "camera_rear", near_camera_rear_offset)
 	config.set_value("near_view", "player_scale", near_self_scale_multiplier)
 	config.set_value("near_view", "near_size_cap", near_body_height_cap_pixels)
@@ -1287,6 +1328,8 @@ func _toggle_debug_menu() -> void:
 	debug_menu_open = not debug_menu_open                                                      # Flip the menu visibility state once per F3 press.
 	if debug_menu_panel != null:                                                               # Guard against calls before _ready has created the panel.
 		debug_menu_panel.visible = debug_menu_open                                               # Apply the new panel visibility.
+	if debug_menu_right_panel != null:
+		debug_menu_right_panel.visible = debug_menu_open                                         # Keep the renderer/debug column paired with the camera column.
 	if debug_menu_open:                                                                        # Refresh checkbox state whenever the panel is opened.
 		_refresh_debug_menu()                                                                    # Reflect inspector values and F2 toggles in every row.
 	_update_status()                                                                           # Update the runtime help text to advertise the current menu state.
@@ -1306,10 +1349,14 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_perspective_extents_overlay                                                # Return the measured floor/actor extent overlay state.
 		"near_view_tuning":
 			return show_near_view_tuning_debug                                                     # Return whether live near-camera clamp guides are visible.
+		"pause_round_timer":
+			return pause_round_timer_for_debug                                                     # Return the independent debug pause state for the shared match clock.
 		"slot_grid":
 			return show_slot_grid_debug                                                            # Return the blue wall-slot audit overlay state.
 		"render_walls":
 			return render_wall_art                                                                 # Return whether transparent wall overlays are currently visible.
+		"music":
+			return music_enabled                                                                    # Return the explicit local-test music preference.
 		"walk_through_walls":
 			return walk_through_walls_cheat                                                        # Return whether only player movement is intentionally allowed through map walls.
 		"selected_slots":
@@ -1325,6 +1372,11 @@ func _debug_option_value(option_key: String) -> bool:
 		"coordinate_integer_snap":
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # The experimental runtime renderer only exists on its dedicated branch/scene.
 			return bool(renderer.integer_uv_scale_snap_enabled) if renderer != null else false     # Keep the ordinary sprite renderer menu safe when the experiment is absent.
+		"coordinate_screen_overlay":
+			for renderer in coordinate_renderers:
+				if is_instance_valid(renderer) and renderer.has_method("set_coordinate_screen_overlay_debug_enabled"):
+					return bool(renderer.get("coordinate_screen_overlay_debug_enabled"))
+			return false
 		"coordinate_wall_ewa":
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Read the same optional renderer for the filtering comparison state.
 			return bool(renderer.wall_ewa_filter_enabled) if renderer != null else false            # Keep this option disabled outside the coordinate-frame experiment.
@@ -1361,10 +1413,19 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_near_view_tuning_debug = enabled                                                  # Show raw/clamped local anchors in every player view and the shared top-down map.
 			if enabled:
 				show_top_down_source_overlay = true                                                  # The clamp is meaningful only alongside its world-space ground truth.
+		"pause_round_timer":
+			pause_round_timer_for_debug = enabled                                                  # Leave all diagnostics and simulation live; pause only the one shared round countdown.
 		"slot_grid":
 			show_slot_grid_debug = enabled                                                         # Show or hide the blue numbered wall-slot audit grid.
 		"render_walls":
 			render_wall_art = enabled                                                              # Hide/reveal only rendered wall overlays; map walls and collision remain active.
+		"music":
+			music_enabled = enabled
+			if music_player != null:
+				if music_enabled and match_started:
+					music_player.play()
+				else:
+					music_player.stop()
 		"walk_through_walls":
 			walk_through_walls_cheat = enabled                                                     # Keep the cheat scoped to player navigation; projectiles and renderer visibility still respect walls.
 		"selected_slots":
@@ -1382,6 +1443,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the optional runtime wall experiment without coupling the base renderer to it.
 			if renderer != null and renderer.has_method("set_integer_uv_scale_snap_enabled"):
 				renderer.set_integer_uv_scale_snap_enabled(enabled)                                  # Apply only the sampling experiment; world/projected geometry remains fixed.
+		"coordinate_screen_overlay":
+			for renderer in coordinate_renderers:
+				if is_instance_valid(renderer) and renderer.has_method("set_coordinate_screen_overlay_debug_enabled"):
+					renderer.call("set_coordinate_screen_overlay_debug_enabled", enabled)
 		"coordinate_wall_ewa":
 			var renderer := get_node_or_null("CoordinateFrameRuntimeRenderer")                    # Locate the same optional renderer for EWA-style wall filtering.
 			if renderer != null and renderer.has_method("set_wall_ewa_filter_enabled"):
@@ -1706,7 +1771,7 @@ func _reset_combat_round() -> void:
 func _advance_combat_round(delta: float) -> void:
 	if not match_started or combat_round_complete or combat_round_duration_seconds <= 0.0:    # Do not start the clock until the first player joins.
 		return
-	if show_near_view_tuning_debug:                                                            # Keep an extended clamp-tuning session from silently ending the active round while all gameplay remains live.
+	if pause_round_timer_for_debug:                                                            # Keep an explicitly paused diagnostic session from silently ending the active round while all gameplay remains live.
 		return
 	combat_round_time_remaining = maxf(combat_round_time_remaining - delta, 0.0)            # Count down in real time rather than from either camera's animation state.
 	if combat_round_time_remaining <= 0.0:
@@ -2250,8 +2315,8 @@ func _update_combat_hud() -> void:
 				if timer_view != null:
 					timer_label.position = timer_view.position + Vector2((VIEWPORT_SIZE.x * timer_view.scale.x - timer_label.size.x * timer_view.scale.x) * 0.5, 3.0)
 					timer_label.scale = timer_view.scale
-				if show_near_view_tuning_debug:
-					timer_label.text = "TUNE"                                                       # Make the intentional timer pause visible in every player's own HUD.
+				if pause_round_timer_for_debug:
+					timer_label.text = "PAUSE"                                                      # Make the separately requested timer pause visible in every player's own HUD.
 				elif combat_round_duration_seconds <= 0.0:
 					timer_label.text = "∞"
 				else:
@@ -5159,20 +5224,32 @@ func _make_3d_material(color: Color) -> StandardMaterial3D:                     
 
 
 
+# _layout_debug_menu_panels: Parks compact F3 controls in the permanent side gutters around the four-player grid.
+func _layout_debug_menu_panels(viewport_size: Vector2) -> void:
+	if debug_menu_panel != null:
+		debug_menu_panel.position = Vector2(DEBUG_MENU_SIDE_MARGIN, DEBUG_MENU_SIDE_MARGIN)
+	if debug_menu_right_panel != null:
+		debug_menu_right_panel.position = Vector2(viewport_size.x - DEBUG_MENU_COLUMN_WIDTH - DEBUG_MENU_SIDE_MARGIN, DEBUG_MENU_SIDE_MARGIN)
+
+
 # _layout_viewport: Scales and centers the 160x120 playfield crop inside the current Godot window.
 func _layout_viewport() -> void:                                                            # Declare this function.
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
+	_layout_debug_menu_panels(viewport_size)
 	if player_views.size() >= 4 and not TEMP_GRID_AUDIT:
-		var quadrant_size := viewport_size * 0.5
-		var camera_scale := maxf(1.0, floorf(minf(quadrant_size.x / VIEWPORT_SIZE.x, quadrant_size.y / VIEWPORT_SIZE.y)))
+		var side_reserve := DEBUG_MENU_COLUMN_WIDTH + DEBUG_MENU_SIDE_MARGIN * 2.0
+		var grid_available := Vector2(viewport_size.x - side_reserve * 2.0, viewport_size.y)
+		var camera_scale := maxf(1.0, floorf(minf(grid_available.x / (VIEWPORT_SIZE.x * 2.0), grid_available.y / (VIEWPORT_SIZE.y * 2.0))))
+		var grid_size := VIEWPORT_SIZE * camera_scale * 2.0
+		var grid_origin := (viewport_size - grid_size) * 0.5
 		for player_index in range(4):
 			var view: Dictionary = player_views[player_index]
 			var view_node: Node2D = view.get("maze_viewport", null)
 			if view_node != null:
 				view_node.scale = Vector2.ONE * camera_scale
 				var layout_cell: int = int([0, 2, 1, 3][player_index]) # Team 1 top row, Team 2 bottom row.
-				var cell_origin := Vector2(float(layout_cell % 2) * quadrant_size.x, float(layout_cell / 2) * quadrant_size.y)
-				view_node.position = cell_origin + (quadrant_size - VIEWPORT_SIZE * camera_scale) * 0.5
+				var cell_origin := grid_origin + Vector2(float(layout_cell % 2) * VIEWPORT_SIZE.x * camera_scale, float(layout_cell / 2) * VIEWPORT_SIZE.y * camera_scale)
+				view_node.position = cell_origin
 			var minimap: Node2D = view.get("match_minimap_overlay", null)
 			if minimap != null and view_node != null:
 				minimap.position = view_node.position + Vector2(VIEWPORT_SIZE.x * camera_scale - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
@@ -8012,7 +8089,7 @@ func _update_all_join_states() -> void:
 		if request:
 			player_joined[player_index] = true
 			player_two_joined = player_joined[1]
-			if not match_started and music_player != null:
+			if not match_started and music_enabled and music_player != null:
 				music_player.play()
 			match_started = true
 
@@ -8330,9 +8407,10 @@ func _position_player() -> void:                                                
 		return                                                                                    # Do not update or redraw the body until reverse Death starts at respawn.
 	player_sprite.visible = true                                                              # Restore the local actor after temporary 45-degree validation views hide it.
 	var truth_projection := _self_world_truth_projection()                                    # Keep the raw world result available for the alternate world-truth diagnostic path.
-	if not use_near_cell_motion_envelope and bool(truth_projection.get("visible", false)):
-		var projected_height := float(truth_projection.get("continuous_actor_height", truth_projection.get("actor_height", near_actor_height_pixels))) * near_self_scale_multiplier # Start from the literal world-projected height before any optional near-camera presentation limit.
-		var truth_height := projected_height if experimental_forward_cell_play_space else minf(projected_height, near_body_height_cap_pixels) # The forward-cell experiment removes the normal near-body cap; its crop is the only framing control.
+	if (use_continuous_world_projection_for_near_actors or not use_near_cell_motion_envelope) and bool(truth_projection.get("visible", false)):
+		var continuous_projection_scale := 1.0 if use_continuous_world_projection_for_near_actors else near_self_scale_multiplier # Option 1 must not apply an actor-only scale multiplier that bullets and smoke cannot share.
+		var projected_height := float(truth_projection.get("continuous_actor_height", truth_projection.get("actor_height", near_actor_height_pixels))) * continuous_projection_scale # Start from the literal world-projected height used by the point-effect camera path.
+		var truth_height := projected_height if use_continuous_world_projection_for_near_actors or experimental_forward_cell_play_space else minf(projected_height, near_body_height_cap_pixels) # Remove the actor-only near size cap in Option 1 so the cowboy and raised effects share one camera scale.
 		var truth_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite)
 		var truth_scale := truth_height / truth_source_height
 		var truth_screen_x := float(truth_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5))   # Keep the actual projected world X; do not pin the player to a screen edge.
@@ -8435,11 +8513,11 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 		return                                                                                    # Return without projecting anything.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
-	var target_in_viewer_near_cell := use_near_cell_motion_envelope and _world_position_is_in_active_player_cell(target_world) # The local and remote body must share the same tuned near-cell presentation whenever they physically occupy this viewer's source cell.
-	var projection := _near_cell_motion_projection(_near_cell_local_position_for_world(target_world)) if target_in_viewer_near_cell else _opponent_projection_from_current_camera(target_world, true) # Use the identical near envelope for same-cell actors; retain the live coordinate renderer for every other cell.
+	var target_in_viewer_near_cell := use_near_cell_motion_envelope and not use_continuous_world_projection_for_near_actors and _world_position_is_in_active_player_cell(target_world) # Preserve the old envelope only when deliberately comparing it; Option 1 gives every same-cell actor the shared continuous point projection.
+	var projection := _near_cell_motion_projection(_near_cell_local_position_for_world(target_world)) if target_in_viewer_near_cell else _opponent_projection_from_current_camera(target_world, true, use_continuous_world_projection_for_near_actors) # Option 1 selects the unclamped effect projector for same-cell opponents, matching bullets and smoke exactly.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
-	var actor_height := float(projection["actor_height"])                                      # Preserve the established opponent LOD scale; the local near-cell envelope uses this same nearest-size floor.
+	var actor_height := float(projection.get("continuous_actor_height", projection["actor_height"])) if use_continuous_world_projection_for_near_actors else float(projection["actor_height"]) # Option 1 uses the continuous world scale rather than an actor-only near LOD cap.
 	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") or String(opponent_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(opponent_sprite) # Keep Death and breathing Idle sheets at one stable projected scale in every camera.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
@@ -9920,7 +9998,7 @@ func _regenerate_runtime_map(restart_round_music := false) -> void:             
 	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
 	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset all four local players into their team spawn corners on the new shared map.
 	_reset_combat_collectibles()                                                               # Replace every objective coin and the contested gun for the newly generated maze.
-	if restart_round_music and music_player != null:
+	if restart_round_music and music_enabled and music_player != null:
 		music_player.stop()
 		music_player.play()                                                                      # Replay only when Start begins a new round, never for an in-round R reroll.
 	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.

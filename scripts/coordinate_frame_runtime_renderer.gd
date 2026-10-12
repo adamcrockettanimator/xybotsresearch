@@ -7,6 +7,13 @@ extends Node
 @export var target_player_index := 0
 
 const VIEW_SIZE := Vector2(160.0, 120.0)
+const OVERSCAN_SIZE := Vector2(320.0, 240.0)
+const OVERSCAN_STABLE_PATH := "res://assets/CoordinateFrames/coord_n_stable_overscan.png"
+# The green rectangle in the user-authored overscan sheet records the exact
+# legacy 160×120 coordinate frame.  Keeping this as the neutral crop makes the
+# test fully reversible: with no crop motion, the runtime projection is pixel
+# for pixel in its former place.
+const OVERSCAN_REFERENCE_CROP_ORIGIN := Vector2(80.0, 32.0)
 const WALL_LAYER1_PATH := "res://assets/Environment/Wall_Layer1.png"
 const WALL_LAYER2_PATH := "res://assets/Environment/Wall_layer2.png"
 const VENDING_MACHINE_PATH := "res://assets/Environment/vendingMachine.png"
@@ -39,6 +46,7 @@ const SHADER_PATH := "res://scripts/coordinate_frame_homography.gdshader"
 const SINGLE_WALL_SHADER_PATH := "res://scripts/coordinate_frame_single_homography.gdshader"
 const GPU_WALL_SHADER_PATH := "res://scripts/coordinate_frame_gpu_wall_homography.gdshader"
 const GPU_PLANE_SHADER_PATH := "res://scripts/coordinate_frame_gpu_plane_homography.gdshader"
+const SCREEN_OVERLAY_SHADER_PATH := "res://scripts/coordinate_frame_screen_overlay.gdshader"
 const TEMPLATE_ROOT := "res://assets/CoordinateFrames/"
 # The canvas shader needs three vec4 rows per wall.  A 96-wall allocation can
 # exceed the portable fragment-uniform budget and silently leave the layer
@@ -130,6 +138,7 @@ var gpu_ceiling_sprites: Array[Sprite2D] = []
 var gpu_ceiling_materials: Array[ShaderMaterial] = []
 var runtime_black_backdrop: ColorRect
 var coordinate_background: Sprite2D
+var coordinate_screen_overlay: Sprite2D
 var status: Label
 var runtime_status: Label
 var parallax_tuner_panel: PanelContainer
@@ -179,6 +188,12 @@ var diagonal_forward_target_cell := Vector2i(-999, -999)
 var diagonal_transition_kind := "" # "forward" is a diagonal cell crossing; "east" is either adjacent cardinal crossing from a diagonal view.
 var diagonal_transition_flip_h := false # Mirror the authored NE-to-east frames for the other adjacent cardinal side.
 var initialized := false
+
+# This is deliberately a camera-window translation, not a cowboy correction.
+# Every projected surface and world actor receives the same offset, so bullets,
+# smoke, walls, pickups, and bodies retain one continuous camera projection.
+@export var coordinate_overscan_test_enabled := true
+@export var coordinate_screen_overlay_debug_enabled := false
 
 # Rolling development profiler.  The renderer intentionally records timings in
 # microseconds because this experiment's costly work happens in short bursts
@@ -288,6 +303,17 @@ func _initialize() -> void:
 	coordinate_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	coordinate_background.z_index = 0
 	controller.environment_layer.add_child(coordinate_background)
+	coordinate_screen_overlay = Sprite2D.new()
+	coordinate_screen_overlay.name = "CoordinateFrameScreenOverlay"
+	coordinate_screen_overlay.centered = false
+	coordinate_screen_overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	coordinate_screen_overlay.z_index = 4095
+	coordinate_screen_overlay.z_as_relative = false
+	var screen_overlay_material := ShaderMaterial.new()
+	screen_overlay_material.shader = load(SCREEN_OVERLAY_SHADER_PATH) as Shader
+	coordinate_screen_overlay.material = screen_overlay_material
+	coordinate_screen_overlay.visible = false
+	controller.environment_layer.add_child(coordinate_screen_overlay)
 	# Floors use the same derived camera basis as the walls, but render beneath
 	# them.  This is deliberately a separate native-resolution image so cycling
 	# a floor texture never rebuilds the maze or invalidates wall visibility.
@@ -1300,14 +1326,15 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 	var forward: Vector2 = entry["forward"]
 	var right: Vector2 = entry["right"]
 	for y in range(min_y, max_y + 1):
-		var vertical_screen_delta := float(y) - HORIZON_Y
+		var projection_offset := _overscan_projection_offset()
+		var vertical_screen_delta := float(y) - HORIZON_Y - projection_offset.y
 		if vertical_screen_delta <= 0.0001:
 			continue
 		var depth := VIRTUAL_CAMERA_HEIGHT * FOCAL_LENGTH / vertical_screen_delta
 		if depth <= 0.0 or depth > MAX_DEPTH:
 			continue
 		for x in range(min_x, max_x + 1):
-			var side := (float(x) - VIEW_SIZE.x * 0.5) * depth / FOCAL_LENGTH
+			var side := (float(x) - VIEW_SIZE.x * 0.5 - projection_offset.x) * depth / FOCAL_LENGTH
 			var world := origin + right * side + forward * depth
 			var uv := world - Vector2(cell)
 			# Expand ownership by the world-space width of one logical screen pixel.
@@ -1465,14 +1492,15 @@ func _rasterize_ceiling_cell(entry: Dictionary) -> void:
 	var layer2_weight := (ceiling_layer_movement_balance + 1.0) * 0.5
 	var height_delta := VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT
 	for y in range(min_y, max_y + 1):
-		var vertical_screen_delta := float(y) - HORIZON_Y
+		var projection_offset := _overscan_projection_offset()
+		var vertical_screen_delta := float(y) - HORIZON_Y - projection_offset.y
 		if absf(vertical_screen_delta) <= 0.0001:
 			continue
 		var depth := height_delta * FOCAL_LENGTH / vertical_screen_delta
 		if depth <= 0.0 or depth > MAX_DEPTH:
 			continue
 		for x in range(min_x, max_x + 1):
-			var side := (float(x) - VIEW_SIZE.x * 0.5) * depth / FOCAL_LENGTH
+			var side := (float(x) - VIEW_SIZE.x * 0.5 - projection_offset.x) * depth / FOCAL_LENGTH
 			var world := origin + right * side + forward * depth
 			var uv := world - Vector2(cell)
 			if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
@@ -1853,11 +1881,84 @@ func _project_wall_quad(first: Vector2, second: Vector2) -> PackedVector2Array:
 	return PackedVector2Array([top_a, top_b, bottom_b, bottom_a])
 
 func _project_view_point(point: Vector2, world_height: float) -> Vector2:
+	return _project_view_point_unframed(point, world_height) + _overscan_projection_offset()
+
+
+# _project_view_point_unframed: The calibrated 160×120 projector before the
+# overscan window is applied.  The crop controller samples this once for the
+# local player's real world feet, then shifts the *whole* camera image by that
+# same amount.
+func _project_view_point_unframed(point: Vector2, world_height: float) -> Vector2:
 	var depth := maxf(point.y, NEAR_CLIP)
 	return Vector2(
 		VIEW_SIZE.x * 0.5 + point.x / depth * FOCAL_LENGTH,
 		HORIZON_Y + (VIRTUAL_CAMERA_HEIGHT - world_height) / depth * FOCAL_LENGTH
 	)
+
+
+func _overscan_crop_origin() -> Vector2:
+	if not coordinate_overscan_test_enabled or controller == null or not controller.has_method("_current_player_world_position"):
+		return OVERSCAN_REFERENCE_CROP_ORIGIN
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var cell_center := Vector2(controller.grid_position) + Vector2(0.5, 0.5)
+	var player_world_position: Vector2 = controller._current_player_world_position()
+	var within_cell: Vector2 = player_world_position - cell_center
+	var half_extent := maxf(float(controller.LOCAL_TILE_WORLD_HALF_EXTENT), 0.001)
+	# The player begins at this cell center, so the green rectangle is the
+	# neutral crop. Moving rearward pans down; moving left/right pans to the
+	# magenta/blue guide rectangles. These are camera-window limits, applied once
+	# to the shared projection rather than separately to a cowboy sprite.
+	var side_fraction := clampf(within_cell.dot(right) / half_extent, -1.0, 1.0)
+	var rear_fraction := clampf(-within_cell.dot(forward) / half_extent, 0.0, 1.0)
+	var horizontal_limit := clampf(float(controller.near_overscan_pan_limit_x_pixels), 0.0, 80.0)
+	var rear_limit := clampf(float(controller.near_overscan_pan_limit_y_pixels), 0.0, 80.0)
+	var desired_origin := OVERSCAN_REFERENCE_CROP_ORIGIN + Vector2(side_fraction * horizontal_limit, rear_fraction * rear_limit)
+	var maximum_origin := OVERSCAN_SIZE - VIEW_SIZE
+	return Vector2(
+		clampf(roundf(desired_origin.x), 0.0, maximum_origin.x),
+		clampf(roundf(desired_origin.y), 0.0, maximum_origin.y)
+	)
+
+
+func _overscan_projection_offset() -> Vector2:
+	# Moving the output window across the 320×240 sheet is equivalent to a
+	# principal-point translation. Do this after perspective projection so it
+	# affects every depth equally and cannot bend a projectile trajectory.
+	return OVERSCAN_REFERENCE_CROP_ORIGIN - _overscan_crop_origin()
+
+
+# _overscan_calibrated_camera_origin: Solves the physical camera point that
+# places the local player's feet at the corresponding point on the virtual
+# 320×240 overscan canvas. The resulting camera is used by every render and
+# culling path; this is deliberately not a local-cowboy screen correction.
+func _overscan_calibrated_camera_origin(base_origin: Vector2, forward: Vector2, right: Vector2) -> Vector2:
+	if not coordinate_overscan_test_enabled or controller == null or not controller.has_method("_current_player_world_position"):
+		return base_origin
+	# Do not blend this stable-pose calibration into the authored between-cell
+	# capture frames. Those frames already own an independently animated camera
+	# path and must remain byte-for-byte compatible with their source images.
+	if int(controller.forward_step) != 0 or int(controller.strafe_step) != 0 or diagonal_forward_active:
+		return base_origin
+	var cell_center := Vector2(controller.grid_position) + Vector2(0.5, 0.5)
+	var home_local := _to_view(cell_center, base_origin, forward, right)
+	var home_foot := _project_view_point_unframed(home_local, 0.0)
+	# Green is the zero-motion camera window. At the rear corners, the desired
+	# virtual foot shifts by exactly the green-to-magenta/blue crop displacement.
+	# After the selected 160×120 crop is removed, the cowboy remains in the same
+	# safe on-screen presentation while the entire visible world shares the pan.
+	var virtual_target_foot := home_foot + (_overscan_crop_origin() - OVERSCAN_REFERENCE_CROP_ORIGIN)
+	var vertical_delta := virtual_target_foot.y - HORIZON_Y
+	if vertical_delta <= 0.0001:
+		return base_origin
+	var target_depth := VIRTUAL_CAMERA_HEIGHT * FOCAL_LENGTH / vertical_delta
+	if target_depth <= NEAR_CLIP:
+		return base_origin
+	var target_side := (virtual_target_foot.x - VIEW_SIZE.x * 0.5) * target_depth / FOCAL_LENGTH
+	var player_world_position: Vector2 = controller._current_player_world_position()
+	# Solve player = camera + right * side + forward * depth. This is a full
+	# world-space camera translation, so all shared effects retain one transform.
+	return player_world_position - right * target_side - forward * target_depth
 
 func _template_camera_origin(forward: Vector2) -> Vector2:
 	# Mirror Blender's Camera_Pivot/camera-child layout exactly: rotate around
@@ -1895,7 +1996,7 @@ func _runtime_camera_origin(forward: Vector2, right: Vector2) -> Vector2:
 		var source_center := Vector2(diagonal_forward_source_cell) + Vector2(0.5, 0.5)
 		var target_center := Vector2(diagonal_forward_target_cell) + Vector2(0.5, 0.5)
 		return (source_center.lerp(target_center, _diagonal_forward_fraction())) - forward * TEMPLATE_CAMERA_REAR_OFFSET
-	return origin
+	return _overscan_calibrated_camera_origin(origin, forward, right)
 
 
 # runtime_camera_origin_for_current_pose: exposes the exact camera point used
@@ -2107,15 +2208,39 @@ func _update_diagonal_forward_animation(delta: float) -> void:
 func _update_coordinate_background() -> void:
 	var frame := _coordinate_frame_for_current_pose()
 	var path := String(frame["path"])
+	var use_overscan_sheet := coordinate_overscan_test_enabled and path.ends_with("coord_n_stable.png")
+	if use_overscan_sheet:
+		path = OVERSCAN_STABLE_PATH
 	var texture := _template_texture(path)
 	# Retain the last valid coordinate image for the fraction of a frame during
 	# any import/load delay.  A pose transition must never flash the blank legacy
 	# playfield between authored coordinate images.
 	if texture != null:
 		coordinate_background.texture = texture
+		coordinate_screen_overlay.texture = texture
 	coordinate_background.flip_h = bool(frame["flip_h"])
+	coordinate_screen_overlay.flip_h = bool(frame["flip_h"])
+	coordinate_background.region_enabled = use_overscan_sheet
+	coordinate_screen_overlay.region_enabled = use_overscan_sheet
+	if use_overscan_sheet:
+		coordinate_background.region_rect = Rect2(_overscan_crop_origin(), VIEW_SIZE)
+		coordinate_screen_overlay.region_rect = Rect2(_overscan_crop_origin(), VIEW_SIZE)
 	var player_is_inside_playable_map: bool = controller != null and controller._is_open_cell(controller.grid_position)
-	coordinate_background.visible = coordinate_background.texture != null and not player_is_inside_playable_map
+	# Keep the green legacy-frame rectangle visible behind the runtime surfaces
+	# during this first test. It makes the moving crop observable without adding
+	# a second overlay transform; disabling the inspector test restores the
+	# prior map-only background behavior.
+	coordinate_background.visible = coordinate_background.texture != null and (use_overscan_sheet or not player_is_inside_playable_map)
+	coordinate_screen_overlay.visible = coordinate_screen_overlay_debug_enabled and coordinate_screen_overlay.texture != null
+
+
+# set_coordinate_screen_overlay_debug_enabled: Controls a true screen-blend
+# overlay. Black guide pixels leave the game untouched; brighter source pixels
+# progressively brighten the already-rendered game view.
+func set_coordinate_screen_overlay_debug_enabled(enabled: bool) -> void:
+	coordinate_screen_overlay_debug_enabled = enabled
+	if coordinate_screen_overlay != null:
+		coordinate_screen_overlay.visible = enabled and coordinate_screen_overlay.texture != null
 
 func _hide_legacy_environment() -> void:
 	for item in legacy_environment_nodes:
@@ -2124,6 +2249,7 @@ func _hide_legacy_environment() -> void:
 
 func _preload_coordinate_templates() -> void:
 	for file_name in [
+		"coord_n_stable_overscan.png",
 		"coord_n_stable.png", "coord_n_forward_quarter.png", "coord_n_forward_half.png", "coord_n_forward_three_quarter.png", "coord_n_forward_next_cell.png",
 		"coord_n_strafe_east_quarter.png", "coord_n_strafe_east_half.png", "coord_n_strafe_east_three_quarter.png", "coord_n_strafe_east_next_cell.png",
 		"coord_n_diagonal_ne_quarter.png", "coord_n_diagonal_ne_half.png", "coord_n_diagonal_ne_three_quarter.png",
@@ -2223,4 +2349,4 @@ func _red_control_points(texture: Texture2D) -> Array[Vector2]:
 	return result
 
 func _render_signature() -> String:
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash()]
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin()]
