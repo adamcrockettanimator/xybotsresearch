@@ -27,6 +27,7 @@ uniform vec2 layer_texture_size = vec2(128.0, 88.0);
 uniform vec2 layer1_offset = vec2(0.0);
 uniform vec2 layer2_offset = vec2(0.0);
 uniform float wall_light = 1.0;
+uniform float wall_opacity = 1.0;
 uniform vec2 canvas_size = vec2(160.0, 120.0);
 
 vec2 homography_uv(vec2 pixel) {
@@ -92,5 +93,5 @@ void fragment() {
 	if (result.a <= 0.0) {
 		discard;
 	}
-	COLOR = vec4(result.rgb * wall_light, result.a);
+	COLOR = vec4(result.rgb * wall_light, result.a * wall_opacity);
 }

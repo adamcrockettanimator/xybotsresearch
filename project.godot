@@ -11,13 +11,14 @@ config_version=5
 [application]
 
 config/name="XybotsResearch"
-run/main_scene="res://coordinate_frame_navigation.tscn"
+run/main_scene="res://grudge_title_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+GrudgeSession="*res://scripts/grudge_session.gd"
 
 [display]
 

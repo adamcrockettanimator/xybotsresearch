@@ -822,6 +822,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row1", inverse[1])
 		material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("wall_light", float(entry["light"]))
+		material.set_shader_parameter("wall_opacity", float(entry.get("camera_cutaway_opacity", 1.0)))
 		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_wall_base_mip_texture != null
 		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips and not is_vending_wall else source_texture)
 		material.set_shader_parameter("base_texture_size", source_size)
@@ -1575,7 +1576,8 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 			color.r *= light
 			color.g *= light
 			color.b *= light
-			wall_render_image.set_pixel(x, y, color)
+			color.a *= float(entry.get("camera_cutaway_opacity", 1.0))
+			wall_render_image.set_pixel(x, y, _alpha_over(wall_render_image.get_pixel(x, y), color))
 
 
 # _inverse_homography_uv: Evaluates the inverse projective map at a screen
@@ -1753,6 +1755,7 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
 	var camera_origin := _runtime_camera_origin(forward, right)
+	var obstruction_edge_keys := _local_camera_obstruction_edge_keys(camera_origin)
 	var result: Array[Dictionary] = []
 	# The first-hit ray fan is still useful for ordinary visibility, but it can
 	# miss a wall that only enters through the extreme left or right edge between
@@ -1781,7 +1784,7 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var facing_cell := _wall_facing_cell(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin)
 		var facing_center := Vector2(float(facing_cell.x) + 0.5, float(facing_cell.y) + 0.5)
 		var cell_draw_depth := clampf(facing_center.distance_to(camera_origin), NEAR_CLIP, MAX_DEPTH)
-		result.append({
+		var projected_entry := {
 			"edge_key": String(edge["key"]),
 			"camera_origin": camera_origin,
 			"world_a": Vector2(edge["a"]),
@@ -1794,7 +1797,12 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"cell_draw_depth": cell_draw_depth,
 			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
-		})
+		}
+		if obstruction_edge_keys.has(String(edge["key"])):
+			# Keep the normal texture on the one camera-side wall that is truly
+			# between the camera and cowboy, but reduce it to 50% opacity.
+			projected_entry["camera_cutaway_opacity"] = 0.5
+		result.append(projected_entry)
 	# Retain the nearest useful walls if the full physical set exceeds the GPU
 	# budget, then put that retained set back into far-to-near order for Canvas
 	# compositing.  The previous one-step far-to-near sort accidentally kept the
@@ -1804,6 +1812,77 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		result = result.slice(0, MAX_WALLS)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	return result
+
+
+# _local_camera_obstruction_edge_keys: Finds every real thin wall crossed by a
+# small camera-to-cowboy cone. The free third-person camera is intentionally
+# allowed to sit beyond a wall to preserve its useful follow distance; locally
+# cutting only obstruction faces is less disruptive than snapping the camera
+# into the cowboy and losing the new framing. The fan covers the displayed body
+# width, so a near wall begins to clear before it swallows the center pixel.
+func _local_camera_obstruction_edge_keys(camera_origin: Vector2) -> Dictionary:
+	if not bool(controller.get("continuous_third_person_camera")) or not controller.has_method("_current_player_world_position"):
+		return {}
+	var camera_right: Vector2 = controller._view_right_vector().normalized()
+	# The collision capsule is intentionally narrow. The drawn cowboy is wider,
+	# so use a modest body-width presentation envelope for this *visual-only*
+	# camera cutaway. Five samples prevent a single pixel centerline from making
+	# walls pop in and out while running past their corner.
+	var cutaway_half_width := maxf(float(controller.PLAYER_CAPSULE_RADIUS) * 1.25, 0.13)
+	var target_lateral_offsets := [-cutaway_half_width, -cutaway_half_width * 0.5, 0.0, cutaway_half_width * 0.5, cutaway_half_width]
+	var blocked_keys := {}
+	var occlusion_targets: Array[Vector2] = [controller._current_player_world_position()]
+	# Only the owning cowboy determines presentation cutaways. Remote actors use
+	# the player's real world line-of-sight in the controller; adding them here
+	# turned a camera readability aid into an unwanted through-wall enemy reveal.
+	# Use physical segments rather than topology alone so an outer-boundary
+	# obstruction still resolves to the drawable wall-face key. Recording every
+	# hit handles a diagonal camera ray that passes two different cell edges.
+	for occlusion_target in occlusion_targets:
+		var player_view_depth := (occlusion_target - camera_origin).dot(controller._view_forward_vector().normalized())
+		for lateral_offset in target_lateral_offsets:
+			var target_world := occlusion_target + camera_right * float(lateral_offset)
+			var camera_to_target := target_world - camera_origin
+			var target_distance := camera_to_target.length()
+			if target_distance <= 0.01:
+				continue
+			var direction := camera_to_target / target_distance
+			for edge in controller._all_physical_wall_edges():
+				var wall_midpoint := (Vector2(edge["a"]) + Vector2(edge["b"])) * 0.5
+				var wall_view_depth := (wall_midpoint - camera_origin).dot(controller._view_forward_vector().normalized())
+				# A wall ahead of the player may cross the widened body fan at a
+				# corner, but is not a camera cutaway. It must be camera-side of the
+				# player in the current view as well as intersecting its ray segment.
+				if wall_view_depth >= player_view_depth - 0.002:
+					continue
+				var hit_distance: float = controller._ray_segment_hit_distance_limited(camera_origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maxf(target_distance - 0.002, 0.0))
+				if hit_distance >= 0.0 and hit_distance < target_distance - 0.002:
+					blocked_keys[String(edge["key"])] = true
+	return blocked_keys
+
+
+# runtime_world_point_has_clear_camera_line_for_current_pose: Uses the same
+# cutaway-wall decision as this renderer's wall pass. Combat VFX calls this
+# instead of independently treating a locally hidden camera obstruction as
+# opaque, while every other real wall remains a visual blocker.
+func runtime_world_point_has_clear_camera_line_for_current_pose(target_world: Vector2) -> bool:
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var camera_origin := _runtime_camera_origin(forward, right)
+	var camera_to_target := target_world - camera_origin
+	var target_distance := camera_to_target.length()
+	if target_distance <= 0.002:
+		return true
+	var direction := camera_to_target / target_distance
+	var ignored_obstruction_keys := _local_camera_obstruction_edge_keys(camera_origin)
+	var maximum_distance := maxf(target_distance - 0.002, 0.0)
+	for edge in controller._all_physical_wall_edges():
+		if ignored_obstruction_keys.has(String(edge["key"])):
+			continue
+		var hit_distance: float = controller._ray_segment_hit_distance_limited(camera_origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance)
+		if hit_distance >= 0.0 and hit_distance < target_distance - 0.002:
+			return false
+	return true
 
 
 # _wall_facing_cell: A visible thin wall belongs to the cell on the camera side
@@ -1899,6 +1978,12 @@ func _project_view_point_unframed(point: Vector2, world_height: float) -> Vector
 func _overscan_crop_origin() -> Vector2:
 	if not coordinate_overscan_test_enabled or controller == null or not controller.has_method("_current_player_world_position"):
 		return OVERSCAN_REFERENCE_CROP_ORIGIN
+	if bool(controller.get("continuous_third_person_camera")):
+		# Free-camera mode deliberately decouples the crop from intra-cell movement.
+		# Keep its framing neutral while the vertical-look experiment is disabled.
+		# The authored blue and magenta rectangles remain reference artwork only.
+		var maximum_origin := OVERSCAN_SIZE - VIEW_SIZE
+		return Vector2(OVERSCAN_REFERENCE_CROP_ORIGIN.x, clampf(OVERSCAN_REFERENCE_CROP_ORIGIN.y, 0.0, maximum_origin.y))
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
 	var cell_center := Vector2(controller.grid_position) + Vector2(0.5, 0.5)
@@ -1948,6 +2033,11 @@ func _overscan_calibrated_camera_origin(base_origin: Vector2, forward: Vector2, 
 	# After the selected 160×120 crop is removed, the cowboy remains in the same
 	# safe on-screen presentation while the entire visible world shares the pan.
 	var virtual_target_foot := home_foot + (_overscan_crop_origin() - OVERSCAN_REFERENCE_CROP_ORIGIN)
+	if bool(controller.get("continuous_third_person_camera")):
+		# Place feet high enough that the upright 48×64 cowboy is visible from hat
+		# to boots at neutral/down look. The crop then supplies right-stick up/down
+		# presentation without applying a special transform to the cowboy alone.
+		virtual_target_foot = Vector2(VIEW_SIZE.x * 0.5, 112.0)
 	var vertical_delta := virtual_target_foot.y - HORIZON_Y
 	if vertical_delta <= 0.0001:
 		return base_origin
@@ -2226,11 +2316,11 @@ func _update_coordinate_background() -> void:
 		coordinate_background.region_rect = Rect2(_overscan_crop_origin(), VIEW_SIZE)
 		coordinate_screen_overlay.region_rect = Rect2(_overscan_crop_origin(), VIEW_SIZE)
 	var player_is_inside_playable_map: bool = controller != null and controller._is_open_cell(controller.grid_position)
-	# Keep the green legacy-frame rectangle visible behind the runtime surfaces
-	# during this first test. It makes the moving crop observable without adding
-	# a second overlay transform; disabling the inspector test restores the
-	# prior map-only background behavior.
-	coordinate_background.visible = coordinate_background.texture != null and (use_overscan_sheet or not player_is_inside_playable_map)
+	# The coordinate sheet is calibration/reference art, not an environmental
+	# surface. The live floor, ceiling, and wall passes own every in-map pixel;
+	# leaving the overscan sheet visible behind them leaked its blue/red/green
+	# guide pixels through distant gaps that must read as darkness.
+	coordinate_background.visible = coordinate_background.texture != null and not player_is_inside_playable_map
 	coordinate_screen_overlay.visible = coordinate_screen_overlay_debug_enabled and coordinate_screen_overlay.texture != null
 
 
@@ -2276,7 +2366,8 @@ func _template_texture(path: String) -> Texture2D:
 
 func _update_debug_outlines(entries: Array[Dictionary]) -> void:
 	_remove_environment_debug_node("CoordinateFrameQuadDebug")
-	if not show_quad_outlines:
+	var cheat_wireframe := bool(controller.get("continuous_third_person_camera")) and bool(controller.get("walk_through_walls_cheat"))
+	if not show_quad_outlines and not cheat_wireframe:
 		return
 	# Use only stock CanvasItems here.  The prior custom draw script could fail
 	# while Godot was hot-reloading it, which made the Y diagnostic toggle able to
@@ -2285,21 +2376,75 @@ func _update_debug_outlines(entries: Array[Dictionary]) -> void:
 	var debug := Node2D.new()
 	debug.name = "CoordinateFrameQuadDebug"
 	debug.z_index = 61
-	for entry in entries:
-		var quad: PackedVector2Array = entry["quad"]
-		var depth := float(entry["depth"])
-		var light := clampf(1.0 - (depth - 0.3) / 5.3, 0.20, 1.0)
-		var fill := Polygon2D.new()
-		fill.polygon = quad
-		fill.color = Color(0.03, 0.90 * light, 0.18 * light, 0.22)
-		debug.add_child(fill)
-		var outline := Line2D.new()
-		outline.points = PackedVector2Array([quad[0], quad[1], quad[2], quad[3], quad[0]])
-		outline.width = 1.0
-		outline.default_color = Color(0.05, 0.95 * light, 0.25 * light, 0.78)
-		outline.antialiased = false
-		debug.add_child(outline)
+	if show_quad_outlines:
+		for entry in entries:
+			var quad: PackedVector2Array = entry["quad"]
+			var depth := float(entry["depth"])
+			var light := clampf(1.0 - (depth - 0.3) / 5.3, 0.20, 1.0)
+			var fill := Polygon2D.new()
+			fill.polygon = quad
+			fill.color = Color(0.03, 0.90 * light, 0.18 * light, 0.22)
+			debug.add_child(fill)
+			var outline := Line2D.new()
+			outline.points = PackedVector2Array([quad[0], quad[1], quad[2], quad[3], quad[0]])
+			outline.width = 1.0
+			outline.default_color = Color(0.05, 0.95 * light, 0.25 * light, 0.78)
+			outline.antialiased = false
+			debug.add_child(outline)
+	if bool(controller.get("continuous_third_person_camera")):
+		# The texture renderer only has finite maze faces to outline.  The free
+		# camera also needs a coordinate-frame cage outside that finite map so the
+		# walk-through-walls cheat remains a useful projection diagnostic.
+		_append_continuous_world_wireframe(debug)
 	controller.environment_layer.add_child(debug)
+
+
+# _append_continuous_world_wireframe: Draws the current camera's infinite
+# projected grid cage, rather than replaying an authored PNG wireframe.  It is
+# intentionally generated from the same origin/basis/projector as walls so it
+# remains meaningful after yawing or walking beyond the textured maze.
+func _append_continuous_world_wireframe(debug: Node2D) -> void:
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var origin := _runtime_camera_origin(forward, right)
+	var anchor_x := floori(origin.x)
+	var anchor_y := floori(origin.y)
+	var world_min_x := anchor_x - 7
+	var world_max_x := anchor_x + 8
+	var world_min_y := anchor_y - 4
+	var world_max_y := anchor_y + 10
+	# Floor, ceiling, and vertical posts form the black-and-white vector room
+	# even where there are no authored texture walls beyond the playable maze.
+	for world_x in range(world_min_x, world_max_x + 1):
+		_append_wire_segment(debug, Vector2(world_x, world_min_y), 0.0, Vector2(world_x, world_max_y), 0.0, Color(0.92, 0.95, 1.0, 0.78))
+		_append_wire_segment(debug, Vector2(world_x, world_min_y), WALL_HEIGHT, Vector2(world_x, world_max_y), WALL_HEIGHT, Color(0.45, 0.52, 0.62, 0.52))
+	for world_y in range(world_min_y, world_max_y + 1):
+		_append_wire_segment(debug, Vector2(world_min_x, world_y), 0.0, Vector2(world_max_x, world_y), 0.0, Color(0.92, 0.95, 1.0, 0.78))
+		_append_wire_segment(debug, Vector2(world_min_x, world_y), WALL_HEIGHT, Vector2(world_max_x, world_y), WALL_HEIGHT, Color(0.45, 0.52, 0.62, 0.52))
+	for world_x in range(world_min_x, world_max_x + 1):
+		for world_y in range(world_min_y, world_max_y + 1):
+			_append_wire_segment(debug, Vector2(world_x, world_y), 0.0, Vector2(world_x, world_y), WALL_HEIGHT, Color(1.0, 1.0, 1.0, 0.66))
+
+
+# _append_wire_segment: Adds only safely projectable portions of one wire.  A
+# segment touching the near plane is skipped instead of becoming a giant line
+# through the view; the neighboring grid segments still describe the room.
+func _append_wire_segment(debug: Node2D, first_world: Vector2, first_height: float, second_world: Vector2, second_height: float, color: Color) -> void:
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var origin := _runtime_camera_origin(forward, right)
+	var first_local := _to_view(first_world, origin, forward, right)
+	var second_local := _to_view(second_world, origin, forward, right)
+	if first_local.y <= NEAR_CLIP or second_local.y <= NEAR_CLIP:
+		return
+	if not _edge_can_be_seen(first_local, second_local):
+		return
+	var line := Line2D.new()
+	line.points = PackedVector2Array([_project_view_point(first_local, first_height), _project_view_point(second_local, second_height)])
+	line.width = 1.0
+	line.default_color = color
+	line.antialiased = false
+	debug.add_child(line)
 
 func _update_projection_point_debug() -> void:
 	_remove_environment_debug_node("CoordinateFrameProjectionPoints")
@@ -2349,4 +2494,6 @@ func _red_control_points(texture: Texture2D) -> Array[Vector2]:
 	return result
 
 func _render_signature() -> String:
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin()]
+	var continuous_world_position: Vector2 = controller._current_player_world_position() if controller.has_method("_current_player_world_position") else Vector2.ZERO
+	var continuous_yaw := float(controller.get("continuous_camera_yaw")) if bool(controller.get("continuous_third_person_camera")) else 0.0
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin(), continuous_world_position, continuous_yaw, bool(controller.get("walk_through_walls_cheat"))]

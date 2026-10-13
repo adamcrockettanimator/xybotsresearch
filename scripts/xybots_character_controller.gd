@@ -182,7 +182,6 @@ const MUZZLE_SMOKE_CLOUD_SIZE := 32                                             
 const MUZZLE_SMOKE_CLOUD_VARIANTS := 3                                                        # Vary individual puff silhouettes so rotation and translation continuously reshuffle the visible turbulent shape.
 const MUZZLE_SMOKE_ROTATION_INCREMENT := PI * 0.5                                             # Let puffs spin only through crisp quarter turns, retaining pixel-grid silhouettes without diagonal filtering.
 const DEBUG_DRAW_MUZZLE_SMOKE_CARDS := false                                                  # The temporary card inspector has served its purpose; leave it ready but hidden during normal smoke viewing.
-const DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES := true                                                 # Temporarily compare the shared world muzzle projection (cyan) against the rendered PNG anchor (magenta) in every player camera.
 const MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS := 1.50                                               # Hold the two diagnostic crosses long enough to inspect their separation after the bullet has struck or left the camera.
 const MUZZLE_SMOKE_LIFETIME_MIN := 0.55                                                       # Let the freshest barrel smoke stay thick long enough to momentarily obscure the shooter.
 const MUZZLE_SMOKE_LIFETIME_MAX := 1.15                                                       # Give the diffuse outer smoke enough time to billow and dissipate in the air.
@@ -719,6 +718,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
 @export var show_near_view_tuning_debug := false                                             # Show raw-versus-clamped local anchors in every player view plus their shared top-down truth guides.
+@export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
 @export var pause_round_timer_for_debug := false                                             # Pause only the shared round clock when deliberately requested from the debug menu; guide visibility stays independent.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
@@ -733,6 +733,9 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var experimental_forward_cell_play_space := false                                     # Kept disabled: the accepted experiment keeps the player in the original near/source cell, never the cell ahead.
 @export var use_near_cell_motion_envelope := true                                            # Keep the local body in the current near cell and use its own extended rear-edge display envelope; never translate it into another grid cell.
 @export var use_continuous_world_projection_for_near_actors := true                          # Option 1: place near-field cowboys with the same unclamped continuous world camera used by bullets, smoke, pickups, and impacts; disable only to compare the legacy cowboy-only envelope.
+@export var continuous_third_person_camera := true                                           # Experimental branch: replace cell-step camera motion with one continuously moving world camera.
+@export_range(0.25, 6.0, 0.05) var continuous_camera_turn_radians_per_second := 2.4         # Traditional right-stick yaw speed for the continuous third-person experiment.
+@export var bots_enabled := false                                                            # Keep unclaimed roster slots stationary while controller ownership is being verified.
 @export_range(0.0, 48.0, 1.0) var near_rear_exit_pixels := 24.0                             # Let the body feet travel this far below the authored near floor edge at the south boundary, creating a natural partial exit.
 @export_range(0.0, 48.0, 1.0) var near_rear_side_exit_pixels := 22.0                        # Flare the south-west/south-east screen limits by this amount so each rear corner can partially leave the frame.
 @export_range(0.50, 1.0, 0.01) var side_transition_trigger_offset := 0.90                    # Start an open lateral crossing at this normalized physical offset; 0.90 is the accepted current tuning.
@@ -816,6 +819,7 @@ var turn_passthrough_target := ""                                               
 var facing := 0                                                                             # Track the player camera direction as 0=N, 1=E, 2=S, 3=W.
 var turn_45_direction := 0                                                                   # Track a temporary halfway turn stop: -1=left, 0=cardinal, 1=right.
 var turn_step := 0                                                                           # Track a view-relative quarter-turn stage: 0=cardinal, 1=22, 2=45, 3=66.
+var continuous_camera_yaw := 0.0                                                            # Store the current free yaw in radians; the eight-direction cowboy art snaps independently.
 var manual_turn_step_enabled := false                                                       # Let the debug menu hold the authored 22/66 turn frames until a fresh turn input advances them.
 var forward_step := 0                                                                        # Track a forward camera stage: 0=stable, 1=Floor/WallsFwd_1, 2=Floor/WallsFwd_2.
 var forward_passthrough_timer := 0.0                                                        # Accumulate the display time of the active forward frame.
@@ -854,6 +858,9 @@ var was_slot_grid_debug_pressed := false                                        
 var was_debug_menu_pressed := false                                                          # Track previous-frame debug-menu input so it opens or closes once per key press.
 var player_two_joined := false                                                               # Legacy compatibility mirror for Player 2.
 var player_joined := [false, false, false, false]
+var player_bots := [false, false, false, false]                                             # Keep bot ownership separate from normal player join/render participation.
+var player_device_ids := [-1, -1, -1, -1]                                                   # Freeze each human's Godot device id when the lobby launches the match.
+var bot_inputs: Dictionary = {}                                                              # Store one small virtual input bundle for the bot currently being simulated.
 var match_started := false
 var match_paused := false
 var scoreboard_visible := false
@@ -977,6 +984,7 @@ func _ready() -> void:                                                          
 	_setup_viewport()                                                                          # Call a helper function as part of the current controller step.
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
+	_apply_session_roster()                                                                    # Convert title-menu vacancies into active bot combatants before views and HUDs are built.
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
 	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
@@ -1143,6 +1151,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "pickup_range", "Pickup Range")                         # Show the true same-cell pickup footprint for tuning.
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
 	_add_debug_menu_check(content, "near_view_tuning", "Near View Truth Guides")             # Show raw world truth versus the optional screen-retention presentation in both player views and the shared top-down map.
+	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
 	_add_debug_menu_tuning_spin(content, "rear_exit", "Rear exit", 0.0, 48.0, 1.0)            # Tune the south-edge partial body exit without changing the fixed camera or wireframe geometry.
 	_add_debug_menu_tuning_spin(content, "rear_side_exit", "Rear side exit", 0.0, 48.0, 1.0) # Tune only the south-west/south-east corner flare of the near-cell body path.
@@ -1332,6 +1341,7 @@ func _toggle_debug_menu() -> void:
 		debug_menu_right_panel.visible = debug_menu_open                                         # Keep the renderer/debug column paired with the camera column.
 	if debug_menu_open:                                                                        # Refresh checkbox state whenever the panel is opened.
 		_refresh_debug_menu()                                                                    # Reflect inspector values and F2 toggles in every row.
+	_layout_viewport()                                                                         # Reclaim the side gutters immediately when F3 closes, or make room only while it is open.
 	_update_status()                                                                           # Update the runtime help text to advertise the current menu state.
 
 
@@ -1349,6 +1359,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_perspective_extents_overlay                                                # Return the measured floor/actor extent overlay state.
 		"near_view_tuning":
 			return show_near_view_tuning_debug                                                     # Return whether live near-camera clamp guides are visible.
+		"muzzle_anchors":
+			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
 		"pause_round_timer":
 			return pause_round_timer_for_debug                                                     # Return the independent debug pause state for the shared match clock.
 		"slot_grid":
@@ -1413,6 +1425,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_near_view_tuning_debug = enabled                                                  # Show raw/clamped local anchors in every player view and the shared top-down map.
 			if enabled:
 				show_top_down_source_overlay = true                                                  # The clamp is meaningful only alongside its world-space ground truth.
+		"muzzle_anchors":
+			show_muzzle_anchor_debug = enabled                                                     # Keep the marker diagnostic opt-in and independent of combat.
+			if not enabled:
+				muzzle_anchor_debug_markers.clear()                                                  # Remove lingering snapshots immediately when the diagnostic closes.
 		"pause_round_timer":
 			pause_round_timer_for_debug = enabled                                                  # Leave all diagnostics and simulation live; pause only the one shared round countdown.
 		"slot_grid":
@@ -1609,6 +1625,119 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 	]                                                                                           # Close the normal state list.
 
 
+# _apply_session_roster: Makes title-menu players human-controlled and fills every remaining combat slot with a bot.
+func _apply_session_roster() -> void:
+	var session := get_node_or_null("/root/GrudgeSession")
+	var roster_slots: Array = [false, false, false, false]
+	var roster_devices: Array = [-1, -1, -1, -1]
+	# Prefer the SceneTree handoff created by the lobby. Unlike a live autoload
+	# read, it cannot be replaced while the coordinate-frame wrapper instantiates
+	# main.tscn during the scene change.
+	if get_tree().has_meta("grudge_match_human_slots"):
+		roster_slots = get_tree().get_meta("grudge_match_human_slots")
+		roster_devices = get_tree().get_meta("grudge_match_device_ids")
+	elif session != null:
+		roster_slots = session.get("human_slots")
+		roster_devices = session.get("slot_device_ids")
+	var has_human_selection := false
+	for player_index in range(4):
+		has_human_selection = has_human_selection or bool(roster_slots[player_index])
+	for player_index in range(mini(4, player_joined.size())):
+		var human := bool(roster_slots[player_index])
+		# Running main.tscn directly from the editor skips the title-menu handoff.
+		# Preserve one controllable keyboard player in that workflow instead of
+		# silently converting every slot into an NPC.
+		if not has_human_selection and player_index == 0:
+			human = true
+		player_bots[player_index] = not human
+		player_device_ids[player_index] = int(roster_devices[player_index]) if human else -1
+		player_joined[player_index] = true                                                       # Bots are full participants: visible, hittable, scoreable, and able to collect pickups.
+	player_two_joined = true                                                                    # Preserve the legacy P2 combat guard while either a human or a bot occupies slot two.
+	match_started = true
+
+
+# _is_human_controlled_slot: Uses the immutable match-start roster, not a live
+# autoload that may be recreated as Godot replaces the title scene.
+func _is_human_controlled_slot(player_index: int) -> bool:
+	return player_index >= 0 and player_index < player_bots.size() and not player_bots[player_index]
+
+
+# _is_bot_controlled_slot: A human lobby claim always wins, even if an earlier setup pass marked the slot as a bot.
+func _is_bot_controlled_slot(player_index: int) -> bool:
+	return player_index >= 0 and player_index < player_bots.size() and player_bots[player_index] and not _is_human_controlled_slot(player_index)
+
+
+# _update_bot_input: A deliberately simple hunter: face the closest enemy, advance when aligned, and fire only down a clear corridor.
+func _update_bot_input(player_index: int) -> void:
+	bot_inputs.erase(player_index)
+	if not bots_enabled:
+		return
+	if not _is_bot_controlled_slot(player_index) or player_index >= player_states.size():
+		return
+	var state: Dictionary = player_states[player_index]
+	var origin := _player_state_world_position(state)
+	var target_index := -1
+	var target_distance := INF
+	for other_index in range(player_states.size()):
+		if other_index == player_index or not player_joined[other_index] or PLAYER_TEAMS[other_index] == PLAYER_TEAMS[player_index] or bool(player_states[other_index].get("is_dying", false)):
+			continue
+		var distance := origin.distance_to(_player_state_world_position(player_states[other_index]))
+		if distance < target_distance:
+			target_distance = distance
+			target_index = other_index
+	if target_index < 0:
+		return
+	var target_vector := _player_state_world_position(player_states[target_index]) - origin
+	var navigation_vector := _bot_navigation_direction(state, target_vector)
+	var virtual_input := {"left": false, "right": false, "forward": false, "fire": false}
+	if continuous_third_person_camera:
+		var free_forward := _view_forward_vector_for_state(state).normalized()
+		var free_target_direction := navigation_vector.normalized()
+		var alignment := free_forward.dot(free_target_direction)
+		if alignment > 0.985:
+			virtual_input["forward"] = true
+			virtual_input["fire"] = free_forward.dot(target_vector.normalized()) > 0.96 and _nearest_projectile_wall_distance(origin, free_forward, target_distance) >= target_distance
+		elif free_forward.cross(free_target_direction) > 0.0:
+			virtual_input["right"] = true
+		else:
+			virtual_input["left"] = true
+		bot_inputs[player_index] = virtual_input
+		return
+	var wanted_facing := 1 if absf(navigation_vector.x) > absf(navigation_vector.y) and navigation_vector.x > 0.0 else 3 if absf(navigation_vector.x) > absf(navigation_vector.y) else 2 if navigation_vector.y > 0.0 else 0
+	var facing := int(state.get("facing", 0))
+	var turn := (wanted_facing - facing + 4) % 4
+	if turn == 1:
+		virtual_input["right"] = true
+	elif turn == 3:
+		virtual_input["left"] = true
+	elif turn == 2:
+		virtual_input["right"] = true
+	else:
+		virtual_input["forward"] = true
+		var forward := _view_forward_vector_for_state(state).normalized()
+		var target_direction := target_vector.normalized()
+		var wall_distance := _nearest_projectile_wall_distance(origin, forward, target_distance)
+		virtual_input["fire"] = forward.dot(target_direction) > 0.96 and wall_distance >= target_distance
+	bot_inputs[player_index] = virtual_input
+
+
+# _bot_navigation_direction: Take the open neighboring cell whose direction most closely reduces distance to the target.
+# This greedy maze step naturally turns around in dead ends instead of repeatedly pressing into a wall.
+func _bot_navigation_direction(state: Dictionary, target_vector: Vector2) -> Vector2:
+	var cell: Vector2i = state.get("grid_position", Vector2i(-1, -1))
+	var desired := target_vector.normalized()
+	var best_direction := desired
+	var best_score := -INF
+	for direction in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+		if not _can_cross_edge(cell, direction):
+			continue
+		var score := Vector2(direction).normalized().dot(desired)
+		if score > best_score:
+			best_score = score
+			best_direction = Vector2(direction)
+	return best_direction
+
+
 
 # _make_audit_player_state: Builds a player state and applies fixed local/facing values for the grid-correction screenshot.
 func _make_audit_player_state(player_index: int, start_cell: Vector2i, start_facing: int, start_turn_45: int, start_local_position: Vector2) -> Dictionary: # Declare this function.
@@ -1677,6 +1806,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"facing": start_facing,                                                                    # Store this player's camera direction.
 		"turn_45_direction": 0,                                                                     # Store whether this player is stopped on a halfway turn view.
 		"turn_step": 0,                                                                              # Store the current 22/45/66 interpolation stage.
+		"continuous_camera_yaw": float(start_facing) * PI * 0.5,                                  # Start the free camera aligned with this player's inherited cardinal heading.
 		"forward_step": 0,                                                                           # Store the current Fwd 1/Fwd 2 camera stage.
 		"forward_passthrough_timer": 0.0,                                                           # Store elapsed automatic Fwd stage time.
 		"forward_transition_name": "",                                                            # Store the pending cell-crossing result after Fwd 2.
@@ -2220,7 +2350,11 @@ func _update_combat_hud() -> void:
 			var name_label := player_name_labels[player_index]
 			name_label.position = viewport_node.position + Vector2(3.0, 2.0) * viewport_node.scale
 			name_label.scale = viewport_node.scale
-			name_label.text = "%s:%d" % [PLAYER_NAMES[player_index], int(state.get("kills", 0))]
+			var input_source := "STATIC"
+			if _is_human_controlled_slot(player_index):
+				var device_id := _xbox_joypad_id_for_player(player_index)
+				input_source = "PAD %d" % device_id if device_id >= 0 else "NO PAD"
+			name_label.text = "%s:%d [%s]" % [PLAYER_NAMES[player_index], int(state.get("kills", 0)), input_source]
 			var team_one_score := 0
 			var team_two_score := 0
 			for score_index in range(player_states.size()):
@@ -2335,6 +2469,8 @@ func _update_combat_hud() -> void:
 
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
 func _is_player_fire_pressed_for(player_index: int) -> bool:
+	if _is_bot_controlled_slot(player_index):
+		return bool(bot_inputs.get(player_index, {}).get("fire", false))
 	var keyboard_fire: int = int([KEY_F, KEY_P, KEY_SLASH, KEY_KP_0][player_index])
 	if _is_key_down(keyboard_fire):
 		return true
@@ -2586,7 +2722,7 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "visual_target_position": origin + direction * visual_distance, "visual_target_player_index": visual_target_player_index, "visual_total_distance": maxf(visual_distance, 0.001), "last_trail_distance": 0.0, "direction": direction, "height": muzzle_height, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered particle travels in a single straight line.
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
-	if DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES:
+	if show_muzzle_anchor_debug:
 		muzzle_anchor_debug_markers.append({"id": int(shot["id"]), "owner": player_index, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "muzzle_hand": muzzle_hand, "timer": MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS}) # Snapshot the spawned shared muzzle so both camera comparisons remain visible after the shot itself is gone.
 	if gunshot_player != null:
 		gunshot_player.pitch_scale = randf_range(0.78, 1.22)
@@ -3228,7 +3364,7 @@ func _render_muzzle_anchor_debug_cross(key: String, center: Vector2, color: Colo
 
 # _render_muzzle_anchor_debug_for_shot: Shows the two coordinate systems being compared for one live shot in the active camera.
 func _render_muzzle_anchor_debug_for_shot(shot: Dictionary, used: Dictionary) -> void:
-	if not DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES:
+	if not show_muzzle_anchor_debug:
 		return
 	var shot_id := int(shot.get("id", -1))                                                     # Keep every shot marker cache independent while it is alive.
 	var shared_muzzle_world: Vector2 = shot.get("authored_muzzle_position", shot.get("spawn_position", Vector2.ZERO)) # Read the canonical world point produced from the firing PNG anchor.
@@ -3875,7 +4011,7 @@ func _update_combat_view() -> void:
 			decal_sprite.z_index = body_sprite.z_index + 4                                           # Keep a wound readable over the body and its brief hit-reaction replacement.
 			decal_sprite.visible = true                                                              # Reveal this accumulated injury mark.
 			used[decal_key] = true                                                                    # Preserve it until a heart or respawn removes the underlying decal description.
-	if DEBUG_DRAW_MUZZLE_ANCHOR_CROSSES:
+	if show_muzzle_anchor_debug:
 		for marker in muzzle_anchor_debug_markers:
 			_render_muzzle_anchor_debug_for_shot(marker, muzzle_debug_used)                         # Render the retained two-cross snapshot after all normal art, through its deliberately topmost overlay layer.
 	_hide_unused_combat_sprites(used)                                                          # Hide stale bullets, impacts, and hit art.
@@ -3989,7 +4125,11 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
 	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16)): # Keep remote collectibles inside the camera fan; normal back-to-front Canvas drawing resolves wall coverage.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
-	var projection := _opponent_projection_from_current_camera(world_position, true)            # Keep coins and guns immediately after camera-facing walls in their own cell.
+	# Collectibles are fixed points in the map, not protected near-cell bodies.
+	# In the continuous third-person view they must use the raw live-camera
+	# projector, otherwise they inherit the body display envelope and appear to
+	# drift forward with the player while that player crosses their cell.
+	var projection := _opponent_projection_from_current_camera(world_position, true, continuous_third_person_camera) # Keep coins and guns immediately after camera-facing walls in their own cell.
 	var actor_height := float(projection.get("actor_height", 0.0))                             # Convert the view depth into a readable pickup scale.
 	if actor_height <= 0.0:
 		return                                                                                    # Avoid degenerate or behind-camera projections.
@@ -4070,6 +4210,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	facing = int(state.get("facing", 0))                                                        # Restore this player's facing.
 	turn_45_direction = int(state.get("turn_45_direction", 0))                                  # Restore this player's temporary halfway-turn direction.
 	turn_step = int(state.get("turn_step", 2 if turn_45_direction != 0 else 0))                   # Restore the current interpolation stage, preserving old saved diagonal states.
+	continuous_camera_yaw = float(state.get("continuous_camera_yaw", float(facing) * PI * 0.5)) # Restore the free camera heading, falling back to old cardinal state safely.
 	forward_step = int(state.get("forward_step", 0))                                          # Restore this player's active forward camera stage.
 	forward_passthrough_timer = float(state.get("forward_passthrough_timer", 0.0))             # Restore elapsed time in the active forward frame.
 	forward_transition_name = String(state.get("forward_transition_name", ""))                # Restore the cell-crossing result that follows the second forward frame.
@@ -4115,6 +4256,7 @@ func _save_player_context(player_index: int) -> void:                           
 	state["facing"] = facing                                                                    # Save this player's facing.
 	state["turn_45_direction"] = turn_45_direction                                             # Save this player's temporary halfway-turn direction.
 	state["turn_step"] = turn_step                                                             # Save this player's current interpolation stage.
+	state["continuous_camera_yaw"] = continuous_camera_yaw                                    # Save the free camera heading independently of snapped sprite-facing state.
 	state["forward_step"] = forward_step                                                       # Save this player's active forward camera stage.
 	state["forward_passthrough_timer"] = forward_passthrough_timer                            # Save elapsed time in the active forward frame.
 	state["forward_transition_name"] = forward_transition_name                                # Save the cell-crossing result that follows the forward frames.
@@ -4165,6 +4307,9 @@ func _process_player_context(delta: float) -> void:                             
 		character_is_moving = false                                                               # Ensure the waiting player remains visually idle in both viewpoints.
 		_play_best_animation(false)                                                               # Play the normal idle pose while waiting for a controller.
 		return                                                                                    # Do not read player-two movement until the join condition has been met.
+	if continuous_third_person_camera:
+		_process_continuous_third_person_input(delta)                                             # The experimental camera owns free yaw and direct world movement; skip all captured cell/turn transitions.
+		return
 	var manual_forward_step_just_pressed := _read_manual_forward_step_input() if manual_forward_step_enabled else false # Sample every enabled frame so a held stick cannot skip stages.
 	var manual_strafe_step_just_pressed := _read_manual_strafe_step_input() if manual_strafe_step_enabled else false # Sample every enabled frame so a held stick cannot skip side stages.
 	var manual_turn_step_direction := _read_turn() if manual_turn_step_enabled else 0         # Sample a fresh Q/E or right-stick turn only when turn-stage inspection is enabled.
@@ -4228,6 +4373,36 @@ func _process_player_context(delta: float) -> void:                             
 		world_run_dir = _direction_string_for_world_vector(_view_forward_vector())                # Use the visible camera direction as the idle body fallback.
 		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
 		_play_idle_animation()                                                                    # Play the new forward-facing idle loop while this player is not moving.
+
+
+
+# _process_continuous_third_person_input: Keeps the maze/collision grid authoritative while
+# moving the experimental camera and player as continuous world-space quantities.
+func _process_continuous_third_person_input(delta: float) -> void:
+	var device_id := _xbox_joypad_id_for_player()
+	var stick_x := Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_X) if device_id >= 0 else 0.0
+	if absf(stick_x) < XBOX_STICK_DEADZONE:
+		stick_x = 0.0
+	var key_turn := float(int(_is_player_turn_right_pressed()) - int(_is_player_turn_left_pressed()))
+	continuous_camera_yaw = wrapf(continuous_camera_yaw + (stick_x + key_turn) * continuous_camera_turn_radians_per_second * delta, -PI, PI)
+	var movement := _read_movement()
+	var forward := _view_forward_vector()
+	var right := _view_right_vector()
+	world_aim_dir = _direction_string_for_world_vector(forward)
+	if movement != Vector2.ZERO:
+		character_is_moving = true
+		run_dir = _movement_to_first_player_run_dir(movement)
+		run_animation_reversed = movement.y > 0.0 and absf(movement.x) < absf(movement.y) * 0.5
+		world_run_dir = _direction_string_for_world_vector((right * movement.x - forward * movement.y).normalized())
+		_play_best_animation(true)
+		var world_delta := (right * movement.x - forward * movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta
+		var moved := _move_world_with_wall_slide(player_world_position, world_delta, "right", "left", "back", "front") # Resolve one continuous input vector, preserving its tangent instead of repeatedly correcting an ordered X/Y pair at a wall.
+		_set_player_world_position_for_current_view(moved)
+	else:
+		character_is_moving = false
+		run_animation_reversed = false
+		world_run_dir = world_aim_dir
+		_play_idle_animation()
 
 
 
@@ -4417,6 +4592,7 @@ func _process(delta: float) -> void:                                            
 	_update_all_join_states()
 	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
+		_update_bot_input(player_index)                                                          # Supply virtual controls only for title-menu bot slots.
 		_process_player_context(delta)                                                           # Run one player's input, movement, turn, and animation logic.
 		_save_player_context(player_index)                                                       # Store this player's updated state before binding the next player.
 	_process_combat(delta)                                                                     # Advance shared pistol shots and resolve wall/player impacts after both actors moved.
@@ -5237,7 +5413,9 @@ func _layout_viewport() -> void:                                                
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
 	_layout_debug_menu_panels(viewport_size)
 	if player_views.size() >= 4 and not TEMP_GRID_AUDIT:
-		var side_reserve := DEBUG_MENU_COLUMN_WIDTH + DEBUG_MENU_SIDE_MARGIN * 2.0
+		# Reserve side gutters only while the F3 panels are open. Normal play uses
+		# the complete window for the four 160x120 camera crops.
+		var side_reserve := DEBUG_MENU_COLUMN_WIDTH + DEBUG_MENU_SIDE_MARGIN * 2.0 if debug_menu_open else 0.0
 		var grid_available := Vector2(viewport_size.x - side_reserve * 2.0, viewport_size.y)
 		var camera_scale := maxf(1.0, floorf(minf(grid_available.x / (VIEWPORT_SIZE.x * 2.0), grid_available.y / (VIEWPORT_SIZE.y * 2.0))))
 		var grid_size := VIEWPORT_SIZE * camera_scale * 2.0
@@ -7891,10 +8069,25 @@ func _is_key_down(keycode: int) -> bool:                                        
 
 # _xbox_joypad_id_for_player: Assigns the first two connected pads deterministically to player one and player two.
 func _xbox_joypad_id_for_player(player_index: int = active_player_index) -> int:            # Declare this function.
-	var connected_joypads := Input.get_connected_joypads()                                    # Ask Godot for the currently available gamepad device ids.
-	if player_index < 0 or player_index >= connected_joypads.size():                          # Keep keyboard controls usable when this player has no assigned pad.
-		return -1                                                                               # Report that there is no gamepad to read.
-	return int(connected_joypads[player_index])                                                # Bind controller one to P1 and controller two to P2.
+	if not _is_human_controlled_slot(player_index):
+		return -1
+	var assigned_device := int(player_device_ids[player_index])
+	var connected_joypads := Input.get_connected_joypads()
+	if connected_joypads.has(assigned_device):
+		return assigned_device                                                                    # Keep the exact Godot device id that claimed the slot in the lobby.
+	# Some Windows drivers renumber pads while the scene changes. Recover only
+	# for an already selected human slot; bots and unclaimed controllers remain
+	# excluded from gameplay input.
+	for candidate_device in connected_joypads:
+		var used_by_another_human := false
+		for other_index in range(player_device_ids.size()):
+			if other_index != player_index and _is_human_controlled_slot(other_index) and int(player_device_ids[other_index]) == int(candidate_device):
+				used_by_another_human = true
+				break
+		if not used_by_another_human:
+			player_device_ids[player_index] = int(candidate_device)
+			return int(candidate_device)
+	return -1
 
 
 
@@ -7904,9 +8097,21 @@ func _xbox_left_stick() -> Vector2:                                             
 	if device_id < 0:                                                                          # Return neutral input when no controller is attached.
 		return Vector2.ZERO                                                                      # Keep keyboard-only use unchanged.
 	var stick := Vector2(Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X), Input.get_joy_axis(device_id, JOY_AXIS_LEFT_Y)) # Read the standard Xbox left-stick axes.
-	if stick.length() < XBOX_STICK_DEADZONE:                                                   # Discard minor hardware drift.
-		return Vector2.ZERO                                                                      # Treat the stick as centered inside the dead zone.
-	return stick.limit_length(1.0)                                                            # Preserve analog strength while keeping diagonal travel bounded.
+	if stick.length() >= XBOX_STICK_DEADZONE:
+		return stick.limit_length(1.0)                                                          # Preserve analog strength while keeping diagonal travel bounded.
+	# D-pad input is digital but should move the selected character exactly like
+	# the left stick. This also supports controllers whose directional pad is the
+	# input used to navigate the character-selection lobby.
+	var dpad := Vector2.ZERO
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_LEFT):
+		dpad.x -= 1.0
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_RIGHT):
+		dpad.x += 1.0
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_UP):
+		dpad.y -= 1.0
+	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_DOWN):
+		dpad.y += 1.0
+	return dpad.limit_length(1.0)
 
 
 
@@ -7926,6 +8131,7 @@ func _xbox_right_stick_turn() -> int:                                           
 
 # _is_player_move_left_pressed: Returns whether the currently bound player is holding local-left movement.
 func _is_player_move_left_pressed() -> bool:                                                # Declare this function.
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("left", false))
 	if active_player_index == 1: return _is_key_down(KEY_J)
 	if active_player_index == 2: return _is_key_down(KEY_LEFT)
 	if active_player_index == 3: return _is_key_down(KEY_KP_4)
@@ -7937,6 +8143,7 @@ func _is_player_move_left_pressed() -> bool:                                    
 
 # _is_player_move_right_pressed: Returns whether the currently bound player is holding local-right movement.
 func _is_player_move_right_pressed() -> bool:                                               # Declare this function.
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("right", false))
 	if active_player_index == 1: return _is_key_down(KEY_L)
 	if active_player_index == 2: return _is_key_down(KEY_RIGHT)
 	if active_player_index == 3: return _is_key_down(KEY_KP_6)
@@ -7948,6 +8155,7 @@ func _is_player_move_right_pressed() -> bool:                                   
 
 # _is_player_move_forward_pressed: Returns whether the currently bound player is holding local-forward movement.
 func _is_player_move_forward_pressed() -> bool:                                             # Declare this function.
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("forward", false))
 	if active_player_index == 1: return _is_key_down(KEY_I)
 	if active_player_index == 2: return _is_key_down(KEY_UP)
 	if active_player_index == 3: return _is_key_down(KEY_KP_8)
@@ -7959,6 +8167,7 @@ func _is_player_move_forward_pressed() -> bool:                                 
 
 # _is_player_move_backward_pressed: Returns whether the currently bound player is holding local-backward movement.
 func _is_player_move_backward_pressed() -> bool:                                            # Declare this function.
+	if _is_bot_controlled_slot(active_player_index): return false
 	if active_player_index == 1: return _is_key_down(KEY_K)
 	if active_player_index == 2: return _is_key_down(KEY_DOWN)
 	if active_player_index == 3: return _is_key_down(KEY_KP_5)
@@ -7970,6 +8179,7 @@ func _is_player_move_backward_pressed() -> bool:                                
 
 # _is_player_turn_left_pressed: Returns whether the currently bound player is pressing a left-turn key.
 func _is_player_turn_left_pressed() -> bool:                                                # Declare this function.
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("left", false))
 	if active_player_index == 1: return _is_key_down(KEY_U)
 	if active_player_index == 2: return _is_key_down(KEY_COMMA)
 	if active_player_index == 3: return _is_key_down(KEY_KP_7)
@@ -7981,6 +8191,7 @@ func _is_player_turn_left_pressed() -> bool:                                    
 
 # _is_player_turn_right_pressed: Returns whether the currently bound player is pressing a right-turn key.
 func _is_player_turn_right_pressed() -> bool:                                               # Declare this function.
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("right", false))
 	if active_player_index == 1: return _is_key_down(KEY_O)
 	if active_player_index == 2: return _is_key_down(KEY_PERIOD)
 	if active_player_index == 3: return _is_key_down(KEY_KP_9)
@@ -8199,8 +8410,7 @@ func _move_inside_tile_diagonal(movement: Vector2, delta: float) -> void:       
 	last_blocked_direction = ""                                                               # Clear stale feedback before applying this frame's collision checks.
 	if _try_move_diagonal_corner_direct(world_position, world_delta):                          # Let a genuine diagonal crossing land in its diagonal cell without briefly visiting a side-adjacent camera cell.
 		return                                                                                    # Keep the world/grid state already committed by the diagonal-corner helper.
-	world_position = _move_diagonal_world_axis(world_position, world_delta.x, Vector2i(1, 0), "right", "left") # Sweep east/west first so an angled move can slide along a blocked north/south wall.
-	world_position = _move_diagonal_world_axis(world_position, world_delta.y, Vector2i(0, 1), "back", "front") # Sweep north/south second using the world position produced by the first sweep.
+	world_position = _move_world_with_wall_slide(world_position, world_delta, "right", "left", "back", "front") # Resolve the complete diagonal vector by its earliest wall hit, so the remaining travel stays smoothly tangent to that wall.
 	_set_player_world_position_for_current_view(world_position)                                # Re-express the valid world point in the current diagonal camera-local coordinates.
 
 
@@ -8241,6 +8451,66 @@ func _can_cross_diagonal_corner(source_cell: Vector2i, x_edge: Vector2i, y_edge:
 	var x_then_y := _can_player_cross_edge(source_cell, x_edge) and _can_player_cross_edge(source_cell + x_edge, y_edge) # Test the route that enters the horizontal neighbor first.
 	var y_then_x := _can_player_cross_edge(source_cell, y_edge) and _can_player_cross_edge(source_cell + y_edge, x_edge) # Test the route that enters the vertical neighbor first.
 	return x_then_y or y_then_x                                                                # Permit the diagonal only when a real non-tunneling route exists.
+
+
+
+# _move_world_with_wall_slide: Sweeps one desired world-space displacement and
+# removes only the component pointing into the first blocking grid edge.  This
+# is deliberately not an X-then-Y correction: at an oblique contact, the
+# surviving tangent is applied in the same update so a held stick glides along
+# the wall without making the camera/world alternate around the contact point.
+func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, positive_x_label: String, negative_x_label: String, positive_y_label: String, negative_y_label: String) -> Vector2:
+	if walk_through_walls_cheat or world_delta.length_squared() <= 0.00000001:
+		return world_position + world_delta
+	var position := world_position
+	var remaining := world_delta
+	last_blocked_direction = ""
+	# One hit leaves a tangent; a second iteration handles sliding into a corner.
+	for _slide_pass in range(2):
+		if remaining.length_squared() <= 0.00000001:
+			break
+		var hit_time := 1.0
+		var hit_x := false
+		var hit_y := false
+		if not is_zero_approx(remaining.x):
+			var x_cell := floori(position.x)
+			var x_step := 1 if remaining.x > 0.0 else -1
+			var x_edge := float(x_cell + 1) if x_step > 0 else float(x_cell)
+			var x_safe := x_edge - float(x_step) * PLAYER_CAPSULE_RADIUS
+			# A previous frame can leave the center a fraction inside the radius
+			# clearance. Treat that as a zero-time collision instead of letting its
+			# negative travel time bypass the edge on the next update.
+			var x_time := maxf(0.0, (x_safe - position.x) / remaining.x)
+			if x_time <= hit_time and not _can_player_cross_edge(Vector2i(x_cell, floori(position.y)), Vector2i(x_step, 0)):
+				hit_time = x_time
+				hit_x = true
+		if not is_zero_approx(remaining.y):
+			var y_cell := floori(position.y)
+			var y_step := 1 if remaining.y > 0.0 else -1
+			var y_edge := float(y_cell + 1) if y_step > 0 else float(y_cell)
+			var y_safe := y_edge - float(y_step) * PLAYER_CAPSULE_RADIUS
+			# Match the X sweep: an already-touching Y wall blocks immediately,
+			# while the other axis remains available as the slide tangent.
+			var y_time := maxf(0.0, (y_safe - position.y) / remaining.y)
+			if y_time <= hit_time and not _can_player_cross_edge(Vector2i(floori(position.x), y_cell), Vector2i(0, y_step)):
+				if is_equal_approx(y_time, hit_time):
+					hit_y = true
+				else:
+					hit_time = y_time
+					hit_x = false
+					hit_y = true
+		if not hit_x and not hit_y:
+			position += remaining
+			break
+		position += remaining * hit_time
+		remaining *= 1.0 - hit_time
+		if hit_x:
+			remaining.x = 0.0
+			last_blocked_direction = positive_x_label if world_delta.x > 0.0 else negative_x_label
+		if hit_y:
+			remaining.y = 0.0
+			last_blocked_direction = positive_y_label if world_delta.y > 0.0 else negative_y_label
+	return position
 
 
 
@@ -8525,6 +8795,9 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	if not target_in_viewer_near_cell and not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width): # The near-envelope path owns same-cell framing; other cells retain true camera-fan culling.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
+	if continuous_third_person_camera and not _world_actor_has_clear_line_of_sight(target_world):
+		opponent_sprite.visible = false                                                           # Camera cutaways preserve local-player readability only; enemies remain hidden behind real gameplay walls.
+		return
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
@@ -8885,6 +9158,18 @@ func _world_position_is_in_active_player_cell(target_world: Vector2) -> bool:
 # a bullet needs only one ray and may be hidden as soon as a wall is between it
 # and this view.
 func _world_point_has_clear_camera_line(target_world: Vector2) -> bool:
+	# The third-person renderer may deliberately hide the single wall face between
+	# its rear camera and owning cowboy. Ask that exact renderer to apply the same
+	# exception here; bullets and muzzle smoke must not disappear behind a face
+	# which this view is no longer drawing. Other physical walls still occlude.
+	if continuous_third_person_camera:
+		var coordinate_renderer: Node = null
+		if active_player_index >= 0 and active_player_index < coordinate_renderers.size():
+			var candidate_renderer := coordinate_renderers[active_player_index]
+			if is_instance_valid(candidate_renderer) and candidate_renderer.has_method("runtime_world_point_has_clear_camera_line_for_current_pose"):
+				coordinate_renderer = candidate_renderer
+		if coordinate_renderer != null:
+			return bool(coordinate_renderer.call("runtime_world_point_has_clear_camera_line_for_current_pose", target_world))
 	var origin := _runtime_camera_origin_for_visibility()
 	var to_target := target_world - origin
 	var target_distance := to_target.length()
@@ -9833,6 +10118,8 @@ func _facing_vector() -> Vector2i:                                              
 
 # _view_forward_vector: Returns the current visible camera direction, including temporary 45-degree stops.
 func _view_forward_vector() -> Vector2:                                                     # Declare this function.
+	if continuous_third_person_camera:
+		return Vector2(0.0, -1.0).rotated(continuous_camera_yaw).normalized()                  # Keep the experimental world camera free to yaw continuously while sprite art snaps separately.
 	if _is_turn_45_view():                                                                    # Use a diagonal basis while stopped on halfway-turn validation art.
 		return _turn_45_view_forward_vector()                                                    # Return the current 45-degree view direction.
 	return Vector2(_facing_vector()).normalized()                                             # Return the committed cardinal camera direction.
@@ -9841,6 +10128,11 @@ func _view_forward_vector() -> Vector2:                                         
 
 # _view_forward_vector_for_state: Returns one saved player's visible camera direction for top-down debug markers.
 func _view_forward_vector_for_state(state: Dictionary) -> Vector2:                         # Declare this function.
+	if continuous_third_person_camera:
+		# Projectiles and every remote view must use the owner's frozen free-camera
+		# heading, not the nearest cardinal sprite frame. The sprite may snap to
+		# eight directions, but shared combat remains genuinely continuous.
+		return Vector2(0.0, -1.0).rotated(float(state.get("continuous_camera_yaw", float(state.get("facing", 0)) * PI * 0.5))).normalized()
 	var state_facing := int(state.get("facing", 0))                                           # Read the saved player's committed cardinal facing.
 	var state_turn_45 := int(state.get("turn_45_direction", 0))                                # Read the saved player's temporary halfway-turn direction.
 	var state_turn_step := int(state.get("turn_step", 2 if state_turn_45 != 0 else 0))          # Read the saved 22/45/66 interpolation stage.
@@ -9853,6 +10145,9 @@ func _view_forward_vector_for_state(state: Dictionary) -> Vector2:              
 
 # _view_right_vector: Returns the current visible camera-right direction, including temporary 45-degree stops.
 func _view_right_vector() -> Vector2:                                                       # Declare this function.
+	if continuous_third_person_camera:
+		var forward := _view_forward_vector()
+		return Vector2(-forward.y, forward.x).normalized()                                       # Derive a perpendicular camera-right vector from the continuous heading.
 	if _is_turn_45_view():                                                                    # Use a diagonal basis while stopped on halfway-turn validation art.
 		return _turn_45_view_right_vector()                                                      # Return the current 45-degree camera-right direction.
 	return Vector2(-_left_vector()).normalized()                                              # Return the committed cardinal camera-right direction.
