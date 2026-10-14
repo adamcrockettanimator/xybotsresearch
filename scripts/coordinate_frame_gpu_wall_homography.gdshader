@@ -28,6 +28,13 @@ uniform vec2 layer1_offset = vec2(0.0);
 uniform vec2 layer2_offset = vec2(0.0);
 uniform float wall_light = 1.0;
 uniform float wall_opacity = 1.0;
+uniform bool use_camera_cutaway_fade = false;
+uniform vec2 wall_world_a = vec2(0.0);
+uniform vec2 wall_world_b = vec2(0.0);
+uniform vec2 cutaway_contact_a = vec2(0.0);
+uniform vec2 cutaway_contact_b = vec2(0.0);
+uniform float cutaway_inner_radius = 0.0;
+uniform float cutaway_fade_width = 0.01;
 uniform vec2 canvas_size = vec2(160.0, 120.0);
 
 vec2 homography_uv(vec2 pixel) {
@@ -37,6 +44,16 @@ vec2 homography_uv(vec2 pixel) {
 		dot(inverse_row2, vec3(pixel, 1.0))
 	);
 	return homogeneous.xy / homogeneous.z;
+}
+
+float bayer2(vec2 pixel) {
+	float x = mod(floor(pixel.x), 2.0);
+	float y = mod(floor(pixel.y), 2.0);
+	return 2.0 * x + 3.0 * y - 4.0 * x * y;
+}
+
+float bayer2_threshold(vec2 pixel) {
+	return (bayer2(pixel) + 0.5) / 4.0;
 }
 
 vec4 nearest_sample(sampler2D source, vec2 source_uv, vec2 source_size, bool clamp_to_edge, float mip_level) {
@@ -93,5 +110,18 @@ void fragment() {
 	if (result.a <= 0.0) {
 		discard;
 	}
-	COLOR = vec4(result.rgb * wall_light, result.a * wall_opacity);
+	float cutaway_opacity = wall_opacity;
+	if (use_camera_cutaway_fade) {
+		// The wall UV's horizontal axis follows its physical world segment. Fade
+		// from the nearest camera-fan contact span so the transition continues
+		// naturally over neighboring physical wall faces.
+		vec2 wall_world_position = mix(wall_world_a, wall_world_b, source_uv.x);
+		vec2 contact_segment = cutaway_contact_b - cutaway_contact_a;
+		float contact_length_squared = dot(contact_segment, contact_segment);
+		float contact_amount = contact_length_squared > 0.000001 ? clamp(dot(wall_world_position - cutaway_contact_a, contact_segment) / contact_length_squared, 0.0, 1.0) : 0.0;
+		float contact_distance = distance(wall_world_position, cutaway_contact_a + contact_segment * contact_amount);
+		float dither_coverage = smoothstep(cutaway_inner_radius, cutaway_inner_radius + max(cutaway_fade_width, 0.0001), contact_distance);
+		cutaway_opacity *= step(bayer2_threshold(pixel), dither_coverage);
+	}
+	COLOR = vec4(result.rgb * wall_light, result.a * cutaway_opacity);
 }

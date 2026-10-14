@@ -16,7 +16,6 @@ const OVERSCAN_STABLE_PATH := "res://assets/CoordinateFrames/coord_n_stable_over
 const OVERSCAN_REFERENCE_CROP_ORIGIN := Vector2(80.0, 32.0)
 const WALL_LAYER1_PATH := "res://assets/Environment/Wall_Layer1.png"
 const WALL_LAYER2_PATH := "res://assets/Environment/Wall_layer2.png"
-const VENDING_MACHINE_PATH := "res://assets/Environment/vendingMachine.png"
 const CEILING_LAYER1_PATH := "res://assets/Environment/ceiling_layer1.png"
 const CEILING_LAYER2_PATH := "res://assets/Environment/ceiling_layer2.png"
 const MASTER_WALL_PATH := WALL_LAYER1_PATH
@@ -57,6 +56,13 @@ const NEAR_CLIP := 0.075
 const MAX_DEPTH := 5.5
 # Match the Blender reference camera exactly: 28.8 mm / 36 mm × 160 px.
 const FOCAL_LENGTH := 128.0
+const CAMERA_CUTAWAY_DITHER_HALF_WIDTH_PIXELS := 26.0
+const CAMERA_CUTAWAY_DITHER_INNER_PIXELS := 10.0
+const CAMERA_CUTAWAY_DITHER_FADE_PIXELS := 36.0
+# Inset the moving PNG silhouette only at its left/right edges. This filters
+# run-frame edge wobble against a side wall without moving the fan's rear base
+# away from a wall directly behind the cowboy.
+const CAMERA_CUTAWAY_SILHOUETTE_SIDE_GUARD_PIXELS := 4.0
 const HORIZON_Y := 31.5
 ## These are the Blender rig values expressed in one Godot grid-cell of width.
 ## Blender built each cell 2.0 units wide and 1.333 units tall, so its 0.75
@@ -123,7 +129,6 @@ var wall_layer1_image: Image
 var wall_layer2_image: Image
 var wall_layer1_texture: Texture2D
 var wall_layer2_texture: Texture2D
-var vending_machine_texture: Texture2D
 var gpu_wall_shader: Shader
 var gpu_wall_dummy_texture: ImageTexture
 var gpu_wall_base_mip_texture: Texture2D
@@ -157,6 +162,7 @@ var active_floor_texture_label := "WoodFloor2"
 # full diagnostic floor list without rebuilding the maze or wall layout.
 var floor_texture_index := 4
 var last_wall_entries: Array[Dictionary] = []
+var camera_cutaway_opaque_width_cache := {}
 var wall_mip_images: Array[Image] = []
 var wall_layer1_mip_images: Array[Image] = []
 var wall_layer2_mip_images: Array[Image] = []
@@ -631,6 +637,7 @@ func _rebuild() -> void:
 	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
 	_rebuild_runtime_wall_surfaces(entries)
 	_update_debug_outlines(entries)
+	_update_camera_cutaway_view_debug(entries)
 	_update_projection_point_debug()
 	runtime_wall_layer.visible = show_runtime_walls
 	_refresh_runtime_status(accepted_count)
@@ -708,7 +715,6 @@ func _load_runtime_wall_layers() -> void:
 	wall_layer2_image = null
 	wall_layer1_texture = load(WALL_LAYER1_PATH) as Texture2D
 	wall_layer2_texture = load(WALL_LAYER2_PATH) as Texture2D
-	vending_machine_texture = load(VENDING_MACHINE_PATH) as Texture2D
 	if wall_layer1_texture == null or wall_layer2_texture == null:
 		push_error("Could not load runtime wall layer textures.")
 		return
@@ -807,15 +813,10 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 			sprite.visible = false
 			continue
 		var material := gpu_wall_materials[index]
-		var is_vending_wall := _entry_is_vending_machine_wall(entry)
-		var source_texture: Texture2D = vending_machine_texture if is_vending_wall and vending_machine_texture != null else wall_source_texture
+		var source_texture: Texture2D = wall_source_texture
 		var source_size: Vector2 = Vector2(source_texture.get_size()) if source_texture != null else Vector2.ONE
 		var use_layers := wall_parallax_enabled and wall_layer1_texture != null and wall_layer2_texture != null
-		if is_vending_wall:
-			use_layers = true                                                                      # Reuse the same single-layer vending art for both wall passes.
-		# The vending art is a single painted wall.  Feed it through both passes
-		# without parallax shifting so the two copies stay perfectly registered.
-		var layer_offset: Vector2 = _layer_parallax_uv_offset(entry) if use_layers and not is_vending_wall else Vector2.ZERO
+		var layer_offset: Vector2 = _layer_parallax_uv_offset(entry) if use_layers else Vector2.ZERO
 		var layer1_weight := (layer_movement_balance - 1.0) * 0.5
 		var layer2_weight := (layer_movement_balance + 1.0) * 0.5
 		material.set_shader_parameter("inverse_row0", inverse[0])
@@ -823,14 +824,21 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("wall_light", float(entry["light"]))
 		material.set_shader_parameter("wall_opacity", float(entry.get("camera_cutaway_opacity", 1.0)))
+		material.set_shader_parameter("use_camera_cutaway_fade", bool(entry.get("camera_cutaway_fade", false)))
+		material.set_shader_parameter("wall_world_a", Vector2(entry.get("world_a", Vector2.ZERO)))
+		material.set_shader_parameter("wall_world_b", Vector2(entry.get("world_b", Vector2.ZERO)))
+		material.set_shader_parameter("cutaway_contact_a", Vector2(entry.get("camera_cutaway_contact_a", Vector2.ZERO)))
+		material.set_shader_parameter("cutaway_contact_b", Vector2(entry.get("camera_cutaway_contact_b", Vector2.ZERO)))
+		material.set_shader_parameter("cutaway_inner_radius", float(entry.get("camera_cutaway_inner_radius", 0.0)))
+		material.set_shader_parameter("cutaway_fade_width", float(entry.get("camera_cutaway_fade_width", 0.01)))
 		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_wall_base_mip_texture != null
-		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips and not is_vending_wall else source_texture)
+		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips else source_texture)
 		material.set_shader_parameter("base_texture_size", source_size)
 		material.set_shader_parameter("use_integer_uv_scale_snap", use_gpu_mips)
 		material.set_shader_parameter("use_layer_parallax", use_layers)
-		material.set_shader_parameter("layer1_texture", source_texture if is_vending_wall else (gpu_wall_layer1_mip_texture if use_gpu_mips and gpu_wall_layer1_mip_texture != null else (wall_layer1_texture if wall_layer1_texture != null else wall_source_texture)))
-		material.set_shader_parameter("layer2_texture", source_texture if is_vending_wall else (gpu_wall_layer2_mip_texture if use_gpu_mips and gpu_wall_layer2_mip_texture != null else (wall_layer2_texture if wall_layer2_texture != null else wall_source_texture)))
-		material.set_shader_parameter("layer_texture_size", source_size if is_vending_wall else (Vector2(wall_layer1_image.get_width(), wall_layer1_image.get_height()) if wall_layer1_image != null else Vector2(wall_source_image.get_width(), wall_source_image.get_height())))
+		material.set_shader_parameter("layer1_texture", gpu_wall_layer1_mip_texture if use_gpu_mips and gpu_wall_layer1_mip_texture != null else (wall_layer1_texture if wall_layer1_texture != null else wall_source_texture))
+		material.set_shader_parameter("layer2_texture", gpu_wall_layer2_mip_texture if use_gpu_mips and gpu_wall_layer2_mip_texture != null else (wall_layer2_texture if wall_layer2_texture != null else wall_source_texture))
+		material.set_shader_parameter("layer_texture_size", Vector2(wall_layer1_image.get_width(), wall_layer1_image.get_height()) if wall_layer1_image != null else Vector2(wall_source_image.get_width(), wall_source_image.get_height()))
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("clamp_layer_edges", layer_uv_edge_clamp_enabled)
@@ -840,23 +848,6 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		sprite.z_index = (controller._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1) if controller != null else index
 	wall_art_sprite.visible = false
 	return entries.size()
-
-
-func _entry_is_vending_machine_wall(entry: Dictionary) -> bool:
-	if controller == null or controller.vending_machine.is_empty():
-		return false
-	var vending_cell: Vector2i = controller.vending_machine.get("cell", Vector2i(-1, -1))
-	var vending_direction: Vector2i = controller.vending_machine.get("direction", Vector2i.ZERO)
-	var segment: Array[Vector2] = controller._physical_cell_edge_segment(vending_cell, vending_direction)
-	if segment.size() != 2 or String(entry.get("edge_key", "")) != String(controller._physical_edge_key(segment[0], segment[1])):
-		return false
-	# Physical walls are visible from either neighboring cell, but the vending
-	# artwork belongs only to the selected cell-facing surface.  Its inward normal
-	# points from the wall midpoint into that selected cell.
-	var camera_origin: Vector2 = entry.get("camera_origin", Vector2.ZERO)
-	var wall_midpoint := (segment[0] + segment[1]) * 0.5
-	var selected_face_normal := -Vector2(vending_direction)
-	return (camera_origin - wall_midpoint).dot(selected_face_normal) > 0.0
 
 
 # _load_runtime_ceiling_layers: Read the independently-authored ceiling base
@@ -1577,7 +1568,31 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 			color.g *= light
 			color.b *= light
 			color.a *= float(entry.get("camera_cutaway_opacity", 1.0))
+			if bool(entry.get("camera_cutaway_fade", false)):
+				var coverage := _camera_cutaway_pixel_coverage(entry, uv)
+				color.a *= 1.0 if coverage >= _camera_cutaway_bayer2_threshold(Vector2(x, y)) else 0.0
 			wall_render_image.set_pixel(x, y, _alpha_over(wall_render_image.get_pixel(x, y), color))
+
+
+# _camera_cutaway_pixel_opacity: CPU counterpart to the GPU contact mask.
+# A wall is invisible around the camera-fan contact, then restores smoothly
+# over the configured visible-PNG-width band across connected wall faces.
+func _camera_cutaway_pixel_coverage(entry: Dictionary, source_uv: Vector2) -> float:
+	if not bool(entry.get("camera_cutaway_fade", false)):
+		return 1.0
+	var world_a := Vector2(entry.get("world_a", Vector2.ZERO))
+	var world_b := Vector2(entry.get("world_b", Vector2.ZERO))
+	var contact_a := Vector2(entry.get("camera_cutaway_contact_a", Vector2.ZERO))
+	var contact_b := Vector2(entry.get("camera_cutaway_contact_b", contact_a))
+	var inner_radius := float(entry.get("camera_cutaway_inner_radius", 0.0))
+	var fade_width := maxf(float(entry.get("camera_cutaway_fade_width", 0.01)), 0.0001)
+	return smoothstep(inner_radius, inner_radius + fade_width, sqrt(_point_to_segment_distance_squared(world_a.lerp(world_b, source_uv.x), contact_a, contact_b)))
+
+
+func _camera_cutaway_bayer2_threshold(pixel: Vector2) -> float:
+	var x := posmod(floori(pixel.x), 2)
+	var y := posmod(floori(pixel.y), 2)
+	return (float(2 * x + 3 * y - 4 * x * y) + 0.5) / 4.0
 
 
 # _inverse_homography_uv: Evaluates the inverse projective map at a screen
@@ -1755,7 +1770,7 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
 	var camera_origin := _runtime_camera_origin(forward, right)
-	var obstruction_edge_keys := _local_camera_obstruction_edge_keys(camera_origin)
+	var cutaway_data := get_camera_cutaway_debug_data(camera_origin)
 	var result: Array[Dictionary] = []
 	# The first-hit ray fan is still useful for ordinary visibility, but it can
 	# miss a wall that only enters through the extreme left or right edge between
@@ -1798,10 +1813,27 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
 		}
-		if obstruction_edge_keys.has(String(edge["key"])):
-			# Keep the normal texture on the one camera-side wall that is truly
-			# between the camera and cowboy, but reduce it to 50% opacity.
-			projected_entry["camera_cutaway_opacity"] = 0.5
+		# Fade outward from the actual camera-fan contact, not from the player's
+		# centre. That keeps a still-occluding wall clear after the player backs
+		# away, and carries the transition seamlessly across connected wall faces.
+		var edge_a := Vector2(edge["a"])
+		var edge_b := Vector2(edge["b"])
+		var dither_contact := _segment_contact_points_in_cutaway_fan(edge_a, edge_b, camera_origin, Vector2(cutaway_data.get("dither_fan_left", Vector2.ZERO)), Vector2(cutaway_data.get("dither_fan_right", Vector2.ZERO)))
+		# Pre-arm the immediately connected wall face before the moving fan reaches
+		# its seam. This avoids a one-segment dither hitch while keeping unrelated
+		# side walls outside the camera fan opaque.
+		if dither_contact.is_empty() and not _is_camera_cutaway_neighbor_edge(edge_a, edge_b, cutaway_data.get("blocked_edges", [])):
+			result.append(projected_entry)
+			continue
+		var inner_radius := float(cutaway_data.get("dither_inner_radius", 0.01))
+		var fade_width := float(cutaway_data.get("dither_fade_width", 0.01))
+		var nearest_contact := _nearest_camera_cutaway_contact(Vector2(edge["a"]), Vector2(edge["b"]), cutaway_data.get("blocked_contact_spans", []))
+		if not nearest_contact.is_empty() and float(nearest_contact["distance"]) <= inner_radius + fade_width:
+			projected_entry["camera_cutaway_fade"] = true
+			projected_entry["camera_cutaway_contact_a"] = Vector2(nearest_contact["a"])
+			projected_entry["camera_cutaway_contact_b"] = Vector2(nearest_contact["b"])
+			projected_entry["camera_cutaway_inner_radius"] = inner_radius
+			projected_entry["camera_cutaway_fade_width"] = fade_width
 		result.append(projected_entry)
 	# Retain the nearest useful walls if the full physical set exceeds the GPU
 	# budget, then put that retained set back into far-to-near order for Canvas
@@ -1821,46 +1853,173 @@ func _visible_wall_entries() -> Array[Dictionary]:
 # into the cowboy and losing the new framing. The fan covers the displayed body
 # width, so a near wall begins to clear before it swallows the center pixel.
 func _local_camera_obstruction_edge_keys(camera_origin: Vector2) -> Dictionary:
+	return get_camera_cutaway_debug_data(camera_origin).get("blocked_keys", {})
+
+
+# get_camera_cutaway_debug_data: Returns the exact visual-only camera fan used
+# for wall fading. F3 consumes this data without changing selection, collision,
+# or gameplay line-of-sight.
+func get_camera_cutaway_debug_data(camera_origin: Vector2) -> Dictionary:
 	if not bool(controller.get("continuous_third_person_camera")) or not controller.has_method("_current_player_world_position"):
 		return {}
 	var camera_right: Vector2 = controller._view_right_vector().normalized()
-	# The collision capsule is intentionally narrow. The drawn cowboy is wider,
-	# so use a modest body-width presentation envelope for this *visual-only*
-	# camera cutaway. Five samples prevent a single pixel centerline from making
-	# walls pop in and out while running past their corner.
-	var cutaway_half_width := maxf(float(controller.PLAYER_CAPSULE_RADIUS) * 1.25, 0.13)
-	var target_lateral_offsets := [-cutaway_half_width, -cutaway_half_width * 0.5, 0.0, cutaway_half_width * 0.5, cutaway_half_width]
+	var player_world: Vector2 = controller._current_player_world_position()
+	var player_depth := (player_world - camera_origin).dot(controller._view_forward_vector().normalized())
+	if player_depth <= 0.01:
+		return {}
+	# This is the entire character silhouette as seen from the camera: apex at
+	# the camera, with a far edge matching the current PNG frame's displayed
+	# width at the player's depth. It replaces the player-origin rear fan.
+	var player_half_width := _camera_cutaway_visible_player_half_width(player_depth)
+	# Detection follows each frame's visible pixels. The dither field deliberately
+	# uses fixed reference pixel widths, avoiding animation-frame shimmer.
+	var world_units_per_pixel := player_depth / FOCAL_LENGTH
+	var side_guard := minf(CAMERA_CUTAWAY_SILHOUETTE_SIDE_GUARD_PIXELS * world_units_per_pixel, player_half_width * 0.45)
+	var detection_half_width := player_half_width - side_guard
+	var fan_left := player_world - camera_right * detection_half_width
+	var fan_right := player_world + camera_right * detection_half_width
+	var dither_half_width := CAMERA_CUTAWAY_DITHER_HALF_WIDTH_PIXELS * world_units_per_pixel
+	var dither_fan_left := player_world - camera_right * dither_half_width
+	var dither_fan_right := player_world + camera_right * dither_half_width
 	var blocked_keys := {}
-	var occlusion_targets: Array[Vector2] = [controller._current_player_world_position()]
+	var blocked_edges: Array[Dictionary] = []
+	var blocked_edge_keys := {}
+	var blocked_contact_positions: Array[Vector2] = []
+	var blocked_contact_spans: Array[Dictionary] = []
 	# Only the owning cowboy determines presentation cutaways. Remote actors use
 	# the player's real world line-of-sight in the controller; adding them here
 	# turned a camera readability aid into an unwanted through-wall enemy reveal.
-	# Use physical segments rather than topology alone so an outer-boundary
-	# obstruction still resolves to the drawable wall-face key. Recording every
-	# hit handles a diagonal camera ray that passes two different cell edges.
-	for occlusion_target in occlusion_targets:
-		var player_view_depth := (occlusion_target - camera_origin).dot(controller._view_forward_vector().normalized())
-		for lateral_offset in target_lateral_offsets:
-			var target_world := occlusion_target + camera_right * float(lateral_offset)
-			var camera_to_target := target_world - camera_origin
-			var target_distance := camera_to_target.length()
-			if target_distance <= 0.01:
+	# Test every physical wall against the solid camera-to-sprite triangle. A
+	# wall only fades when it overlaps actual character pixels in this view.
+	for edge in controller._all_physical_wall_edges():
+		var contact_positions := _segment_contact_points_in_cutaway_fan(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin, fan_left, fan_right)
+		if contact_positions.is_empty():
+			continue
+		blocked_keys[String(edge["key"])] = true
+		blocked_contact_positions.append_array(contact_positions)
+		blocked_contact_spans.append({"edge_key": String(edge["key"]), "a": contact_positions.front(), "b": contact_positions.back()})
+		if not blocked_edge_keys.has(String(edge["key"])):
+			blocked_edge_keys[String(edge["key"])] = true
+			blocked_edges.append(edge)
+	return {"camera_origin": camera_origin, "player_world": player_world, "player_half_width": player_half_width, "detection_half_width": detection_half_width, "fan_left": fan_left, "fan_right": fan_right, "dither_fan_left": dither_fan_left, "dither_fan_right": dither_fan_right, "dither_inner_radius": CAMERA_CUTAWAY_DITHER_INNER_PIXELS * world_units_per_pixel, "dither_fade_width": CAMERA_CUTAWAY_DITHER_FADE_PIXELS * world_units_per_pixel, "blocked_keys": blocked_keys, "blocked_edges": blocked_edges, "blocked_contact_positions": blocked_contact_positions, "blocked_contact_spans": blocked_contact_spans}
+
+
+# _camera_cutaway_visible_player_half_width: Converts the current frame's
+# displayed PNG width back into camera-side world units at player depth.
+func _camera_cutaway_visible_player_half_width(player_depth: float) -> float:
+	var displayed_width := 34.0
+	var sprite := controller.get("player_sprite") as AnimatedSprite2D
+	if sprite != null and sprite.sprite_frames != null:
+		var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+		if texture != null:
+			displayed_width = _camera_cutaway_opaque_texture_width(texture) * absf(sprite.scale.x)
+	return maxf(displayed_width * 0.5 * player_depth / FOCAL_LENGTH, 0.005)
+
+
+# _camera_cutaway_opaque_texture_width: Measures only the non-transparent x
+# span of one PNG frame, then caches it. Transparent animation padding must not
+# make the camera silhouette fan wider than the visible character pixels.
+func _camera_cutaway_opaque_texture_width(texture: Texture2D) -> float:
+	var cache_key := texture.resource_path if texture.resource_path != "" else str(texture.get_rid())
+	if camera_cutaway_opaque_width_cache.has(cache_key):
+		return float(camera_cutaway_opaque_width_cache[cache_key])
+	var image := texture.get_image()
+	if image == null:
+		return float(texture.get_width())
+	var minimum_x := image.get_width()
+	var maximum_x := -1
+	for y in range(image.get_height()):
+		for x in range(image.get_width()):
+			if image.get_pixel(x, y).a <= 0.01:
 				continue
-			var direction := camera_to_target / target_distance
-			for edge in controller._all_physical_wall_edges():
-				var wall_midpoint := (Vector2(edge["a"]) + Vector2(edge["b"])) * 0.5
-				var wall_view_depth := (wall_midpoint - camera_origin).dot(controller._view_forward_vector().normalized())
-				# A wall ahead of the player may cross the widened body fan at a
-				# corner, but is not a camera cutaway. It must be camera-side of the
-				# player in the current view as well as intersecting its ray segment.
-				if wall_view_depth >= player_view_depth - 0.002:
-					continue
-				var hit_distance: float = controller._ray_segment_hit_distance_limited(camera_origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maxf(target_distance - 0.002, 0.0))
-				if hit_distance >= 0.0 and hit_distance < target_distance - 0.002:
-					blocked_keys[String(edge["key"])] = true
-	return blocked_keys
+			minimum_x = mini(minimum_x, x)
+			maximum_x = maxi(maximum_x, x)
+	var opaque_width := float(maximum_x - minimum_x + 1) if maximum_x >= minimum_x else float(texture.get_width())
+	camera_cutaway_opaque_width_cache[cache_key] = opaque_width
+	return opaque_width
 
 
+# _segment_contact_points_in_cutaway_fan: Clips a wall segment to the solid
+# camera-to-sprite fan triangle. Returning its contact endpoints makes the F3
+# debug view show the same continuous test the renderer used to select a wall.
+func _segment_contact_points_in_cutaway_fan(a: Vector2, b: Vector2, apex: Vector2, fan_left: Vector2, fan_right: Vector2) -> Array[Vector2]:
+	var winding := signf((fan_left - apex).cross(fan_right - apex))
+	if absf(winding) < 0.00001:
+		return []
+	var segment := b - a
+	var interval_start := 0.0
+	var interval_end := 1.0
+	var triangle := PackedVector2Array([apex, fan_left, fan_right])
+	for index in triangle.size():
+		var edge_start := triangle[index]
+		var edge_end := triangle[(index + 1) % triangle.size()]
+		var edge_direction := edge_end - edge_start
+		var value_at_start := winding * edge_direction.cross(a - edge_start)
+		var value_slope := winding * edge_direction.cross(segment)
+		if absf(value_slope) < 0.00001:
+			if value_at_start < -0.00001:
+				return []
+			continue
+		var crossing := (-0.00001 - value_at_start) / value_slope
+		if value_slope > 0.0:
+			interval_start = maxf(interval_start, crossing)
+		else:
+			interval_end = minf(interval_end, crossing)
+		if interval_start > interval_end:
+			return []
+	var contact_start := a + segment * clampf(interval_start, 0.0, 1.0)
+	var contact_end := a + segment * clampf(interval_end, 0.0, 1.0)
+	if contact_start.distance_squared_to(contact_end) < 0.00000001:
+		return [contact_start]
+	return [contact_start, contact_end]
+
+
+# _nearest_camera_cutaway_contact: Finds the closest fan-contact span to a
+# drawable wall edge. Nearby connected faces inherit that span so their fade
+# does not snap at a physical segment seam.
+func _nearest_camera_cutaway_contact(edge_a: Vector2, edge_b: Vector2, contact_spans: Array) -> Dictionary:
+	var nearest := {}
+	var nearest_distance_squared := INF
+	for span in contact_spans:
+		var contact_a := Vector2(span.get("a", Vector2.ZERO))
+		var contact_b := Vector2(span.get("b", contact_a))
+		var distance_squared := _segment_to_segment_distance_squared(edge_a, edge_b, contact_a, contact_b)
+		if distance_squared >= nearest_distance_squared:
+			continue
+		nearest_distance_squared = distance_squared
+		nearest = {"a": contact_a, "b": contact_b, "distance": sqrt(nearest_distance_squared)}
+	return nearest
+
+
+# _is_camera_cutaway_neighbor_edge: An edge sharing a real endpoint with a
+# currently camera-blocking face receives the dither a moment early. Physical
+# adjacency is deliberate here: proximity alone would spill the effect onto a
+# separate wall on the other side of a corridor.
+func _is_camera_cutaway_neighbor_edge(edge_a: Vector2, edge_b: Vector2, blocked_edges: Array) -> bool:
+	const ENDPOINT_EPSILON_SQUARED := 0.00001
+	for blocked_edge in blocked_edges:
+		var blocked_a := Vector2(blocked_edge.get("a", Vector2.ZERO))
+		var blocked_b := Vector2(blocked_edge.get("b", Vector2.ZERO))
+		if edge_a.distance_squared_to(blocked_a) <= ENDPOINT_EPSILON_SQUARED or edge_a.distance_squared_to(blocked_b) <= ENDPOINT_EPSILON_SQUARED or edge_b.distance_squared_to(blocked_a) <= ENDPOINT_EPSILON_SQUARED or edge_b.distance_squared_to(blocked_b) <= ENDPOINT_EPSILON_SQUARED:
+			return true
+	return false
+
+
+func _segment_to_segment_distance_squared(a0: Vector2, a1: Vector2, b0: Vector2, b1: Vector2) -> float:
+	if Geometry2D.segment_intersects_segment(a0, a1, b0, b1) != null:
+		return 0.0
+	var endpoint_distance_a := minf(_point_to_segment_distance_squared(a0, b0, b1), _point_to_segment_distance_squared(a1, b0, b1))
+	var endpoint_distance_b := minf(_point_to_segment_distance_squared(b0, a0, a1), _point_to_segment_distance_squared(b1, a0, a1))
+	return minf(endpoint_distance_a, endpoint_distance_b)
+
+
+func _point_to_segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) -> float:
+	var segment := b - a
+	var length_squared := segment.length_squared()
+	if length_squared <= 0.00000001:
+		return point.distance_squared_to(a)
+	var amount := clampf((point - a).dot(segment) / length_squared, 0.0, 1.0)
+	return point.distance_squared_to(a + segment * amount)
 # runtime_world_point_has_clear_camera_line_for_current_pose: Uses the same
 # cutaway-wall decision as this renderer's wall pass. Combat VFX calls this
 # instead of independently treating a locally hidden camera obstruction as
@@ -2397,6 +2556,73 @@ func _update_debug_outlines(entries: Array[Dictionary]) -> void:
 		# walk-through-walls cheat remains a useful projection diagnostic.
 		_append_continuous_world_wireframe(debug)
 	controller.environment_layer.add_child(debug)
+
+
+# _update_camera_cutaway_view_debug: Draws the cutaway decision directly over
+# the player view, including the floor-projected camera-to-sprite silhouette
+# fan and the selected wall quads.
+func _update_camera_cutaway_view_debug(entries: Array[Dictionary]) -> void:
+	_remove_environment_debug_node("CoordinateFrameCameraCutawayDebug")
+	if controller == null or not bool(controller.get("show_camera_cutaway_debug")):
+		return
+	var data := get_camera_cutaway_debug_data(_runtime_camera_origin(controller._view_forward_vector().normalized(), controller._view_right_vector().normalized()))
+	if data.is_empty():
+		return
+	var debug := Node2D.new()
+	debug.name = "CoordinateFrameCameraCutawayDebug"
+	debug.z_index = 63
+	_append_camera_cutaway_floor_fan(debug, data)
+	var blocked_keys: Dictionary = data.get("blocked_keys", {})
+	for entry in entries:
+		if not blocked_keys.has(String(entry.get("edge_key", ""))):
+			continue
+		var quad: PackedVector2Array = entry.get("quad", PackedVector2Array())
+		if quad.size() != 4:
+			continue
+		var fill := Polygon2D.new()
+		fill.polygon = quad
+		fill.color = Color(1.0, 0.05, 0.80, 0.07)
+		debug.add_child(fill)
+		var outline := Line2D.new()
+		outline.points = PackedVector2Array([quad[0], quad[1], quad[2], quad[3], quad[0]])
+		outline.width = 2.0
+		outline.default_color = Color(1.0, 0.12, 0.86, 0.98)
+		outline.antialiased = false
+		debug.add_child(outline)
+	controller.environment_layer.add_child(debug)
+
+
+# _append_camera_cutaway_floor_fan: Projects the finite part of the exact
+# camera-origin fan onto the rendered floor. The camera apex itself cannot be
+# projected at depth zero, so the wedge begins at the normal near clip plane.
+func _append_camera_cutaway_floor_fan(debug: Node2D, data: Dictionary) -> void:
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var origin := Vector2(data.get("camera_origin", Vector2.ZERO))
+	var left_local := _to_view(Vector2(data.get("fan_left", origin)), origin, forward, right)
+	var right_local := _to_view(Vector2(data.get("fan_right", origin)), origin, forward, right)
+	if left_local.y <= NEAR_CLIP or right_local.y <= NEAR_CLIP:
+		return
+	var near_left := left_local * (NEAR_CLIP / left_local.y)
+	var near_right := right_local * (NEAR_CLIP / right_local.y)
+	var floor_height := 0.002
+	var polygon := PackedVector2Array([
+		_project_view_point(near_left, floor_height),
+		_project_view_point(near_right, floor_height),
+		_project_view_point(right_local, floor_height),
+		_project_view_point(left_local, floor_height),
+	])
+	var fill := Polygon2D.new()
+	fill.name = "CameraCutawayFloorFan"
+	fill.polygon = polygon
+	fill.color = Color(0.0, 0.90, 1.0, 0.14)
+	debug.add_child(fill)
+	var outline := Line2D.new()
+	outline.points = PackedVector2Array([polygon[0], polygon[1], polygon[2], polygon[3], polygon[0]])
+	outline.width = 1.25
+	outline.default_color = Color(0.0, 1.0, 1.0, 0.92)
+	outline.antialiased = false
+	debug.add_child(outline)
 
 
 # _append_continuous_world_wireframe: Draws the current camera's infinite

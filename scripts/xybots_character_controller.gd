@@ -235,6 +235,7 @@ const XBOX_STICK_DEADZONE := 0.22                                               
 const XBOX_TURN_THRESHOLD := 0.62                                                            # Require a deliberate right-stick push before issuing one turn input.
 const DEBUG_MAP_CELL_SIZE := 16.0                                                           # Fit the temporary 9x9 diagnostic grid inside its own side panel.
 const DEBUG_MAP_PANEL_SIZE := Vector2(160.0, 160.0)                                        # Give the 9x9 source grid a square panel beside the player view.
+const CUTAWAY_DEBUG_MAP_CELL_SIZE := 48.0                                                   # Expand the active cell plus its eight neighbors to fill the cutaway diagnostic panel.
 const DEBUG_MENU_COLUMN_WIDTH := 148.0                                                       # Fit two compact F3 control columns beside the centered four-player grid at the normal 960px window width.
 const DEBUG_MENU_SIDE_MARGIN := 4.0                                                          # Leave a small black gutter between each control column and the playfield grid.
 const DEBUG_MAP_PANEL_GRID_ORIGIN := Vector2(8.0, 8.0)                                      # Center the temporary 9x9 grid inside its 160x160 side panel.
@@ -718,6 +719,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export_range(1, 15, 1) var debug_raycast_stride: int = 5                                    # Draw every Nth ray so the debug overlay stays readable.
 @export var show_perspective_extents_overlay := false                                        # Show colored projected square extents over each 160x120 player view.
 @export var show_near_view_tuning_debug := false                                             # Show raw-versus-clamped local anchors in every player view plus their shared top-down truth guides.
+@export var show_camera_cutaway_debug := false                                               # Show the camera-to-player presentation rays and walls selected for local cutaway fading.
 @export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
 @export var pause_round_timer_for_debug := false                                             # Pause only the shared round clock when deliberately requested from the debug menu; guide visibility stays independent.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
@@ -1151,6 +1153,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "pickup_range", "Pickup Range")                         # Show the true same-cell pickup footprint for tuning.
 	_add_debug_menu_check(content, "extents", "Floor Bounds")                               # Add the measured floor and sprite registration guides.
 	_add_debug_menu_check(content, "near_view_tuning", "Near View Truth Guides")             # Show raw world truth versus the optional screen-retention presentation in both player views and the shared top-down map.
+	_add_debug_menu_check(content, "camera_cutaway", "Camera Cutaway Rays")                  # Show the exact widened camera-to-player fan that selects walls for local fading.
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
 	_add_debug_menu_tuning_spin(content, "rear_exit", "Rear exit", 0.0, 48.0, 1.0)            # Tune the south-edge partial body exit without changing the fixed camera or wireframe geometry.
@@ -1359,6 +1362,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_perspective_extents_overlay                                                # Return the measured floor/actor extent overlay state.
 		"near_view_tuning":
 			return show_near_view_tuning_debug                                                     # Return whether live near-camera clamp guides are visible.
+		"camera_cutaway":
+			return show_camera_cutaway_debug                                                       # Return whether the local wall-fade ray fan is visible on the source map.
 		"muzzle_anchors":
 			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
 		"pause_round_timer":
@@ -1425,6 +1430,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_near_view_tuning_debug = enabled                                                  # Show raw/clamped local anchors in every player view and the shared top-down map.
 			if enabled:
 				show_top_down_source_overlay = true                                                  # The clamp is meaningful only alongside its world-space ground truth.
+		"camera_cutaway":
+			show_camera_cutaway_debug = enabled                                                    # Show the same visual-only camera fan that drives local wall fades.
+			if enabled:
+				show_top_down_source_overlay = true                                                  # The cutaway fan is meaningful only alongside the physical wall map.
 		"muzzle_anchors":
 			show_muzzle_anchor_debug = enabled                                                     # Keep the marker diagnostic opt-in and independent of combat.
 			if not enabled:
@@ -5431,6 +5440,16 @@ func _layout_viewport() -> void:                                                
 			var minimap: Node2D = view.get("match_minimap_overlay", null)
 			if minimap != null and view_node != null:
 				minimap.position = view_node.position + Vector2(VIEWPORT_SIZE.x * camera_scale - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+			var source_map: Node2D = view.get("debug_map_overlay", null)
+			if source_map != null:
+				if player_index == 0:
+					var source_map_visible := show_top_down_source_overlay or show_raycast_debug or show_pickup_range_debug or show_near_view_tuning_debug or show_camera_cutaway_debug
+					var source_map_scale := 1.25
+					source_map.visible = source_map_visible
+					source_map.scale = Vector2.ONE * source_map_scale
+					source_map.position = Vector2((viewport_size.x - DEBUG_MAP_PANEL_SIZE.x * source_map_scale) * 0.5, viewport_size.y - DEBUG_MAP_PANEL_SIZE.y * source_map_scale - 8.0)
+				else:
+					source_map.visible = false
 		return
 	var status_margin := 84.0                                                                  # Reserve screen space for the three-line debug status text.
 	if TEMP_GRID_AUDIT and player_views.size() == 1:                                           # Use a clean side-by-side layout for the one-player 9x9 audit.
@@ -5590,6 +5609,30 @@ func _update_match_minimap_overlay() -> void:
 		arrow.polygon = PackedVector2Array([center + forward * 7.0, center - forward * 4.0 + right * 4.0, center - forward * 4.0 - right * 4.0]) # Use bolder player arrows that remain legible at a glance.
 		arrow.color = color                                                                       # Apply the player's identifying color.
 		match_minimap_dynamic_layer.add_child(arrow)                                              # Draw it over the white wall network.
+	_add_match_minimap_camera_cutaway_debug()                                                  # Overlay only the local camera fan when its F3 diagnostic is enabled.
+
+
+
+# _add_match_minimap_camera_cutaway_debug: Draws the local cutaway fan on the
+# minimap that remains visible in the four-player F3 layout. Cyan lines are the
+# sampled camera rays; amber marks are intersections; magenta walls fade.
+func _add_match_minimap_camera_cutaway_debug() -> void:
+	if not show_camera_cutaway_debug or active_player_index < 0 or active_player_index >= coordinate_renderers.size():
+		return
+	var data := _camera_cutaway_debug_data_for_active_renderer()
+	if data.is_empty():
+		return
+	for ray in data.get("rays", []):
+		var ray_origin := _match_minimap_point(Vector2(ray.get("origin_world", Vector2.ZERO)))
+		var target_point := _match_minimap_point(Vector2(ray.get("target_world", Vector2.ZERO)))
+		_add_match_minimap_line(match_minimap_dynamic_layer, ray_origin, target_point, Color(0.0, 0.95, 1.0, 0.95), 1.0)
+		for hit_world in ray.get("hit_positions", []):
+			var hit_point := _match_minimap_point(Vector2(hit_world))
+			_add_match_minimap_line(match_minimap_dynamic_layer, hit_point + Vector2(-1.5, -1.5), hit_point + Vector2(1.5, 1.5), Color(1.0, 0.72, 0.08, 1.0), 1.0)
+			_add_match_minimap_line(match_minimap_dynamic_layer, hit_point + Vector2(-1.5, 1.5), hit_point + Vector2(1.5, -1.5), Color(1.0, 0.72, 0.08, 1.0), 1.0)
+	for edge in data.get("blocked_edges", []):
+		if edge.has("a") and edge.has("b"):
+			_add_match_minimap_line(match_minimap_dynamic_layer, _match_minimap_point(Vector2(edge["a"])), _match_minimap_point(Vector2(edge["b"])), Color(1.0, 0.08, 0.82, 1.0), 3.0)
 
 
 # _setup_debug_map_overlay: Creates a runtime top-down map overlay for comparing map state to the rendered wall view.
@@ -5615,13 +5658,13 @@ func _update_debug_map_overlay() -> void:                                       
 		return                                                                                    # Return without drawing the map.
 	var show_ray_diagnostic := show_raycast_debug                                               # Ray inspection explicitly overrides the normal clean-minimap presentation.
 	var show_pickup_diagnostic := show_pickup_range_debug                                      # Pickup tuning uses the same source-map panel without enabling ray clutter.
-	if not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic and not show_near_view_tuning_debug: # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
+	if not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic and not show_near_view_tuning_debug and not show_camera_cutaway_debug: # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
 		debug_map_overlay.visible = false                                                         # Keep blue guides, cones, and slot labels out of normal local play.
 		_update_match_minimap_overlay()                                                          # Keep the map replacement synchronized with movement and orientation.
 		return                                                                                    # Skip all legacy diagnostic geometry.
 	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the one source-map diagnostic panel.
-	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug) and is_shared_match_map # Focused diagnostics may reveal the source map without the full audit.
-	if not (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug) or not is_shared_match_map: # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
+	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug or show_camera_cutaway_debug) and is_shared_match_map # Focused diagnostics may reveal the source map without the full audit.
+	if not (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug or show_camera_cutaway_debug) or not is_shared_match_map: # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
 		return                                                                                    # Return without drawing the map.
 	if show_near_view_tuning_debug and not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic: # The live clamp map is useful at a stepped diagnostic cadence, not as a node-rebuild every render frame.
 		var current_frame := Engine.get_process_frames()
@@ -5631,19 +5674,29 @@ func _update_debug_map_overlay() -> void:                                       
 
 	if not is_instance_valid(debug_map_static_layer) or not is_instance_valid(debug_map_dynamic_layer): # Recover safely if an older scene tree lacks the retained-map children.
 		return                                                                                    # The next normal setup will recreate the top-down map layers.
-	if bool(debug_map_static_layer.get_meta("map_static_dirty", true)):                       # Rebuild maze geometry only after setup or a map reroll.
+	var cutaway_focus_cell := Vector2i(floori(_current_player_world_position().x), floori(_current_player_world_position().y))
+	var map_layout_key := "%s:%d,%d" % [show_camera_cutaway_debug, cutaway_focus_cell.x, cutaway_focus_cell.y]
+	if String(debug_map_static_layer.get_meta("map_layout_key", "")) != map_layout_key:
+		debug_map_static_layer.set_meta("map_static_dirty", true)
+		debug_map_static_layer.set_meta("map_layout_key", map_layout_key)
+	if bool(debug_map_static_layer.get_meta("map_static_dirty", true)):                       # Rebuild maze geometry only after setup, a map reroll, or a focused-cell change.
 		_clear_debug_map_layer(debug_map_static_layer)                                            # Remove the old retained maze primitives before replacing them.
 		debug_map_draw_layer = debug_map_static_layer                                             # Route the following panel/grid primitives into the retained layer.
 		_add_debug_panel_background()                                                             # Draw the dark 160x120 panel behind the source-of-truth map.
 		var open_color := Color(0.2, 0.45, 0.55, 0.55)                                            # Define the color for non-blocking cell guide lines.
 		var wall_color := Color(1.0, 1.0, 1.0, 0.95)                                              # Define the color for blocking wall edges.
-		for y in range(MAP_HEIGHT):                                                               # Draw every maze row exactly once per map layout.
-			for x in range(MAP_WIDTH):                                                              # Draw every maze column exactly once per map layout.
+		var cell_size := _debug_map_cell_size()
+		var minimum_x := maxi(0, cutaway_focus_cell.x - 1) if show_camera_cutaway_debug else 0
+		var maximum_x := mini(MAP_WIDTH, cutaway_focus_cell.x + 2) if show_camera_cutaway_debug else MAP_WIDTH
+		var minimum_y := maxi(0, cutaway_focus_cell.y - 1) if show_camera_cutaway_debug else 0
+		var maximum_y := mini(MAP_HEIGHT, cutaway_focus_cell.y + 2) if show_camera_cutaway_debug else MAP_HEIGHT
+		for y in range(minimum_y, maximum_y):                                                     # Draw all map cells normally, or only the focused three-by-three cutaway neighborhood.
+			for x in range(minimum_x, maximum_x):
 				var cell := Vector2i(x, y)                                                           # Build the map cell coordinate for this maze cell.
 				var top_left := _debug_map_cell_top_left(cell)                                       # Convert the map cell to overlay pixel coordinates.
-				var top_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, 0.0)                        # Compute the top-right corner of the cell.
-				var bottom_left := top_left + Vector2(0.0, DEBUG_MAP_CELL_SIZE)                      # Compute the bottom-left corner of the cell.
-				var bottom_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, DEBUG_MAP_CELL_SIZE)     # Compute the bottom-right corner of the cell.
+				var top_right := top_left + Vector2(cell_size, 0.0)                                  # Compute the top-right corner of the cell.
+				var bottom_left := top_left + Vector2(0.0, cell_size)                                # Compute the bottom-left corner of the cell.
+				var bottom_right := top_left + Vector2(cell_size, cell_size)                         # Compute the bottom-right corner of the cell.
 				_add_debug_line(top_left, top_right, open_color, 1.0)                                # Draw the north guide edge for this cell.
 				_add_debug_line(top_right, bottom_right, open_color, 1.0)                            # Draw the east guide edge for this cell.
 				_add_debug_line(bottom_left, bottom_right, open_color, 1.0)                          # Draw the south guide edge for this cell.
@@ -5663,9 +5716,10 @@ func _update_debug_map_overlay() -> void:                                       
 
 	var home_center := _debug_map_cell_center(grid_position)                                    # Convert the current cell center into an overlay reference position.
 	var player_center := _debug_map_player_position()                                           # Convert the actual intra-cell player offset into overlay coordinates.
-	var camera_center := _debug_map_world_position(_camera_grid_origin())                        # Convert the actual visibility-camera origin into overlay coordinates.
+	var camera_center := _debug_map_world_position(_runtime_camera_origin_for_visibility())       # Use the same continuously moving camera origin as runtime walls and cutaway selection.
 	_add_debug_view_cone(camera_center)                                                         # Draw the camera/view cone from the same backed-up origin used by ray casting.
 	_add_debug_near_view_tuning_map_guides()                                                    # Draw cardinal screen-clamp rails in world space when live near-view tuning is enabled.
+	_add_debug_camera_cutaway_rays()                                                            # Draw the exact presentation fan that selects walls for local cutaway fading.
 	_add_debug_other_player_view_cones()                                                        # Draw each other joined player's camera cone on this shared source-of-truth map.
 	_add_debug_all_wall_slot_numbers()                                                         # Draw the independent blue slot-number audit on every local slot candidate.
 	_add_debug_raycast_rays()                                                                   # Draw sampled raycast lines and first-hit points so visibility can be inspected.
@@ -5673,12 +5727,13 @@ func _update_debug_map_overlay() -> void:                                       
 	_add_debug_visible_wall_slots()                                                            # Highlight the wall slots selected by the renderer on the source map.
 	_add_debug_player_bounds(home_center)                                                       # Draw the playable/contact footprint inside the current cell.
 	_add_debug_player_marker(home_center, Color(1.0, 1.0, 1.0, 0.35))                           # Draw a faint marker at the home center for offset comparison.
-	var facing_end := player_center + _view_forward_vector() * (DEBUG_MAP_CELL_SIZE * 0.34)     # Compute the arrow tip from the actual current player position and visible camera direction.
+	var facing_end := player_center + _view_forward_vector() * (_debug_map_cell_size() * 0.34)  # Compute the arrow tip from the actual current player position and visible camera direction.
 	_add_debug_line(player_center, facing_end, player_color, 3.0)                               # Draw the player facing arrow shaft.
 	_add_debug_arrow_head(facing_end, _view_forward_vector(), player_color)                     # Draw the player facing arrow head.
 	_add_debug_player_marker(player_center, player_color)                                      # Draw the player position marker.
 	_add_debug_other_player_markers()                                                          # Draw the other local player on this player's top-down map.
 	# Keep collectibles off the top-down map so both players genuinely have to hunt for them.
+	_update_match_minimap_overlay()                                                            # Keep the visible in-view map current while a source-map diagnostic is active.
 
 
 # _add_debug_combat_pickup_markers: Shows collectible objective state on the shared top-down source map.
@@ -5737,19 +5792,31 @@ func _debug_map_draw_parent() -> Node2D:
 
 # _debug_map_cell_top_left: Converts a grid cell coordinate into a debug overlay top-left pixel position.
 func _debug_map_cell_top_left(cell: Vector2i) -> Vector2:                                    # Declare this function.
-	return DEBUG_MAP_PANEL_GRID_ORIGIN + Vector2(float(cell.x) * DEBUG_MAP_CELL_SIZE, float(cell.y) * DEBUG_MAP_CELL_SIZE) # Return the cell's top-left panel coordinate.
+	return _debug_map_world_position(Vector2(cell))                                             # Reuse the shared full-map or focused-neighborhood world-to-panel transform.
 
 
 
 # _debug_map_cell_center: Converts a grid cell coordinate into a debug overlay center pixel position.
 func _debug_map_cell_center(cell: Vector2i) -> Vector2:                                      # Declare this function.
-	return _debug_map_cell_top_left(cell) + Vector2.ONE * (DEBUG_MAP_CELL_SIZE * 0.5)          # Return the center of this cell on the debug overlay.
+	return _debug_map_cell_top_left(cell) + Vector2.ONE * (_debug_map_cell_size() * 0.5)       # Return the center of this cell on the debug overlay.
 
 
 
 # _debug_map_world_position: Converts a world-grid coordinate into a debug overlay pixel position.
 func _debug_map_world_position(world_position: Vector2) -> Vector2:                          # Declare this function.
-	return DEBUG_MAP_PANEL_GRID_ORIGIN + world_position * DEBUG_MAP_CELL_SIZE                  # Scale grid units into the top-down panel coordinate system.
+	var cell_size := _debug_map_cell_size()
+	if show_camera_cutaway_debug:
+		var focus_world := Vector2(floori(_current_player_world_position().x), floori(_current_player_world_position().y))
+		return DEBUG_MAP_PANEL_GRID_ORIGIN + (world_position - focus_world + Vector2(1.5, 1.5)) * cell_size
+	return DEBUG_MAP_PANEL_GRID_ORIGIN + world_position * cell_size                            # Scale normal full-map grid units into the top-down panel coordinate system.
+
+
+
+# _debug_map_cell_size: Enlarges only the cutaway diagnostic to its local
+# three-by-three neighborhood; all other source-map diagnostics retain their
+# normal full-maze scale.
+func _debug_map_cell_size() -> float:
+	return CUTAWAY_DEBUG_MAP_CELL_SIZE if show_camera_cutaway_debug else DEBUG_MAP_CELL_SIZE
 
 
 
@@ -5774,20 +5841,90 @@ func _add_debug_near_view_tuning_map_guides() -> void:
 	if not show_near_view_tuning_debug:                                                        # Keep the regular source map clean unless the dedicated clamp diagnostic is enabled.
 		return
 	var player_marker := _debug_map_world_position(_current_player_world_position())          # Use the exact shared collision/VFX position as the top-down source of truth.
-	var camera_marker := _debug_map_world_position(_camera_grid_origin())                     # Show the real camera origin separately from the player's physical position.
+	var camera_marker := _debug_map_world_position(_runtime_camera_origin_for_visibility())    # Show the same continuously moving camera origin used by runtime walls.
 	_add_debug_line(camera_marker, player_marker, Color(1.0, 0.85, 0.10, 0.95), 2.0)          # Connect camera to player so camera-rear adjustment is immediately visible.
 	_add_debug_player_marker(player_marker, Color(1.0, 0.15, 0.10, 0.98))                     # Mark the real player/collision/VFX point in red.
 
 
 
+# _add_debug_camera_cutaway_rays: Visualizes the solid camera-to-sprite
+# silhouette fan. Cyan is dynamic frame-pixel detection, blue is the stable
+# dither boundary, amber marks contact, and magenta marks core blocked walls.
+func _add_debug_camera_cutaway_rays() -> void:
+	if not show_camera_cutaway_debug:
+		return
+	if active_player_index < 0 or active_player_index >= coordinate_renderers.size():
+		return
+	var data := _camera_cutaway_debug_data_for_active_renderer()
+	if data.is_empty():
+		return
+	var camera_world := Vector2(data.get("camera_origin", Vector2.ZERO))
+	var player_world := Vector2(data.get("player_world", _current_player_world_position()))
+	var camera_map := _debug_map_world_position(camera_world)
+	var player_map := _debug_map_world_position(player_world)
+	var fan_left_map := _debug_map_world_position(Vector2(data.get("fan_left", player_world)))
+	var fan_right_map := _debug_map_world_position(Vector2(data.get("fan_right", player_world)))
+	var dither_left_map := _debug_map_world_position(Vector2(data.get("dither_fan_left", player_world)))
+	var dither_right_map := _debug_map_world_position(Vector2(data.get("dither_fan_right", player_world)))
+	_add_debug_cutaway_fan_area(camera_map, fan_left_map, fan_right_map)
+	_add_debug_line(camera_map, fan_left_map, Color(0.0, 1.0, 1.0, 0.98), 2.0)
+	_add_debug_line(camera_map, fan_right_map, Color(0.0, 1.0, 1.0, 0.98), 2.0)
+	_add_debug_line(fan_left_map, fan_right_map, Color(0.0, 1.0, 1.0, 0.98), 2.0)
+	_add_debug_line(camera_map, dither_left_map, Color(0.20, 0.45, 1.0, 0.70), 1.0)
+	_add_debug_line(camera_map, dither_right_map, Color(0.20, 0.45, 1.0, 0.70), 1.0)
+	_add_debug_line(dither_left_map, dither_right_map, Color(0.20, 0.45, 1.0, 0.70), 1.0)
+	_add_debug_line(camera_map, player_map, Color(0.0, 0.9, 1.0, 0.45), 1.0)
+	_add_debug_player_marker(camera_map, Color(0.0, 0.95, 1.0, 0.98))
+	_add_debug_player_marker(player_map, Color(1.0, 0.16, 0.10, 0.98))
+	for contact_world in data.get("blocked_contact_positions", []):
+		_add_debug_raycast_hit_marker(_debug_map_world_position(Vector2(contact_world)), Color(1.0, 0.72, 0.08, 0.98), 2.1)
+	for edge in data.get("blocked_edges", []):
+		if not edge.has("a") or not edge.has("b"):
+			continue
+		_add_debug_line(_debug_map_world_position(Vector2(edge["a"])), _debug_map_world_position(Vector2(edge["b"])), Color(1.0, 0.10, 0.82, 0.98), 5.0)
+
+
+# _add_debug_cutaway_fan_area: Draws the *filled* camera-to-sprite triangle used
+# by wall selection. Its outline is added separately so white map walls and
+# amber contact markers remain readable over the cyan tint.
+func _add_debug_cutaway_fan_area(apex: Vector2, fan_left: Vector2, fan_right: Vector2) -> void:
+	var fan_area := Polygon2D.new()
+	fan_area.name = "ContinuousCutawayFan"
+	fan_area.polygon = PackedVector2Array([apex, fan_left, fan_right])
+	fan_area.color = Color(0.0, 0.85, 1.0, 0.20)
+	fan_area.z_index = -2
+	_debug_map_draw_parent().add_child(fan_area)
+
+
+
+# _camera_cutaway_debug_data_for_active_renderer: Reads one canonical cutaway
+# snapshot from the runtime renderer. Its camera origin is the live continuous
+# origin, never the legacy cell-centered map proxy.
+func _camera_cutaway_debug_data_for_active_renderer() -> Dictionary:
+	if active_player_index < 0 or active_player_index >= coordinate_renderers.size():
+		return {}
+	var renderer := coordinate_renderers[active_player_index]
+	if not is_instance_valid(renderer) or not renderer.has_method("get_camera_cutaway_debug_data") or not renderer.has_method("runtime_camera_origin_for_current_pose"):
+		return {}
+	var origin_value: Variant = renderer.call("runtime_camera_origin_for_current_pose")
+	if not origin_value is Vector2:
+		return {}
+	return renderer.call("get_camera_cutaway_debug_data", origin_value)
+
+
+
 # _add_debug_view_cone: Draws the cell-locked camera cone on top of the source-of-truth map.
 func _add_debug_view_cone(origin: Vector2) -> void:                                        # Declare this function.
+	if show_camera_cutaway_debug:
+		return                                                                                # The focused cutaway map already draws its exact player-to-camera fan; omit the unrelated long forward cone.
 	_add_debug_view_cone_for_basis(origin, _view_forward_vector(), Color(0.0, 0.75, 1.0, 0.22), Color(0.0, 0.95, 1.0, 0.75)) # Draw the active player's cyan cone.
 
 
 
 # _add_debug_other_player_view_cones: Draws a separate blue camera cone for every joined, non-bound player on the shared map.
 func _add_debug_other_player_view_cones() -> void:
+	if show_camera_cutaway_debug:
+		return                                                                                # Keep the focused cutaway map limited to the active player's camera relationship.
 	for player_index in range(player_states.size()):
 		if player_index == active_player_index:                                                 # The bound player already has the standard cyan cone.
 			continue
@@ -5808,9 +5945,10 @@ func _add_debug_view_cone_for_basis(origin: Vector2, forward: Vector2, cone_colo
 		return
 	forward = forward.normalized()                                                            # Ensure view-cone dimensions remain consistent at diagonal headings.
 	var left := Vector2(forward.y, -forward.x).normalized()                                  # Derive camera-left in world/map space from this explicit forward vector.
-	var far_center := origin + forward * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_DEPTH)        # Compute the center of the far end of the view cone.
-	var far_left := far_center + left * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_HALF_WIDTH)    # Compute the left boundary point at the far end of the cone.
-	var far_right := far_center - left * (DEBUG_MAP_CELL_SIZE * DEBUG_VIEW_CONE_HALF_WIDTH)   # Compute the right boundary point at the far end of the cone.
+	var cell_size := _debug_map_cell_size()
+	var far_center := origin + forward * (cell_size * DEBUG_VIEW_CONE_DEPTH)                  # Compute the center of the far end of the view cone.
+	var far_left := far_center + left * (cell_size * DEBUG_VIEW_CONE_HALF_WIDTH)              # Compute the left boundary point at the far end of the cone.
+	var far_right := far_center - left * (cell_size * DEBUG_VIEW_CONE_HALF_WIDTH)             # Compute the right boundary point at the far end of the cone.
 	var cone := Polygon2D.new()                                                               # Create a filled triangle for the view cone area.
 	cone.polygon = PackedVector2Array([origin, far_left, far_right])                          # Define the triangle from camera origin to far left/right limits.
 	cone.color = cone_color                                                                   # Tint the cone fill without hiding the wall map.
@@ -5835,7 +5973,7 @@ func _camera_grid_origin_for_state(state: Dictionary) -> Vector2:
 func _add_debug_raycast_rays() -> void:                                                     # Declare this function.
 	if not show_raycast_debug:                                                                 # Respect the inspector toggle for dense ray debugging.
 		return                                                                                    # Return without drawing ray debug primitives.
-	var origin_world := _camera_grid_origin()                                                  # Use the same camera origin that the renderer uses for visibility.
+	var origin_world := _runtime_camera_origin_for_visibility()                                # Use the same continuously moving camera origin as runtime walls and actor culling.
 	var forward := _view_forward_vector().normalized()                                        # Use the active cardinal or 45-degree camera forward vector.
 	var right := _view_right_vector().normalized()                                            # Use the active cardinal or 45-degree camera-right vector.
 	var samples := _raycast_visibility_samples_for_basis(origin_world, forward, right)         # Build the same ray samples used by wall visibility.
@@ -6236,9 +6374,10 @@ func _debug_wall_slot_segment(slot: Dictionary) -> Array[Vector2]:              
 # _debug_cell_edge_segment: Converts one cell edge into two top-down overlay points.
 func _debug_cell_edge_segment(cell: Vector2i, delta: Vector2i) -> Array[Vector2]:           # Declare this function.
 	var top_left := _debug_map_cell_top_left(cell)                                            # Convert the cell to the top-left corner of its debug-map square.
-	var top_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, 0.0)                             # Compute the top-right corner of the cell.
-	var bottom_left := top_left + Vector2(0.0, DEBUG_MAP_CELL_SIZE)                           # Compute the bottom-left corner of the cell.
-	var bottom_right := top_left + Vector2(DEBUG_MAP_CELL_SIZE, DEBUG_MAP_CELL_SIZE)          # Compute the bottom-right corner of the cell.
+	var cell_size := _debug_map_cell_size()
+	var top_right := top_left + Vector2(cell_size, 0.0)                                       # Compute the top-right corner of the cell.
+	var bottom_left := top_left + Vector2(0.0, cell_size)                                     # Compute the bottom-left corner of the cell.
+	var bottom_right := top_left + Vector2(cell_size, cell_size)                              # Compute the bottom-right corner of the cell.
 	if delta == Vector2i(0, -1):                                                              # Handle the north edge.
 		return [top_left, top_right]                                                            # Return the north edge segment.
 	if delta == Vector2i(1, 0):                                                               # Handle the east edge.
@@ -6268,7 +6407,7 @@ func _add_debug_wall_slot_label(position: Vector2, wall_id: int, color: Color) -
 # _add_debug_player_bounds: Draws the current cell's source-of-truth movement/contact footprint.
 func _add_debug_player_bounds(center: Vector2) -> void:                                     # Declare this function.
 	var bounds_color := Color(0.0, 0.95, 1.0, 0.35)                                           # Use translucent cyan for the reachable local-position area.
-	var half_extent := DEBUG_MAP_CELL_SIZE * LOCAL_TILE_WORLD_HALF_EXTENT                                             # Match the debug player's normalized -1..1 movement span.
+	var half_extent := _debug_map_cell_size() * LOCAL_TILE_WORLD_HALF_EXTENT                  # Match the debug player's normalized -1..1 movement span.
 	var top_left := center + Vector2(-half_extent, -half_extent)                              # Compute the top-left of the contact footprint.
 	var top_right := center + Vector2(half_extent, -half_extent)                              # Compute the top-right of the contact footprint.
 	var bottom_left := center + Vector2(-half_extent, half_extent)                            # Compute the bottom-left of the contact footprint.
