@@ -949,6 +949,7 @@ var debug_menu_right_panel: PanelContainer                                      
 var debug_menu_canvas: CanvasLayer                                                           # Keep the F3 controls on their own highest-priority canvas instead of whichever player HUD is currently bound.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_tuning_spins: Dictionary = {}                                                 # Store live near-view SpinBoxes so F3 tuning never depends on the Remote debugger.
+var debug_menu_layer_tuning_spins: Dictionary = {}                                           # Store runtime wall/ceiling layer SpinBoxes in the same F3 menu.
 var near_view_debug_last_map_frame := -1                                                     # Throttle the optional dynamic top-down diagnostic so it does not create a large Remote-debugger packet.
 var debug_menu_open := false                                                                 # Track whether the debug-menu panel is currently visible.
 var debug_combat_hit_label: Label                                                            # Show the most recent final combat line-of-sight verdict only inside the F3 menu.
@@ -1193,6 +1194,18 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(right_content, "coordinate_wall_parallax", "Wall Layers (P)")     # Toggle Layer 1/Layer 2 view-dependent separation on the runtime wall pass.
 	_add_debug_menu_check(right_content, "coordinate_ceiling_parallax", "Ceiling Layers (C)") # Toggle the independent two-layer ceiling pass without changing its projected geometry.
 	_add_debug_menu_check(right_content, "coordinate_layer_edge_clamp", "Layer Clamp (L)")  # Extend offset wall-layer edge texels instead of opening transparent UV seams.
+	var layers_title := Label.new()
+	layers_title.text = "LAYER TUNING"
+	layers_title.add_theme_font_size_override("font_size", 9)
+	right_content.add_child(layers_title)
+	_add_debug_menu_layer_tuning_spin(right_content, "depth", "Wall separation", 0.0, 16.0, 0.25)
+	_add_debug_menu_layer_tuning_spin(right_content, "balance", "Wall balance", -1.0, 1.0, 0.05)
+	_add_debug_menu_layer_tuning_spin(right_content, "side", "Wall side", -2.0, 2.0, 0.05)
+	_add_debug_menu_layer_tuning_spin(right_content, "vertical", "Wall vertical", -2.0, 2.0, 0.05)
+	_add_debug_menu_layer_tuning_spin(right_content, "ceiling_depth", "Ceil separate", 0.0, 16.0, 0.25)
+	_add_debug_menu_layer_tuning_spin(right_content, "ceiling_balance", "Ceil balance", -1.0, 1.0, 0.05)
+	_add_debug_menu_layer_tuning_spin(right_content, "ceiling_side", "Ceil side", -2.0, 2.0, 0.05)
+	_add_debug_menu_layer_tuning_spin(right_content, "ceiling_forward", "Ceil depth", -2.0, 2.0, 0.05)
 	debug_combat_hit_label = Label.new()                                                        # Add a compact readout for diagnosing final gameplay hit authority.
 	debug_combat_hit_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART                       # Keep the diagnostic readable inside the narrow F3 panel.
 	debug_combat_hit_label.custom_minimum_size = Vector2(DEBUG_MENU_COLUMN_WIDTH - 10.0, 0.0) # Keep combat evidence inside the right column.
@@ -1241,6 +1254,54 @@ func _add_debug_menu_tuning_spin(parent: VBoxContainer, option_key: String, labe
 	row.add_child(spin)                                                                       # Place the editable value beside its label.
 	parent.add_child(row)                                                                      # Add this control to the F3 diagnostic stack.
 	debug_menu_tuning_spins[option_key] = spin                                                # Retain it so keyboard/menu refreshes reflect Inspector or code changes too.
+
+
+# _add_debug_menu_layer_tuning_spin: Adds one wall/ceiling layer value to F3
+# rather than depending on a fixed-resolution runtime panel.
+func _add_debug_menu_layer_tuning_spin(parent: VBoxContainer, option_key: String, label_text: String, minimum: float, maximum: float, step: float) -> void:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(78.0, 0.0)
+	row.add_child(label)
+	var spin := SpinBox.new()
+	spin.min_value = minimum
+	spin.max_value = maximum
+	spin.step = step
+	spin.value = _layer_tuning_value(option_key)
+	spin.custom_minimum_size = Vector2(58.0, 0.0)
+	spin.tooltip_text = "Live runtime layer parallax tuning"
+	spin.value_changed.connect(_set_layer_tuning_value.bind(option_key))
+	row.add_child(spin)
+	parent.add_child(row)
+	debug_menu_layer_tuning_spins[option_key] = spin
+
+
+func _layer_tuning_renderers() -> Array[Node]:
+	var renderers: Array[Node] = []
+	for renderer in coordinate_renderers:
+		if is_instance_valid(renderer) and renderer.has_method("get_parallax_tuning_value") and renderer.has_method("set_parallax_tuning_value"):
+			renderers.append(renderer)
+	if not renderers.is_empty():
+		return renderers
+	# Retain the original one-renderer entry scene as a safe fallback. The
+	# current continuous-camera scene registers P1/P2/P3/P4 renderers instead.
+	var fallback := get_node_or_null("CoordinateFrameRuntimeRenderer")
+	if is_instance_valid(fallback) and fallback.has_method("get_parallax_tuning_value") and fallback.has_method("set_parallax_tuning_value"):
+		renderers.append(fallback)
+	return renderers
+
+
+func _layer_tuning_value(option_key: String) -> float:
+	var renderers := _layer_tuning_renderers()
+	if not renderers.is_empty():
+		return float(renderers[0].call("get_parallax_tuning_value", option_key))
+	return 0.0
+
+
+func _set_layer_tuning_value(value: float, option_key: String) -> void:
+	for renderer in _layer_tuning_renderers():
+		renderer.call("set_parallax_tuning_value", option_key, value)
 
 
 
@@ -1506,6 +1567,10 @@ func _refresh_debug_menu() -> void:
 		var spin: SpinBox = debug_menu_tuning_spins[option_key]                                  # Read the control retained for this stable tuning key.
 		if spin != null:
 			spin.set_value_no_signal(_near_view_tuning_value(String(option_key)))                  # Update without recursively rerendering during a UI refresh.
+	for option_key in debug_menu_layer_tuning_spins:
+		var layer_spin: SpinBox = debug_menu_layer_tuning_spins[option_key]
+		if layer_spin != null:
+			layer_spin.set_value_no_signal(_layer_tuning_value(String(option_key)))
 	if debug_combat_hit_label != null:                                                         # Refresh the latest combat result whenever F3 is opened.
 		debug_combat_hit_label.text = "LAST COMBAT LOS\n" + last_projectile_hit_debug          # Keep gameplay diagnostics out of the normal split-screen HUD.
 

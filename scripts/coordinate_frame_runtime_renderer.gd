@@ -137,6 +137,9 @@ var gpu_wall_dummy_texture: ImageTexture
 var gpu_wall_base_mip_texture: Texture2D
 var gpu_wall_layer1_mip_texture: Texture2D
 var gpu_wall_layer2_mip_texture: Texture2D
+var gpu_floor_mip_texture: Texture2D
+var gpu_ceiling_layer1_mip_texture: Texture2D
+var gpu_ceiling_layer2_mip_texture: Texture2D
 var gpu_wall_sprites: Array[Sprite2D] = []
 var gpu_wall_materials: Array[ShaderMaterial] = []
 var gpu_plane_shader: Shader
@@ -149,9 +152,6 @@ var coordinate_background: Sprite2D
 var coordinate_screen_overlay: Sprite2D
 var status: Label
 var runtime_status: Label
-var parallax_tuner_panel: PanelContainer
-var parallax_tuner_canvas_layer: CanvasLayer
-var parallax_tuner_open := false
 var last_signature := ""
 var show_runtime_walls := true
 var show_quad_outlines := false
@@ -402,7 +402,6 @@ func _initialize() -> void:
 		runtime_status.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0))
 		runtime_status.add_theme_constant_override("outline_size", 3)
 		controller.canvas_layer.add_child(runtime_status)
-		_setup_parallax_tuner()
 	initialized = true
 	_rebuild()
 	controller._bind_player_context(0)
@@ -615,9 +614,6 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_L:
 			set_layer_uv_edge_clamp_enabled(not layer_uv_edge_clamp_enabled)
 			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_O:
-			_toggle_parallax_tuner()
-			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_V:
 			# Keep a live CPU fallback available while the GPU path is being
 			# evaluated.  This is also useful for comparing the two projective
@@ -684,6 +680,7 @@ func _load_floor_source_texture(path: String) -> void:
 	floor_source_image = image
 	floor_source_texture = texture
 	floor_mip_images = _build_mip_chain(floor_source_image)
+	_rebuild_gpu_plane_sampling_textures()
 	active_floor_texture_label = path.get_file().get_basename()
 
 
@@ -877,6 +874,7 @@ func _load_runtime_ceiling_layers() -> void:
 		return
 	ceiling_layer1_mip_images = _build_mip_chain(ceiling_layer1_image)
 	ceiling_layer2_mip_images = _build_mip_chain(ceiling_layer2_image)
+	_rebuild_gpu_plane_sampling_textures()
 
 
 # _set_height_texture_for_color_path: Height data belongs to one specific
@@ -900,10 +898,12 @@ func _set_height_texture_for_color_path(color_path: String) -> void:
 	wall_height_image = height_image
 
 
-# set_integer_uv_scale_snap_enabled: Quantizes the texture footprint before it
-# chooses a mip level.  It deliberately does not move a wall quad or camera.
+# set_integer_uv_scale_snap_enabled: Quantizes each projective texture footprint
+# before choosing a mip level. It deliberately does not move any surface or camera.
 func set_integer_uv_scale_snap_enabled(enabled: bool) -> void:
 	integer_uv_scale_snap_enabled = enabled
+	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
+	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
 	_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_refresh_runtime_status(last_wall_entries.size())
 
@@ -942,113 +942,23 @@ func set_layer_uv_edge_clamp_enabled(enabled: bool) -> void:
 	_refresh_runtime_status(last_wall_entries.size())
 
 
-# _setup_parallax_tuner: Builds a separate, visible live-tuning panel instead
-# of appending controls below the clipped F3 menu.  It lives on the CanvasLayer
-# and only changes this experimental CPU renderer while the game keeps running.
-func _setup_parallax_tuner() -> void:
-	if controller == null or controller.canvas_layer == null:
-		return
-	if parallax_tuner_panel != null:
-		return
-	# The map and its debug drawing share the normal CanvasLayer and can paint
-	# over ordinary Controls.  Keep this temporary live-tuning UI in a dedicated
-	# higher CanvasLayer so it remains readable while the map is visible.
-	parallax_tuner_canvas_layer = CanvasLayer.new()
-	parallax_tuner_canvas_layer.name = "RuntimeLayerParallaxCanvas"
-	parallax_tuner_canvas_layer.layer = 100
-	controller.add_child(parallax_tuner_canvas_layer)
-	parallax_tuner_panel = PanelContainer.new()
-	parallax_tuner_panel.name = "RuntimeLayerParallaxTuner"
-	# Keep the live material controls out of the 160×120 player view; the
-	# top-down map is the appropriate temporary overlay surface for tuning.
-	parallax_tuner_panel.position = Vector2(860.0, 104.0)
-	parallax_tuner_panel.custom_minimum_size = Vector2(270.0, 0.0)
-	parallax_tuner_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	parallax_tuner_panel.z_index = 1000
-	parallax_tuner_panel.z_as_relative = false
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.025, 0.035, 0.055, 0.96)
-	panel_style.border_color = Color(0.18, 0.82, 0.96, 0.95)
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(3)
-	panel_style.content_margin_left = 10.0
-	panel_style.content_margin_right = 10.0
-	panel_style.content_margin_top = 8.0
-	panel_style.content_margin_bottom = 8.0
-	parallax_tuner_panel.add_theme_stylebox_override("panel", panel_style)
-	parallax_tuner_panel.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0, 1.0))
-	parallax_tuner_panel.visible = false
-	parallax_tuner_canvas_layer.add_child(parallax_tuner_panel)
-	var section := VBoxContainer.new()
-	section.add_theme_constant_override("separation", 3)
-	parallax_tuner_panel.add_child(section)
-	var heading := Label.new()
-	heading.text = "RUNTIME LAYERS  [O closes]"
-	heading.add_theme_font_size_override("font_size", 14)
-	heading.add_theme_color_override("font_color", Color(0.30, 0.92, 1.0, 1.0))
-	section.add_child(heading)
-	var hint := Label.new()
-	hint.text = "Layer 1 base + transparent Layer 2 • live tuning"
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.add_theme_color_override("font_color", Color(0.88, 0.92, 0.98, 1.0))
-	section.add_child(hint)
-	_add_parallax_tuning_slider(section, "Layer separation", "depth", 0.0, 16.0, 0.25, parallax_max_texels, "px")
-	_add_parallax_tuning_slider(section, "Movement balance", "balance", -1.0, 1.0, 0.05, layer_movement_balance, "")
-	_add_parallax_tuning_slider(section, "Side response", "side", -2.0, 2.0, 0.05, parallax_side_multiplier, "x")
-	_add_parallax_tuning_slider(section, "Vertical response", "vertical", -2.0, 2.0, 0.05, parallax_vertical_multiplier, "x")
-	var ceiling_heading := Label.new()
-	ceiling_heading.text = "CEILING LAYERS  [C toggles]"
-	ceiling_heading.add_theme_font_size_override("font_size", 13)
-	ceiling_heading.add_theme_color_override("font_color", Color(0.30, 0.92, 1.0, 1.0))
-	section.add_child(ceiling_heading)
-	_add_parallax_tuning_slider(section, "Ceiling separation", "ceiling_depth", 0.0, 16.0, 0.25, ceiling_parallax_max_texels, "px")
-	_add_parallax_tuning_slider(section, "Ceiling movement balance", "ceiling_balance", -1.0, 1.0, 0.05, ceiling_layer_movement_balance, "")
-	_add_parallax_tuning_slider(section, "Ceiling side response", "ceiling_side", -2.0, 2.0, 0.05, ceiling_parallax_side_multiplier, "x")
-	_add_parallax_tuning_slider(section, "Ceiling depth response", "ceiling_forward", -2.0, 2.0, 0.05, ceiling_parallax_depth_multiplier, "x")
+# get_parallax_tuning_value: Lets the shared F3 diagnostics display the
+# current layer settings without creating a second, fixed-position overlay.
+func get_parallax_tuning_value(key: String) -> float:
+	match key:
+		"depth": return parallax_max_texels
+		"side": return parallax_side_multiplier
+		"vertical": return parallax_vertical_multiplier
+		"balance": return layer_movement_balance
+		"ceiling_depth": return ceiling_parallax_max_texels
+		"ceiling_side": return ceiling_parallax_side_multiplier
+		"ceiling_forward": return ceiling_parallax_depth_multiplier
+		"ceiling_balance": return ceiling_layer_movement_balance
+	return 0.0
 
 
-func _toggle_parallax_tuner() -> void:
-	if parallax_tuner_panel == null:
-		return
-	parallax_tuner_open = not parallax_tuner_open
-	parallax_tuner_panel.visible = parallax_tuner_open
-	_refresh_runtime_status(last_wall_entries.size())
-
-
-# _add_parallax_tuning_slider: Adds one readable label/slider pair.  The bound
-# callback keeps the displayed value and the CPU wall image synchronized while
-# the user drags, so it is suitable for visual tuning in a running game.
-func _add_parallax_tuning_slider(parent: VBoxContainer, title: String, key: String, minimum: float, maximum: float, step: float, initial: float, suffix: String) -> void:
-	var value_label := Label.new()
-	value_label.add_theme_font_size_override("font_size", 12)
-	value_label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0, 1.0))
-	parent.add_child(value_label)
-	var slider := HSlider.new()
-	slider.min_value = minimum
-	slider.max_value = maximum
-	slider.step = step
-	slider.value = initial
-	slider.custom_minimum_size = Vector2(250.0, 18.0)
-	slider.tooltip_text = "Live runtime-layer parallax tuning"
-	parent.add_child(slider)
-	_update_parallax_slider_label(value_label, title, initial, suffix)
-	slider.value_changed.connect(func(value: float) -> void:
-		_set_parallax_tuning_value(key, value)
-		_update_parallax_slider_label(value_label, title, value, suffix)
-	)
-
-
-func _update_parallax_slider_label(label: Label, title: String, value: float, suffix: String) -> void:
-	if title == "Movement balance" or title == "Ceiling movement balance":
-		var balance_name := "Layer 1 moves" if value <= -0.99 else "Layer 2 moves" if value >= 0.99 else "split opposite"
-		label.text = "Movement balance: %.2f (%s)" % [value, balance_name]
-		return
-	var formatted := "%d" % roundi(value) if suffix.is_empty() and title == "March layers" else "%.2f" % value
-	label.text = "%s: %s%s" % [title, formatted, suffix]
-
-
-func _set_parallax_tuning_value(key: String, value: float) -> void:
+# set_parallax_tuning_value: Applies one F3 layer-tuning edit immediately.
+func set_parallax_tuning_value(key: String, value: float) -> void:
 	match key:
 		"depth": parallax_max_texels = value
 		"side": parallax_side_multiplier = value
@@ -1069,7 +979,7 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 	var displayed_texture_label := "Wall_Layer1+Layer2" if wall_parallax_enabled and layer_mode_available else active_wall_texture_label
 	var ceiling_layers_available := ceiling_layer1_image != null and ceiling_layer2_image != null
 	var render_backend := "GPU" if _can_use_gpu_wall_renderer() else "CPU"
-	var status_text := "Coord %s | %d walls | %s | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  P:%s  C:%s  L:%s  O:%s  V:%s" % [_pose_key(), visible_wall_count, render_backend, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if parallax_tuner_open else "OFF", "ON" if gpu_wall_renderer_enabled else "OFF"]
+	var status_text := "Coord %s | %d walls | %s | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  P:%s  C:%s  L:%s  V:%s" % [_pose_key(), visible_wall_count, render_backend, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if gpu_wall_renderer_enabled else "OFF"]
 	if is_instance_valid(status):
 		status.text = status_text
 	if is_instance_valid(runtime_status):
@@ -1268,8 +1178,8 @@ func _set_gpu_floor_sprites_visible(visible: bool) -> void:
 			sprite.visible = visible
 
 
-# _rebuild_gpu_floor_surfaces: Assigns one inverse-homography material per
-# visible floor cell; the GPU performs every texel lookup and lighting sample.
+# _rebuild_gpu_floor_surfaces: Assigns one live ray-to-plane material per
+# visible floor cell; the GPU determines the owning cell from each world ray.
 func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 	while gpu_floor_sprites.size() < entries.size():
 		var sprite := Sprite2D.new()
@@ -1291,17 +1201,20 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		sprite.visible = is_active
 		if not is_active:
 			continue
-		var quad: PackedVector2Array = entries[index]["quad"]
-		var inverse := _inverse_homography(quad[0], quad[1], quad[2], quad[3])
-		if inverse.size() != 3:
-			sprite.visible = false
-			continue
+		var entry := entries[index]
 		var material := gpu_floor_materials[index]
-		material.set_shader_parameter("inverse_row0", inverse[0])
-		material.set_shader_parameter("inverse_row1", inverse[1])
-		material.set_shader_parameter("inverse_row2", inverse[2])
-		material.set_shader_parameter("base_texture", floor_source_texture)
-		material.set_shader_parameter("use_floor_depth_dither", true)                            # Limit the Bayer blend to the floor; ceiling lighting keeps its existing hard palette steps.
+		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_floor_mip_texture != null
+		material.set_shader_parameter("base_texture", gpu_floor_mip_texture if use_gpu_mips else floor_source_texture)
+		material.set_shader_parameter("base_texture_size", Vector2(floor_source_image.get_size()))
+		material.set_shader_parameter("layer_texture_size", Vector2(floor_source_image.get_size()))
+		material.set_shader_parameter("use_integer_uv_scale_snap", use_gpu_mips)
+		material.set_shader_parameter("use_anisotropic_bottom_filter", false)
+		material.set_shader_parameter("camera_origin", Vector2(entry["origin"]))
+		material.set_shader_parameter("camera_forward", Vector2(entry["forward"]))
+		material.set_shader_parameter("camera_right", Vector2(entry["right"]))
+		material.set_shader_parameter("cell_world", Vector2(Vector2i(entry["cell"])))
+		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
+		material.set_shader_parameter("use_depth_light_dither", true)                            # Blend only the authored depth-light boundaries; texture ownership stays exact.
 		material.set_shader_parameter("use_layers", false)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT)
 	floor_art_sprite.visible = false
@@ -1458,8 +1371,8 @@ func _set_gpu_ceiling_sprites_visible(visible: bool) -> void:
 			sprite.visible = visible
 
 
-# _rebuild_gpu_ceiling_surfaces: Mirrors the floor GPU pass while preserving
-# the authored two-layer ceiling parallax in each independent cell material.
+# _rebuild_gpu_ceiling_surfaces: Mirrors the floor ray-to-plane pass while
+# preserving the authored two-layer ceiling parallax in each cell material.
 func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 	while gpu_ceiling_sprites.size() < entries.size():
 		var sprite := Sprite2D.new()
@@ -1482,22 +1395,25 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		if not is_active:
 			continue
 		var entry := entries[index]
-		var quad: PackedVector2Array = entry["quad"]
-		var inverse := _inverse_homography(quad[0], quad[1], quad[2], quad[3])
-		if inverse.size() != 3:
-			sprite.visible = false
-			continue
 		var layer_offset := _ceiling_parallax_uv_offset(Vector2i(entry["cell"]), Vector2(entry["origin"]), Vector2(entry["forward"]), Vector2(entry["right"]))
 		var layer1_weight := (ceiling_layer_movement_balance - 1.0) * 0.5
 		var layer2_weight := (ceiling_layer_movement_balance + 1.0) * 0.5
 		var material := gpu_ceiling_materials[index]
-		material.set_shader_parameter("inverse_row0", inverse[0])
-		material.set_shader_parameter("inverse_row1", inverse[1])
-		material.set_shader_parameter("inverse_row2", inverse[2])
-		material.set_shader_parameter("base_texture", ceiling_layer1_texture)
-		material.set_shader_parameter("layer1_texture", ceiling_layer1_texture)
-		material.set_shader_parameter("layer2_texture", ceiling_layer2_texture if ceiling_layer2_texture != null else ceiling_layer1_texture)
+		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_ceiling_layer1_mip_texture != null
+		material.set_shader_parameter("base_texture", gpu_ceiling_layer1_mip_texture if use_gpu_mips else ceiling_layer1_texture)
+		material.set_shader_parameter("base_texture_size", Vector2(ceiling_layer1_image.get_size()))
+		material.set_shader_parameter("layer_texture_size", Vector2(ceiling_layer1_image.get_size()))
+		material.set_shader_parameter("use_integer_uv_scale_snap", use_gpu_mips)
+		material.set_shader_parameter("use_anisotropic_bottom_filter", use_gpu_mips)
+		material.set_shader_parameter("camera_origin", Vector2(entry["origin"]))
+		material.set_shader_parameter("camera_forward", Vector2(entry["forward"]))
+		material.set_shader_parameter("camera_right", Vector2(entry["right"]))
+		material.set_shader_parameter("cell_world", Vector2(Vector2i(entry["cell"])))
+		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
+		material.set_shader_parameter("layer1_texture", gpu_ceiling_layer1_mip_texture if use_gpu_mips else ceiling_layer1_texture)
+		material.set_shader_parameter("layer2_texture", gpu_ceiling_layer2_mip_texture if use_gpu_mips and gpu_ceiling_layer2_mip_texture != null else (ceiling_layer2_texture if ceiling_layer2_texture != null else ceiling_layer1_texture))
 		material.set_shader_parameter("use_layers", ceiling_parallax_enabled and ceiling_layer2_texture != null)
+		material.set_shader_parameter("use_depth_light_dither", true)                            # Use the same ordered transition as the floor so ceiling brightness bands do not form hard lines.
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT)
@@ -1767,6 +1683,12 @@ func _rebuild_gpu_wall_sampling_textures() -> void:
 	gpu_wall_base_mip_texture = _create_mipmapped_texture(wall_source_image)
 	gpu_wall_layer1_mip_texture = _create_mipmapped_texture(wall_layer1_image)
 	gpu_wall_layer2_mip_texture = _create_mipmapped_texture(wall_layer2_image)
+
+
+func _rebuild_gpu_plane_sampling_textures() -> void:
+	gpu_floor_mip_texture = _create_mipmapped_texture(floor_source_image)
+	gpu_ceiling_layer1_mip_texture = _create_mipmapped_texture(ceiling_layer1_image)
+	gpu_ceiling_layer2_mip_texture = _create_mipmapped_texture(ceiling_layer2_image)
 
 
 func _create_mipmapped_texture(source_image: Image) -> Texture2D:
