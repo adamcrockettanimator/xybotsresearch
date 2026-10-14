@@ -77,6 +77,9 @@ const WALL_HEIGHT := 2.0 / 3.0
 ## through along the baseboard when the two independent projectors round their
 ## shared edge differently.
 const FLOOR_EDGE_OVERDRAW_PIXELS := 2
+const FLOOR_LIGHT_DITHER_NEAR_HALF_WIDTH_PIXELS := 3.0
+const FLOOR_LIGHT_DITHER_FAR_HALF_WIDTH_PIXELS := 1.0
+const FLOOR_LIGHT_DITHER_STEPS := 4
 const TEMPLATE_CAMERA_REAR_OFFSET := 0.49
 # World-projected actors are intentionally shorter than a wall.  This value was
 # calibrated against the old corridor sprite sizes at useful mid-range depths,
@@ -1298,6 +1301,7 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row1", inverse[1])
 		material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("base_texture", floor_source_texture)
+		material.set_shader_parameter("use_floor_depth_dither", true)                            # Limit the Bayer blend to the floor; ceiling lighting keeps its existing hard palette steps.
 		material.set_shader_parameter("use_layers", false)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT)
 	floor_art_sprite.visible = false
@@ -1336,11 +1340,46 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 			if uv.x < -edge_margin or uv.x > 1.0 + edge_margin or uv.y < -edge_margin or uv.y > 1.0 + edge_margin:
 				continue
 			var color := _sample_image_nearest(floor_source_image, uv.clamp(Vector2.ZERO, Vector2.ONE))
-			var light := _depth_light(depth)
+			var light := _floor_depth_light(depth, Vector2(x, y))                                   # Dither only the depth-lighting threshold, never the texture or its cell ownership.
 			color.r *= light
 			color.g *= light
 			color.b *= light
 			floor_render_image.set_pixel(x, y, color)
+
+
+# _floor_depth_light: Retains the authored depth-light palette while replacing each hard horizontal boundary with a 2x2 ordered dither.
+func _floor_depth_light(depth: float, pixel: Vector2) -> float:
+	var thresholds := [1.35, 2.5, 3.8, 4.8, 5.2]                                              # Preserve the existing floor-light distance breaks.
+	var near_lights := [1.0, 0.78, 0.56, 0.36, 0.22]                                          # Keep every original brighter-side level.
+	var far_lights := [0.78, 0.56, 0.36, 0.22, 0.10]                                          # Keep every original darker-side level.
+	var depth_per_pixel := maxf(depth * depth / (VIRTUAL_CAMERA_HEIGHT * FOCAL_LENGTH), 0.0001) # Convert a logical screen-pixel width into local depth units.
+	var near_weight := 1.0 - clampf(inverse_lerp(1.35, 5.2, depth), 0.0, 1.0)                  # Give the visually stronger near bands more room than the already-readable distant ones.
+	var half_band := depth_per_pixel * lerpf(FLOOR_LIGHT_DITHER_FAR_HALF_WIDTH_PIXELS, FLOOR_LIGHT_DITHER_NEAR_HALF_WIDTH_PIXELS, near_weight) # Spread near Bayer transitions across six pixels and far transitions across two.
+	for index in range(thresholds.size()):
+		var threshold := float(thresholds[index])                                                 # Read one authored brightness boundary.
+		if depth < threshold - half_band:
+			return float(near_lights[index])                                                        # Stay fully bright before this boundary.
+		if depth <= threshold + half_band:
+			var coverage := clampf((depth - (threshold - half_band)) / (half_band * 2.0), 0.0, 1.0) # Progress through the perspective-adjusted transition strip.
+			return _floor_depth_dithered_light(float(near_lights[index]), float(far_lights[index]), coverage, pixel) # Bayer-select only between neighboring gradient steps, never the full bright/dark jump.
+	return 0.10                                                                                 # Preserve the original farthest-depth light.
+
+
+# _floor_depth_bayer2_threshold: The stable ordered pattern used only at floor-light boundaries.
+func _floor_depth_bayer2_threshold(pixel: Vector2) -> float:
+	var x := posmod(floori(pixel.x), 2)                                                        # Repeat horizontally on the logical floor pixel grid.
+	var y := posmod(floori(pixel.y), 2)                                                        # Repeat vertically on the logical floor pixel grid.
+	return (float(2 * x + 3 * y - 4 * x * y) + 0.5) / 4.0                                     # Standard 2x2 Bayer thresholds: 0.125, 0.625, 0.875, 0.375.
+
+
+# _floor_depth_dithered_light: Quantizes a gradual light fade into small ordered-dithered steps instead of checkerboarding the complete brightness jump.
+func _floor_depth_dithered_light(near_light: float, far_light: float, coverage: float, pixel: Vector2) -> float:
+	var scaled_step := coverage * float(FLOOR_LIGHT_DITHER_STEPS)                              # Divide the original light change into subtle intermediate values.
+	var lower_step := clampi(floori(scaled_step), 0, FLOOR_LIGHT_DITHER_STEPS)                 # Keep the stable lower quantized brightness level.
+	var upper_step := mini(lower_step + 1, FLOOR_LIGHT_DITHER_STEPS)                           # Compare it only with the immediately darker neighboring level.
+	var fraction := scaled_step - float(lower_step)                                            # Read progress between those two neighbors.
+	var selected_step := upper_step if fraction >= _floor_depth_bayer2_threshold(pixel) else lower_step # Use Bayer coverage for this small adjacent-level choice.
+	return lerpf(near_light, far_light, float(selected_step) / float(FLOOR_LIGHT_DITHER_STEPS)) # Preserve the existing endpoint lights while making the route between them gradual.
 
 
 # _visible_ceiling_cells: Ceiling cells share the grid x/y footprint of their
