@@ -131,7 +131,7 @@ void fragment() {
 		result.rgb = min(result.rgb * convex_highlight_factor, vec3(0.82));
 	} else if (corner_tone < 0.0) {
 		// AO is a dark mark, never a multiply of an already-bright wallpaper texel.
-		result.rgb = min(result.rgb * concave_crevice_factor, vec3(0.36));
+		result.rgb = min(result.rgb * 0.82, vec3(0.46));
 	}
 	float cutaway_opacity = wall_opacity;
 	if (use_camera_cutaway_fade) {
