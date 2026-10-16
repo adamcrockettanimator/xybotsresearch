@@ -150,20 +150,25 @@ void fragment() {
 		result = use_anisotropic_bottom_filter ? anisotropic_nearest_sample(base_texture, source_uv, base_texture_size, mip_level, uv_x, uv_y) : nearest_sample(base_texture, source_uv, base_texture_size, mip_level);
 	}
 	if (result.a <= 0.0) discard;
-	// The floor/ceiling side of a wall-plane corner gets exactly one logical
-	// pixel of ambient occlusion. Derive its width from the live ray footprint,
-	// so it remains a line rather than becoming a broad textured band nearby.
-	vec2 corner_uv_x = plane_uv(pixel + vec2(1.0, 0.0));
-	vec2 corner_uv_y = plane_uv(pixel + vec2(0.0, 1.0));
-	vec2 corner_width = max(abs(corner_uv_x - source_uv), abs(corner_uv_y - source_uv));
+	// Mark a plane pixel only when one of its immediate screen neighbors crosses
+	// a real wall boundary. This is a true one-logical-pixel contour; a UV
+	// footprint threshold widened into a heavy band at oblique angles.
+	vec2 uv_left = plane_uv(pixel + vec2(-1.0, 0.0));
+	vec2 uv_right = plane_uv(pixel + vec2(1.0, 0.0));
+	vec2 uv_up = plane_uv(pixel + vec2(0.0, -1.0));
+	vec2 uv_down = plane_uv(pixel + vec2(0.0, 1.0));
+	bool crosses_north = (uv_left.y < 0.0 && uv_left.x >= 0.0 && uv_left.x <= 1.0) || (uv_right.y < 0.0 && uv_right.x >= 0.0 && uv_right.x <= 1.0) || (uv_up.y < 0.0 && uv_up.x >= 0.0 && uv_up.x <= 1.0) || (uv_down.y < 0.0 && uv_down.x >= 0.0 && uv_down.x <= 1.0);
+	bool crosses_east = (uv_left.x > 1.0 && uv_left.y >= 0.0 && uv_left.y <= 1.0) || (uv_right.x > 1.0 && uv_right.y >= 0.0 && uv_right.y <= 1.0) || (uv_up.x > 1.0 && uv_up.y >= 0.0 && uv_up.y <= 1.0) || (uv_down.x > 1.0 && uv_down.y >= 0.0 && uv_down.y <= 1.0);
+	bool crosses_south = (uv_left.y > 1.0 && uv_left.x >= 0.0 && uv_left.x <= 1.0) || (uv_right.y > 1.0 && uv_right.x >= 0.0 && uv_right.x <= 1.0) || (uv_up.y > 1.0 && uv_up.x >= 0.0 && uv_up.x <= 1.0) || (uv_down.y > 1.0 && uv_down.x >= 0.0 && uv_down.x <= 1.0);
+	bool crosses_west = (uv_left.x < 0.0 && uv_left.y >= 0.0 && uv_left.y <= 1.0) || (uv_right.x < 0.0 && uv_right.y >= 0.0 && uv_right.y <= 1.0) || (uv_up.x < 0.0 && uv_up.y >= 0.0 && uv_up.y <= 1.0) || (uv_down.x < 0.0 && uv_down.y >= 0.0 && uv_down.y <= 1.0);
 	bool at_wall_plane_corner =
-		(wall_edge_mask.x > 0.5 && source_uv.y <= corner_width.y) ||
-		(wall_edge_mask.y > 0.5 && source_uv.x >= 1.0 - corner_width.x) ||
-		(wall_edge_mask.z > 0.5 && source_uv.y >= 1.0 - corner_width.y) ||
-		(wall_edge_mask.w > 0.5 && source_uv.x <= corner_width.x);
+		(wall_edge_mask.x > 0.5 && crosses_north) ||
+		(wall_edge_mask.y > 0.5 && crosses_east) ||
+		(wall_edge_mask.z > 0.5 && crosses_south) ||
+		(wall_edge_mask.w > 0.5 && crosses_west);
 	// Clamp the contact seam itself to a dark value: AO must not turn into a
 	// bright texture-colored stripe when the underlying floor/ceiling texel is pale.
-	if (at_wall_plane_corner) result.rgb = min(result.rgb * plane_corner_ao_factor, vec3(0.22));
+	if (at_wall_plane_corner) result.rgb = min(result.rgb * 0.72, vec3(0.36));
 	float light = use_depth_light_dither ? depth_light_dither(depth, pixel) : depth_light(depth);
 	COLOR = vec4(result.rgb * light, result.a);
 }
