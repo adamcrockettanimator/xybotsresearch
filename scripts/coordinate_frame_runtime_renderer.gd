@@ -1821,6 +1821,7 @@ func _wall_endpoint_corner_tone(edge_key: String, endpoint: Vector2, edge_direct
 	if controller == null or edge_direction.length_squared() <= 0.00001:
 		return 0.0
 	var normalized_direction := edge_direction.normalized()
+	var has_collinear_neighbor := false
 	var has_perpendicular_neighbor := false
 	for candidate in controller._all_physical_wall_edges():
 		if String(candidate.get("key", "")) == edge_key:
@@ -1830,12 +1831,17 @@ func _wall_endpoint_corner_tone(edge_key: String, endpoint: Vector2, edge_direct
 		if endpoint.distance_squared_to(candidate_a) > 0.00001 and endpoint.distance_squared_to(candidate_b) > 0.00001:
 			continue
 		var candidate_direction := candidate_b - candidate_a
-		if candidate_direction.length_squared() <= 0.00001 or absf(normalized_direction.dot(candidate_direction.normalized())) > 0.99:
+		if candidate_direction.length_squared() <= 0.00001:
+			continue
+		if absf(normalized_direction.dot(candidate_direction.normalized())) > 0.99:
+			has_collinear_neighbor = true
 			continue
 		has_perpendicular_neighbor = true
 		break
 	if not has_perpendicular_neighbor:
-		return 1.0
+		# A continuous straight wall has two physical one-cell segments meeting at
+		# this endpoint. It is not an exposed cap and must receive no accent line.
+		return 0.0 if has_collinear_neighbor else 1.0
 	# If the visible cell owns another physical edge at the same vertex, the two
 	# surfaces meet around its interior: dark crevice. Otherwise the neighbor is
 	# around the outside of the turn: bright convex highlight.
