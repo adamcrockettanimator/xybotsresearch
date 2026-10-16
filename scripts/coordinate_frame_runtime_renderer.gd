@@ -2261,6 +2261,11 @@ func _template_camera_origin(forward: Vector2) -> Vector2:
 	return center - forward.normalized() * TEMPLATE_CAMERA_REAR_OFFSET
 
 func _runtime_camera_origin(forward: Vector2, right: Vector2) -> Vector2:
+	if bool(controller.get("continuous_third_person_camera")):
+		# The free camera has its own collision-swept position. Do not reconstruct
+		# it from the player here: that exact-follow shortcut lets the rear camera
+		# pass through a wall whenever the player backs or turns near one.
+		return Vector2(controller.get("continuous_camera_world_position"))
 	# Stable poses use the Blender-calibrated camera.  The existing controller
 	# only stores authored transition stage numbers, so this renderer turns those
 	# stages into the matching camera positions before projecting walls.  Without
@@ -2765,4 +2770,5 @@ func _red_control_points(texture: Texture2D) -> Array[Vector2]:
 func _render_signature() -> String:
 	var continuous_world_position: Vector2 = controller._current_player_world_position() if controller.has_method("_current_player_world_position") else Vector2.ZERO
 	var continuous_yaw := float(controller.get("continuous_camera_yaw")) if bool(controller.get("continuous_third_person_camera")) else 0.0
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin(), continuous_world_position, continuous_yaw, bool(controller.get("walk_through_walls_cheat"))]
+	var continuous_camera_position: Vector2 = Vector2(controller.get("continuous_camera_world_position")) if bool(controller.get("continuous_third_person_camera")) else Vector2.ZERO
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin(), continuous_world_position, continuous_yaw, continuous_camera_position, bool(controller.get("walk_through_walls_cheat"))]
