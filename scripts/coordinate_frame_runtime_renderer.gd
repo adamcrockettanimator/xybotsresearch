@@ -827,6 +827,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("wall_light", float(entry["light"]))
 		material.set_shader_parameter("endpoint_corner_tones", Vector2(entry.get("corner_tone_a", 0.0), entry.get("corner_tone_b", 0.0)))
+		material.set_shader_parameter("draw_center_crease", bool(entry.get("draw_center_crease", false)))
 		material.set_shader_parameter("wall_opacity", float(entry.get("camera_cutaway_opacity", 1.0)))
 		material.set_shader_parameter("use_camera_cutaway_fade", bool(entry.get("camera_cutaway_fade", false)))
 		material.set_shader_parameter("wall_world_a", Vector2(entry.get("world_a", Vector2.ZERO)))
@@ -1815,6 +1816,22 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	if result.size() > MAX_WALLS:
 		result = result.slice(0, MAX_WALLS)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
+	# Keep the requested full-height one-pixel line singular. Select the face
+	# closest to the player's forward screen axis; depth breaks ties toward the
+	# nearer, more legible wall.
+	var center_crease_index := -1
+	var center_crease_score := INF
+	for index in range(result.size()):
+		var quad: PackedVector2Array = result[index]["quad"]
+		if quad.size() != 4:
+			continue
+		var face_center_x := (quad[0].x + quad[1].x + quad[2].x + quad[3].x) * 0.25
+		var score := absf(face_center_x - VIEW_SIZE.x * 0.5) + float(result[index]["depth"]) * 0.01
+		if score < center_crease_score:
+			center_crease_score = score
+			center_crease_index = index
+	if center_crease_index >= 0:
+		result[center_crease_index]["draw_center_crease"] = true
 	return result
 
 

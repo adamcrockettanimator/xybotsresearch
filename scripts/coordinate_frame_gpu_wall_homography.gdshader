@@ -30,7 +30,8 @@ uniform float wall_light = 1.0;
 // -1 darkens a recessed (concave) endpoint, +1 lights an exposed (convex)
 // endpoint. Zero leaves a straight continuation unmarked.
 uniform vec2 endpoint_corner_tones = vec2(0.0);
-uniform float convex_highlight_factor = 1.24;
+uniform bool draw_center_crease = false;
+uniform float convex_highlight_factor = 1.12;
 uniform float concave_crevice_factor = 0.58;
 uniform float wall_opacity = 1.0;
 uniform bool use_camera_cutaway_fade = false;
@@ -123,9 +124,16 @@ void fragment() {
 	float endpoint_width = max(abs(corner_uv_x.x - source_uv.x), abs(corner_uv_y.x - source_uv.x));
 	float corner_tone = source_uv.x <= endpoint_width ? endpoint_corner_tones.x : (source_uv.x >= 1.0 - endpoint_width ? endpoint_corner_tones.y : 0.0);
 	if (corner_tone > 0.0) {
-		result.rgb *= convex_highlight_factor;
+		// Preserve the brighter exposed-edge read without allowing a light wall
+		// texel to bloom into a white accidental line.
+		result.rgb = min(result.rgb * convex_highlight_factor, vec3(0.82));
 	} else if (corner_tone < 0.0) {
-		result.rgb *= concave_crevice_factor;
+		// AO is a dark mark, never a multiply of an already-bright wallpaper texel.
+		result.rgb = min(result.rgb * concave_crevice_factor, vec3(0.22));
+	}
+	if (draw_center_crease && abs(source_uv.x - 0.5) <= endpoint_width) {
+		// One selected face carries a continuous, one-output-pixel vertical crease.
+		result.rgb = min(result.rgb * concave_crevice_factor, vec3(0.22));
 	}
 	float cutaway_opacity = wall_opacity;
 	if (use_camera_cutaway_fade) {

@@ -161,7 +161,9 @@ void fragment() {
 		(wall_edge_mask.y > 0.5 && source_uv.x >= 1.0 - corner_width.x) ||
 		(wall_edge_mask.z > 0.5 && source_uv.y >= 1.0 - corner_width.y) ||
 		(wall_edge_mask.w > 0.5 && source_uv.x <= corner_width.x);
-	if (at_wall_plane_corner) result.rgb *= plane_corner_ao_factor;
+	// Clamp the contact seam itself to a dark value: AO must not turn into a
+	// bright texture-colored stripe when the underlying floor/ceiling texel is pale.
+	if (at_wall_plane_corner) result.rgb = min(result.rgb * plane_corner_ao_factor, vec3(0.22));
 	float light = use_depth_light_dither ? depth_light_dither(depth, pixel) : depth_light(depth);
 	COLOR = vec4(result.rgb * light, result.a);
 }
