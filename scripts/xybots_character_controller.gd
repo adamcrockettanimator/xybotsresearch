@@ -161,11 +161,6 @@ const MACHINE_GUN_PICKUP_STREAM := preload("res://assets/Audio/SFX/MachineGun.mp
 const PROJECTILE_SPEED := 6                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.5                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PLAYER_CAPSULE_RADIUS := 0.10                                                           # Match the visible body width more closely while retaining one shared circular footprint for movement, combat, and pickups.
-const CONTINUOUS_CAMERA_FOLLOW_DISTANCE := 0.795                                               # Match the original full-motion player-derived camera depth for the helicopter's desired trailing point.
-const CONTINUOUS_CAMERA_MAX_SPEED := 4.0                                                       # Let the camera recover promptly enough to keep the player framed without a sharp teleport.
-const CONTINUOUS_CAMERA_STEERING_RESPONSE := 8.0                                               # Smoothly steer toward the follow target instead of snapping velocity or direction.
-const CONTINUOUS_CAMERA_WALL_AVOID_SECONDS := 0.18                                             # Briefly prefer the player's side of a wall before allowing the camera to pass through it.
-const CONTINUOUS_CAMERA_WALL_RELEASE_SECONDS := 0.60                                           # Ease out of avoidance quickly enough that a wall can never strand the camera.
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
 const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
@@ -849,9 +844,6 @@ var facing := 0                                                                 
 var turn_45_direction := 0                                                                   # Track a temporary halfway turn stop: -1=left, 0=cardinal, 1=right.
 var turn_step := 0                                                                           # Track a view-relative quarter-turn stage: 0=cardinal, 1=22, 2=45, 3=66.
 var continuous_camera_yaw := 0.0                                                            # Store the current free yaw in radians; the eight-direction cowboy art snaps independently.
-var continuous_camera_world_position := Vector2.ZERO                                        # Keep the free camera separate from the player's capsule so it moves as a collision-safe helicopter instead of teleporting to every player offset.
-var continuous_camera_velocity := Vector2.ZERO                                              # Preserve smooth helicopter inertia independently for each local player view.
-var continuous_camera_wall_obstruction_seconds := 0.0                                       # Track sustained wall pressure so wall avoidance yields gracefully instead of trapping the camera.
 var manual_turn_step_enabled := false                                                       # Let the debug menu hold the authored 22/66 turn frames until a fresh turn input advances them.
 var forward_step := 0                                                                        # Track a forward camera stage: 0=stable, 1=Floor/WallsFwd_1, 2=Floor/WallsFwd_2.
 var forward_passthrough_timer := 0.0                                                        # Accumulate the display time of the active forward frame.
@@ -1911,9 +1903,6 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"turn_45_direction": 0,                                                                     # Store whether this player is stopped on a halfway turn view.
 		"turn_step": 0,                                                                              # Store the current 22/45/66 interpolation stage.
 		"continuous_camera_yaw": float(start_facing) * PI * 0.5,                                  # Start the free camera aligned with this player's inherited cardinal heading.
-		"continuous_camera_world_position": Vector2(float(start_cell.x) + 0.5, float(start_cell.y) + 0.5) - Vector2(0.0, -1.0).rotated(float(start_facing) * PI * 0.5) * CONTINUOUS_CAMERA_FOLLOW_DISTANCE, # Begin already framed at the normal rear follow point.
-		"continuous_camera_velocity": Vector2.ZERO,                                               # Begin each view's helicopter at rest.
-		"continuous_camera_wall_obstruction_seconds": 0.0,                                        # Begin without a pending wall-avoidance release.
 		"forward_step": 0,                                                                           # Store the current Fwd 1/Fwd 2 camera stage.
 		"forward_passthrough_timer": 0.0,                                                           # Store elapsed automatic Fwd stage time.
 		"forward_transition_name": "",                                                            # Store the pending cell-crossing result after Fwd 2.
@@ -4503,9 +4492,6 @@ func _bind_player_context(player_index: int) -> void:                           
 	turn_45_direction = int(state.get("turn_45_direction", 0))                                  # Restore this player's temporary halfway-turn direction.
 	turn_step = int(state.get("turn_step", 2 if turn_45_direction != 0 else 0))                   # Restore the current interpolation stage, preserving old saved diagonal states.
 	continuous_camera_yaw = float(state.get("continuous_camera_yaw", float(facing) * PI * 0.5)) # Restore the free camera heading, falling back to old cardinal state safely.
-	continuous_camera_world_position = state.get("continuous_camera_world_position", player_world_position) # Restore the independent collision-safe helicopter position.
-	continuous_camera_velocity = state.get("continuous_camera_velocity", Vector2.ZERO)        # Restore the camera's smooth steering velocity separately from its position.
-	continuous_camera_wall_obstruction_seconds = float(state.get("continuous_camera_wall_obstruction_seconds", 0.0)) # Restore the soft wall-avoidance timer for this local view.
 	forward_step = int(state.get("forward_step", 0))                                          # Restore this player's active forward camera stage.
 	forward_passthrough_timer = float(state.get("forward_passthrough_timer", 0.0))             # Restore elapsed time in the active forward frame.
 	forward_transition_name = String(state.get("forward_transition_name", ""))                # Restore the cell-crossing result that follows the second forward frame.
@@ -4552,9 +4538,6 @@ func _save_player_context(player_index: int) -> void:                           
 	state["turn_45_direction"] = turn_45_direction                                             # Save this player's temporary halfway-turn direction.
 	state["turn_step"] = turn_step                                                             # Save this player's current interpolation stage.
 	state["continuous_camera_yaw"] = continuous_camera_yaw                                    # Save the free camera heading independently of snapped sprite-facing state.
-	state["continuous_camera_world_position"] = continuous_camera_world_position              # Save the helicopter's independent collision-safe world position for this local view.
-	state["continuous_camera_velocity"] = continuous_camera_velocity                          # Save its inertial flight state so player contexts do not borrow one another's correction.
-	state["continuous_camera_wall_obstruction_seconds"] = continuous_camera_wall_obstruction_seconds # Save its soft wall-avoidance state with the matching local camera.
 	state["forward_step"] = forward_step                                                       # Save this player's active forward camera stage.
 	state["forward_passthrough_timer"] = forward_passthrough_timer                            # Save elapsed time in the active forward frame.
 	state["forward_transition_name"] = forward_transition_name                                # Save the cell-crossing result that follows the forward frames.
@@ -4701,52 +4684,6 @@ func _process_continuous_third_person_input(delta: float) -> void:
 		run_animation_reversed = false
 		world_run_dir = world_aim_dir
 		_play_idle_animation()
-	_update_continuous_camera_position(delta)                                                  # Follow after the body has moved through bounded physical helicopter motion.
-
-
-# _continuous_camera_follow_target: Preserves the original full-motion framing
-# target: directly behind the player on the current free-yaw axis.
-func _continuous_camera_follow_target() -> Vector2:
-	return player_world_position - _view_forward_vector() * CONTINUOUS_CAMERA_FOLLOW_DISTANCE
-
-
-# _continuous_camera_safe_boom_target: Return the preferred pre-wall boom
-# point. This is guidance only: the player remains the priority, so sustained
-# obstruction will smoothly release the camera through a dithered cutaway.
-func _continuous_camera_safe_boom_target() -> Vector2:
-	var desired_target := _continuous_camera_follow_target()
-	var boom_delta := desired_target - player_world_position
-	var boom_distance := boom_delta.length()
-	if boom_distance <= 0.002:
-		return desired_target
-	var wall_distance := _nearest_projectile_wall_distance(player_world_position, boom_delta / boom_distance, boom_distance)
-	if wall_distance >= boom_distance - PROJECTILE_WALL_EPSILON:
-		return desired_target
-	return player_world_position + boom_delta.normalized() * maxf(0.0, wall_distance - PLAYER_CAPSULE_RADIUS)
-
-
-# _update_continuous_camera_position: Treat walls as a brief soft steering
-# preference, not a prison. The camera starts by favoring the near-side boom
-# point, then continuously releases to the real follow target so it always
-# recovers to the player and the renderer's dithered cutaway owns any overlap.
-func _update_continuous_camera_position(delta: float) -> void:
-	var safe_delta := maxf(delta, 0.0)
-	var desired_target := _continuous_camera_follow_target()
-	var preferred_target := _continuous_camera_safe_boom_target()
-	var obstructed := preferred_target.distance_to(desired_target) > 0.002
-	if obstructed:
-		continuous_camera_wall_obstruction_seconds += safe_delta
-	else:
-		continuous_camera_wall_obstruction_seconds = maxf(0.0, continuous_camera_wall_obstruction_seconds - safe_delta * 3.0)
-	var release_fraction := clampf((continuous_camera_wall_obstruction_seconds - CONTINUOUS_CAMERA_WALL_AVOID_SECONDS) / CONTINUOUS_CAMERA_WALL_RELEASE_SECONDS, 0.0, 1.0)
-	release_fraction = release_fraction * release_fraction * (3.0 - 2.0 * release_fraction)
-	var guidance_target := preferred_target.lerp(desired_target, release_fraction)
-	var desired_velocity := (guidance_target - continuous_camera_world_position) * CONTINUOUS_CAMERA_STEERING_RESPONSE
-	if desired_velocity.length() > CONTINUOUS_CAMERA_MAX_SPEED:
-		desired_velocity = desired_velocity.normalized() * CONTINUOUS_CAMERA_MAX_SPEED
-	var steering_blend := 1.0 - exp(-CONTINUOUS_CAMERA_STEERING_RESPONSE * safe_delta)
-	continuous_camera_velocity = continuous_camera_velocity.lerp(desired_velocity, steering_blend)
-	continuous_camera_world_position += continuous_camera_velocity * safe_delta
 
 
 
