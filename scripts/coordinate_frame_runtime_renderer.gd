@@ -1742,8 +1742,11 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	# two rays. Start with those ray-visible edges, then supplement them with
 	# every authoritative map edge that geometrically intersects the same frustum.
 	var edges_by_key := {}
+	var ray_visible_edge_keys := {}
 	for ray_visible_edge in controller._visible_physical_wall_edges_for_basis(camera_origin, forward, right):
-		edges_by_key[String(ray_visible_edge["key"])] = ray_visible_edge
+		var ray_visible_key := String(ray_visible_edge["key"])
+		edges_by_key[ray_visible_key] = ray_visible_edge
+		ray_visible_edge_keys[ray_visible_key] = true
 	for physical_edge in controller._all_physical_wall_edges():
 		var first_candidate := _to_view(Vector2(physical_edge["a"]), camera_origin, forward, right)
 		var second_candidate := _to_view(Vector2(physical_edge["b"]), camera_origin, forward, right)
@@ -1777,8 +1780,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"cell_draw_depth": cell_draw_depth,
 			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
-			"corner_tone_a": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell),
-			"corner_tone_b": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell),
+			"corner_tone_a": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
+			"corner_tone_b": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
 		}
 		# Fade outward from the actual camera-fan contact, not from the player's
 		# centre. That keeps a still-occluding wall clear after the player backs
@@ -1817,14 +1820,15 @@ func _visible_wall_entries() -> Array[Dictionary]:
 # perpendicular face is on the camera-facing cell (a recessed/concave join) or
 # outside it (an exposed/convex join). Straight runs stay unlined; a free cap
 # is treated as an exposed edge.
-func _wall_endpoint_corner_tone(edge_key: String, endpoint: Vector2, edge_direction: Vector2, facing_cell: Vector2i) -> float:
+func _wall_endpoint_corner_tone(edge_key: String, endpoint: Vector2, edge_direction: Vector2, facing_cell: Vector2i, ray_visible_edge_keys: Dictionary) -> float:
 	if controller == null or edge_direction.length_squared() <= 0.00001:
 		return 0.0
 	var normalized_direction := edge_direction.normalized()
 	var has_collinear_neighbor := false
 	var has_perpendicular_neighbor := false
 	for candidate in controller._all_physical_wall_edges():
-		if String(candidate.get("key", "")) == edge_key:
+		var candidate_key := String(candidate.get("key", ""))
+		if candidate_key == edge_key:
 			continue
 		var candidate_a := Vector2(candidate.get("a", Vector2.ZERO))
 		var candidate_b := Vector2(candidate.get("b", Vector2.ZERO))
@@ -1835,6 +1839,11 @@ func _wall_endpoint_corner_tone(edge_key: String, endpoint: Vector2, edge_direct
 			continue
 		if absf(normalized_direction.dot(candidate_direction.normalized())) > 0.99:
 			has_collinear_neighbor = true
+			continue
+		# A branch hidden behind this face at a T intersection cannot create a
+		# corner on the visible side. Only first-hit faces from this camera's ray
+		# fan may participate in the perpendicular endpoint relationship.
+		if not ray_visible_edge_keys.has(candidate_key):
 			continue
 		has_perpendicular_neighbor = true
 		break
