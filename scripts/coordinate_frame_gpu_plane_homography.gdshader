@@ -30,10 +30,6 @@ uniform vec2 camera_right = vec2(1.0, 0.0);
 uniform vec2 cell_world = vec2(0.0);
 uniform vec2 projection_offset = vec2(0.0);
 uniform float plane_height_delta = 0.5;
-// N, E, S, W walls around this cell. Only real maze walls receive a crease;
-// open cell ownership boundaries remain invisible.
-uniform vec4 wall_edge_mask = vec4(0.0);
-uniform float plane_crevice_factor = 0.60;
 uniform float focal_length = 128.0;
 uniform float horizon_y = 31.5;
 uniform vec2 canvas_size = vec2(160.0, 120.0);
@@ -150,18 +146,6 @@ void fragment() {
 		result = use_anisotropic_bottom_filter ? anisotropic_nearest_sample(base_texture, source_uv, base_texture_size, mip_level, uv_x, uv_y) : nearest_sample(base_texture, source_uv, base_texture_size, mip_level);
 	}
 	if (result.a <= 0.0) discard;
-	// Convert one output pixel back into cell UV units. This makes the wall/plane
-	// contact crease screen-space one pixel wide rather than a variable-width
-	// strip of floor or ceiling source texels.
-	vec2 crease_uv_x = plane_uv(pixel + vec2(1.0, 0.0));
-	vec2 crease_uv_y = plane_uv(pixel + vec2(0.0, 1.0));
-	vec2 crease_width = max(abs(crease_uv_x - source_uv), abs(crease_uv_y - source_uv));
-	bool at_wall_contact =
-		(wall_edge_mask.x > 0.5 && source_uv.y <= crease_width.y) ||
-		(wall_edge_mask.y > 0.5 && source_uv.x >= 1.0 - crease_width.x) ||
-		(wall_edge_mask.z > 0.5 && source_uv.y >= 1.0 - crease_width.y) ||
-		(wall_edge_mask.w > 0.5 && source_uv.x <= crease_width.x);
-	if (at_wall_contact) result.rgb *= plane_crevice_factor;
 	float light = use_depth_light_dither ? depth_light_dither(depth, pixel) : depth_light(depth);
 	COLOR = vec4(result.rgb * light, result.a);
 }
