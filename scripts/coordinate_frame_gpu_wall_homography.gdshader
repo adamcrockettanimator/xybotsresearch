@@ -30,7 +30,6 @@ uniform float wall_light = 1.0;
 // -1 darkens a recessed (concave) endpoint, +1 lights an exposed (convex)
 // endpoint. Zero leaves a straight continuation unmarked.
 uniform vec2 endpoint_corner_tones = vec2(0.0);
-uniform bool draw_center_crease = false;
 uniform float convex_highlight_factor = 1.12;
 uniform float concave_crevice_factor = 0.58;
 uniform float wall_opacity = 1.0;
@@ -120,8 +119,11 @@ void fragment() {
 	// from a source texel. This keeps a corner line one 160x120 logical pixel at
 	// every distance and viewing angle.
 	vec2 corner_uv_x = homography_uv(pixel + vec2(1.0, 0.0));
-	vec2 corner_uv_y = homography_uv(pixel + vec2(0.0, 1.0));
-	float endpoint_width = max(abs(corner_uv_x.x - source_uv.x), abs(corner_uv_y.x - source_uv.x));
+	// Wall endpoints are vertical under the yaw-only projector, so only the
+	// horizontal neighboring sample measures the perpendicular one-pixel width.
+	// Including the vertical UV derivative made oblique faces produce broad,
+	// flickering bands instead of a single logical-pixel line.
+	float endpoint_width = max(abs(corner_uv_x.x - source_uv.x), 0.000001);
 	float corner_tone = source_uv.x <= endpoint_width ? endpoint_corner_tones.x : (source_uv.x >= 1.0 - endpoint_width ? endpoint_corner_tones.y : 0.0);
 	if (corner_tone > 0.0) {
 		// Preserve the brighter exposed-edge read without allowing a light wall
@@ -129,10 +131,6 @@ void fragment() {
 		result.rgb = min(result.rgb * convex_highlight_factor, vec3(0.82));
 	} else if (corner_tone < 0.0) {
 		// AO is a dark mark, never a multiply of an already-bright wallpaper texel.
-		result.rgb = min(result.rgb * concave_crevice_factor, vec3(0.22));
-	}
-	if (draw_center_crease && abs(source_uv.x - 0.5) <= endpoint_width) {
-		// One selected face carries a continuous, one-output-pixel vertical crease.
 		result.rgb = min(result.rgb * concave_crevice_factor, vec3(0.22));
 	}
 	float cutaway_opacity = wall_opacity;
