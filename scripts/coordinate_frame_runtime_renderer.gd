@@ -1217,6 +1217,7 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("camera_forward", Vector2(entry["forward"]))
 		material.set_shader_parameter("camera_right", Vector2(entry["right"]))
 		material.set_shader_parameter("cell_world", Vector2(Vector2i(entry["cell"])))
+		material.set_shader_parameter("wall_edge_mask", _cell_wall_edge_mask(Vector2i(entry["cell"])))
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
 		material.set_shader_parameter("use_depth_light_dither", true)                            # Blend only the authored depth-light boundaries; texture ownership stays exact.
 		material.set_shader_parameter("use_layers", false)
@@ -1413,6 +1414,7 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("camera_forward", Vector2(entry["forward"]))
 		material.set_shader_parameter("camera_right", Vector2(entry["right"]))
 		material.set_shader_parameter("cell_world", Vector2(Vector2i(entry["cell"])))
+		material.set_shader_parameter("wall_edge_mask", _cell_wall_edge_mask(Vector2i(entry["cell"])))
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
 		material.set_shader_parameter("layer1_texture", gpu_ceiling_layer1_mip_texture if use_gpu_mips else ceiling_layer1_texture)
 		material.set_shader_parameter("layer2_texture", gpu_ceiling_layer2_mip_texture if use_gpu_mips and gpu_ceiling_layer2_mip_texture != null else (ceiling_layer2_texture if ceiling_layer2_texture != null else ceiling_layer1_texture))
@@ -1814,6 +1816,19 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		result = result.slice(0, MAX_WALLS)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	return result
+
+
+# _cell_wall_edge_mask: Give plane shaders only physical wall contacts. This
+# keeps AO at the floor/ceiling-to-wall corners, never at open cell boundaries.
+func _cell_wall_edge_mask(cell: Vector2i) -> Vector4:
+	if controller == null:
+		return Vector4.ZERO
+	return Vector4(
+		1.0 if controller._has_wall_edge(cell, Vector2i(0, -1)) else 0.0,
+		1.0 if controller._has_wall_edge(cell, Vector2i(1, 0)) else 0.0,
+		1.0 if controller._has_wall_edge(cell, Vector2i(0, 1)) else 0.0,
+		1.0 if controller._has_wall_edge(cell, Vector2i(-1, 0)) else 0.0
+	)
 
 
 # _wall_endpoint_corner_tone: A wall face knows whether a connected
