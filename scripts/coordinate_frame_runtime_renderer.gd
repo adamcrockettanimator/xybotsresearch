@@ -174,7 +174,10 @@ var wall_layer2_mip_images: Array[Image] = []
 # levels itself; CPU is retained only for the optional EWA comparison pass.
 var integer_uv_scale_snap_enabled := true
 var wall_ewa_filter_enabled := false
-var wall_parallax_enabled := true
+# Wall_Layer2 remains available for future windows and wall art, but the
+# base wallpaper should render without a permanent decorative overlay.
+# Press P during play to enable the layered/parallax composition.
+var wall_parallax_enabled := false
 var gpu_wall_renderer_enabled := true
 var gpu_plane_renderer_enabled := true
 var parallax_max_texels := 4.0

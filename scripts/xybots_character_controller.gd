@@ -59,7 +59,7 @@ const FORWARD_RUN_ANIMATION_SPEED := 1.75                                       
 const STRAFE_PASSTHROUGH_SECONDS := 0.075                                                    # Keep each authored side-camera frame equally brisk during ordinary automatic strafing.
 const TURN_STAGE_SEQUENCE_NAMES := ["idle", "turn_22", "turn_45", "turn_66"]               # Name the cardinal and authored intermediate turn views for debug status.
 const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir_Strafe.tres" # Team 1 uses Cowboy2's authored-color runs plus aim-relative strafes.
-const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                                       # Team 2 uses Cowboy2's new animations with the green/brown costume palette.
+const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                                       # Team 2 uses the same authored-color Cowboy2 frames; only purple costume fabric is remapped green at render time.
 const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
 const IDLE_FRAMES := "res://assets/Characters/Cowboy2_Idle_8Dir/Cowboy2_Idle_8Dir.tres"     # Load the twelve-frame eight-direction Cowboy 2 idle set alongside the run SpriteFrames.
 const DEATH_FRAMES := "res://assets/Characters/Cowboy2_Death_8Dir/Cowboy2_Death_8Dir.tres"  # Load the preliminary eight-camera death reaction alongside run and idle SpriteFrames.
@@ -69,6 +69,26 @@ const DUAL_WIELD_RUN_RIGHT_FRAMES := "res://assets/Characters/Cowboy2_DualWield_
 const DUAL_WIELD_IDLE_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Idle_8Dir/Cowboy2_DualWield_Idle_8Dir.tres" # Add the separate dual-pistol idle loops without replacing normal idle art.
 const MUZZLE_ANCHORS: MuzzleAnchorLibrary = preload("res://assets/Characters/Cowboy2_MuzzleAnchors.tres") # Store user-authored PNG-local barrel pixels independently of SpriteFrames artwork.
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
+const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/N.png")          # View the authored barrel from the world-north side.
+const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/NNE.png")      # Preserve the 22.5-degree north-northeast Blender render.
+const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/NE.png")        # Preserve the barrel's northeast Blender render.
+const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/ENE.png")      # Preserve the 67.5-degree east-northeast Blender render.
+const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/E.png")          # Preserve the barrel's east Blender render.
+const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/ESE.png")      # Preserve the 112.5-degree east-southeast Blender render.
+const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/SE.png")        # Preserve the barrel's southeast Blender render.
+const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/SSE.png")      # Preserve the 157.5-degree south-southeast Blender render.
+const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/S.png")          # Preserve the barrel's south Blender render.
+const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/SSW.png")      # Preserve the 202.5-degree south-southwest Blender render.
+const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/SW.png")        # Preserve the barrel's southwest Blender render.
+const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/WSW.png")      # Preserve the 247.5-degree west-southwest Blender render.
+const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/W.png")          # Preserve the barrel's west Blender render.
+const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/WNW.png")      # Preserve the 292.5-degree west-northwest Blender render.
+const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/NW.png")        # Preserve the barrel's northwest Blender render.
+const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/NNW.png")      # Preserve the 337.5-degree north-northwest Blender render.
+const BARREL_VIEW_DIRECTIONS: Array[String] = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"] # Keep the barrel-only ring ordered clockwise in 22.5-degree steps.
+const MAP_BARREL_COUNT := 8                                                                    # Keep the compact six-by-six arena dressed without filling every playable cell.
+const BARREL_ART_HEIGHT := 38.5                                                               # Match the visible barrel height in the new half-resolution authored PNGs.
+const BARREL_SIZE_MULTIPLIER := 0.85                                                          # Let barrel art be tuned independently without changing world depth scaling or collision.
 
 const FAR_FLOOR_Y := 0.30                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
 const NEAR_FLOOR_Y := 0.93                                                                  # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -141,6 +161,7 @@ const MACHINE_GUN_PICKUP_STREAM := preload("res://assets/Audio/SFX/MachineGun.mp
 const PROJECTILE_SPEED := 6                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.5                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PLAYER_CAPSULE_RADIUS := 0.10                                                           # Match the visible body width more closely while retaining one shared circular footprint for movement, combat, and pickups.
+const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
 const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
 const PROJECTILE_WALL_GUARD_RADIUS := 0.12                                                    # Give thin source-map edges a gameplay thickness so diagonal corner grazes cannot hit an unseen body.
@@ -210,7 +231,8 @@ const HIT_FRONT_TEXTURE := preload("res://assets/frames/Hit/Hit_Front.png")     
 const HIT_LEFT_TEXTURE := preload("res://assets/frames/Hit/Hit_Left.png")                   # Use the authored left-side hit pose.
 const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")                 # Use the authored right-side hit pose.
 const WORLD_SPRITE_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_lod.gdshader") # Apply the same coarse GPU pixel language and depth bands to every projected world sprite.
-const WORLD_SPRITE_TEAM2_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_team2_lod.gdshader") # Use the explicit green/orange Team 2 costume variant.
+const WORLD_SPRITE_TEAM2_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_team2_lod.gdshader") # Use the green-tinted Team 2 world-sprite variant.
+const WORLD_PROP_LOD_SHADER := preload("res://scripts/coordinate_frame_world_prop_lod.gdshader") # Apply neutral depth-reduced, depth-lit rendering to static map props without player team tint.
 const PROCEDURAL_CLOUD_LOD_SHADER := preload("res://scripts/procedural_cloud_lod.gdshader")  # Reduce procedural cloud-mask detail with the same depth bands while retaining independent material tinting.
 const PLAYER_BLOOD_DECAL_SHADER := preload("res://scripts/player_blood_decal.gdshader")      # Stencil world-body blood blobs by the alpha of the exact currently displayed character frame.
 const COIN_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Coin/Coin_Sprites.tres") # Use the authored eight-pixel coin animation as the near in-world LOD source.
@@ -904,7 +926,7 @@ var combat_player_blood_decals: Array = []                                      
 var combat_vfx_render_profile := {"muzzle_smoke_us": 0, "trails_us": 0, "trail_smoke_us": 0, "projectile_hot_us": 0, "wall_dust_us": 0, "blood_us": 0, "debris_us": 0} # Capture per-view visual-effect pass costs for the runtime CSV without changing their behavior.
 var world_coins: Array[Dictionary] = []                                                       # Keep uncollected map and dropped coins in shared world coordinates.
 var world_hearts: Array[Dictionary] = []                                                      # Keep rare one-health drops in the same shared world space as coins and guns.
-var vending_machine: Dictionary = {}                                                          # Store one wall-attached shop per generated maze.
+var world_barrels: Array[Dictionary] = []                                                     # Keep decorative barrel positions in shared world coordinates for every local camera.
 var projectile_pixel_texture: ImageTexture = null                                             # Lazily create one white texel, then tint and scale it into every crisp bullet/trail particle.
 var wall_debris_shape_textures: Dictionary = {}                                               # Cache tiny generated white masks for one-pixel, domino, block, and L-shaped wood chunks.
 var wall_debris_color_cache: Dictionary = {}                                                  # Cache each live splinter's sampled 2x2 wall palette per local view instead of rereading its source texture every frame.
@@ -1830,7 +1852,7 @@ func _make_audit_player_state(player_index: int, start_cell: Vector2i, start_fac
 func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedSprite2D:   # Declare this function.
 	var sprite := AnimatedSprite2D.new()                                                       # Create a fresh animated character sprite.
 	sprite.name = sprite_name                                                                   # Name the sprite for scene-tree inspection.
-	var frames_path := TEAM_TWO_FRAMES if team_index == 1 else TEAM_ONE_FRAMES                 # Select Cowboy1 grayscale for Team 2 and Cowboy2 color for Team 1.
+	var frames_path := TEAM_TWO_FRAMES if team_index == 1 else TEAM_ONE_FRAMES                 # Select the shared authored-color Cowboy2 frames for either team.
 	var frames := load(frames_path)                                                             # Load that team's SpriteFrames resource.
 	if frames is SpriteFrames:
 		sprite.sprite_frames = frames.duplicate(true)                                             # Give this sprite its own mutable copy of the team's animations.
@@ -1949,6 +1971,7 @@ func _setup_combat_collectibles() -> void:
 func _reset_combat_collectibles() -> void:
 	world_coins.clear()                                                                        # Remove old map/dropped coins before rebuilding the round objective.
 	world_hearts.clear()                                                                       # Remove unclaimed health drops with the completed round.
+	_reset_world_barrels()                                                                     # Scatter a fresh decorative barrel layout with every maze/round rebuild.
 	_reset_combat_round()                                                                     # Restart the shared match clock and clear any prior frozen result with the new map.
 	combat_total_coin_value = MAP_WIDTH * MAP_HEIGHT                                          # Keep the original map total stable for both players' score readouts.
 	for y in range(MAP_HEIGHT):                                                                # Visit every walkable maze cell exactly once.
@@ -1962,6 +1985,51 @@ func _reset_combat_collectibles() -> void:
 	machine_gun_pickup = {}                                                                   # Clear any pickup held by the old map before choosing a fresh contested location.
 	machine_gun_respawn_timer = 0.0                                                          # Allow the first pickup to appear immediately.
 	_spawn_machine_gun_pickup()                                                              # Place the pickup away from the starting players when possible.
+
+
+# _barrel_position_in_cell: Bias props toward useful wall dressing while reserving each cell's pickup center.
+func _barrel_position_in_cell(cell: Vector2i) -> Vector2:
+	var local_position := Vector2.ZERO                                                          # Author every barrel from the cell's shared world-space origin.
+	var placement_roll := randf()                                                               # Let occasional inset props break up an otherwise wall-hugging layout.
+	if placement_roll < 0.68:
+		local_position = Vector2(                                                               # Most props sit near corners, where they read as intentional set dressing.
+			randf_range(0.16, 0.24) if randi() % 2 == 0 else randf_range(0.76, 0.84),
+			randf_range(0.16, 0.24) if randi() % 2 == 0 else randf_range(0.76, 0.84)
+		)
+	elif placement_roll < 0.90:
+		if randi() % 2 == 0:
+			local_position = Vector2(randf_range(0.16, 0.24) if randi() % 2 == 0 else randf_range(0.76, 0.84), randf_range(0.30, 0.70)) # Keep the barrel against a left/right side.
+		else:
+			local_position = Vector2(randf_range(0.30, 0.70), randf_range(0.16, 0.24) if randi() % 2 == 0 else randf_range(0.76, 0.84)) # Keep the barrel against a top/bottom side.
+	else:
+		local_position = Vector2(                                                               # Rare inset diagonals loosen the wall bias without occupying a cell's center.
+			randf_range(0.29, 0.34) if randi() % 2 == 0 else randf_range(0.66, 0.71),
+			randf_range(0.29, 0.34) if randi() % 2 == 0 else randf_range(0.66, 0.71)
+		)
+	return Vector2(cell) + local_position                                                      # Keep the prop in the same world coordinates used by movement and depth sorting.
+
+
+# _reset_world_barrels: Decorates random non-spawn cells without changing the maze's collision topology.
+func _reset_world_barrels() -> void:
+	world_barrels.clear()                                                                      # Discard the previous map's purely visual barrel layout.
+	var candidates: Array[Vector2i] = []                                                       # Build a pool so props never begin underneath a player spawn.
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			var occupied := false
+			for state in player_states:
+				if cell == state.get("grid_position", Vector2i(-99, -99)):
+					occupied = true
+					break
+			if not occupied:
+				candidates.append(cell)
+	for barrel_index in range(mini(MAP_BARREL_COUNT, candidates.size())):
+		var chosen_index := randi() % candidates.size()
+		var chosen_cell := candidates[chosen_index]
+		candidates.remove_at(chosen_index)                                                       # Keep one barrel maximum per cell so art remains readable in the tight maze.
+		var position := _barrel_position_in_cell(chosen_cell)                                    # Keep the pickup-safe middle of every grid cell clear.
+		world_barrels.append({"id": next_combat_visual_id, "position": position})
+		next_combat_visual_id += 1                                                               # Give every prop a stable cache key across all player cameras.
 
 
 # _reset_combat_round: Re-arms the shared clock whenever a new map/coin layout begins.
@@ -2350,7 +2418,7 @@ func _make_scoreboard_shop_label() -> RichTextLabel:
 	shop.add_theme_constant_override("shadow_offset_x", 1)
 	shop.add_theme_constant_override("shadow_offset_y", 1)
 	shop.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	shop.size = Vector2(156.0, 24.0)
+	shop.size = Vector2(34.0, 10.0)
 	shop.z_index = 521
 	shop.visible = false
 	return shop
@@ -2444,14 +2512,14 @@ func _update_combat_hud() -> void:
 			board.scale = viewport_node.scale
 			board.visible = board_visible
 			var shop := scoreboard_shop_labels[player_index]
-			shop.position = viewport_node.position + Vector2(2.0, 82.0) * viewport_node.scale
+			shop.position = viewport_node.position + Vector2(60.0, VIEWPORT_SIZE.y - 12.0) * viewport_node.scale # Center the compact A/B purchase cues in the open bottom-HUD space between health and ammunition.
 			shop.scale = viewport_node.scale
-			shop.visible = _player_can_use_vending_machine(player_index) and not combat_round_complete
+			shop.visible = player_index < player_joined.size() and player_joined[player_index] and not bool(state.get("is_dying", false)) and not combat_round_complete
 			if shop.visible:
 				var coins := int(state.get("coins", 0))
-				var heart_color := "#ffffff" if coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH else "#5c5c5c"
+				var heart_color := "#ffffff" if coins >= 5 else "#5c5c5c"
 				var gun_color := "#ffffff" if coins >= 10 else "#5c5c5c"
-				shop.text = "[center][color=%s]PRESS A: BUY [img=5x5]res://assets/Items/Heart/heart.png[/img] $5[/color]\n[font_size=1] [/font_size]\n[color=%s]PRESS B: BUY [img=5x5]res://assets/Items/Gun/gun_01.png[/img] $10[/color][/center]" % [heart_color, gun_color] # Show the same fixed cowboy-gun frame advertised by the HUD.
+				shop.text = "[color=%s]A:[img=5x5]res://assets/Items/Heart/heart.png[/img][/color] [color=%s]B:[img=5x5]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, gun_color] # Keep the controller cues compact while reusing the crisp heart and gun HUD art.
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -3694,19 +3762,74 @@ func _runtime_world_sprite_texel_stride(world_view_depth: float) -> float:
 
 
 # _apply_runtime_world_sprite_style: Gives a world-projected sprite its own GPU material, with no object distance darkening.
-func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0, world_view_depth := 0.0, use_texel_lod := true) -> void:
+func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team_index := 0, world_view_depth := 0.0, use_texel_lod := true, apply_green_costume_remap := false) -> void:
 	if sprite == null:
 		return
-	var resolved_team_index: int = int(PLAYER_TEAMS[team_index]) if team_index >= 0 and team_index < PLAYER_TEAMS.size() else team_index # Normalize player indices to their team so normal and hit sprites always share one palette.
-	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER # Give Team 2 the established green/brown costume remap.
+	var resolved_team_index: int = int(PLAYER_TEAMS[team_index]) if team_index >= 0 and team_index < PLAYER_TEAMS.size() else team_index # Normalize player indices to their team so normal and hit sprites always share one costume treatment.
+	var expected_shader := WORLD_SPRITE_TEAM2_LOD_SHADER if resolved_team_index == 1 else WORLD_SPRITE_LOD_SHADER # Select the Team 2 green-costume shader without altering the underlying SpriteFrames.
 	var material := sprite.material as ShaderMaterial                                          # Reuse this sprite's material without sharing per-view uniforms.
 	if material == null or material.shader != expected_shader:
 		material = ShaderMaterial.new()
 		material.shader = expected_shader
 		sprite.material = material
-	sprite.self_modulate = Color.WHITE                                                        # Let the selected shader preserve Team 1 or remap Team 2 costume swatches.
+	sprite.self_modulate = Color.WHITE                                                        # Preserve every authored PNG color before the optional green-costume remap.
 	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth) if use_texel_lod else 1.0) # Keep authored coin LOD textures exact while other world sprites retain shader sampling reduction.
+	material.set_shader_parameter("apply_green_costume_remap", apply_green_costume_remap and resolved_team_index == 1) # Restrict the value-preserving green remap to Team 2 player fabric; gameplay pickups retain authored color.
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
+
+
+# _environment_depth_light: Matches the stepped distance light used by runtime walls, floors, and ceilings.
+func _environment_depth_light(world_view_depth: float) -> float:
+	if world_view_depth < 1.35:
+		return 1.0
+	if world_view_depth < 2.5:
+		return 0.78
+	if world_view_depth < 3.8:
+		return 0.56
+	if world_view_depth < 4.8:
+		return 0.36
+	if world_view_depth < 5.2:
+		return 0.22
+	return 0.10
+
+
+# _environment_depth_light_at_pixel: Matches the floor renderer's dithered light at a prop's floor contact point.
+func _environment_depth_light_at_pixel(world_view_depth: float, floor_pixel: Vector2) -> float:
+	const THRESHOLDS := [1.35, 2.5, 3.8, 4.8, 5.2]
+	const NEAR_LIGHTS := [1.0, 0.78, 0.56, 0.36, 0.22]
+	const FAR_LIGHTS := [0.78, 0.56, 0.36, 0.22, 0.10]
+	const DITHER_STEPS := 4
+	var depth_per_pixel := maxf(world_view_depth * world_view_depth / 64.0, 0.0001)             # Mirror the runtime plane's 0.5 camera height and 128 focal length.
+	var near_weight := 1.0 - clampf(inverse_lerp(1.35, 5.2, world_view_depth), 0.0, 1.0)
+	var half_band := depth_per_pixel * lerpf(1.0, 3.0, near_weight)                            # Preserve the floor's two-to-six-pixel dither transition width.
+	var pixel_x := posmod(floori(floor_pixel.x), 2)
+	var pixel_y := posmod(floori(floor_pixel.y), 2)
+	var bayer_threshold := (float(2 * pixel_x + 3 * pixel_y - 4 * pixel_x * pixel_y) + 0.5) / 4.0
+	for index in range(THRESHOLDS.size()):
+		var threshold := float(THRESHOLDS[index])
+		if world_view_depth < threshold - half_band:
+			return float(NEAR_LIGHTS[index])
+		if world_view_depth <= threshold + half_band:
+			var coverage := clampf((world_view_depth - (threshold - half_band)) / (half_band * 2.0), 0.0, 1.0)
+			var scaled_step := coverage * DITHER_STEPS
+			var lower_step := clampi(floori(scaled_step), 0, DITHER_STEPS)
+			var upper_step := mini(lower_step + 1, DITHER_STEPS)
+			var selected_step := upper_step if scaled_step - float(lower_step) >= bayer_threshold else lower_step
+			return lerpf(float(NEAR_LIGHTS[index]), float(FAR_LIGHTS[index]), float(selected_step) / DITHER_STEPS)
+	return 0.10
+
+
+# _apply_runtime_world_prop_style: Gives a static prop the same stable source grid and depth light as the environment beneath it.
+func _apply_runtime_world_prop_style(sprite: Sprite2D, world_view_depth: float, floor_pixel: Vector2) -> void:
+	var material := sprite.material as ShaderMaterial
+	if material == null or material.shader != WORLD_PROP_LOD_SHADER:
+		material = ShaderMaterial.new()
+		material.shader = WORLD_PROP_LOD_SHADER
+		sprite.material = material
+	sprite.self_modulate = Color.WHITE
+	material.set_shader_parameter("texel_stride", maxf(1.0, roundf(_runtime_world_sprite_texel_stride(world_view_depth)))) # Fractional source strides reshuffled the barrel's pixels while the continuous camera moved.
+	material.set_shader_parameter("depth_light", _environment_depth_light_at_pixel(world_view_depth, floor_pixel)) # Read the same dither phase as the floor at the barrel's feet.
+	sprite.position = sprite.position.round()
 
 
 # _clear_runtime_world_sprite_style: Keeps the local player camera-relative body at its authored brightness and source pixel resolution.
@@ -3714,7 +3837,7 @@ func _clear_runtime_world_sprite_style(sprite: CanvasItem) -> void:
 	if sprite == null:
 		return
 	var material := sprite.material as ShaderMaterial
-	if material != null and material.shader == WORLD_SPRITE_LOD_SHADER:
+	if material != null and (material.shader == WORLD_SPRITE_LOD_SHADER or material.shader == WORLD_SPRITE_TEAM2_LOD_SHADER):
 		sprite.material = null
 
 
@@ -3750,6 +3873,9 @@ func _update_combat_view() -> void:
 		muzzle_debug_layer.position = view_node.position                                          # Convert logical 160-by-120 cross coordinates into this view's native-window origin.
 		muzzle_debug_layer.scale = view_node.scale                                                # Match the exact integer player-view enlargement so the cross stays on its intended source pixel.
 	combat_vfx_render_profile = {"muzzle_smoke_us": 0, "trails_us": 0, "trail_smoke_us": 0, "projectile_hot_us": 0, "wall_dust_us": 0, "blood_us": 0, "debris_us": 0} # Reset this camera's small profiling payload before rendering its current effect passes.
+	for barrel in world_barrels:                                                                # Draw every static prop through this view's live wall/floor projection.
+		var barrel_position: Vector2 = barrel.get("position", Vector2.ZERO)
+		_render_world_barrel("barrel_%d" % int(barrel.get("id", -1)), barrel_position, used)
 	var coin_frame_index := _coin_animation_frame_index()                                      # Keep every coin on the same authored spin frame while allowing each depth to choose its own authored silhouette.
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
@@ -3917,7 +4043,7 @@ func _update_combat_view() -> void:
 		var hole_world_position: Vector2 = hole.get("position", Vector2.ZERO)                    # Read the exact collision point saved when the projectile hit the wall.
 		if not _world_actor_overlaps_current_camera_fan(hole_world_position, 0.06) or not _world_point_has_clear_camera_line(hole_world_position):
 			continue                                                                                   # Never leak the decal through a wall that occludes the real physical contact point.
-		var hole_projection := _opponent_projection_from_current_camera(hole_world_position, true) # Project the physical contact point immediately after its facing wall.
+		var hole_projection := _opponent_projection_from_current_camera(hole_world_position, true, true) # Use the raw world-effect projection so the decal stays registered to its wall while this camera passes through the actor-only protected near zone.
 		if float(hole_projection.get("view_depth", INF)) > WALL_BULLET_HOLE_MAX_VIEW_DEPTH:
 			continue                                                                                   # Keep the single-pixel mark from becoming an oversized distant decal beyond three grid cells.
 		var hole_layer := _impact_layer_for_current_view(String(hole.get("wall_edge_key", "")), Vector2(hole.get("direction", Vector2.ZERO)), int(hole_projection.get("z_index", 0)) + 3) # Retain the struck front face's layering and reject its back face.
@@ -4012,7 +4138,7 @@ func _update_combat_view() -> void:
 			sprite.position = player_sprite.position                                                  # Reuse their visible feet registration.
 			sprite.scale = player_sprite.scale                                                        # Reuse their body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index])      # Keep the hit body on its owning team's palette without distance darkening.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], 0.0, true, true) # Give the hit body the same selective green costume remap as its owner.
 			sprite.z_index = player_sprite.z_index + 3                                               # Keep reaction above nearby environment art.
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
@@ -4024,7 +4150,7 @@ func _update_combat_view() -> void:
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], float(projection.get("view_depth", 0.0))) # Match hit bodies to their owning team's world-sprite LOD.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], float(projection.get("view_depth", 0.0)), true, true) # Match the hit body to its owning team's selective costume treatment.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			var view: Dictionary = player_views[active_player_index] if active_player_index >= 0 and active_player_index < player_views.size() else {}
 			var opponents: Dictionary = view.get("opponent_sprites", {})
@@ -4223,6 +4349,73 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
+
+
+# _render_world_barrel: Projects one non-colliding barrel with the authored eight-view Blender render matching this camera's side of the prop.
+func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary) -> void:
+	if not _world_actor_overlaps_current_camera_fan(world_position, 0.22) or not _world_point_has_clear_camera_line(world_position):
+		return                                                                                    # Treat props like every other shared-world object: no local-cell exception and no viewing through real walls.
+	var projection := _opponent_projection_from_current_camera(world_position, true, true)     # Use the raw live camera projector so the barrel follows the same continuous world truth as walls, actors, and effects.
+	var actor_height := float(projection.get("continuous_actor_height", projection.get("actor_height", 0.0))) # Never use the actor-only protected-near LOD height for a fixed world prop.
+	var world_view_depth := float(projection.get("view_depth", 0.0))
+	if actor_height <= 0.0:
+		return
+	var sprite := _combat_sprite(key)
+	sprite.texture = _barrel_texture_for_current_camera()                                      # Swap only the source image; the Sprite2D is already isolated per local view.
+	var sprite_scale := clampf(actor_height / 56.91699, 0.2024, 1.1638) * BARREL_SIZE_MULTIPLIER # Keep perspective scaling while applying the artist-tunable barrel size.
+	sprite.scale = Vector2.ONE * sprite_scale
+	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - BARREL_ART_HEIGHT * sprite_scale * 0.5).round() # Register the bottom of the PNG directly to the projected floor.
+	_apply_runtime_world_prop_style(sprite, world_view_depth, Vector2(float(projection["screen_x"]), float(projection["feet_y"]))) # Reduce source pixels and darken from the exact floor pixel beneath the barrel.
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.z_index = _world_actor_draw_layer(world_position)                                   # Use the standard shared-world painter layer so the barrel correctly passes in front of/behind players and items by real map depth.
+	sprite.visible = true
+	used[key] = true
+
+
+# _barrel_direction_for_world_vector: Selects the nearest 22.5-degree barrel camera without changing the eight-way character animation vocabulary.
+func _barrel_direction_for_world_vector(world_vector: Vector2) -> String:
+	if world_vector.length_squared() <= 0.0001:
+		return "N"
+	var clockwise_angle := atan2(world_vector.x, -world_vector.y)                             # Map north to zero, then advance clockwise through the sixteen Blender camera positions.
+	var direction_index := posmod(floori((clockwise_angle + PI / 16.0) / (PI / 8.0)), BARREL_VIEW_DIRECTIONS.size()) # Round to the nearest 22.5-degree slice.
+	return BARREL_VIEW_DIRECTIONS[direction_index]
+
+
+# _barrel_texture_for_current_camera: Maps the viewer's world-side position to the matching static barrel angle.
+func _barrel_texture_for_current_camera() -> Texture2D:
+	match _barrel_direction_for_world_vector(-_view_forward_vector()):
+		"NNE":
+			return BARREL_TEXTURE_NNE
+		"NE":
+			return BARREL_TEXTURE_NE
+		"ENE":
+			return BARREL_TEXTURE_ENE
+		"E":
+			return BARREL_TEXTURE_E
+		"ESE":
+			return BARREL_TEXTURE_ESE
+		"SE":
+			return BARREL_TEXTURE_SE
+		"SSE":
+			return BARREL_TEXTURE_SSE
+		"S":
+			return BARREL_TEXTURE_S
+		"SSW":
+			return BARREL_TEXTURE_SSW
+		"SW":
+			return BARREL_TEXTURE_SW
+		"WSW":
+			return BARREL_TEXTURE_WSW
+		"W":
+			return BARREL_TEXTURE_W
+		"WNW":
+			return BARREL_TEXTURE_WNW
+		"NW":
+			return BARREL_TEXTURE_NW
+		"NNW":
+			return BARREL_TEXTURE_NNW
+		_:
+			return BARREL_TEXTURE_N
 
 
 
@@ -4587,17 +4780,6 @@ func _apply_wall_art_debug_visibility() -> void:
 
 
 
-func _player_can_use_vending_machine(player_index: int) -> bool:
-	if vending_machine.is_empty() or player_index >= player_states.size() or player_index >= player_joined.size() or not player_joined[player_index]:
-		return false
-	var state := player_states[player_index]
-	if bool(state.get("is_dying", false)) or int(state.get("turn_45_direction", 0)) != 0:
-		return false
-	var vending_cell: Vector2i = vending_machine.get("cell", Vector2i(-1, -1))
-	var vending_direction: Vector2i = vending_machine.get("direction", Vector2i.ZERO)
-	return state.get("grid_position", Vector2i(-2, -2)) == vending_cell and _facing_vector_for_index(int(state.get("facing", 0))) == vending_direction
-
-
 func _update_scoreboard_shop_input() -> void:
 	for player_index in range(player_states.size()):
 		var joypad_id := _xbox_joypad_id_for_player(player_index)
@@ -4606,7 +4788,7 @@ func _update_scoreboard_shop_input() -> void:
 		if player_index == 0:
 			heart_pressed = heart_pressed or _is_key_down(KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
 			gun_pressed = gun_pressed or _is_key_down(KEY_2)
-		if _player_can_use_vending_machine(player_index) and not combat_round_complete:
+		if player_index < player_joined.size() and player_joined[player_index] and not bool(player_states[player_index].get("is_dying", false)) and not combat_round_complete:
 			var state := player_states[player_index]
 			var coins := int(state.get("coins", 0))
 			if heart_pressed and not was_shop_heart_pressed[player_index] and coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH:
@@ -4614,12 +4796,12 @@ func _update_scoreboard_shop_input() -> void:
 				state["health"] = mini(PLAYER_MAX_HEALTH, int(state.get("health", 0)) + 1)
 				player_states[player_index] = state
 				_clear_camera_blood_for_heart(player_index)                                             # Treat a purchased heart as the same one-health recovery, removing one matching set of close-screen blood drops.
-				_play_pickup_sound(heart_pickup_player)                                               # Reuse the health cue for a successful vending-machine heart purchase.
+				_play_pickup_sound(heart_pickup_player)                                               # Reuse the health cue for a successful controller heart purchase.
 			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10:
 				state["coins"] = coins - 10
 				state["machine_gun_ammo"] = DUAL_WIELD_AMMO
 				player_states[player_index] = state
-				_play_pickup_sound(machine_gun_pickup_player)                                         # Reuse the weapon cue for a successful vending-machine gun purchase.
+				_play_pickup_sound(machine_gun_pickup_player)                                         # Reuse the weapon cue for a successful controller gun purchase.
 		was_shop_heart_pressed[player_index] = heart_pressed
 		was_shop_gun_pressed[player_index] = gun_pressed
 
@@ -5653,13 +5835,6 @@ func _update_match_minimap_overlay() -> void:
 					_add_match_minimap_line(match_minimap_static_layer, top_right, bottom_right, wall_color, 2.0)
 		match_minimap_static_layer.set_meta("map_static_dirty", false)                          # Retain the maze geometry until its topology changes.
 	_clear_debug_map_layer(match_minimap_dynamic_layer)                                        # Replace just the two player arrows each frame.
-	if not vending_machine.is_empty():
-		var vending_cell: Vector2i = vending_machine.get("cell", Vector2i.ZERO)
-		var vending_marker := Polygon2D.new()
-		var vending_center := _match_minimap_point(Vector2(vending_cell) + Vector2(0.5, 0.5))
-		vending_marker.polygon = PackedVector2Array([vending_center + Vector2(-2.0, -2.0), vending_center + Vector2(2.0, -2.0), vending_center + Vector2(2.0, 2.0), vending_center + Vector2(-2.0, 2.0)])
-		vending_marker.color = Color(0.55, 0.55, 0.55, 1.0)
-		match_minimap_dynamic_layer.add_child(vending_marker)                                   # Keep the neutral shop marker below the team-colored player arrows.
 	for player_index in range(player_states.size()):
 		if player_index >= player_joined.size() or not player_joined[player_index]:
 			continue                                                                                # Do not reveal an unjoined player's spawn position on any minimap.
@@ -6536,7 +6711,7 @@ func _add_debug_other_player_markers() -> void:                                 
 			continue                                                                                 # Continue to the next player state.
 		var other_center := _debug_map_world_position(_player_state_world_position(other_state))    # Convert the other player's physical position to map pixels.
 		var other_forward := _view_forward_vector_for_state(other_state)                            # Read the other player's cardinal or temporary diagonal view direction.
-		var facing_end := other_center + other_forward * (DEBUG_MAP_CELL_SIZE * 0.26)               # Compute the other player's facing arrow tip.
+		var facing_end := other_center + other_forward * (_debug_map_cell_size() * 0.26)            # Compute the other player's facing arrow tip.
 		_add_debug_line(other_center, facing_end, other_color, 2.0)                                # Draw the other player's facing arrow shaft.
 		_add_debug_arrow_head(facing_end, other_forward, other_color)                              # Draw the other player's facing arrow head.
 		_add_debug_player_marker(other_center, other_color)                                        # Draw the other player's marker body.
@@ -8663,14 +8838,87 @@ func _can_cross_diagonal_corner(source_cell: Vector2i, x_edge: Vector2i, y_edge:
 # is deliberately not an X-then-Y correction: at an oblique contact, the
 # surviving tangent is applied in the same update so a held stick glides along
 # the wall without making the camera/world alternate around the contact point.
+func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Dictionary:
+	var movement_length_squared := world_delta.length_squared()
+	if movement_length_squared <= 0.00000001:
+		return {}
+	var earliest_hit := 2.0                                                                    # Keep a no-hit sentinel outside the normalized sweep interval.
+	var hit_center := Vector2.ZERO
+	var combined_radius := PLAYER_CAPSULE_RADIUS + BARREL_COLLISION_RADIUS                    # Sweep the player capsule against every static barrel circle.
+	for barrel in world_barrels:
+		var barrel_center: Vector2 = barrel.get("position", Vector2.ZERO)
+		var offset := world_position - barrel_center
+		var radius_squared := combined_radius * combined_radius
+		var start_distance_squared := offset.length_squared()
+		var movement_toward_center := offset.dot(world_delta)
+		if start_distance_squared <= radius_squared:
+			if movement_toward_center < 0.0 and 0.0 < earliest_hit:
+				earliest_hit = 0.0                                                                   # Resolve only an inward retained contact; outward motion must remain free.
+				hit_center = barrel_center
+			continue
+		if movement_toward_center >= 0.0:
+			continue                                                                              # A player already moving away cannot newly contact this barrel.
+		var discriminant := movement_toward_center * movement_toward_center - movement_length_squared * (start_distance_squared - radius_squared)
+		if discriminant < 0.0:
+			continue                                                                              # The finite movement segment misses this barrel's expanded circle.
+		var hit_time := (-movement_toward_center - sqrt(discriminant)) / movement_length_squared
+		if hit_time >= 0.0 and hit_time <= 1.0 and hit_time < earliest_hit:
+			earliest_hit = hit_time
+			hit_center = barrel_center
+	if earliest_hit > 1.0:
+		return {}
+	return {"time": earliest_hit, "center": hit_center}
+
+
+# _wall_endpoint_sweep_hit: Supplements the existing cardinal grid-edge
+# sweeps with the circular caps they do not model.  Every source-map wall edge
+# has two real endpoints; testing those caps closes convex corners even when a
+# player approaches from a neighboring open cell.  Returning the contact normal
+# lets the caller retain tangential motion instead of snagging on the vertex.
+func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Dictionary:
+	var movement_length_squared := world_delta.length_squared()
+	if movement_length_squared <= 0.00000001:
+		return {}
+	var earliest_hit := 2.0
+	var hit_normal := Vector2.ZERO
+	var radius_squared := PLAYER_CAPSULE_RADIUS * PLAYER_CAPSULE_RADIUS
+	for edge: Dictionary in _all_physical_wall_edges():
+		var edge_a: Vector2 = edge["a"]
+		var edge_b: Vector2 = edge["b"]
+		for endpoint: Vector2 in [edge_a, edge_b]:
+			var offset: Vector2 = world_position - endpoint
+			var movement_toward_endpoint: float = offset.dot(world_delta)
+			var endpoint_hit_time: float = 2.0
+			var endpoint_normal: Vector2 = Vector2.ZERO
+			if offset.length_squared() <= radius_squared:
+				if movement_toward_endpoint >= 0.0:
+					continue
+				endpoint_hit_time = 0.0
+				endpoint_normal = offset.normalized() if offset.length_squared() > 0.00000001 else -world_delta.normalized()
+			elif movement_toward_endpoint < 0.0:
+				var discriminant: float = movement_toward_endpoint * movement_toward_endpoint - movement_length_squared * (offset.length_squared() - radius_squared)
+				if discriminant < 0.0:
+					continue
+				endpoint_hit_time = (-movement_toward_endpoint - sqrt(discriminant)) / movement_length_squared
+				if endpoint_hit_time < 0.0 or endpoint_hit_time > 1.0:
+					continue
+				endpoint_normal = (world_position + world_delta * endpoint_hit_time - endpoint).normalized()
+			if endpoint_hit_time < earliest_hit:
+				earliest_hit = endpoint_hit_time
+				hit_normal = endpoint_normal
+	if earliest_hit > 1.0:
+		return {}
+	return {"time": earliest_hit, "normal": hit_normal}
+
+
 func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, positive_x_label: String, negative_x_label: String, positive_y_label: String, negative_y_label: String) -> Vector2:
 	if walk_through_walls_cheat or world_delta.length_squared() <= 0.00000001:
 		return world_position + world_delta
 	var position := world_position
 	var remaining := world_delta
 	last_blocked_direction = ""
-	# One hit leaves a tangent; a second iteration handles sliding into a corner.
-	for _slide_pass in range(2):
+	# Two walls plus a prop can meet at a corner, so retain one extra tangent pass.
+	for _slide_pass in range(3):
 		if remaining.length_squared() <= 0.00000001:
 			break
 		var hit_time := 1.0
@@ -8703,11 +8951,42 @@ func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, 
 					hit_time = y_time
 					hit_x = false
 					hit_y = true
-		if not hit_x and not hit_y:
+		var barrel_hit := _barrel_sweep_hit(position, remaining)
+		var hit_barrel := not barrel_hit.is_empty() and float(barrel_hit["time"]) < hit_time
+		if hit_barrel:
+			hit_time = float(barrel_hit["time"])
+			hit_x = false
+			hit_y = false
+		var endpoint_hit := _wall_endpoint_sweep_hit(position, remaining)
+		var hit_endpoint := not endpoint_hit.is_empty() and float(endpoint_hit["time"]) < hit_time
+		if hit_endpoint:
+			hit_time = float(endpoint_hit["time"])
+			hit_x = false
+			hit_y = false
+			hit_barrel = false
+		if not hit_x and not hit_y and not hit_barrel and not hit_endpoint:
 			position += remaining
 			break
 		position += remaining * hit_time
 		remaining *= 1.0 - hit_time
+		if hit_endpoint:
+			var endpoint_normal: Vector2 = endpoint_hit["normal"]
+			var movement_into_endpoint := remaining.dot(endpoint_normal)
+			if movement_into_endpoint < 0.0:
+				remaining -= endpoint_normal * movement_into_endpoint
+			last_blocked_direction = "corner"
+			continue
+		if hit_barrel:
+			var barrel_normal := position - Vector2(barrel_hit["center"])
+			if barrel_normal.length_squared() <= 0.00000001:
+				barrel_normal = -remaining.normalized()                                             # Pick the opposing motion direction for an exact-center recovery.
+			else:
+				barrel_normal = barrel_normal.normalized()
+			var movement_into_barrel := remaining.dot(barrel_normal)
+			if movement_into_barrel < 0.0:
+				remaining -= barrel_normal * movement_into_barrel                                   # Preserve tangent motion around the rounded prop.
+			last_blocked_direction = "barrel"
+			continue
 		if hit_x:
 			remaining.x = 0.0
 			last_blocked_direction = positive_x_label if world_delta.x > 0.0 else negative_x_label
@@ -8892,7 +9171,7 @@ func _position_player() -> void:                                                
 		player_sprite.scale = Vector2.ONE * truth_scale
 		var truth_center := Vector2(truth_screen_x, _sprite_center_y_for_feet(player_sprite, truth_feet_y, truth_scale)) # Build the unmodified billboard location from real world truth.
 		player_sprite.position = _near_view_retained_sprite_center(player_sprite, truth_center, truth_scale) # Optionally retain a small top/edge strip only after natural viewport travel would fully remove it.
-		_apply_runtime_world_sprite_style(player_sprite, truth_scale, active_player_index, float(truth_projection.get("view_depth", 0.0)))
+		_apply_runtime_world_sprite_style(player_sprite, truth_scale, active_player_index, float(truth_projection.get("view_depth", 0.0)), true, true)
 		player_sprite.z_index = _world_actor_draw_layer(_current_player_world_position())
 		return                                                                                # Let the clipped viewport crop every remaining body pixel naturally; no hidden cardinal or diagonal clamp remains.
 	if _is_turn_45_view() and not use_near_cell_motion_envelope:                              # Retain this raw diagonal fallback only when the near-cell envelope is deliberately disabled.
@@ -8905,7 +9184,7 @@ func _position_player() -> void:                                                
 				var diagonal_scale := diagonal_height / diagonal_source_height
 				player_sprite.scale = Vector2.ONE * diagonal_scale
 				player_sprite.position = Vector2(float(diagonal_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5)), _sprite_center_y_for_feet(player_sprite, float(diagonal_projection.get("feet_y", VIEWPORT_SIZE.y)), diagonal_scale))
-				_apply_runtime_world_sprite_style(player_sprite, diagonal_scale, active_player_index)
+				_apply_runtime_world_sprite_style(player_sprite, diagonal_scale, active_player_index, 0.0, true, true)
 				player_sprite.z_index = _world_actor_draw_layer(_current_player_world_position())
 				return                                                                                # Keep the visible local body registered to the same world footprint as diagonal collision.
 	var display_local_position := _translation_display_local_position()                         # Let the actor travel smoothly through authored forward or side camera frames without changing collision or the source-map graph.
@@ -8917,7 +9196,7 @@ func _position_player() -> void:                                                
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the calibrated self-view feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
 	player_sprite.position = Vector2(screen_x, screen_y)                                       # Update player sprite rendering or animation state.
-	_apply_runtime_world_sprite_style(player_sprite, sprite_scale, active_player_index)         # Use this player's authored or Team 2 palette without distance darkening.
+	_apply_runtime_world_sprite_style(player_sprite, sprite_scale, active_player_index, 0.0, true, true) # Keep the local player authored-color, remapping only Team 2 purple fabric to green.
 	player_sprite.z_index = _world_actor_draw_layer(_current_player_world_position())          # Use the real same-cell camera-depth tie-breaker instead of forcing the local player in front of every body or prop.
 
 
@@ -9008,7 +9287,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	var character_layer := _world_actor_draw_layer(target_world)                               # Share the exact same cell layer and within-cell camera-depth tie-breaker as the local player.
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
-	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0))) # Match opponents to the same depth-driven source-pixel grid.
+	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0)), true, true) # Match opponents to the same depth-driven grid and selective costume treatment.
 	opponent_sprite.z_index = character_layer                                                          # Put the opponent into the same z-depth range as wall overlays.
 	opponent_sprite.visible = true                                                             # Show the opponent because it passed visibility checks.
 	_update_opponent_respawn_countdown(opponent_sprite, other_state)                           # Overlay the shared countdown only while this visible opponent is down.
@@ -10547,7 +10826,6 @@ func _build_random_maze_wall_edges() -> void:                                   
 	var start_cell := Vector2i(0, MAP_HEIGHT - 1)                                              # Start the test player in the southwest corner of the generated map.
 	_carve_maze_from(start_cell, visited, rng)                                                 # Carve a connected maze from the starting cell.
 	_add_extra_maze_openings(rng)                                                              # Open a few extra internal walls so the map has some loops.
-	_select_vending_machine_wall()                                                             # Give this generated maze one randomly placed wall shop.
 	grid_position = start_cell                                                                 # Place the player at the start of the generated maze.
 	facing = 0                                                                                 # Face north so the first view looks into the map.
 	turn_45_direction = 0                                                                      # Reset any temporary halfway-turn view when generating a new map.
@@ -10555,21 +10833,6 @@ func _build_random_maze_wall_edges() -> void:                                   
 	local_floor_position = HOME_LOCAL_FLOOR_POSITION                                           # Reset the player to the normal local tile position.
 	pending_grid_delta = Vector2i.ZERO                                                         # Clear any stale cell-crossing request.
 	last_blocked_direction = ""                                                                # Clear any stale blocked-movement status.
-
-
-func _select_vending_machine_wall() -> void:
-	var candidates: Array[Dictionary] = []
-	for y in range(MAP_HEIGHT):
-		for x in range(MAP_WIDTH):
-			var cell := Vector2i(x, y)
-			for direction in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
-				if _has_wall_edge(cell, direction):
-					candidates.append({"cell": cell, "direction": direction})
-	if candidates.is_empty():
-		vending_machine = {}
-		return
-	vending_machine = candidates[randi() % candidates.size()]
-
 
 
 # _carve_maze_from: Recursively carves passages through internal wall edges to make all cells reachable.

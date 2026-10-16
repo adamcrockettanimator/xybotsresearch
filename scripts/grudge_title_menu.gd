@@ -2,12 +2,32 @@ extends Control
 
 const GAME_SCENE := "res://coordinate_frame_navigation.tscn"
 const PLAYER_NAMES := ["BART", "JED", "HANK", "WYATT"]
-const TEAM_COLORS := [Color("#943dde"), Color("#27b84d"), Color("#943dde"), Color("#27b84d")]
+const MENU_INK := Color("#3b1b12")
 const DISPLAY_ORDER := [0, 2, 1, 3]
-var slot_labels: Array[Label] = []
+const SPLATTER_FRAME_PATHS := [
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed1.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed2.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed3.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed4.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed5.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed6.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed7.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed8.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed9.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed10.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed11.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed12.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed13.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed14.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed15.png",
+	"res://assets/Effects/Splatter/MenuSmall/FootageCrate-Ink_Bleed16.png",
+]
+var slot_name_labels: Array[Label] = []
+var slot_status_labels: Array[Label] = []
 var entrants: Dictionary = {}
 var input_latches: Dictionary = {}
-var decoration: AnimatedSprite2D
+var splatter: AnimatedSprite2D
+var masked_cowboy: AnimatedSprite2D
 
 func _ready() -> void:
 	var font: FontFile = preload("res://assets/Fonts/High Noon.woff")
@@ -18,41 +38,49 @@ func _ready() -> void:
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(backdrop)
-	var title := _make_label(font, "GRUDGE COUNTY", 64, Color("#3b1b12"))
-	title.add_theme_color_override("font_shadow_color", Color("#fff0a8"))
-	title.add_theme_constant_override("shadow_offset_x", 4)
-	title.add_theme_constant_override("shadow_offset_y", 4)
+	_add_broadside_frame()
+	var title := _make_label(font, "GRUDGE COUNTY", 64, MENU_INK)
 	title.position = Vector2(60, 45)
 	title.size = Vector2(840, 92)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(title)
-	var lawmen := _make_label(font, "LAWMEN", 18, TEAM_COLORS[0])
-	lawmen.position = Vector2(90, 190)
+	var lawmen := _make_label(font, "LAWMEN", 18, MENU_INK)
+	lawmen.position = Vector2(90, 184)
 	lawmen.size = Vector2(350, 28)
 	add_child(lawmen)
-	var outlaws := _make_label(font, "OUTLAWS", 18, TEAM_COLORS[1])
-	outlaws.position = Vector2(90, 365)
+	_add_team_underline(Vector2(90, 212), Vector2(220, 212))
+	var outlaws := _make_label(font, "OUTLAWS", 18, MENU_INK)
+	outlaws.position = Vector2(90, 340)
 	outlaws.size = Vector2(350, 28)
 	add_child(outlaws)
+	_add_team_underline(Vector2(90, 368), Vector2(220, 368))
+	var member_y := [222.0, 262.0, 378.0, 418.0]
 	for display_index in range(4):
 		var slot_index: int = DISPLAY_ORDER[display_index]
-		var slot := _make_label(font, "", 25, TEAM_COLORS[slot_index])
-		slot.position = Vector2(90, 228 + display_index * 72 + (32 if display_index >= 2 else 0))
-		slot.size = Vector2(440, 52)
-		slot.add_theme_color_override("font_shadow_color", Color("#32170e"))
-		slot.add_theme_constant_override("shadow_offset_x", 2)
-		slot.add_theme_constant_override("shadow_offset_y", 2)
-		add_child(slot)
-		slot_labels.append(slot)
-	_decoration_setup()
-	var start_hint := _make_label(font, "START: JOIN / START MATCH", 16, Color("#3b1b12"))
-	start_hint.position = Vector2(90, 590)
-	start_hint.size = Vector2(780, 34)
-	add_child(start_hint)
-	var join_hint := _make_label(font, "STICK: SELECT   A: CONFIRM   B: BACK   •   VACANCIES BECOME BOTS", 10, Color("#5a2d14"))
-	join_hint.position = Vector2(90, 635)
-	join_hint.size = Vector2(780, 24)
-	add_child(join_hint)
+		var name_label := _make_label(font, "", 25, MENU_INK)
+		name_label.position = Vector2(90, member_y[display_index])
+		name_label.size = Vector2(170, 42)
+		add_child(name_label)
+		slot_name_labels.append(name_label)
+		var status_label := _make_label(font, "", 10, MENU_INK)
+		status_label.position = Vector2(270, member_y[display_index] + 12.0)
+		status_label.size = Vector2(180, 22)
+		add_child(status_label)
+		slot_status_labels.append(status_label)
+	_splatter_decoration_setup()
+	_add_horizon_silhouette()
+	var directions := ["STICK: SELECT", "A: CONFIRM", "B: BACK", "START: JOIN / START MATCH"]
+	for direction_index in range(directions.size()):
+		var direction_label := _make_label(font, directions[direction_index], 10, MENU_INK)
+		direction_label.position = Vector2(90, 566 + direction_index * 22)
+		direction_label.size = Vector2(260, 20)
+		direction_label.z_index = 4
+		add_child(direction_label)
+	var vacancy_note := _make_label(font, "VACANCIES BECOME BOTS", 10, MENU_INK)
+	vacancy_note.position = Vector2(90, 666)
+	vacancy_note.size = Vector2(260, 20)
+	vacancy_note.z_index = 4
+	add_child(vacancy_note)
 	_refresh_slots()
 
 func _make_label(font: Font, text: String, font_size: int, color: Color) -> Label:
@@ -63,6 +91,47 @@ func _make_label(font: Font, text: String, font_size: int, color: Color) -> Labe
 	label.add_theme_color_override("font_color", color)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
+
+func _add_broadside_frame() -> void:
+	# A clean rectangular rule keeps the flat pixel-art menu reading as a
+	# printed broadside without a broken corner. These child lines sit above the backdrop but underneath
+	# later text/splatter children.
+	var border := PackedVector2Array([
+		Vector2(14, 14), Vector2(946, 14), Vector2(946, 706), Vector2(14, 706),
+	])
+	var border_line := Line2D.new()
+	border_line.points = border
+	border_line.closed = true
+	border_line.width = 3.0
+	border_line.default_color = MENU_INK
+	border_line.antialiased = false
+	border_line.z_index = 5
+	add_child(border_line)
+	# Simple square-ended divider between the masthead and roster.
+	var divider := Line2D.new()
+	divider.points = PackedVector2Array([Vector2(62, 128), Vector2(898, 128)])
+	divider.width = 3.0
+	divider.default_color = MENU_INK
+	divider.antialiased = false
+	add_child(divider)
+
+func _add_team_underline(from: Vector2, to: Vector2) -> void:
+	var underline := Line2D.new()
+	underline.points = PackedVector2Array([from, to])
+	underline.width = 2.0
+	underline.default_color = MENU_INK
+	underline.antialiased = false
+	add_child(underline)
+
+func _add_horizon_silhouette() -> void:
+	# This standalone transparent texture can be opened directly in a pixel-art
+	# editor to repaint the horizon without modifying menu code.
+	var horizon := Sprite2D.new()
+	horizon.texture = load("res://assets/UI/GrudgeMenu/grudge_menu_horizon.png")
+	horizon.centered = false
+	horizon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	horizon.z_index = 3
+	add_child(horizon)
 
 func _process(delta: float) -> void:
 	for device_id in Input.get_connected_joypads():
@@ -113,9 +182,11 @@ func _start_match() -> void:
 func _refresh_slots() -> void:
 	var session := get_node_or_null("/root/GrudgeSession")
 	var slots: Array = session.get("human_slots") if session != null else [false, false, false, false]
-	for display_index in range(slot_labels.size()):
+	for display_index in range(slot_name_labels.size()):
 		var slot_index: int = DISPLAY_ORDER[display_index]
-		var occupied: bool = slot_index < slots.size() and bool(slots[slot_index])
+		var occupied := false
+		if slot_index < slots.size():
+			occupied = bool(slots[slot_index])
 		var selecting := _is_slot_selected(slot_index)
 		var state := "SELECTING" if selecting else "OPEN"
 		if occupied:
@@ -123,7 +194,8 @@ func _refresh_slots() -> void:
 			var device_id := int(device_ids[slot_index]) if slot_index < device_ids.size() else -1
 			var source := "PAD %d" % device_id if device_id >= 0 else "KEYBOARD"
 			state = "P%d READY [%s]" % [slot_index + 1, source]
-		slot_labels[display_index].text = "%s  %s" % [PLAYER_NAMES[slot_index], state]
+		slot_name_labels[display_index].text = PLAYER_NAMES[slot_index]
+		slot_status_labels[display_index].text = state
 
 func _handle_start(device_id: int) -> void:
 	if not entrants.has(device_id):
@@ -201,13 +273,80 @@ func _just_pressed(device_id: int, action: String, pressed: bool) -> bool:
 	input_latches[key] = pressed
 	return pressed and not was_pressed
 
-func _decoration_setup() -> void:
-	decoration = AnimatedSprite2D.new()
-	decoration.sprite_frames = load("res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir_Strafe.tres")
-	decoration.animation = &"RunW_AimW"
-	decoration.position = Vector2(710, 368)
-	decoration.scale = Vector2(6.4, 6.4)
-	decoration.modulate = Color(0.04, 0.025, 0.02, 1.0)
-	decoration.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	decoration.play()
-	add_child(decoration)
+func _splatter_decoration_setup() -> void:
+	# The supplied ink sequence is a red window in the yellow menu, rather than
+	# an opaque panel. The cowboy's rendered texture is alpha-clipped by the
+	# current ink frame, so he only exists inside the animated splatter.
+	var frames := SpriteFrames.new()
+	frames.remove_animation(&"default")
+	frames.add_animation(&"bleed")
+	# This is an arrival accent: reveal the red field once, then preserve the
+	# completed splatter as the backdrop for the looping silhouette.
+	frames.set_animation_loop(&"bleed", false)
+	frames.set_animation_speed(&"bleed", 9.0)
+	for frame_path in SPLATTER_FRAME_PATHS:
+		frames.add_frame(&"bleed", load(frame_path), 1.0)
+
+	splatter = AnimatedSprite2D.new()
+	splatter.sprite_frames = frames
+	splatter.animation = &"bleed"
+	splatter.position = Vector2(720, 390)
+	splatter.scale = Vector2(2.5, 2.5)
+	splatter.modulate = Color("#b52b24")
+	splatter.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	splatter.z_index = 1
+	var ink_shader := Shader.new()
+	ink_shader.code = """shader_type canvas_item;
+void fragment() {
+	vec4 ink = texture(TEXTURE, UV);
+	float ink_alpha = max(ink.r, max(ink.g, ink.b));
+	COLOR = vec4(COLOR.rgb, COLOR.a * ink_alpha);
+}"""
+	var ink_material := ShaderMaterial.new()
+	ink_material.shader = ink_shader
+	splatter.material = ink_material
+	splatter.frame_changed.connect(_update_cowboy_mask)
+	add_child(splatter)
+
+	masked_cowboy = AnimatedSprite2D.new()
+	masked_cowboy.sprite_frames = load("res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir_Strafe.tres")
+	masked_cowboy.animation = &"RunW_AimW"
+	masked_cowboy.position = splatter.position
+	masked_cowboy.scale = Vector2(10.9, 10.9)
+	masked_cowboy.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	masked_cowboy.z_index = 2
+	var mask_shader := Shader.new()
+	mask_shader.code = """shader_type canvas_item;
+uniform sampler2D mask_texture : source_color, filter_nearest;
+void fragment() {
+	vec4 cowboy = texture(TEXTURE, UV);
+	// Keep the cowboy's 32x48 frame aligned to the source 320x240 splatter.
+	vec2 mask_uv = vec2(0.5, 0.525) + (UV - vec2(0.5)) * vec2(0.5, 1.0);
+	vec4 ink = texture(mask_texture, mask_uv);
+	float mask_alpha = max(ink.r, max(ink.g, ink.b));
+	COLOR = vec4(vec3(0.04), cowboy.a * mask_alpha);
+}"""
+	var mask_material := ShaderMaterial.new()
+	mask_material.shader = mask_shader
+	masked_cowboy.material = mask_material
+	add_child(masked_cowboy)
+	# Keep the menu quiet for a beat, then play the one-shot reveal. Hiding both
+	# nodes prevents frame zero from flashing before the intended delay.
+	splatter.visible = false
+	masked_cowboy.visible = false
+	masked_cowboy.play()
+	get_tree().create_timer(1.0).timeout.connect(_start_splatter_reveal)
+	_update_cowboy_mask()
+
+func _start_splatter_reveal() -> void:
+	if splatter == null or masked_cowboy == null:
+		return
+	splatter.visible = true
+	masked_cowboy.visible = true
+	splatter.play()
+
+func _update_cowboy_mask() -> void:
+	if splatter == null or masked_cowboy == null:
+		return
+	var material := masked_cowboy.material as ShaderMaterial
+	material.set_shader_parameter(&"mask_texture", splatter.sprite_frames.get_frame_texture(splatter.animation, splatter.frame))
