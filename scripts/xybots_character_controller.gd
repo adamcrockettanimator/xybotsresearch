@@ -162,8 +162,10 @@ const PROJECTILE_SPEED := 6                                                     
 const PROJECTILE_LIFETIME := 1.5                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PLAYER_CAPSULE_RADIUS := 0.10                                                           # Match the visible body width more closely while retaining one shared circular footprint for movement, combat, and pickups.
 const CONTINUOUS_CAMERA_FOLLOW_DISTANCE := 0.795                                               # Match the original full-motion player-derived camera depth for the helicopter's desired trailing point.
-const CONTINUOUS_CAMERA_MAX_SPEED := 2.5                                                       # Limit uncommanded helicopter speed so camera corrections stay comfortable for the player.
-const CONTINUOUS_CAMERA_STEERING_RESPONSE := 7.0                                               # Smoothly steer toward the follow target instead of snapping velocity or direction.
+const CONTINUOUS_CAMERA_MAX_SPEED := 4.0                                                       # Let the camera recover promptly enough to keep the player framed without a sharp teleport.
+const CONTINUOUS_CAMERA_STEERING_RESPONSE := 8.0                                               # Smoothly steer toward the follow target instead of snapping velocity or direction.
+const CONTINUOUS_CAMERA_WALL_AVOID_SECONDS := 0.18                                             # Briefly prefer the player's side of a wall before allowing the camera to pass through it.
+const CONTINUOUS_CAMERA_WALL_RELEASE_SECONDS := 0.60                                           # Ease out of avoidance quickly enough that a wall can never strand the camera.
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
 const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
@@ -849,6 +851,7 @@ var turn_step := 0                                                              
 var continuous_camera_yaw := 0.0                                                            # Store the current free yaw in radians; the eight-direction cowboy art snaps independently.
 var continuous_camera_world_position := Vector2.ZERO                                        # Keep the free camera separate from the player's capsule so it moves as a collision-safe helicopter instead of teleporting to every player offset.
 var continuous_camera_velocity := Vector2.ZERO                                              # Preserve smooth helicopter inertia independently for each local player view.
+var continuous_camera_wall_obstruction_seconds := 0.0                                       # Track sustained wall pressure so wall avoidance yields gracefully instead of trapping the camera.
 var manual_turn_step_enabled := false                                                       # Let the debug menu hold the authored 22/66 turn frames until a fresh turn input advances them.
 var forward_step := 0                                                                        # Track a forward camera stage: 0=stable, 1=Floor/WallsFwd_1, 2=Floor/WallsFwd_2.
 var forward_passthrough_timer := 0.0                                                        # Accumulate the display time of the active forward frame.
@@ -1908,8 +1911,9 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"turn_45_direction": 0,                                                                     # Store whether this player is stopped on a halfway turn view.
 		"turn_step": 0,                                                                              # Store the current 22/45/66 interpolation stage.
 		"continuous_camera_yaw": float(start_facing) * PI * 0.5,                                  # Start the free camera aligned with this player's inherited cardinal heading.
-		"continuous_camera_world_position": Vector2(float(start_cell.x) + 0.5, float(start_cell.y) + 0.5), # Start at the player before the helicopter flies to its rear follow point.
+		"continuous_camera_world_position": Vector2(float(start_cell.x) + 0.5, float(start_cell.y) + 0.5) - Vector2(0.0, -1.0).rotated(float(start_facing) * PI * 0.5) * CONTINUOUS_CAMERA_FOLLOW_DISTANCE, # Begin already framed at the normal rear follow point.
 		"continuous_camera_velocity": Vector2.ZERO,                                               # Begin each view's helicopter at rest.
+		"continuous_camera_wall_obstruction_seconds": 0.0,                                        # Begin without a pending wall-avoidance release.
 		"forward_step": 0,                                                                           # Store the current Fwd 1/Fwd 2 camera stage.
 		"forward_passthrough_timer": 0.0,                                                           # Store elapsed automatic Fwd stage time.
 		"forward_transition_name": "",                                                            # Store the pending cell-crossing result after Fwd 2.
@@ -4501,6 +4505,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	continuous_camera_yaw = float(state.get("continuous_camera_yaw", float(facing) * PI * 0.5)) # Restore the free camera heading, falling back to old cardinal state safely.
 	continuous_camera_world_position = state.get("continuous_camera_world_position", player_world_position) # Restore the independent collision-safe helicopter position.
 	continuous_camera_velocity = state.get("continuous_camera_velocity", Vector2.ZERO)        # Restore the camera's smooth steering velocity separately from its position.
+	continuous_camera_wall_obstruction_seconds = float(state.get("continuous_camera_wall_obstruction_seconds", 0.0)) # Restore the soft wall-avoidance timer for this local view.
 	forward_step = int(state.get("forward_step", 0))                                          # Restore this player's active forward camera stage.
 	forward_passthrough_timer = float(state.get("forward_passthrough_timer", 0.0))             # Restore elapsed time in the active forward frame.
 	forward_transition_name = String(state.get("forward_transition_name", ""))                # Restore the cell-crossing result that follows the second forward frame.
@@ -4549,6 +4554,7 @@ func _save_player_context(player_index: int) -> void:                           
 	state["continuous_camera_yaw"] = continuous_camera_yaw                                    # Save the free camera heading independently of snapped sprite-facing state.
 	state["continuous_camera_world_position"] = continuous_camera_world_position              # Save the helicopter's independent collision-safe world position for this local view.
 	state["continuous_camera_velocity"] = continuous_camera_velocity                          # Save its inertial flight state so player contexts do not borrow one another's correction.
+	state["continuous_camera_wall_obstruction_seconds"] = continuous_camera_wall_obstruction_seconds # Save its soft wall-avoidance state with the matching local camera.
 	state["forward_step"] = forward_step                                                       # Save this player's active forward camera stage.
 	state["forward_passthrough_timer"] = forward_passthrough_timer                            # Save elapsed time in the active forward frame.
 	state["forward_transition_name"] = forward_transition_name                                # Save the cell-crossing result that follows the forward frames.
@@ -4704,104 +4710,43 @@ func _continuous_camera_follow_target() -> Vector2:
 	return player_world_position - _view_forward_vector() * CONTINUOUS_CAMERA_FOLLOW_DISTANCE
 
 
-# _move_camera_through_walls: Camera-only wall slide. It deliberately ignores
-# barrels (the helicopter flies above them) and treats wall corners as a point
-# steering constraint rather than the player's swept capsule, preventing the
-# endpoint catches that made camera corrections feel jerky.
-func _move_camera_through_walls(world_position: Vector2, world_delta: Vector2) -> Dictionary:
-	var position := world_position
-	var remaining := world_delta
-	var hit_x := false
-	var hit_y := false
-	for _slide_pass in range(2):
-		if remaining.length_squared() <= 0.00000001:
-			break
-		var hit_time := 1.0
-		var pass_hit_x := false
-		var pass_hit_y := false
-		if not is_zero_approx(remaining.x):
-			var x_cell := floori(position.x)
-			var x_step := 1 if remaining.x > 0.0 else -1
-			var x_boundary := float(x_cell + 1) if x_step > 0 else float(x_cell)
-			var x_time := maxf(0.0, (x_boundary - position.x) / remaining.x)
-			if x_time <= hit_time and not _can_cross_edge(Vector2i(x_cell, floori(position.y)), Vector2i(x_step, 0)):
-				hit_time = x_time
-				pass_hit_x = true
-		if not is_zero_approx(remaining.y):
-			var y_cell := floori(position.y)
-			var y_step := 1 if remaining.y > 0.0 else -1
-			var y_boundary := float(y_cell + 1) if y_step > 0 else float(y_cell)
-			var y_time := maxf(0.0, (y_boundary - position.y) / remaining.y)
-			if y_time <= hit_time and not _can_cross_edge(Vector2i(floori(position.x), y_cell), Vector2i(0, y_step)):
-				if is_equal_approx(y_time, hit_time):
-					pass_hit_y = true
-				else:
-					hit_time = y_time
-					pass_hit_x = false
-					pass_hit_y = true
-		if not pass_hit_x and not pass_hit_y:
-			position += remaining
-			break
-		position += remaining * hit_time
-		remaining *= 1.0 - hit_time
-		if pass_hit_x:
-			remaining.x = 0.0
-			hit_x = true
-		if pass_hit_y:
-			remaining.y = 0.0
-			hit_y = true
-	return {"position": position, "hit_x": hit_x, "hit_y": hit_y}
-
-
-# _continuous_camera_safe_boom_target: Sweep the desired rear point outward
-# from the player's legal center using the camera's wall-only flight rules.
+# _continuous_camera_safe_boom_target: Return the preferred pre-wall boom
+# point. This is guidance only: the player remains the priority, so sustained
+# obstruction will smoothly release the camera through a dithered cutaway.
 func _continuous_camera_safe_boom_target() -> Vector2:
 	var desired_target := _continuous_camera_follow_target()
-	var safe_target: Vector2 = _move_camera_through_walls(player_world_position, desired_target - player_world_position)["position"]
-	var player_to_safe := safe_target - player_world_position
-	var safe_distance := player_to_safe.length()
-	if safe_distance > 0.002:
-		var first_wall_distance := _nearest_projectile_wall_distance(player_world_position, player_to_safe / safe_distance, safe_distance)
-		if first_wall_distance <= safe_distance - PROJECTILE_WALL_EPSILON:
-			# A slide around a corner can be collision-safe locally while falling
-			# behind that corner from the player's view. Shorten the boom instead:
-			# a helicopter that must frame the player cannot occupy that hidden side.
-			var desired_direction := (desired_target - player_world_position).normalized()
-			return player_world_position + desired_direction * maxf(0.0, first_wall_distance - PLAYER_CAPSULE_RADIUS)
-	return safe_target
+	var boom_delta := desired_target - player_world_position
+	var boom_distance := boom_delta.length()
+	if boom_distance <= 0.002:
+		return desired_target
+	var wall_distance := _nearest_projectile_wall_distance(player_world_position, boom_delta / boom_distance, boom_distance)
+	if wall_distance >= boom_distance - PROJECTILE_WALL_EPSILON:
+		return desired_target
+	return player_world_position + boom_delta.normalized() * maxf(0.0, wall_distance - PLAYER_CAPSULE_RADIUS)
 
 
-# _continuous_camera_has_clear_player_line: A camera must share a real open
-# line with its player. This guards saved/old positions and prevents the view
-# from ever surviving on the far side of a wall after an abrupt turn.
-func _continuous_camera_has_clear_player_line() -> bool:
-	var to_player := player_world_position - continuous_camera_world_position
-	var distance := to_player.length()
-	if distance <= 0.002:
-		return true
-	return _nearest_projectile_wall_distance(continuous_camera_world_position, to_player / distance, distance) > distance - PROJECTILE_WALL_EPSILON
-
-
-# _update_continuous_camera_position: Smoothly steer the helicopter toward its
-# safe boom target, then let walls remove only the blocked velocity component.
-# That makes it glide along a wall/corner rather than snap, snag, or collide
-# with gameplay barrels.
+# _update_continuous_camera_position: Treat walls as a brief soft steering
+# preference, not a prison. The camera starts by favoring the near-side boom
+# point, then continuously releases to the real follow target so it always
+# recovers to the player and the renderer's dithered cutaway owns any overlap.
 func _update_continuous_camera_position(delta: float) -> void:
-	var safe_target := _continuous_camera_safe_boom_target()
-	if not _continuous_camera_has_clear_player_line():
-		safe_target = player_world_position
 	var safe_delta := maxf(delta, 0.0)
-	var desired_velocity := (safe_target - continuous_camera_world_position) * CONTINUOUS_CAMERA_STEERING_RESPONSE
+	var desired_target := _continuous_camera_follow_target()
+	var preferred_target := _continuous_camera_safe_boom_target()
+	var obstructed := preferred_target.distance_to(desired_target) > 0.002
+	if obstructed:
+		continuous_camera_wall_obstruction_seconds += safe_delta
+	else:
+		continuous_camera_wall_obstruction_seconds = maxf(0.0, continuous_camera_wall_obstruction_seconds - safe_delta * 3.0)
+	var release_fraction := clampf((continuous_camera_wall_obstruction_seconds - CONTINUOUS_CAMERA_WALL_AVOID_SECONDS) / CONTINUOUS_CAMERA_WALL_RELEASE_SECONDS, 0.0, 1.0)
+	release_fraction = release_fraction * release_fraction * (3.0 - 2.0 * release_fraction)
+	var guidance_target := preferred_target.lerp(desired_target, release_fraction)
+	var desired_velocity := (guidance_target - continuous_camera_world_position) * CONTINUOUS_CAMERA_STEERING_RESPONSE
 	if desired_velocity.length() > CONTINUOUS_CAMERA_MAX_SPEED:
 		desired_velocity = desired_velocity.normalized() * CONTINUOUS_CAMERA_MAX_SPEED
 	var steering_blend := 1.0 - exp(-CONTINUOUS_CAMERA_STEERING_RESPONSE * safe_delta)
 	continuous_camera_velocity = continuous_camera_velocity.lerp(desired_velocity, steering_blend)
-	var move_result := _move_camera_through_walls(continuous_camera_world_position, continuous_camera_velocity * safe_delta)
-	continuous_camera_world_position = Vector2(move_result["position"])
-	if bool(move_result["hit_x"]):
-		continuous_camera_velocity.x = 0.0
-	if bool(move_result["hit_y"]):
-		continuous_camera_velocity.y = 0.0
+	continuous_camera_world_position += continuous_camera_velocity * safe_delta
 
 
 
