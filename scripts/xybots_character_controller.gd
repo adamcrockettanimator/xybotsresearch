@@ -161,7 +161,8 @@ const MACHINE_GUN_PICKUP_STREAM := preload("res://assets/Audio/SFX/MachineGun.mp
 const PROJECTILE_SPEED := 6                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.5                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PLAYER_CAPSULE_RADIUS := 0.10                                                           # Match the visible body width more closely while retaining one shared circular footprint for movement, combat, and pickups.
-const CONTINUOUS_CAMERA_FOLLOW_DISTANCE := 0.795                                               # Match the former full-motion player-derived camera depth while allowing its own collision-safe world position.
+const CONTINUOUS_CAMERA_FOLLOW_DISTANCE := 0.795                                               # Match the former full-motion player-derived camera depth while keeping the camera on a room/corridor center track.
+const CONTINUOUS_CAMERA_TRACK_RAY_DISTANCE := 24.0                                             # Reach either side of the authored maze when locating the centerline between its real walls.
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
 const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
@@ -845,8 +846,7 @@ var facing := 0                                                                 
 var turn_45_direction := 0                                                                   # Track a temporary halfway turn stop: -1=left, 0=cardinal, 1=right.
 var turn_step := 0                                                                           # Track a view-relative quarter-turn stage: 0=cardinal, 1=22, 2=45, 3=66.
 var continuous_camera_yaw := 0.0                                                            # Store the current free yaw in radians; the eight-direction cowboy art snaps independently.
-var continuous_camera_world_position := Vector2.ZERO                                        # Keep the free camera separate from the player's capsule so its rear follow point can stop at real maze walls.
-var continuous_camera_initialized := false                                                   # Delay the first camera sweep until a collision-safe player position is available.
+var continuous_camera_world_position := Vector2.ZERO                                        # Keep the free camera separate from the player's capsule so it can remain on the center track instead of chasing side-to-side motion.
 var manual_turn_step_enabled := false                                                       # Let the debug menu hold the authored 22/66 turn frames until a fresh turn input advances them.
 var forward_step := 0                                                                        # Track a forward camera stage: 0=stable, 1=Floor/WallsFwd_1, 2=Floor/WallsFwd_2.
 var forward_passthrough_timer := 0.0                                                        # Accumulate the display time of the active forward frame.
@@ -1906,8 +1906,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"turn_45_direction": 0,                                                                     # Store whether this player is stopped on a halfway turn view.
 		"turn_step": 0,                                                                              # Store the current 22/45/66 interpolation stage.
 		"continuous_camera_yaw": float(start_facing) * PI * 0.5,                                  # Start the free camera aligned with this player's inherited cardinal heading.
-		"continuous_camera_world_position": Vector2(float(start_cell.x) + 0.5, float(start_cell.y) + 0.5), # Begin at the player so the first rear-follow move sweeps outward through real wall collision.
-		"continuous_camera_initialized": false,                                                    # Mark the first collision sweep as pending until the player state is fully bound.
+		"continuous_camera_world_position": Vector2(float(start_cell.x) + 0.5, float(start_cell.y) + 0.5), # Start on the cell centre before the first centered-track update.
 		"forward_step": 0,                                                                           # Store the current Fwd 1/Fwd 2 camera stage.
 		"forward_passthrough_timer": 0.0,                                                           # Store elapsed automatic Fwd stage time.
 		"forward_transition_name": "",                                                            # Store the pending cell-crossing result after Fwd 2.
@@ -4497,8 +4496,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	turn_45_direction = int(state.get("turn_45_direction", 0))                                  # Restore this player's temporary halfway-turn direction.
 	turn_step = int(state.get("turn_step", 2 if turn_45_direction != 0 else 0))                   # Restore the current interpolation stage, preserving old saved diagonal states.
 	continuous_camera_yaw = float(state.get("continuous_camera_yaw", float(facing) * PI * 0.5)) # Restore the free camera heading, falling back to old cardinal state safely.
-	continuous_camera_world_position = state.get("continuous_camera_world_position", player_world_position) # Restore the collision-safe camera separately; older saves start from the player before their first sweep.
-	continuous_camera_initialized = bool(state.get("continuous_camera_initialized", false))     # Old state records deliberately reinitialize from the collision-safe player point.
+	continuous_camera_world_position = state.get("continuous_camera_world_position", player_world_position) # Restore the independent camera position; the center track refreshes it immediately.
 	forward_step = int(state.get("forward_step", 0))                                          # Restore this player's active forward camera stage.
 	forward_passthrough_timer = float(state.get("forward_passthrough_timer", 0.0))             # Restore elapsed time in the active forward frame.
 	forward_transition_name = String(state.get("forward_transition_name", ""))                # Restore the cell-crossing result that follows the second forward frame.
@@ -4545,8 +4543,7 @@ func _save_player_context(player_index: int) -> void:                           
 	state["turn_45_direction"] = turn_45_direction                                             # Save this player's temporary halfway-turn direction.
 	state["turn_step"] = turn_step                                                             # Save this player's current interpolation stage.
 	state["continuous_camera_yaw"] = continuous_camera_yaw                                    # Save the free camera heading independently of snapped sprite-facing state.
-	state["continuous_camera_world_position"] = continuous_camera_world_position              # Save the camera's independent collision-safe world position for this local view.
-	state["continuous_camera_initialized"] = continuous_camera_initialized                    # Preserve whether this camera has completed its initial player-to-rear collision sweep.
+	state["continuous_camera_world_position"] = continuous_camera_world_position              # Save the camera's independent center-track position for this local view.
 	state["forward_step"] = forward_step                                                       # Save this player's active forward camera stage.
 	state["forward_passthrough_timer"] = forward_passthrough_timer                            # Save elapsed time in the active forward frame.
 	state["forward_transition_name"] = forward_transition_name                                # Save the cell-crossing result that follows the forward frames.
@@ -4693,28 +4690,35 @@ func _process_continuous_third_person_input(delta: float) -> void:
 		run_animation_reversed = false
 		world_run_dir = world_aim_dir
 		_play_idle_animation()
-	_update_continuous_camera_position()                                                       # Follow after the body has moved, stopping the camera at walls instead of letting its rear offset tunnel through them.
+	_update_continuous_camera_position()                                                       # Follow after the body has moved, retaining only its progress along the room/corridor center track.
 
 
 # _continuous_camera_follow_target: Preserves the original full-motion framing
-# target: directly behind the player on the current free-yaw axis. This is a
-# target only; the actual camera advances toward it through wall collision.
+# target: directly behind the player on the current free-yaw axis.
 func _continuous_camera_follow_target() -> Vector2:
 	return player_world_position - _view_forward_vector() * CONTINUOUS_CAMERA_FOLLOW_DISTANCE
 
 
-# _update_continuous_camera_position: Makes the third-person camera a small
-# independent collider. The existing capsule sweep handles thin edges, convex
-# corners, and sliding, so the camera stays in reachable maze space while the
-# player can move freely within the frame instead of being forced to its center.
+# _continuous_camera_track_target: Keeps the camera centered between the two
+# nearest physical walls across its current view. Moving down a hall changes
+# the camera's depth normally; moving toward either side wall leaves the camera
+# on the hall/room middle instead of dragging it sideways with the player.
+func _continuous_camera_track_target() -> Vector2:
+	var rear_follow_target := _continuous_camera_follow_target()
+	var right := _view_right_vector().normalized()
+	var right_wall_distance := _nearest_projectile_wall_distance(rear_follow_target, right, CONTINUOUS_CAMERA_TRACK_RAY_DISTANCE)
+	var left_wall_distance := _nearest_projectile_wall_distance(rear_follow_target, -right, CONTINUOUS_CAMERA_TRACK_RAY_DISTANCE)
+	if right_wall_distance > CONTINUOUS_CAMERA_TRACK_RAY_DISTANCE or left_wall_distance > CONTINUOUS_CAMERA_TRACK_RAY_DISTANCE:
+		return rear_follow_target
+	return rear_follow_target + right * (right_wall_distance - left_wall_distance) * 0.5
+
+
+# _update_continuous_camera_position: Recenter the free camera in the current
+# room or hall cross-section. Unlike the prior collision-held position, this
+# is deliberately not a lagging chase camera: turning and longitudinal travel
+# remain immediate while lateral player movement leaves the camera on track.
 func _update_continuous_camera_position() -> void:
-	var target := _continuous_camera_follow_target()
-	if not continuous_camera_initialized:
-		continuous_camera_world_position = player_world_position
-		continuous_camera_initialized = true
-	var player_blocked_direction := last_blocked_direction
-	continuous_camera_world_position = _move_world_with_wall_slide(continuous_camera_world_position, target - continuous_camera_world_position, "camera right", "camera left", "camera back", "camera front")
-	last_blocked_direction = player_blocked_direction                                           # A blocked camera must not overwrite the player's own collision/debug feedback.
+	continuous_camera_world_position = _continuous_camera_track_target()
 
 
 
