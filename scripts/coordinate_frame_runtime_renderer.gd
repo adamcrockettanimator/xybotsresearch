@@ -826,6 +826,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row1", inverse[1])
 		material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("wall_light", float(entry["light"]))
+		material.set_shader_parameter("endpoint_corner_tones", Vector2(entry.get("corner_tone_a", 0.0), entry.get("corner_tone_b", 0.0)))
 		material.set_shader_parameter("wall_opacity", float(entry.get("camera_cutaway_opacity", 1.0)))
 		material.set_shader_parameter("use_camera_cutaway_fade", bool(entry.get("camera_cutaway_fade", false)))
 		material.set_shader_parameter("wall_world_a", Vector2(entry.get("world_a", Vector2.ZERO)))
@@ -1216,6 +1217,7 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("camera_forward", Vector2(entry["forward"]))
 		material.set_shader_parameter("camera_right", Vector2(entry["right"]))
 		material.set_shader_parameter("cell_world", Vector2(Vector2i(entry["cell"])))
+		material.set_shader_parameter("wall_edge_mask", _cell_wall_edge_mask(Vector2i(entry["cell"])))
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
 		material.set_shader_parameter("use_depth_light_dither", true)                            # Blend only the authored depth-light boundaries; texture ownership stays exact.
 		material.set_shader_parameter("use_layers", false)
@@ -1412,6 +1414,7 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("camera_forward", Vector2(entry["forward"]))
 		material.set_shader_parameter("camera_right", Vector2(entry["right"]))
 		material.set_shader_parameter("cell_world", Vector2(Vector2i(entry["cell"])))
+		material.set_shader_parameter("wall_edge_mask", _cell_wall_edge_mask(Vector2i(entry["cell"])))
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
 		material.set_shader_parameter("layer1_texture", gpu_ceiling_layer1_mip_texture if use_gpu_mips else ceiling_layer1_texture)
 		material.set_shader_parameter("layer2_texture", gpu_ceiling_layer2_mip_texture if use_gpu_mips and gpu_ceiling_layer2_mip_texture != null else (ceiling_layer2_texture if ceiling_layer2_texture != null else ceiling_layer1_texture))
@@ -1776,6 +1779,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"cell_draw_depth": cell_draw_depth,
 			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
+			"corner_tone_a": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell),
+			"corner_tone_b": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell),
 		}
 		# Fade outward from the actual camera-fan contact, not from the player's
 		# centre. That keeps a still-occluding wall clear after the player backs
@@ -1808,6 +1813,58 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		result = result.slice(0, MAX_WALLS)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	return result
+
+
+# _cell_wall_edge_mask: Encode only actual thin-wall contacts for the horizontal
+# plane shader. Open cell borders are deliberately excluded so this does not
+# turn the floor or ceiling into a visible tile grid.
+func _cell_wall_edge_mask(cell: Vector2i) -> Vector4:
+	if controller == null:
+		return Vector4.ZERO
+	return Vector4(
+		1.0 if controller._has_wall_edge(cell, Vector2i(0, -1)) else 0.0,
+		1.0 if controller._has_wall_edge(cell, Vector2i(1, 0)) else 0.0,
+		1.0 if controller._has_wall_edge(cell, Vector2i(0, 1)) else 0.0,
+		1.0 if controller._has_wall_edge(cell, Vector2i(-1, 0)) else 0.0
+	)
+
+
+# _wall_endpoint_corner_tone: A wall face knows whether a connected
+# perpendicular face is on the camera-facing cell (a recessed/concave join) or
+# outside it (an exposed/convex join). Straight runs stay unlined; a free cap
+# is treated as an exposed edge.
+func _wall_endpoint_corner_tone(edge_key: String, endpoint: Vector2, edge_direction: Vector2, facing_cell: Vector2i) -> float:
+	if controller == null or edge_direction.length_squared() <= 0.00001:
+		return 0.0
+	var normalized_direction := edge_direction.normalized()
+	var has_perpendicular_neighbor := false
+	for candidate in controller._all_physical_wall_edges():
+		if String(candidate.get("key", "")) == edge_key:
+			continue
+		var candidate_a := Vector2(candidate.get("a", Vector2.ZERO))
+		var candidate_b := Vector2(candidate.get("b", Vector2.ZERO))
+		if endpoint.distance_squared_to(candidate_a) > 0.00001 and endpoint.distance_squared_to(candidate_b) > 0.00001:
+			continue
+		var candidate_direction := candidate_b - candidate_a
+		if candidate_direction.length_squared() <= 0.00001 or absf(normalized_direction.dot(candidate_direction.normalized())) > 0.99:
+			continue
+		has_perpendicular_neighbor = true
+		break
+	if not has_perpendicular_neighbor:
+		return 1.0
+	# If the visible cell owns another physical edge at the same vertex, the two
+	# surfaces meet around its interior: dark crevice. Otherwise the neighbor is
+	# around the outside of the turn: bright convex highlight.
+	for delta in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+		if not controller._has_wall_edge(facing_cell, delta):
+			continue
+		var segment: Array = controller._physical_cell_edge_segment(facing_cell, delta)
+		var local_key := String(controller._physical_edge_key(Vector2(segment[0]), Vector2(segment[1])))
+		if local_key == edge_key:
+			continue
+		if endpoint.distance_squared_to(Vector2(segment[0])) <= 0.00001 or endpoint.distance_squared_to(Vector2(segment[1])) <= 0.00001:
+			return -1.0
+	return 1.0
 
 
 # _local_camera_obstruction_edge_keys: Finds every real thin wall crossed by a

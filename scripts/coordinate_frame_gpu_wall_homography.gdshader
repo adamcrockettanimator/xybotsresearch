@@ -27,6 +27,11 @@ uniform vec2 layer_texture_size = vec2(128.0, 88.0);
 uniform vec2 layer1_offset = vec2(0.0);
 uniform vec2 layer2_offset = vec2(0.0);
 uniform float wall_light = 1.0;
+// -1 darkens a recessed (concave) endpoint, +1 lights an exposed (convex)
+// endpoint. Zero leaves a straight continuation unmarked.
+uniform vec2 endpoint_corner_tones = vec2(0.0);
+uniform float convex_highlight_factor = 1.24;
+uniform float concave_crevice_factor = 0.58;
 uniform float wall_opacity = 1.0;
 uniform bool use_camera_cutaway_fade = false;
 uniform vec2 wall_world_a = vec2(0.0);
@@ -109,6 +114,18 @@ void fragment() {
 	}
 	if (result.a <= 0.0) {
 		discard;
+	}
+	// Derive the stroke thickness from the projected UV footprint, rather than
+	// from a source texel. This keeps a corner line one 160x120 logical pixel at
+	// every distance and viewing angle.
+	vec2 corner_uv_x = homography_uv(pixel + vec2(1.0, 0.0));
+	vec2 corner_uv_y = homography_uv(pixel + vec2(0.0, 1.0));
+	float endpoint_width = max(abs(corner_uv_x.x - source_uv.x), abs(corner_uv_y.x - source_uv.x));
+	float corner_tone = source_uv.x <= endpoint_width ? endpoint_corner_tones.x : (source_uv.x >= 1.0 - endpoint_width ? endpoint_corner_tones.y : 0.0);
+	if (corner_tone > 0.0) {
+		result.rgb *= convex_highlight_factor;
+	} else if (corner_tone < 0.0) {
+		result.rgb *= concave_crevice_factor;
 	}
 	float cutaway_opacity = wall_opacity;
 	if (use_camera_cutaway_fade) {

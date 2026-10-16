@@ -4360,14 +4360,28 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	var world_view_depth := float(projection.get("view_depth", 0.0))
 	if actor_height <= 0.0:
 		return
+	var feet := Vector2(float(projection["screen_x"]), float(projection["feet_y"])).round()
+	var sprite_scale := clampf(actor_height / 56.91699, 0.2024, 1.1638) * BARREL_SIZE_MULTIPLIER # Keep perspective scaling while applying the artist-tunable barrel size.
+	var draw_layer := _world_actor_draw_layer(world_position)
+	# A restrained one-logical-pixel ground contact shadow gives the Blender
+	# barrel a floor anchor without baking a view-specific shadow into 16 PNGs.
+	var shadow := _combat_sprite("%s_shadow" % key)
+	shadow.texture = _projectile_pixel_texture()
+	shadow.material = null
+	shadow.self_modulate = Color(0.10, 0.055, 0.028, 0.48)
+	shadow.position = feet + Vector2(0.0, 1.0)
+	shadow.scale = Vector2(maxf(3.0, roundf(8.0 * sprite_scale)), 1.0)
+	shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shadow.z_index = draw_layer
+	shadow.visible = true
+	used["%s_shadow" % key] = true
 	var sprite := _combat_sprite(key)
 	sprite.texture = _barrel_texture_for_current_camera()                                      # Swap only the source image; the Sprite2D is already isolated per local view.
-	var sprite_scale := clampf(actor_height / 56.91699, 0.2024, 1.1638) * BARREL_SIZE_MULTIPLIER # Keep perspective scaling while applying the artist-tunable barrel size.
 	sprite.scale = Vector2.ONE * sprite_scale
-	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - BARREL_ART_HEIGHT * sprite_scale * 0.5).round() # Register the bottom of the PNG directly to the projected floor.
-	_apply_runtime_world_prop_style(sprite, world_view_depth, Vector2(float(projection["screen_x"]), float(projection["feet_y"]))) # Reduce source pixels and darken from the exact floor pixel beneath the barrel.
+	sprite.position = Vector2(feet.x, feet.y - BARREL_ART_HEIGHT * sprite_scale * 0.5).round() # Register the bottom of the PNG directly to the projected floor.
+	_apply_runtime_world_prop_style(sprite, world_view_depth, feet) # Reduce source pixels and darken from the exact floor pixel beneath the barrel.
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.z_index = _world_actor_draw_layer(world_position)                                   # Use the standard shared-world painter layer so the barrel correctly passes in front of/behind players and items by real map depth.
+	sprite.z_index = draw_layer + 1                                                            # Keep the barrel immediately in front of its own floor shadow while retaining world-depth ordering.
 	sprite.visible = true
 	used[key] = true
 
