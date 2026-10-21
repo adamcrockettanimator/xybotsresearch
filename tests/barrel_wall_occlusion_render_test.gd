@@ -66,7 +66,7 @@ func _run() -> void:
 	await RenderingServer.frame_post_draw
 	print("sprite visible=", sprite.visible, " pos=", sprite.position, " scale=", sprite.scale, " z=", sprite.z_index)
 	for entry in renderer.last_wall_entries:
-		print("wall ", entry["edge_key"], " z=", game._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1, " quad=", entry["quad"])
+		print("wall ", entry["edge_key"], " z=", game._character_layer_for_view_depth(float(entry["depth"])), " quad=", entry["quad"])
 	var normal := root.get_texture().get_image()
 	sprite.visible = false
 	shadow.visible = false
