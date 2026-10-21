@@ -26,7 +26,12 @@ uniform vec2 base_texture_size = vec2(128.0, 88.0);
 uniform vec2 layer_texture_size = vec2(128.0, 88.0);
 uniform vec2 layer1_offset = vec2(0.0);
 uniform vec2 layer2_offset = vec2(0.0);
-uniform float wall_light = 1.0;
+uniform vec2 wall_depths = vec2(1.0);
+uniform float camera_height = 0.5;
+uniform float focal_length = 128.0;
+uniform float light_dither_near_half_width_pixels = 3.0;
+uniform float light_dither_far_half_width_pixels = 1.0;
+uniform int light_dither_steps = 4;
 // -1 darkens a recessed (concave) endpoint, +1 lights an exposed (convex)
 // endpoint. Zero leaves a straight continuation unmarked.
 uniform vec2 endpoint_corner_tones = vec2(0.0);
@@ -59,6 +64,29 @@ float bayer2(vec2 pixel) {
 
 float bayer2_threshold(vec2 pixel) {
 	return (bayer2(pixel) + 0.5) / 4.0;
+}
+
+// Match the floor's distance bands and intermediate Bayer-dithered levels.
+float depth_light_dither(float depth, vec2 pixel) {
+	float thresholds[5] = float[](1.35, 2.5, 3.8, 4.8, 5.2);
+	float near_lights[5] = float[](1.0, 0.78, 0.56, 0.36, 0.22);
+	float far_lights[5] = float[](0.78, 0.56, 0.36, 0.22, 0.10);
+	float depth_per_pixel = max(depth * depth / (camera_height * focal_length), 0.0001);
+	float near_weight = 1.0 - clamp((depth - 1.35) / (5.2 - 1.35), 0.0, 1.0);
+	float half_band = depth_per_pixel * mix(light_dither_far_half_width_pixels, light_dither_near_half_width_pixels, near_weight);
+	for (int index = 0; index < 5; index++) {
+		float threshold = thresholds[index];
+		if (depth < threshold - half_band) return near_lights[index];
+		if (depth <= threshold + half_band) {
+			float coverage = clamp((depth - (threshold - half_band)) / (half_band * 2.0), 0.0, 1.0);
+			float scaled_step = coverage * float(light_dither_steps);
+			int lower_step = clamp(int(floor(scaled_step)), 0, light_dither_steps);
+			int upper_step = min(lower_step + 1, light_dither_steps);
+			int selected_step = fract(scaled_step) >= bayer2_threshold(pixel) ? upper_step : lower_step;
+			return mix(near_lights[index], far_lights[index], float(selected_step) / float(light_dither_steps));
+		}
+	}
+	return 0.10;
 }
 
 vec4 nearest_sample(sampler2D source, vec2 source_uv, vec2 source_size, bool clamp_to_edge, float mip_level) {
@@ -146,5 +174,6 @@ void fragment() {
 		float dither_coverage = smoothstep(cutaway_inner_radius, cutaway_inner_radius + max(cutaway_fade_width, 0.0001), contact_distance);
 		cutaway_opacity *= step(bayer2_threshold(pixel), dither_coverage);
 	}
+	float wall_light = depth_light_dither(mix(wall_depths.x, wall_depths.y, source_uv.x), pixel);
 	COLOR = vec4(result.rgb * wall_light, result.a * cutaway_opacity);
 }

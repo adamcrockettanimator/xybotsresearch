@@ -58,7 +58,7 @@ const MAX_DEPTH := 5.5
 const FOCAL_LENGTH := 128.0
 const CAMERA_CUTAWAY_DITHER_HALF_WIDTH_PIXELS := 26.0
 const CAMERA_CUTAWAY_DITHER_INNER_PIXELS := 10.0
-const CAMERA_CUTAWAY_DITHER_FADE_PIXELS := 36.0
+const CAMERA_CUTAWAY_DITHER_FADE_PIXELS := 72.0
 # Inset the moving PNG silhouette only at its left/right edges. This filters
 # run-frame edge wobble against a side wall without moving the fan's rear base
 # away from a wall directly behind the cowboy.
@@ -825,7 +825,12 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("inverse_row0", inverse[0])
 		material.set_shader_parameter("inverse_row1", inverse[1])
 		material.set_shader_parameter("inverse_row2", inverse[2])
-		material.set_shader_parameter("wall_light", float(entry["light"]))
+		material.set_shader_parameter("wall_depths", Vector2(entry["depths"]))
+		material.set_shader_parameter("camera_height", VIRTUAL_CAMERA_HEIGHT)
+		material.set_shader_parameter("focal_length", FOCAL_LENGTH)
+		material.set_shader_parameter("light_dither_near_half_width_pixels", FLOOR_LIGHT_DITHER_NEAR_HALF_WIDTH_PIXELS)
+		material.set_shader_parameter("light_dither_far_half_width_pixels", FLOOR_LIGHT_DITHER_FAR_HALF_WIDTH_PIXELS)
+		material.set_shader_parameter("light_dither_steps", FLOOR_LIGHT_DITHER_STEPS)
 		material.set_shader_parameter("endpoint_corner_tones", Vector2(entry.get("corner_tone_a", 0.0), entry.get("corner_tone_b", 0.0)))
 		material.set_shader_parameter("wall_opacity", float(entry.get("camera_cutaway_opacity", 1.0)))
 		material.set_shader_parameter("use_camera_cutaway_fade", bool(entry.get("camera_cutaway_fade", false)))
@@ -1516,7 +1521,7 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 	var row0: Vector3 = inverse[0]
 	var row1: Vector3 = inverse[1]
 	var row2: Vector3 = inverse[2]
-	var light := float(entry["light"])
+	var depths: Vector2 = entry["depths"]
 	for y in range(min_y, max_y + 1):
 		for x in range(min_x, max_x + 1):
 			var uv := _inverse_homography_uv(row0, row1, row2, Vector2(x, y))
@@ -1525,6 +1530,7 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 			var color := _sample_projected_wall(entry, row0, row1, row2, Vector2(x, y), uv)
 			if color.a <= 0.0:
 				continue
+			var light := _floor_depth_light(lerpf(depths.x, depths.y, uv.x), Vector2(x, y))
 			color.r *= light
 			color.g *= light
 			color.b *= light
@@ -1929,9 +1935,8 @@ func get_camera_cutaway_debug_data(camera_origin: Vector2) -> Dictionary:
 	var blocked_edge_keys := {}
 	var blocked_contact_positions: Array[Vector2] = []
 	var blocked_contact_spans: Array[Dictionary] = []
-	# Only the owning cowboy determines presentation cutaways. Remote actors use
-	# the player's real world line-of-sight in the controller; adding them here
-	# turned a camera readability aid into an unwanted through-wall enemy reveal.
+	# Only the owning cowboy determines presentation cutaways. Opponents use
+	# the regular back-to-front drawing order, including through a faded wall.
 	# Test every physical wall against the solid camera-to-sprite triangle. A
 	# wall only fades when it overlaps actual character pixels in this view.
 	for edge in controller._all_physical_wall_edges():

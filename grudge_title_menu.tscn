@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://dvaww2fs17ax1"]
 
-[ext_resource type="Script" path="res://scripts/grudge_title_menu.gd" id="1"]
+[ext_resource type="Script" uid="uid://cp5deydcu3n56" path="res://scripts/grudge_title_menu.gd" id="1"]
 
-[node name="GrudgeTitleMenu" type="Control"]
+[node name="GrudgeTitleMenu" type="Control" unique_id=439679111]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

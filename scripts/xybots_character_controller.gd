@@ -62,6 +62,14 @@ const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8
 const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                                       # Team 2 uses the same authored-color Cowboy2 frames; only purple costume fabric is remapped green at render time.
 const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
 const IDLE_FRAMES := "res://assets/Characters/Cowboy2_Idle_8Dir/Cowboy2_Idle_8Dir.tres"     # Load the twelve-frame eight-direction Cowboy 2 idle set alongside the run SpriteFrames.
+const CROUCH_IDLE_FRAMES := "res://assets/Characters/Cowboy2_CrouchIdle_8Dir/Cowboy2_CrouchIdle_8Dir.tres"
+const CROUCH_IDLE_DUAL_WIELD_FRAMES := "res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/Cowboy2_CrouchIdleDualWield_8Dir.tres"
+const CROUCH_WALK_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalk_8Dir/Cowboy2_CrouchWalk_8Dir.tres"
+const CROUCH_WALK_RIGHT_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalkRight2_8Dir/Cowboy2_CrouchWalkRight2_8Dir.tres" # Current Blender right crouch-walk render.
+const CROUCH_WALK_DUAL_RIGHT_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalkRightDualWield_8Dir/Cowboy2_CrouchWalkRightDualWield_8Dir.tres"
+const CROUCH_WALK_DUAL_FWD_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalkFwdDualWield_8Dir/Cowboy2_CrouchWalkFwdDualWield_8Dir.tres"
+const CROUCH_WALK_DUAL_LEFT_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalkLeftDualWield_8Dir/Cowboy2_CrouchWalkLeftDualWield_8Dir.tres"
+const CROUCH_WALK_LEFT_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalkRight_8Dir/Cowboy2_CrouchWalkRight_8Dir.tres" # Blender's right-named, mirrored render is the in-game left walk.
 const DEATH_FRAMES := "res://assets/Characters/Cowboy2_Death_8Dir/Cowboy2_Death_8Dir.tres"  # Load the preliminary eight-camera death reaction alongside run and idle SpriteFrames.
 const DUAL_WIELD_RUN_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Forward_8Dir/Cowboy2_DualWield_Run_Forward_8Dir.tres" # Add the separate dual-pistol forward run without replacing the normal run, strafe, or idle resources.
 const DUAL_WIELD_RUN_LEFT_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Run_Left_8Dir/Cowboy2_DualWield_Run_Left_8Dir.tres" # Add the separate dual-pistol left run without replacing normal or dual-forward clips.
@@ -69,25 +77,27 @@ const DUAL_WIELD_RUN_RIGHT_FRAMES := "res://assets/Characters/Cowboy2_DualWield_
 const DUAL_WIELD_IDLE_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Idle_8Dir/Cowboy2_DualWield_Idle_8Dir.tres" # Add the separate dual-pistol idle loops without replacing normal idle art.
 const MUZZLE_ANCHORS: MuzzleAnchorLibrary = preload("res://assets/Characters/Cowboy2_MuzzleAnchors.tres") # Store user-authored PNG-local barrel pixels independently of SpriteFrames artwork.
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
-const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/N.png")          # View the authored barrel from the world-north side.
-const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/NNE.png")      # Preserve the 22.5-degree north-northeast Blender render.
-const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/NE.png")        # Preserve the barrel's northeast Blender render.
-const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/ENE.png")      # Preserve the 67.5-degree east-northeast Blender render.
-const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/E.png")          # Preserve the barrel's east Blender render.
-const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/ESE.png")      # Preserve the 112.5-degree east-southeast Blender render.
-const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/SE.png")        # Preserve the barrel's southeast Blender render.
-const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/SSE.png")      # Preserve the 157.5-degree south-southeast Blender render.
-const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/S.png")          # Preserve the barrel's south Blender render.
-const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/SSW.png")      # Preserve the 202.5-degree south-southwest Blender render.
-const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/SW.png")        # Preserve the barrel's southwest Blender render.
-const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/WSW.png")      # Preserve the 247.5-degree west-southwest Blender render.
-const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/W.png")          # Preserve the barrel's west Blender render.
-const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/WNW.png")      # Preserve the 292.5-degree west-northwest Blender render.
-const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/NW.png")        # Preserve the barrel's northwest Blender render.
-const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/NNW.png")      # Preserve the 337.5-degree north-northwest Blender render.
+# Numbered frames follow the clockwise camera order, starting at north.
+const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_000.png")
+const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_001.png")
+const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_002.png")
+const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_003.png")
+const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_004.png")
+const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_005.png")
+const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_006.png")
+const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_007.png")
+const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_008.png")
+const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_009.png")
+const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_010.png")
+const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_011.png")
+const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_012.png")
+const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_013.png")
+const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_014.png")
+const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-18_21-01-21/barrel_015.png")
 const BARREL_VIEW_DIRECTIONS: Array[String] = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"] # Keep the barrel-only ring ordered clockwise in 22.5-degree steps.
 const MAP_BARREL_COUNT := 8                                                                    # Keep the compact six-by-six arena dressed without filling every playable cell.
-const BARREL_ART_HEIGHT := 38.5                                                               # Match the visible barrel height in the new half-resolution authored PNGs.
+const BARREL_ART_HEIGHT := 32.0                                                               # The sprite canvas height, used to anchor its bottom to the floor.
+const BARREL_REFERENCE_ART_HEIGHT := 43.0                                                     # Preserve the in-game size calibrated for the previous 43-pixel-tall sprite.
 const BARREL_SIZE_MULTIPLIER := 0.85                                                          # Let barrel art be tuned independently without changing world depth scaling or collision.
 
 const FAR_FLOOR_Y := 0.30                                                                   # Define a fixed value used by the movement, rendering, or asset-loading system.
@@ -162,6 +172,11 @@ const PROJECTILE_SPEED := 6                                                     
 const PROJECTILE_LIFETIME := 1.5                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PLAYER_CAPSULE_RADIUS := 0.10                                                           # Match the visible body width more closely while retaining one shared circular footprint for movement, combat, and pickups.
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
+const BARREL_HIT_POINTS := 3
+const BARREL_PROJECTILE_RADIUS := 0.08                                                     # Approximate the visible barrel width, which is narrower than its 32-pixel canvas.
+const BARREL_PROJECTILE_HEIGHT := BARREL_REFERENCE_ART_HEIGHT / 56.91699 * BARREL_SIZE_MULTIPLIER # Barrel canvas height in the same standing-character units used by projectiles.
+const BARREL_PROJECTILE_TOP_MARGIN := 0.12                                                 # Allow for the gun and barrel's pixelated upper silhouette at grazing contacts.
+const CROUCH_PROJECTILE_HEIGHT_OFFSET := 0.22                                             # Aim crouched shots below the wall rail while keeping muzzle smoke on the authored gun marker.
 const PROJECTILE_PLAYER_RADIUS := 0.14                                                        # Keep the bullet hit circle inside the 0.16 wall-clearance capsule, so a body on the far side of a wall can never be contacted before that wall.
 const PROJECTILE_WALL_EPSILON := 0.002                                                        # Let a wall win an exact body/wall tie so a shot can never damage through a solid edge.
 const PROJECTILE_WALL_GUARD_RADIUS := 0.12                                                    # Give thin source-map edges a gameplay thickness so diagonal corner grazes cannot hit an unseen body.
@@ -189,6 +204,7 @@ const WALL_DEBRIS_LIFETIME := 1.20                                              
 const WALL_DEBRIS_GRAVITY := 4.0                                                              # Pull the screen-height simulation down quickly enough to read as falling splinters.
 const WALL_DEBRIS_BOUNCE := 0.34                                                              # Retain a small one-time upward rebound when a chunk reaches the floor.
 const WALL_DEBRIS_NEAR_GROUND_FADE_SECONDS := 0.24                                            # Let close chunks linger briefly after settling, so a nearby wall strike retains its satisfying aftermath.
+const BARREL_DEBRIS_GROUND_SECONDS := WALL_DEBRIS_NEAR_GROUND_FADE_SECONDS * 2.0
 const WALL_DEBRIS_FAR_GROUND_FADE_SECONDS := 0.0                                              # Remove far-tier chunks on their first settled frame instead of retaining an unnecessary distant floor decal.
 const WALL_DEBRIS_LARGE_NEAR_CHANCE := 0.65                                                   # Favor two-pixel chunks that launch slowly and remain close to the impact point.
 const WALL_DEBRIS_LARGE_FAR_CHANCE := 0.14                                                    # Keep fast-flying distant splinters predominantly one pixel.
@@ -198,19 +214,36 @@ const WALL_BULLET_HOLE_DURATION := 5.0                                          
 const WALL_BULLET_HOLE_MAX_VIEW_DEPTH := 3.0                                                  # Do not draw oversized one-pixel wall decals beyond three camera-grid cells.
 const GUN_SMOKE_DURATION := 6.0 / 14.0                                                        # Match the replacement six-frame GunSmoke animation at its authored 14 FPS.
 const GUN_SMOKE_SCALE_MULTIPLIER := 2.0                                                       # Compensate for the authored muzzle-smoke frames being roughly half their intended visible size while retaining depth scaling.
+# Muzzle smoke tuning: height is measured from the floor in character-height units.
 const MUZZLE_SMOKE_PARTICLE_COUNT := 6                                                      # Build the black-powder cloud from individual irregular puffs, each on its own small card rather than fixed multi-lobe clusters.
 const MUZZLE_SMOKE_CLOUD_SIZE := 32                                                           # Generate every individual puff at the full 32-pixel close-range resolution so varied sizes never need to magnify coarse source texels.
 const MUZZLE_SMOKE_CLOUD_VARIANTS := 3                                                        # Vary individual puff silhouettes so rotation and translation continuously reshuffle the visible turbulent shape.
 const MUZZLE_SMOKE_ROTATION_INCREMENT := PI * 0.5                                             # Let puffs spin only through crisp quarter turns, retaining pixel-grid silhouettes without diagonal filtering.
 const DEBUG_DRAW_MUZZLE_SMOKE_CARDS := false                                                  # The temporary card inspector has served its purpose; leave it ready but hidden during normal smoke viewing.
-const MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS := 1.50                                               # Hold the two diagnostic crosses long enough to inspect their separation after the bullet has struck or left the camera.
 const MUZZLE_SMOKE_LIFETIME_MIN := 0.55                                                       # Let the freshest barrel smoke stay thick long enough to momentarily obscure the shooter.
 const MUZZLE_SMOKE_LIFETIME_MAX := 1.15                                                       # Give the diffuse outer smoke enough time to billow and dissipate in the air.
 const MUZZLE_SMOKE_VISUAL_FRAME_DURATION := 1.0 / 14.0                                        # Advance rendered smoke puffs at the same deliberate pixel-animation cadence as splinters.
 const MUZZLE_SMOKE_CARD_SCALE_MIN := 0.5                                                      # Smallest visible 32-pixel smoke-card scale; vary this with the maximum for a more or less turbulent cloud.
 const MUZZLE_SMOKE_CARD_SCALE_MAX := 1                                                      # Largest visible 32-pixel smoke-card scale; this does not change the card's authored texture resolution.
+const MUZZLE_SMOKE_MAX_RISE := 0                                                          # Maximum rise of each puff's center above its own starting height; lower this to keep smoke nearer the barrel.
+const MUZZLE_SMOKE_MIN_HEIGHT := 0.34                                                        # Keep puffs above the projected floor.
+const MUZZLE_SMOKE_VERTICAL_SPEED_MIN := -1                                                # Slowest initial upward speed, in character-height units per second.
+const MUZZLE_SMOKE_VERTICAL_SPEED_MAX := -.05                                                # Fastest initial upward speed; the max rise still limits total travel.
+const MUZZLE_SMOKE_LATERAL_SPEED_MIN := 0.035                                                # Minimum sideways launch speed, in grid cells per second.
+const MUZZLE_SMOKE_LATERAL_SPEED_MAX := 0.25                                                 # Maximum sideways launch speed.
+const MUZZLE_SMOKE_FORWARD_SPEED_MIN := 0.0                                                  # Minimum forward launch speed, in grid cells per second.
+const MUZZLE_SMOKE_FORWARD_SPEED_MAX := 0.25                                                 # Maximum forward launch speed.
+const MUZZLE_SMOKE_SPAWN_LATERAL_SPREAD := 0.020                                             # Maximum initial sideways offset from the barrel, in grid cells.
+const MUZZLE_SMOKE_SPAWN_HEIGHT_SPREAD := 0.06                                               # Maximum initial height offset from the muzzle, in character-height units.
+const MUZZLE_SMOKE_TURBULENCE := 0.035                                                       # Maximum random drift applied independently on each world axis.
+const MUZZLE_SMOKE_ANGULAR_SPEED_MAX := 7.0                                                  # Maximum initial spin in either direction, in radians per second.
+const MUZZLE_SMOKE_TONE_MIN := 0.74                                                          # Darkest grey puff, with 1.0 representing white.
+const MUZZLE_SMOKE_TONE_MAX := 1.0                                                           # Lightest puff.
+const MUZZLE_SMOKE_OPACITY_MIN := 0.58                                                       # Minimum initial opacity of a puff.
+const MUZZLE_SMOKE_OPACITY_MAX := 1.0                                                        # Maximum initial opacity of a puff.
 const MUZZLE_SMOKE_ANCHOR_BLEND_SECONDS := 0.12                                              # Let a fresh powder puff begin at its exact PNG barrel pixel before its existing world drift takes over.
 const MUZZLE_SMOKE_SCREEN_PIXELS_PER_WORLD_UNIT := 96.0                                      # Convert powder drift into a stable logical-pixel speed without letting near-field perspective change its travel distance.
+const MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS := 1.50                                               # Hold the two diagnostic crosses long enough to inspect their separation after the bullet has struck or left the camera.
 const MUZZLE_WORLD_WIDTH := 0.32                                                              # Map a full PNG frame width to this stable physical left/right muzzle span around the player capsule.
 const WALL_IMPACT_SMOKE_MIN_CARDS := 3                                                        # Use three overlapping material-dust masses so a strike reads at range.
 const WALL_IMPACT_SMOKE_MAX_CARDS := 3                                                        # Keep the burst capped at three cards so it stays distinct from the broad muzzle-smoke cloud.
@@ -233,6 +266,7 @@ const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")     
 const WORLD_SPRITE_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_lod.gdshader") # Apply the same coarse GPU pixel language and depth bands to every projected world sprite.
 const WORLD_SPRITE_TEAM2_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_team2_lod.gdshader") # Use the green-tinted Team 2 world-sprite variant.
 const WORLD_PROP_LOD_SHADER := preload("res://scripts/coordinate_frame_world_prop_lod.gdshader") # Apply neutral depth-reduced, depth-lit rendering to static map props without player team tint.
+const BARREL_CONTACT_SHADOW_SHADER := preload("res://scripts/barrel_contact_shadow.gdshader") # Stencil a shifted, darkened copy of the barrel's lower silhouette onto the floor.
 const PROCEDURAL_CLOUD_LOD_SHADER := preload("res://scripts/procedural_cloud_lod.gdshader")  # Reduce procedural cloud-mask detail with the same depth bands while retaining independent material tinting.
 const PLAYER_BLOOD_DECAL_SHADER := preload("res://scripts/player_blood_decal.gdshader")      # Stencil world-body blood blobs by the alpha of the exact currently displayed character frame.
 const COIN_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Coin/Coin_Sprites.tres") # Use the authored eight-pixel coin animation as the near in-world LOD source.
@@ -732,6 +766,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 
 @export_group("Movement Phases")                                                            # Group inspector controls for captured movement and turn phase playback.
 @export var use_captured_transitions := false                                                # Snap movement/turns by default until the matching transition art is rebuilt.
+@export_range(0.05, 2.0, 0.05) var crouch_move_speed_multiplier := 0.5                        # Crouched travel speed relative to ordinary movement.
 
 @export_group("Diagnostics")                                                                # Group inspector toggles for temporary visual debugging tools.
 @export var enable_3d_diagnostic := false                                                    # Keep the experimental 3D view disabled unless it is explicitly needed.
@@ -864,6 +899,7 @@ var last_animation: StringName = &""                                            
 var run_animation_reversed := false                                                         # Request reverse playback only for straight local backward movement.
 var last_animation_reversed := false                                                        # Remember playback direction so RunN can switch between forward and reverse.
 var character_is_moving := false                                                            # Track whether the bound player is actively moving this frame.
+var character_is_crouching := false                                                        # Track the bound player's held crouch control for every camera.
 var world_run_dir := DIR_N                                                                  # Track this player's movement direction in shared world space for opponent rendering.
 var world_aim_dir := DIR_N                                                                  # Track this player's aim direction in shared world space for opponent rendering.
 var available_animations: Dictionary = {}                                                   # Store animation-name lookups for exact and fallback animation selection.
@@ -925,16 +961,22 @@ var combat_camera_blood_droplets: Array = []                                    
 var combat_player_blood_decals: Array = []                                                    # Store each player's world-body blood decal descriptions, rendered in every camera that sees that character.
 var combat_vfx_render_profile := {"muzzle_smoke_us": 0, "trails_us": 0, "trail_smoke_us": 0, "projectile_hot_us": 0, "wall_dust_us": 0, "blood_us": 0, "debris_us": 0} # Capture per-view visual-effect pass costs for the runtime CSV without changing their behavior.
 var world_coins: Array[Dictionary] = []                                                       # Keep uncollected map and dropped coins in shared world coordinates.
+var world_barrel_guns: Array[Dictionary] = [] # Independent bonus pickups do not replace the contested weapon.
 var world_hearts: Array[Dictionary] = []                                                      # Keep rare one-health drops in the same shared world space as coins and guns.
 var world_barrels: Array[Dictionary] = []                                                     # Keep decorative barrel positions in shared world coordinates for every local camera.
 var projectile_pixel_texture: ImageTexture = null                                             # Lazily create one white texel, then tint and scale it into every crisp bullet/trail particle.
+var barrel_source_images: Dictionary = {} # Cache the imported directional source images used for particle colors.
+var barrel_source_bounds: Dictionary = {}
+var barrel_surface_color_cache: Dictionary = {}
+var barrel_small_splinter_palettes: Dictionary = {} # Cache each directional PNG's actual darkest and lightest opaque texels.
+var barrel_small_splinter_textures: Dictionary = {} # Cache each shape in the matching directional palette.
 var wall_debris_shape_textures: Dictionary = {}                                               # Cache tiny generated white masks for one-pixel, domino, block, and L-shaped wood chunks.
 var wall_debris_color_cache: Dictionary = {}                                                  # Cache each live splinter's sampled 2x2 wall palette per local view instead of rereading its source texture every frame.
 var wall_debris_render_cache: Dictionary = {}                                                 # Cache each splinter's per-camera projection and occlusion result until its next deliberate 14 FPS visual frame.
 var muzzle_smoke_render_cache: Dictionary = {}                                                # Cache each smoke card's per-camera projection, visibility, and Sprite2D state until its next 14 FPS display sample.
 var projectile_launch_render_cache: Dictionary = {}                                           # Store each shot's per-camera sprite-muzzle origin independently of the world projectile's collision origin.
 var muzzle_anchor_debug_markers: Array[Dictionary] = []                                      # Retain short-lived shared muzzle snapshots solely for the cyan-versus-magenta placement audit.
-var wall_impact_smoke_render_cache: Dictionary = {}                                           # Cache each wall-material card's projection, sampled tint, LOD, and visibility until its next 14 FPS display sample.
+var wall_impact_smoke_render_cache: Dictionary = {}                                           # Cache each wall-material card's appearance and visibility until its next 14 FPS display sample.
 var muzzle_smoke_cloud_textures: Dictionary = {}                                              # Cache procedural low-resolution cloud cards keyed by their stable silhouette variant.
 var muzzle_smoke_card_debug_texture: ImageTexture = null                                      # Cache the temporary card-outline overlay used to inspect the cloud-particle makeup.
 var camera_blood_blob_textures: Dictionary = {}                                               # Cache procedural opaque red-blob masks for the close player-camera damage overlay.
@@ -1859,6 +1901,7 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 	else:
 		sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                        # Retain the prior player resource as a safe fallback if an asset is missing.
 	_add_idle_animations(sprite.sprite_frames)                                                   # Give every player and opponent the same directional idle clips as the primary player.
+	_add_crouch_walk_animations(sprite.sprite_frames)
 	_add_dual_wield_idle_animations(sprite.sprite_frames)                                       # Add the powered-up idle loops beside, not instead of, the normal idle clips.
 	_add_death_animations(sprite.sprite_frames)                                                  # Give every player and opponent the preliminary directional death clips.
 	_add_dual_wield_forward_animations(sprite.sprite_frames)                                    # Add the temporary forward-only dual-pistol runs without replacing the base movement set.
@@ -1920,6 +1963,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"run_animation_reversed": false,                                                           # Store whether this player currently requests a reversed forward run.
 		"last_animation_reversed": false,                                                          # Store the direction of the last started playback.
 		"character_is_moving": false,                                                              # Store whether this player is actively running this frame.
+		"character_is_crouching": false,
 		"world_run_dir": _direction_string_for_facing(start_facing),                                # Store this player's shared-world movement direction.
 		"world_aim_dir": _direction_string_for_facing(start_facing),                                # Store this player's shared-world aim direction.
 		"pending_grid_delta": Vector2i.ZERO,                                                       # Store any pending cell-crossing movement.
@@ -1971,6 +2015,7 @@ func _setup_combat_collectibles() -> void:
 func _reset_combat_collectibles() -> void:
 	world_coins.clear()                                                                        # Remove old map/dropped coins before rebuilding the round objective.
 	world_hearts.clear()                                                                       # Remove unclaimed health drops with the completed round.
+	world_barrel_guns.clear()
 	_reset_world_barrels()                                                                     # Scatter a fresh decorative barrel layout with every maze/round rebuild.
 	_reset_combat_round()                                                                     # Restart the shared match clock and clear any prior frozen result with the new map.
 	combat_total_coin_value = MAP_WIDTH * MAP_HEIGHT                                          # Keep the original map total stable for both players' score readouts.
@@ -2028,7 +2073,7 @@ func _reset_world_barrels() -> void:
 		var chosen_cell := candidates[chosen_index]
 		candidates.remove_at(chosen_index)                                                       # Keep one barrel maximum per cell so art remains readable in the tight maze.
 		var position := _barrel_position_in_cell(chosen_cell)                                    # Keep the pickup-safe middle of every grid cell clear.
-		world_barrels.append({"id": next_combat_visual_id, "position": position})
+		world_barrels.append({"id": next_combat_visual_id, "position": position, "hits": 0})
 		next_combat_visual_id += 1                                                               # Give every prop a stable cache key across all player cameras.
 
 
@@ -2092,7 +2137,7 @@ func _collect_combat_pickups(delta: float) -> void:
 	for coin in world_coins:
 		var collected_by := -1                                                                 # Let at most one player receive this coin.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                       # Read the camera-independent world location.
-		if not combat_round_complete:                                                           # Leave unclaimed coins in place after the clock so final scores cannot change.
+		if not combat_round_complete and not bool(coin.get("loot_airborne", false)):             # Let thrown loot land before it can be collected.
 			for player_index in range(player_states.size()):                                   # Test both living local players against the shared pickup.
 				var state := player_states[player_index]
 				if bool(state.get("is_dying", false)):
@@ -2114,7 +2159,7 @@ func _collect_combat_pickups(delta: float) -> void:
 	for heart in world_hearts:
 		var collected_by := -1
 		var heart_position: Vector2 = heart.get("position", Vector2.ZERO)
-		if not combat_round_complete:
+		if not combat_round_complete and not bool(heart.get("loot_airborne", false)):
 			for player_index in range(player_states.size()):
 				if player_index >= player_joined.size() or not player_joined[player_index]:
 					continue
@@ -2133,6 +2178,25 @@ func _collect_combat_pickups(delta: float) -> void:
 		else:
 			remaining_hearts.append(heart)
 	world_hearts = remaining_hearts                                                         # Keep heart items available until an injured joined player claims them.
+	var remaining_barrel_guns: Array[Dictionary] = []
+	for gun in world_barrel_guns:
+		var collected := false
+		if bool(gun.get("loot_airborne", false)):
+			remaining_barrel_guns.append(gun)
+			continue
+		for player_index in range(player_states.size()):
+			if player_index >= player_joined.size() or not player_joined[player_index]:
+				continue
+			var state := player_states[player_index]
+			if not bool(state.get("is_dying", false)) and _player_can_collect_pickup(state, Vector2(gun["position"])):
+				state["machine_gun_ammo"] = int(gun.get("ammo", DUAL_WIELD_AMMO))
+				player_states[player_index] = state
+				_play_pickup_sound(machine_gun_pickup_player)
+				collected = true
+				break
+		if not collected:
+			remaining_barrel_guns.append(gun)
+	world_barrel_guns = remaining_barrel_guns
 	if not machine_gun_pickup.is_empty():                                                    # Test the active pickup only while it exists in the world.
 		var pickup_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)
 		for player_index in range(player_states.size()):
@@ -2211,7 +2275,11 @@ func _drop_machine_gun_for_defeat(player_index: int) -> void:
 	var drop_position := _player_state_world_position(state)
 	state["machine_gun_ammo"] = 0
 	player_states[player_index] = state
-	machine_gun_pickup = {"id": next_combat_visual_id, "position": drop_position, "ammo": remaining_rounds}
+	var dropped_gun := {"id": next_combat_visual_id, "position": drop_position, "ammo": remaining_rounds}
+	if machine_gun_pickup.is_empty():
+		machine_gun_pickup = dropped_gun
+	else:
+		world_barrel_guns.append(dropped_gun) # Bonus weapons can coexist with the contested pickup.
 	next_combat_visual_id += 1
 	machine_gun_respawn_timer = 0.0
 
@@ -2610,6 +2678,11 @@ func _update_combat_hud() -> void:
 
 
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
+func _is_player_crouch_pressed_for(player_index: int) -> bool:
+	var joypad_id := _xbox_joypad_id_for_player(player_index)
+	return joypad_id >= 0 and Input.get_joy_axis(joypad_id, JOY_AXIS_TRIGGER_LEFT) >= 0.45
+
+
 func _is_player_fire_pressed_for(player_index: int) -> bool:
 	if _is_bot_controlled_slot(player_index):
 		return bool(bot_inputs.get(player_index, {}).get("fire", false))
@@ -2638,6 +2711,7 @@ func _process_combat(delta: float) -> void:
 			continue                                                                                   # Wait until a person joins P2.
 		if float(state["fire_cooldown"]) <= 0.0 and _is_player_fire_pressed_for(player_index):  # Spawn one shot only when the pistol is ready.
 			_spawn_pistol_shot(player_index)                                                         # Create a shot using the player's actual current world heading.
+	_advance_barrel_loot(delta)                                                               # Move thrown loot in shared world space before testing pickup contact.
 	_collect_combat_pickups(delta)                                                              # Pick up coins and the contested gun after all players have finished moving.
 	var remaining_shots: Array[Dictionary] = []                                                 # Rebuild the active list so consumed shots disappear cleanly.
 	for shot in active_projectiles:                                                             # Advance every live projectile once per shared frame.
@@ -2650,16 +2724,25 @@ func _process_combat(delta: float) -> void:
 		var direction: Vector2 = shot["direction"]                                                # Read its frozen launch direction.
 		var step_distance := PROJECTILE_SPEED * delta                                             # Convert the configured cells-per-second speed to this frame distance.
 		var wall_distance := _nearest_projectile_wall_distance(origin, direction, step_distance) # Find the first thin-wall collision in this short path.
-		var player_hit := _nearest_projectile_player_hit(int(shot["owner"]), origin, direction, step_distance) # Find the nearest opposing body in the same path.
+		var player_hit := _nearest_projectile_player_hit(int(shot["owner"]), origin, direction, step_distance, bool(shot.get("crouched", false))) # Check the target's current stance against the shot's firing stance.
+		var barrel_hit := _nearest_projectile_barrel_hit(origin, direction, step_distance, float(shot.get("height", 0.72))) if bool(shot.get("crouched", false)) else {}
 		var hit_distance := wall_distance                                                          # Prefer wall collision unless a player is strictly closer.
 		var hit_player_index := -1                                                                 # Track whether this collision was a player.
+		var hit_barrel := false
 		if not player_hit.is_empty() and float(player_hit["distance"]) < hit_distance:          # A player in front of the wall takes the shot.
 			hit_distance = float(player_hit["distance"])                                            # Use the nearer body collision distance.
 			hit_player_index = int(player_hit["player_index"])                                     # Remember the struck player.
+		if not barrel_hit.is_empty() and float(barrel_hit["distance"]) < hit_distance - PROJECTILE_WALL_EPSILON:
+			hit_distance = float(barrel_hit["distance"])
+			hit_player_index = -1
+			hit_barrel = true
 		if hit_distance <= step_distance:                                                         # Resolve any hit inside this frame's travel segment.
 			var impact_position := origin + direction * maxf(hit_distance, 0.0)                     # Place the explosion exactly at the contact point.
-			var wall_edge_key := _nearest_projectile_wall_edge_key(origin, direction, step_distance) if hit_player_index < 0 else "" # Retain the actual struck wall so its flash can share that wall's cell layer in every view.
-			_spawn_impact(impact_position, direction, hit_player_index, wall_edge_key)              # Show the two-frame authored impact art.
+			var wall_edge_key := _nearest_projectile_wall_edge_key(origin, direction, step_distance) if hit_player_index < 0 and not hit_barrel else ""
+			var impact_height := minf(float(shot.get("height", 0.72)), BARREL_PROJECTILE_HEIGHT) if hit_barrel else float(shot.get("height", 0.72))
+			_spawn_impact(impact_position, direction, hit_player_index, wall_edge_key, impact_height, hit_barrel, int(barrel_hit.get("id", -1)))
+			if hit_barrel:
+				_damage_barrel(int(barrel_hit["id"]), direction, impact_position, impact_height)
 			if hit_player_index >= 0:                                                               # Apply damage only for body collisions.
 				var target_was_dying := bool(player_states[hit_player_index].get("is_dying", false)) # Avoid treating a rejected hit against an already-defeated body as a new killing shot.
 				var damage_applied := _apply_projectile_hit(hit_player_index, direction, int(shot["owner"])) # Revalidate the complete owner-to-target path before changing health or emitting a confirmed-body effect.
@@ -2790,7 +2873,7 @@ func _process_combat(delta: float) -> void:
 				smoke["display_position"] = smoke["position"]
 				smoke["display_height"] = smoke["height"]                                             # Keep vertical burst motion on the same deliberate visual cadence as horizontal drift.
 				smoke["display_rotation"] = snappedf(float(smoke["rotation"]), MUZZLE_SMOKE_ROTATION_INCREMENT) # Retain the smoke system's clean pixel-grid quarter turns.
-				smoke["visual_frame"] = int(smoke.get("visual_frame", 0)) + 1                         # Invalidate the cached per-camera card state only when its visibly stepped burst sample changes.
+				smoke["visual_frame"] = int(smoke.get("visual_frame", 0)) + 1                         # Invalidate the cached appearance and visibility when the stepped burst sample changes.
 				visual_step_timer = MUZZLE_SMOKE_VISUAL_FRAME_DURATION
 			smoke["visual_step_timer"] = visual_step_timer
 			remaining_wall_impact_smokes.append(smoke)                                                # Retain only wall-contact clouds with visible frames remaining.
@@ -2812,7 +2895,7 @@ func _process_combat(delta: float) -> void:
 		velocity *= 1.0 - minf(delta * 0.70, 0.18)                                                 # Bleed the explosive launch speed away as black-powder smoke disperses.
 		particle["velocity"] = velocity                                                            # Preserve the softened motion for the next shared physics tick.
 		particle["position"] = Vector2(particle.get("position", Vector2.ZERO)) + velocity * delta # Move most puffs sideways from the barrel, with the small turbulent curl layered on top.
-		particle["height"] = maxf(0.34, float(particle.get("height", 0.72)) + float(particle.get("vertical_velocity", 0.0)) * delta) # Let the cloud slowly rise without ever sinking into the projected floor.
+		particle["height"] = clampf(float(particle.get("height", 0.5)) + float(particle.get("vertical_velocity", 0.0)) * delta, MUZZLE_SMOKE_MIN_HEIGHT, float(particle.get("max_height", MUZZLE_SMOKE_MIN_HEIGHT))) # Limit rise relative to this puff's muzzle-height start while keeping it above the floor.
 		particle["rotation"] = float(particle.get("rotation", 0.0)) + float(particle.get("angular_velocity", 0.0)) * delta # Advance a unique turbulent spin under the held pixel-animation frame.
 		particle["angular_velocity"] = float(particle.get("angular_velocity", 0.0)) * (1.0 - minf(delta * 0.55, 0.12)) # Let rotation gradually settle as the powder loses its explosive energy.
 		var visual_step_timer := float(particle.get("visual_step_timer", 0.0)) - delta            # Hold each screen-visible smoke state for a complete low-frame-rate pixel-animation frame.
@@ -2833,6 +2916,7 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var state := player_states[player_index]                                                    # Read the completed movement state.
 	var direction := _view_forward_vector_for_state(state).normalized()                         # Shoot directly along the visible camera/player aim heading.
 	var dual_wield_rounds := int(state.get("machine_gun_ammo", 0))                             # Read the optional dual-pistol powerup state once before choosing this shot's muzzle.
+	var crouched := bool(state.get("character_is_crouching", false))
 	var dual_wield_barrel_sign := 0.0                                                           # Retain the chosen muzzle side so the local screen-space effect can avoid applying a second offset to the right pistol.
 	var muzzle_hand: StringName = &"right"                                                     # Normal single-pistol animations use their right/default authored muzzle.
 	var body_origin := _player_state_world_position(state)                                      # Keep the simulation rooted at the player's actual collision center, never beyond a wall.
@@ -2840,28 +2924,40 @@ func _spawn_pistol_shot(player_index: int) -> void:
 		var muzzle_side := Vector2(-direction.y, direction.x)                                     # Build a horizontal perpendicular so the two pistols fire from opposite sides of the body.
 		var barrel_sign := -1.0 if dual_wield_rounds % 2 == 0 else 1.0                           # Alternate left and right muzzle origins deterministically across all twelve remaining-round values.
 		dual_wield_barrel_sign = barrel_sign                                                       # Carry this exact side through to the screen-space shot effect.
-		muzzle_hand = &"left" if barrel_sign < 0.0 else &"right"                                 # Select the matching independently authored dual-pistol barrel pixel.
+		var firing_sprite: AnimatedSprite2D = player_views[player_index].get("player_sprite", null)
+		var dual_crouch_art := firing_sprite != null and (String(firing_sprite.animation).begins_with("CrouchWalkDualRight") or String(firing_sprite.animation).begins_with("CrouchWalkDualLeft") or String(firing_sprite.animation).begins_with("CrouchWalkDual") or String(firing_sprite.animation).begins_with("CrouchIdleDual"))
+		muzzle_hand = &"left" if barrel_sign < 0.0 and (not crouched or dual_crouch_art) else &"right" # Single-pistol crouch poses still use their one visible gun.
 		var muzzle_side_distance := 0.12 if barrel_sign < 0.0 else 0.04                           # Match the authored pose: the right pistol sits much nearer the body center than the left pistol.
 		body_origin += muzzle_side * muzzle_side_distance * barrel_sign                           # Offset only the visible/simulated muzzle; the player's collision center remains unchanged.
 	var authored_muzzle := _world_muzzle_anchor(player_index, _player_state_world_position(state), direction, muzzle_hand) # Resolve the selected pixel once into the shared map, never into one camera's screen space.
 	if _character_has_muzzle_anchor(player_views[player_index].get("player_sprite", null), muzzle_hand):
 		body_origin = authored_muzzle.get("position", body_origin)                                # Authored anchor replaces the heuristic left/right body offset when available.
 	var muzzle_height := float(authored_muzzle.get("height", 0.72))                            # Carry the PNG vertical location as real raised-effect height for every camera.
+	var projectile_height := maxf(muzzle_height - CROUCH_PROJECTILE_HEIGHT_OFFSET, 0.0) if crouched else muzzle_height # Aim down from the authored muzzle over the existing body-to-projectile launch distance.
 	var desired_muzzle_distance := 0.34                                                          # Preserve the authored visual separation between body and pistol muzzle when the lane is clear.
 	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance) # Check the short body-to-muzzle segment before placing the bullet.
+	if crouched:
+		var near_barrel := _nearest_projectile_barrel_hit(body_origin, direction, desired_muzzle_distance, projectile_height)
+		if not near_barrel.is_empty():
+			muzzle_wall_distance = minf(muzzle_wall_distance, float(near_barrel["distance"]))
 	var muzzle_distance := minf(desired_muzzle_distance, maxf(muzzle_wall_distance - PROJECTILE_WALL_EPSILON, 0.0)) # Clamp the muzzle just in front of a wall instead of spawning a shot on its far side.
 	var origin := body_origin + direction * muzzle_distance                                      # Start the projectile at the safe, wall-bounded muzzle point.
 	var smoke_origin := body_origin + direction * minf(muzzle_distance, .2)                    # Anchor smoke halfway down the gameplay muzzle segment so it reads at the visible raised barrel rather than in front of the projectile.
 	var maximum_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME                               # Determine a stable visual end point for the complete projectile lifetime.
 	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
-	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance) # Include a player already directly in this firing lane.
+	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance, crouched) # Predict only players this shot can actually strike.
+	var barrel_hit := _nearest_projectile_barrel_hit(origin, direction, maximum_distance, projectile_height) if crouched else {}
 	var visual_distance := wall_distance                                                           # Prefer the wall endpoint unless a body is closer.
 	var visual_target_player_index := -1                                                         # Preserve a direct incoming-shot relationship for per-camera visibility without changing collision.
 	if not player_hit.is_empty() and float(player_hit.get("distance", maximum_distance)) < visual_distance:
 		visual_distance = float(player_hit["distance"])                                            # End at the nearer target body.
 		visual_target_player_index = int(player_hit.get("player_index", -1))                       # Record the player actually lying at the selected visual/collision endpoint.
+	if not barrel_hit.is_empty() and float(barrel_hit["distance"]) < visual_distance - PROJECTILE_WALL_EPSILON:
+		visual_distance = float(barrel_hit["distance"])
+		visual_target_player_index = -1
 	_spawn_muzzle_smoke_particles(smoke_origin, direction, player_index, dual_wield_barrel_sign, muzzle_hand, muzzle_height) # Emit shared-world black-powder smoke from the same authored map point.
-	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "visual_target_position": origin + direction * visual_distance, "visual_target_player_index": visual_target_player_index, "visual_total_distance": maxf(visual_distance, 0.001), "last_trail_distance": 0.0, "direction": direction, "height": muzzle_height, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered particle travels in a single straight line.
+	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "visual_target_position": origin + direction * visual_distance, "visual_target_player_index": visual_target_player_index, "visual_total_distance": maxf(visual_distance, 0.001), "last_trail_distance": 0.0, "direction": direction, "height": projectile_height, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered particle travels in a single straight line.
+	shot["crouched"] = crouched
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
 	if show_muzzle_anchor_debug:
@@ -2885,15 +2981,15 @@ func _spawn_muzzle_smoke_particles(smoke_origin: Vector2, direction: Vector2, ow
 	var lateral := Vector2(-direction.y, direction.x)                                          # Build the visible left/right emission axis perpendicular to the barrel direction.
 	for particle_index in range(MUZZLE_SMOKE_PARTICLE_COUNT):
 		var lateral_sign := -1.0 if randf() < 0.5 else 1.0                                       # Throw equal groups to either side so the antique powder burst blooms sideways from the barrel.
-		var lateral_velocity := lateral * lateral_sign * randf_range(0.035, 0.25)                # Keep the sideward burst close to the barrel so powder hangs in front of the firing player instead of racing away.
-		var forward_velocity := direction * randf_range(-0.0, .25)                           # Retain only a faint forward/backward irregularity beneath the deliberately slow lateral drift.
+		var lateral_velocity := lateral * lateral_sign * randf_range(MUZZLE_SMOKE_LATERAL_SPEED_MIN, MUZZLE_SMOKE_LATERAL_SPEED_MAX) # Keep the sideward burst close to the barrel.
+		var forward_velocity := direction * randf_range(MUZZLE_SMOKE_FORWARD_SPEED_MIN, MUZZLE_SMOKE_FORWARD_SPEED_MAX) # Control the forward burst independently of sideways drift.
 		var lifetime := randf_range(MUZZLE_SMOKE_LIFETIME_MIN, MUZZLE_SMOKE_LIFETIME_MAX)        # Let each puff thin at a different time around the cloud's edge.
 		var base_scale := randf_range(MUZZLE_SMOKE_CARD_SCALE_MIN, MUZZLE_SMOKE_CARD_SCALE_MAX)  # Vary puffs through the named card-scale range beside the rest of the muzzle-smoke tuning controls.
-		var initial_position := smoke_origin + lateral * randf_range(-0.020, 0.020)              # Start tightly at the barrel before the restrained sideways drift opens the cloud.
-		var initial_height := muzzle_height + randf_range(-0.06, 0.06)                            # Keep every puff at the single shared authored barrel height, with only a small physical cloud variation.
-		var smoke_tone := randf_range(0.74, 1.0)                                                 # Mix soft grey outer puffs through thick white powder without an image texture.
+		var initial_position := smoke_origin + lateral * randf_range(-MUZZLE_SMOKE_SPAWN_LATERAL_SPREAD, MUZZLE_SMOKE_SPAWN_LATERAL_SPREAD) # Start tightly at the barrel.
+		var initial_height := muzzle_height + randf_range(-MUZZLE_SMOKE_SPAWN_HEIGHT_SPREAD, MUZZLE_SMOKE_SPAWN_HEIGHT_SPREAD) # Vary each puff around the authored barrel height.
+		var smoke_tone := randf_range(MUZZLE_SMOKE_TONE_MIN, MUZZLE_SMOKE_TONE_MAX)               # Mix soft grey outer puffs through thick white powder without an image texture.
 		var initial_rotation := float(randi() % 4) * MUZZLE_SMOKE_ROTATION_INCREMENT              # Begin every irregular puff on a clean but varied quarter-turn orientation.
-		active_muzzle_smoke_particles.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "velocity": lateral_velocity + forward_velocity, "turbulence": Vector2(randf_range(-0.035, 0.035), randf_range(-0.035, 0.035)), "height": initial_height, "display_height": initial_height, "vertical_velocity": randf_range(0.02, 0.08), "rotation": initial_rotation, "display_rotation": initial_rotation, "angular_velocity": randf_range(-7.0, 7.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "visual_frame": 0, "base_scale": base_scale, "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "tone": smoke_tone, "opacity": randf_range(0.58, 1.0), "lifetime": lifetime, "timer": lifetime, "owner": owner, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand}) # Keep each separately rotating irregular puff in shared world coordinates for the same result in both player views.
+		active_muzzle_smoke_particles.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "velocity": lateral_velocity + forward_velocity, "turbulence": Vector2(randf_range(-MUZZLE_SMOKE_TURBULENCE, MUZZLE_SMOKE_TURBULENCE), randf_range(-MUZZLE_SMOKE_TURBULENCE, MUZZLE_SMOKE_TURBULENCE)), "height": initial_height, "display_height": initial_height, "max_height": maxf(initial_height, MUZZLE_SMOKE_MIN_HEIGHT) + maxf(MUZZLE_SMOKE_MAX_RISE, 0.0), "vertical_velocity": randf_range(MUZZLE_SMOKE_VERTICAL_SPEED_MIN, MUZZLE_SMOKE_VERTICAL_SPEED_MAX), "rotation": initial_rotation, "display_rotation": initial_rotation, "angular_velocity": randf_range(-MUZZLE_SMOKE_ANGULAR_SPEED_MAX, MUZZLE_SMOKE_ANGULAR_SPEED_MAX), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "visual_frame": 0, "base_scale": base_scale, "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "tone": smoke_tone, "opacity": randf_range(MUZZLE_SMOKE_OPACITY_MIN, MUZZLE_SMOKE_OPACITY_MAX), "lifetime": lifetime, "timer": lifetime, "owner": owner, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand}) # Keep each separately rotating irregular puff in shared world coordinates for the same result in both player views.
 		next_combat_visual_id += 1                                                               # Reserve an independent cached Sprite2D for this one procedural puff.
 
 
@@ -2979,8 +3075,130 @@ func _ray_segment_hit_distance_limited(origin: Vector2, ray_direction: Vector2, 
 	return ray_t                                                                                # Return the valid distance.
 
 
+# Find the first barrel intersected by the horizontal ray at this shot's height.
+func _nearest_projectile_barrel_hit(origin: Vector2, direction: Vector2, maximum_distance: float, height: float) -> Dictionary:
+	if height < 0.0 or height > BARREL_PROJECTILE_HEIGHT + BARREL_PROJECTILE_TOP_MARGIN:
+		return {}
+	var nearest_distance := maximum_distance + 1.0
+	var nearest_id := -1
+	for barrel in world_barrels:
+		var distance := _ray_circle_hit_distance(origin, direction, Vector2(barrel.get("position", Vector2.ZERO)), BARREL_PROJECTILE_RADIUS)
+		if distance >= 0.0 and distance <= maximum_distance and distance < nearest_distance:
+			nearest_distance = distance
+			nearest_id = int(barrel.get("id", -1))
+	return {"distance": nearest_distance, "id": nearest_id} if nearest_id >= 0 else {}
+
+
+# _damage_barrel: Apply each resolved projectile once, then remove the prop and its collision.
+func _damage_barrel(barrel_id: int, direction: Vector2, impact_position: Vector2, impact_height: float) -> void:
+	for index in range(world_barrels.size()):
+		var barrel := world_barrels[index]
+		if int(barrel.get("id", -1)) != barrel_id:
+			continue
+		barrel["hits"] = int(barrel.get("hits", 0)) + 1
+		if int(barrel["hits"]) < BARREL_HIT_POINTS:
+			world_barrels[index] = barrel
+			return
+		var position: Vector2 = barrel["position"]
+		world_barrels.remove_at(index)
+		for hole_index in range(active_wall_bullet_holes.size() - 1, -1, -1):
+			if int(active_wall_bullet_holes[hole_index].get("barrel_id", -1)) == barrel_id:
+				active_wall_bullet_holes.remove_at(hole_index)
+		_spawn_barrel_break(position, direction, impact_position, impact_height)
+		_drop_barrel_loot(position)
+		return
+
+
+# Roll a small mix, with a rare empty barrel and rare pistol; spread items around the full circle.
+func _drop_barrel_loot(position: Vector2) -> void:
+	if randf() < 0.03:
+		return
+	var coin_roll := randf()
+	var coin_count := 0 if coin_roll < 0.14 else (1 if coin_roll < 0.51 else (2 if coin_roll < 0.81 else 3))
+	var heart_count := 1 if randf() < 0.28 else 0
+	var gun_count := 1 if randf() < 0.07 else 0
+	if coin_count + heart_count + gun_count == 0:
+		coin_count = 1
+	var kinds: Array[String] = []
+	for index in range(coin_count):
+		kinds.append("coin")
+	for index in range(heart_count):
+		kinds.append("heart")
+	for index in range(gun_count):
+		kinds.append("gun")
+	var start_angle := randf_range(0.0, TAU)
+	for index in range(kinds.size()):
+		var angle := start_angle + TAU * float(index) / float(kinds.size()) + randf_range(-0.16, 0.16)
+		var speed := randf_range(0.48, 0.82)
+		var item := {"id": next_combat_visual_id, "position": position, "loot_airborne": true, "loot_height": randf_range(0.20, 0.35), "loot_vertical_velocity": randf_range(0.95, 1.35), "loot_velocity": Vector2(cos(angle), sin(angle)) * speed, "loot_bounces": 1}
+		match kinds[index]:
+			"coin":
+				item["value"] = 1
+				world_coins.append(item)
+			"heart": world_hearts.append(item)
+			"gun": world_barrel_guns.append(item)
+		next_combat_visual_id += 1
+
+
+# Coins, hearts and guns use the same short arc and one bounce in the shared maze.
+# Stop horizontal travel at physical walls so a throw cannot strand loot across one.
+func _advance_barrel_loot(delta: float) -> void:
+	for items in [world_coins, world_hearts, world_barrel_guns]:
+		for item in items:
+			if not bool(item.get("loot_airborne", false)):
+				continue
+			var position: Vector2 = item["position"]
+			var velocity: Vector2 = item["loot_velocity"]
+			var travel := velocity * delta
+			var distance := travel.length()
+			if distance > 0.00001:
+				var wall_distance := _nearest_projectile_wall_distance(position, travel / distance, distance + 0.03)
+				if wall_distance <= distance + 0.03:
+					position += travel.normalized() * maxf(wall_distance - 0.03, 0.0)
+					velocity = Vector2.ZERO
+				else:
+					position += travel
+			item["position"] = position
+			var vertical_velocity := float(item["loot_vertical_velocity"]) - WALL_DEBRIS_GRAVITY * delta
+			var height := float(item["loot_height"]) + vertical_velocity * delta
+			if height <= 0.0:
+				height = 0.0
+				if int(item["loot_bounces"]) > 0:
+					item["loot_bounces"] = int(item["loot_bounces"]) - 1
+					vertical_velocity = absf(vertical_velocity) * WALL_DEBRIS_BOUNCE
+					velocity *= 0.42
+				else:
+					item["loot_airborne"] = false
+					vertical_velocity = 0.0
+					velocity = Vector2.ZERO
+			item["loot_velocity"] = velocity
+			item["loot_vertical_velocity"] = vertical_velocity
+			item["loot_height"] = height
+
+
+# Reuse the wall's stepped world-space arc, bounce, smoke and fade for larger fragments.
+func _spawn_barrel_break(position: Vector2, direction: Vector2, impact_position: Vector2, impact_height: float) -> void:
+	var frame_duration := 1.0 / WALL_DEBRIS_NEAR_VISUAL_FPS
+	for chunk_index in range(14):
+		var angle := randf_range(0.0, TAU)
+		var velocity := Vector2(cos(angle), sin(angle)) * randf_range(0.12, 0.55)
+		var metal := chunk_index % 4 == 0
+		var shapes := ["barrel_plank", "barrel_chip", "barrel_hoop"]
+		var shape: String = shapes[2] if metal else shapes[randi() % 2]
+		var sample_uv := Vector2(randf_range(0.20, 0.80), randf_range(0.08, 0.92))
+		var height := randf_range(0.12, BARREL_PROJECTILE_HEIGHT * 0.8)
+		active_wall_debris.append({"id": next_combat_visual_id, "position": position, "display_position": position, "horizontal_velocity": velocity, "height": height, "display_height": height, "visual_step_timer": frame_duration, "visual_frame_duration": frame_duration, "visual_frame": 0, "vertical_velocity": randf_range(0.5, 1.5), "rotation": randf_range(-PI, PI), "angular_velocity": randf_range(-14.0, 14.0), "shape": shape, "barrel_fragment": true, "barrel_hit": true, "barrel_sample_uv": sample_uv, "color_sample_index": randi() % 4, "ground_fade_seconds": BARREL_DEBRIS_GROUND_SECONDS, "remaining_bounces": 1, "timer": 2.0, "wall_edge_key": "", "direction": direction})
+		next_combat_visual_id += 1
+	for card in range(5):
+		var angle := randf_range(0.0, TAU)
+		var velocity := Vector2(cos(angle), sin(angle)) * randf_range(0.04, 0.25)
+		var height := randf_range(-0.42, -0.25)
+		active_wall_impact_smokes.append({"id": next_combat_visual_id, "position": position, "display_position": position, "velocity": velocity, "turbulence": Vector2.ZERO, "height": height, "display_height": height, "vertical_velocity": randf_range(0.1, 0.4), "rotation": 0.0, "display_rotation": 0.0, "angular_velocity": randf_range(-6.0, 6.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "visual_frame": 0, "base_scale": randf_range(1.2, 1.7), "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "color_sample_index": randi() % 4, "opacity": 0.85, "direction": direction, "wall_edge_key": "", "sample_position": impact_position, "barrel_center": position, "barrel_impact_height": impact_height, "barrel_hit": true, "timer": WALL_IMPACT_SMOKE_LIFETIME})
+		next_combat_visual_id += 1
+
+
 # _nearest_projectile_player_hit: Finds the closest opposing body intersected by this projectile path.
-func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vector2, maximum_distance: float) -> Dictionary:
+func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vector2, maximum_distance: float, shot_crouched: bool) -> Dictionary:
 	var nearest_distance := maximum_distance + 0.001                                           # Keep the first body beyond any possible hit by default.
 	var nearest_player := -1                                                                    # Track which body owns that nearest intersection.
 	for player_index in range(player_states.size()):                                           # Check each currently active local player.
@@ -2988,6 +3206,8 @@ func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vect
 			continue                                                                                   # Skip this candidate.
 		if bool(player_states[player_index].get("is_dying", false)):                            # Do not let stray bullets repeatedly hit a fallen or respawning body.
 			continue                                                                                   # The player becomes targetable again only after the reverse Death animation finishes.
+		if bool(player_states[player_index].get("character_is_crouching", false)) and not shot_crouched:
+			continue                                                                                   # Standing shots pass over a crouched body; crouched shots still hit both stances.
 		var distance := _ray_circle_hit_distance(origin, direction, _player_state_world_position(player_states[player_index]), PROJECTILE_PLAYER_RADIUS) # Test the compact player body circle.
 		if distance < 0.0 or distance > maximum_distance:                                        # Ignore bodies that the projectile ray does not reach during this segment.
 			continue                                                                                   # Leave the candidate out of the nearest-hit test.
@@ -3040,9 +3260,15 @@ func _nearest_joined_player_distance(world_position: Vector2) -> float:
 
 
 # _spawn_impact: Emits only wall-strike debris and a decal at an actual shared-world collision point; player hits retain their existing body reaction without a wall effect.
-func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index: int, wall_edge_key := "") -> void:
-	if hit_player_index >= 0 or wall_edge_key.is_empty():
+func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index: int, wall_edge_key := "", impact_height := 0.72, barrel_hit := false, barrel_id := -1) -> void:
+	if hit_player_index >= 0 or (wall_edge_key.is_empty() and not barrel_hit):
 		return                                                                                    # A body strike uses its dedicated hit reaction; only a physical wall dislodges wood splinters and receives a decal.
+	var barrel_center := world_position
+	if barrel_hit:
+		for barrel in world_barrels:
+			if int(barrel.get("id", -1)) == barrel_id:
+				barrel_center = Vector2(barrel["position"])
+				break
 	var away_from_wall := -direction.normalized()                                               # Send debris back into the side from which the bullet arrived.
 	var tangent := Vector2(-away_from_wall.y, away_from_wall.x)                                # Spread square chunks along the struck wall as well as straight back from it.
 	var nearest_player_distance := _nearest_joined_player_distance(world_position)               # Pick one shared particle tier from the closest camera so a near split-screen player never receives a reduced impact.
@@ -3055,9 +3281,9 @@ func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index
 		var dust_position := world_position + away_from_wall * 0.006                              # Separate the card slightly from the wall face so it never appears buried in the texture.
 		var dust_velocity := away_from_wall * randf_range(0.027, 0.120) + tangent * randf_range(-.4, .4) # Spread the three wall cards 50% farther away and sideways so the burst reads as several material puffs rather than one round cloud.
 		var dust_vertical_velocity := randf_range(-.4, .4)                                   # Fill the third dimension: most cards lift from the impact, while a few drop below it like heavier disturbed material.
-		active_wall_impact_smokes.append({"id": next_combat_visual_id, "position": dust_position, "display_position": dust_position, "velocity": dust_velocity, "turbulence": Vector2(randf_range(-0.018, 0.018), randf_range(-0.018, 0.018)), "height": 0.0, "display_height": 0.0, "vertical_velocity": dust_vertical_velocity, "rotation": float(randi() % 4) * MUZZLE_SMOKE_ROTATION_INCREMENT, "display_rotation": 0.0, "angular_velocity": randf_range(-6.0, 6.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "visual_frame": 0, "base_scale": randf_range(0.90, 1.35), "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "color_sample_index": randi() % 4, "opacity": randf_range(0.72, 0.95), "direction": direction, "wall_edge_key": wall_edge_key, "sample_position": world_position, "timer": WALL_IMPACT_SMOKE_LIFETIME}) # Give every impact dust puff separate planar and vertical material-burst motion.
+		active_wall_impact_smokes.append({"id": next_combat_visual_id, "position": dust_position, "display_position": dust_position, "velocity": dust_velocity, "turbulence": Vector2(randf_range(-0.018, 0.018), randf_range(-0.018, 0.018)), "height": impact_height - 0.72, "display_height": impact_height - 0.72, "vertical_velocity": dust_vertical_velocity, "rotation": float(randi() % 4) * MUZZLE_SMOKE_ROTATION_INCREMENT, "display_rotation": 0.0, "angular_velocity": randf_range(-6.0, 6.0), "visual_step_timer": MUZZLE_SMOKE_VISUAL_FRAME_DURATION, "visual_frame": 0, "base_scale": randf_range(0.90, 1.35), "cloud_variant": randi() % MUZZLE_SMOKE_CLOUD_VARIANTS, "color_sample_index": randi() % 4, "opacity": randf_range(0.72, 0.95), "direction": direction, "wall_edge_key": wall_edge_key, "sample_position": world_position, "barrel_center": barrel_center, "barrel_impact_height": impact_height, "barrel_hit": barrel_hit, "timer": WALL_IMPACT_SMOKE_LIFETIME})
 		next_combat_visual_id += 1                                                                # Give each wall-dust card a stable cache identity.
-	active_wall_bullet_holes.append({"id": next_combat_visual_id, "position": world_position, "direction": direction, "wall_edge_key": wall_edge_key, "timer": WALL_BULLET_HOLE_DURATION}) # Retain one black square at the exact wall contact.
+	active_wall_bullet_holes.append({"id": next_combat_visual_id, "position": world_position, "direction": direction, "wall_edge_key": wall_edge_key, "height": impact_height, "barrel_hit": barrel_hit, "barrel_id": barrel_id, "timer": WALL_BULLET_HOLE_DURATION})
 	next_combat_visual_id += 1                                                                  # Reserve a stable decal key.
 	for chunk_index in range(debris_count):
 		var lateral_spread := randf_range(-0.72, 0.72)                                             # Let some chunks peel strongly sideways along the wall instead of every splinter following the same path.
@@ -3067,9 +3293,9 @@ func _spawn_impact(world_position: Vector2, direction: Vector2, hit_player_index
 		var large_chance := lerpf(WALL_DEBRIS_LARGE_FAR_CHANCE, WALL_DEBRIS_LARGE_NEAR_CHANCE, near_fraction) # Make two-pixel chunks increasingly likely near the impact point.
 		var large_shapes := ["domino_h", "domino_v", "block", "l"]                           # Keep every non-dot candidate within a two-by-two footprint.
 		var shape := String(large_shapes[randi() % large_shapes.size()]) if randf() < large_chance else "dot" # Choose a nearby chunk shape or a single-pixel distant splinter.
-		var color_variation := Color(randf_range(0.88, 1.08), randf_range(0.82, 1.02), randf_range(0.74, 0.96), 1.0) # Add a subtle warm brightness/color variation over the sampled wall texel.
+		var color_variation := Color.WHITE if barrel_hit else Color(randf_range(0.88, 1.08), randf_range(0.82, 1.02), randf_range(0.74, 0.96), 1.0) # Add a subtle warm brightness/color variation over the sampled wall texel.
 		var initial_position := world_position + away_from_wall * 0.008                            # Start just off the struck wall so every visible splinter begins on its own side of the impact face.
-		active_wall_debris.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "horizontal_velocity": horizontal_velocity, "height": 0.72, "display_height": 0.72, "visual_step_timer": debris_visual_frame_duration, "visual_frame_duration": debris_visual_frame_duration, "visual_frame": 0, "vertical_velocity": randf_range(-0.42, 1.55), "rotation": randf_range(-PI, PI), "angular_velocity": randf_range(-14.0, 14.0), "shape": shape, "color_sample_index": randi() % 4, "color_variation": color_variation, "ground_fade_seconds": debris_ground_fade_seconds, "remaining_bounces": debris_bounce_count, "timer": WALL_DEBRIS_LIFETIME, "wall_edge_key": wall_edge_key, "direction": direction, "sample_position": world_position}) # Near impacts retain their floor-linger; distant impacts use the cheaper shared count, bounce, cadence, and settled lifetime.
+		active_wall_debris.append({"id": next_combat_visual_id, "position": initial_position, "display_position": initial_position, "horizontal_velocity": horizontal_velocity, "height": impact_height, "display_height": impact_height, "visual_step_timer": debris_visual_frame_duration, "visual_frame_duration": debris_visual_frame_duration, "visual_frame": 0, "vertical_velocity": randf_range(-0.42, 1.55), "rotation": randf_range(-PI, PI), "angular_velocity": randf_range(-14.0, 14.0), "shape": shape, "color_sample_index": randi() % 4, "color_variation": color_variation, "ground_fade_seconds": debris_ground_fade_seconds, "remaining_bounces": debris_bounce_count, "timer": WALL_DEBRIS_LIFETIME, "wall_edge_key": wall_edge_key, "direction": direction, "sample_position": world_position, "barrel_hit": barrel_hit, "barrel_center": barrel_center, "barrel_impact_height": impact_height})
 		next_combat_visual_id += 1                                                                # Give every square particle a stable cache identity in both player views.
 
 
@@ -3100,6 +3326,52 @@ func _wall_impact_colors_for_current_view(wall_edge_key: String, world_position:
 		if colors.size() >= 4:
 			return colors                                                                           # Return the complete 2×2 wall-color patch for per-chunk selection.
 	return fallback_colors                                                                      # Fall back only if the renderer supplied an incomplete or malformed patch.
+
+
+# Sample the actual directional barrel image. Impact effects use the projected
+# contact on its sprite; break fragments sample individual points across its surface.
+func _barrel_surface_colors_for_current_view(effect: Dictionary) -> Array[Color]:
+	var texture := _barrel_texture_for_current_camera()
+	var texture_id := texture.get_instance_id()
+	var image: Image = barrel_source_images.get(texture_id, null)
+	if image == null:
+		image = texture.get_image()
+		if image == null or image.is_empty():
+			return [Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE]
+		barrel_source_images[texture_id] = image
+		barrel_source_bounds[texture_id] = image.get_used_rect()
+	var bounds: Rect2i = barrel_source_bounds[texture_id]
+	if bounds.size.x <= 0 or bounds.size.y <= 0:
+		return [Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE]
+	var uv: Vector2
+	if effect.has("barrel_sample_uv"):
+		uv = effect["barrel_sample_uv"]
+	else:
+		var offset := Vector2(effect.get("sample_position", Vector2.ZERO)) - Vector2(effect.get("barrel_center", Vector2.ZERO))
+		uv = Vector2(0.5 + offset.dot(_view_right_vector()) / (BARREL_PROJECTILE_RADIUS * 2.0), 1.0 - float(effect.get("barrel_impact_height", BARREL_PROJECTILE_HEIGHT * 0.5)) / BARREL_PROJECTILE_HEIGHT)
+	var sample_x := bounds.position.x + roundi(clampf(uv.x, 0.0, 1.0) * float(bounds.size.x - 1))
+	var sample_y := bounds.position.y + roundi(clampf(uv.y, 0.0, 1.0) * float(bounds.size.y - 1))
+	var cache_key := "%d:%d:%d" % [texture_id, sample_x, sample_y]
+	if barrel_surface_color_cache.has(cache_key):
+		return barrel_surface_color_cache[cache_key]
+	var colors: Array[Color] = []
+	for offset in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
+		var point := Vector2i(clampi(sample_x + offset.x, 0, image.get_width() - 1), clampi(sample_y + offset.y, 0, image.get_height() - 1))
+		var color := image.get_pixelv(point)
+		if color.a <= 0.01:
+			# Sprite silhouettes have transparent corners; find the closest real texel.
+			var nearest_distance := INF
+			for y in range(bounds.position.y, bounds.end.y):
+				for x in range(bounds.position.x, bounds.end.x):
+					var candidate := image.get_pixel(x, y)
+					var distance := Vector2(x - point.x, y - point.y).length_squared()
+					if candidate.a > 0.01 and distance < nearest_distance:
+						color = candidate
+						nearest_distance = distance
+		color.a = 1.0
+		colors.append(color)
+	barrel_surface_color_cache[cache_key] = colors
+	return colors
 
 
 # _projectile_owner_has_clear_path_to_player: Final gameplay authority for combat line-of-sight, using the same cell-edge wall ownership as movement.
@@ -3636,7 +3908,7 @@ func _world_muzzle_anchor(owner: int, body_position: Vector2, direction: Vector2
 	var lateral_fraction := (float(anchor.x) + 0.5 - texture.get_width() * 0.5) / maxf(float(texture.get_width()), 1.0)
 	var lateral := Vector2(-direction.y, direction.x)
 	var foot_y := _texture_foot_anchor_y(texture)
-	var body_height := maxf(_texture_body_height_to_foot(texture), 1.0)
+	var body_height := maxf(_standard_actor_body_height() if String(sprite.animation).begins_with("Crouch") else _texture_body_height_to_foot(texture), 1.0)
 	var height := clampf((foot_y - float(anchor.y)) / body_height, 0.35, 1.10)
 	return {"position": body_position + lateral * lateral_fraction * MUZZLE_WORLD_WIDTH, "height": height}
 
@@ -3649,6 +3921,12 @@ func _muzzle_anchor_for_animation(animation_name: StringName, muzzle_hand: Strin
 	if direct is Vector2i:
 		return direct
 	var animation_text := String(animation_name)
+	if animation_text.begins_with("CrouchIdle"):
+		return MUZZLE_ANCHORS.get_anchor(StringName("CrouchWalk" + animation_text.trim_prefix("CrouchIdle")), muzzle_hand)
+	if animation_text.begins_with("CrouchWalkRight"):
+		return MUZZLE_ANCHORS.get_anchor(StringName("CrouchWalk" + animation_text.trim_prefix("CrouchWalkRight")), muzzle_hand)
+	if animation_text.begins_with("CrouchWalkLeft"):
+		return MUZZLE_ANCHORS.get_anchor(StringName("CrouchWalk" + animation_text.trim_prefix("CrouchWalkLeft")), muzzle_hand)
 	var aim_marker := animation_text.rfind("_Aim")
 	if aim_marker >= 0:
 		var aim_direction := animation_text.substr(aim_marker + 4)
@@ -3657,9 +3935,9 @@ func _muzzle_anchor_for_animation(animation_name: StringName, muzzle_hand: Strin
 
 
 # _projectile_screen_position_continuous: Preserves subpixel projection data for stable live-vector direction calculations.
-func _projectile_screen_position_continuous(projection: Dictionary) -> Vector2:
+func _projectile_screen_position_continuous(projection: Dictionary, projectile_height: float = 0.72) -> Vector2:
 	var continuous_height := float(projection.get("continuous_actor_height", projection.get("actor_height", 0.0))) # Prefer the renderer's non-quantized height; retain the legacy fallback only if an alternate renderer omits it.
-	return Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - continuous_height * 0.72) # Keep the physical raised bullet height continuous until the caller deliberately snaps its final screen pixel.
+	return Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - continuous_height * projectile_height) # Keep the physical raised bullet height continuous until the caller deliberately snaps its final screen pixel.
 
 
 # _projectile_pixel_texture: Creates the single neutral texel used as the exact-color source for all bullet and hot-trail particles.
@@ -3727,10 +4005,13 @@ func _wall_debris_shape_texture(shape: String) -> ImageTexture:
 	var cached: ImageTexture = wall_debris_shape_textures.get(shape, null)
 	if cached != null:
 		return cached                                                                             # Reuse the generated procedural mask for every matching chunk.
-	var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)                                 # No shape exceeds the requested two-by-two pixel footprint.
+	var image := Image.create(4 if shape.begins_with("barrel_") else 2, 4 if shape.begins_with("barrel_") else 2, false, Image.FORMAT_RGBA8)                                 # No shape exceeds the requested two-by-two pixel footprint.
 	image.fill(Color(1.0, 1.0, 1.0, 0.0))                                                       # Leave every unused texel transparent.
 	var filled_pixels: Array[Vector2i] = [Vector2i(0, 0)]                                      # Keep the default shape as one square pixel.
 	match shape:
+		"barrel_plank": filled_pixels = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1)]
+		"barrel_chip": filled_pixels = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2)]
+		"barrel_hoop": filled_pixels = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(3, 1)]
 		"domino_h": filled_pixels = [Vector2i(0, 0), Vector2i(1, 0)]
 		"domino_v": filled_pixels = [Vector2i(0, 0), Vector2i(0, 1)]
 		"block": filled_pixels = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
@@ -3740,6 +4021,70 @@ func _wall_debris_shape_texture(shape: String) -> ImageTexture:
 	var texture := ImageTexture.create_from_image(image)                                        # Upload the small procedural shape once.
 	wall_debris_shape_textures[shape] = texture                                                  # Cache by semantic shape name for later impacts.
 	return texture                                                                               # Return the hard-edged generated splinter mask.
+
+
+# Find the actual darkest and lightest opaque texels of the active directional
+# barrel art. The per-texture cache avoids scanning the PNG for every particle.
+func _barrel_small_splinter_palette() -> Array[Color]:
+	var source_texture := _barrel_texture_for_current_camera()
+	var texture_id := source_texture.get_instance_id()
+	if barrel_small_splinter_palettes.has(texture_id):
+		return barrel_small_splinter_palettes[texture_id]
+	var image: Image = barrel_source_images.get(texture_id, null)
+	if image == null:
+		image = source_texture.get_image()
+		if image == null or image.is_empty():
+			return [Color.TRANSPARENT, Color.TRANSPARENT]
+		barrel_source_images[texture_id] = image
+		barrel_source_bounds[texture_id] = image.get_used_rect()
+	var darkest := Color.TRANSPARENT
+	var lightest := Color.TRANSPARENT
+	var min_luminance := INF
+	var max_luminance := -INF
+	# Prefer opaque pixels; only use translucent pixels for an entirely translucent image.
+	for minimum_alpha in [0.99, 0.01]:
+		for y in range(image.get_height()):
+			for x in range(image.get_width()):
+				var color := image.get_pixel(x, y)
+				if color.a < minimum_alpha:
+					continue
+				var luminance := color.get_luminance()
+				color.a = 1.0
+				if luminance < min_luminance:
+					min_luminance = luminance
+					darkest = color
+				if luminance > max_luminance:
+					max_luminance = luminance
+					lightest = color
+		if max_luminance >= 0.0:
+			break
+	var palette: Array[Color] = [darkest, lightest]
+	barrel_small_splinter_palettes[texture_id] = palette
+	return palette
+
+
+# Keep each tiny silhouette and its one-pixel backing in the barrel's own colors.
+func _barrel_small_splinter_texture(shape: String) -> ImageTexture:
+	var source_texture := _barrel_texture_for_current_camera()
+	var cache_key := "%d:%s" % [source_texture.get_instance_id(), shape]
+	var cached: ImageTexture = barrel_small_splinter_textures.get(cache_key, null)
+	if cached != null:
+		return cached
+	var palette := _barrel_small_splinter_palette()
+	var source := _wall_debris_shape_texture(shape).get_image()
+	var image := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	image.fill(Color.TRANSPARENT)
+	for y in range(2):
+		for x in range(2):
+			if source.get_pixel(x, y).a > 0.5:
+				image.set_pixel(x + 2, y + 2, palette[0])
+	for y in range(2):
+		for x in range(2):
+			if source.get_pixel(x, y).a > 0.5:
+				image.set_pixel(x + 1, y + 1, palette[1])
+	var texture := ImageTexture.create_from_image(image)
+	barrel_small_splinter_textures[cache_key] = texture
+	return texture
 
 
 # _runtime_world_sprite_texel_stride: Recreates the supplied eight-level run
@@ -3827,7 +4172,8 @@ func _apply_runtime_world_prop_style(sprite: Sprite2D, world_view_depth: float, 
 		material.shader = WORLD_PROP_LOD_SHADER
 		sprite.material = material
 	sprite.self_modulate = Color.WHITE
-	material.set_shader_parameter("texel_stride", maxf(1.0, roundf(_runtime_world_sprite_texel_stride(world_view_depth)))) # Fractional source strides reshuffled the barrel's pixels while the continuous camera moved.
+	material.set_shader_parameter("sprite_scale", sprite.scale.x)
+	material.set_shader_parameter("grid_origin", sprite.position - sprite.texture.get_size() * sprite.scale * 0.5) # Anchor samples to whole playfield pixels, not fractional prop texels.
 	material.set_shader_parameter("depth_light", _environment_depth_light_at_pixel(world_view_depth, floor_pixel)) # Read the same dither phase as the floor at the barrel's feet.
 	sprite.position = sprite.position.round()
 
@@ -3879,11 +4225,13 @@ func _update_combat_view() -> void:
 	var coin_frame_index := _coin_animation_frame_index()                                      # Keep every coin on the same authored spin frame while allowing each depth to choose its own authored silhouette.
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
-		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), null, coin_position, used, 0.16, 1, true, coin_frame_index) # Use each coin's exact authored LOD frame instead of shader-derived pixel grouping.
+		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), null, coin_position, used, 0.16, 1, true, coin_frame_index, false, 0, float(coin.get("loot_height", 0.0))) # Use each coin's exact authored LOD frame instead of shader-derived pixel grouping.
 	var heart_frame_index := _heart_animation_frame_index()                                    # Keep every heart on the same authored pulse frame while allowing each depth to choose its own silhouette.
 	for heart in world_hearts:
 		var heart_position: Vector2 = heart.get("position", Vector2.ZERO)
-		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), null, heart_position, used, 0.18, 1, false, 0, true, heart_frame_index) # Use each heart's exact authored LOD pulse frame only in the world pickup view.
+		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), null, heart_position, used, 0.18, 1, false, 0, true, heart_frame_index, float(heart.get("loot_height", 0.0))) # Use each heart's exact authored LOD pulse frame only in the world pickup view.
+	for gun in world_barrel_guns:
+		_render_world_pickup("barrel_gun_%d" % int(gun["id"]), _gun_animation_texture(), Vector2(gun["position"]), used, 0.10, 1, false, 0, false, 0, float(gun.get("loot_height", 0.0)))
 	if not machine_gun_pickup.is_empty():                                                       # Draw the contested rapid-fire pickup only while it remains unclaimed.
 		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared Vector2 directly instead of reconstructing it from a Variant.
 		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), _gun_animation_texture(), gun_position, used, 0.10) # Cycle the authored Gun.tres rotation at its configured speed.
@@ -3976,7 +4324,7 @@ func _update_combat_view() -> void:
 		var head_screen_position := Vector2(float(head_projection["screen_x"]), float(head_projection["feet_y"]) - float(head_projection.get("continuous_actor_height", head_projection.get("actor_height", 0.0))) * projectile_height).round() # Project the one shared physical position directly in this camera.
 		var shot_direction: Vector2 = shot.get("direction", Vector2.ZERO)
 		var probe_projection := _opponent_projection_from_current_camera(world_position - shot_direction * 0.04, true, true)
-		var raw_tail_screen_direction := (_projectile_screen_position_continuous(probe_projection) - _projectile_screen_position_continuous(head_projection)).normalized()
+		var raw_tail_screen_direction := (_projectile_screen_position_continuous(probe_projection, projectile_height) - _projectile_screen_position_continuous(head_projection, projectile_height)).normalized()
 		var projected_height := float(head_projection.get("continuous_actor_height", head_projection.get("actor_height", 0.0))) # Use the same continuous perspective scale that governs world-body apparent size.
 		var tail_length_pixels := clampi(roundi(projected_height / PROJECTILE_TRACER_LENGTH_HEIGHT_DIVISOR), 1, PROJECTILE_TRACER_MAX_LENGTH_PIXELS) # Keep a distant vector to one tail pixel, then lengthen only its aliased screen-space extent as it approaches.
 		var tracer_tail_points := _projectile_tracer_wu_points(head_screen_position, raw_tail_screen_direction, tail_length_pixels) # Rasterize the actual projected angle into anti-aliased coverage pairs without changing its physical direction or length.
@@ -3996,47 +4344,50 @@ func _update_combat_view() -> void:
 		var impact_smoke_id := int(smoke.get("id", -1))                                          # Reuse the stable card identity for its Sprite2D and per-camera stepped render cache.
 		var impact_smoke_key := "wall_smoke_%d" % impact_smoke_id                                 # Keep wall-material cards separate from muzzle cards and one-pixel debris.
 		var impact_smoke_render_cache_key := "%d:%d" % [active_player_index, impact_smoke_id]   # The same shared-world impact must retain a distinct screen result in each split-screen camera.
-		var impact_smoke_visual_frame := int(smoke.get("visual_frame", 0))                        # This result is valid until the card's next existing 14 FPS display sample.
-		var cached_impact_smoke_render: Variant = wall_impact_smoke_render_cache.get(impact_smoke_render_cache_key, {}) # Validate generic cache storage before deciding whether the complete prior card state can be reused.
-		if cached_impact_smoke_render is Dictionary and int(cached_impact_smoke_render.get("visual_frame", -1)) == impact_smoke_visual_frame:
-			if bool(cached_impact_smoke_render.get("visible", false)):
-				used[impact_smoke_key] = true                                                          # Keep the prior texture, sampled tint, shader LOD, transform, and layer without rewriting them this render frame.
-			continue                                                                                   # Skip repeated world visibility, projection, source-color sampling, and material work during the held visual frame.
+		var impact_smoke_visual_frame := int(smoke.get("visual_frame", 0))                        # Keep the card's own motion and material on the existing 14 FPS cadence.
+		var cached_impact_smoke_render: Variant = wall_impact_smoke_render_cache.get(impact_smoke_render_cache_key, {})
+		var reuse_impact_smoke_sample: bool = cached_impact_smoke_render is Dictionary and int(cached_impact_smoke_render.get("visual_frame", -1)) == impact_smoke_visual_frame
+		if reuse_impact_smoke_sample and not bool(cached_impact_smoke_render.get("visible", false)):
+			continue                                                                                   # Preserve the existing stepped occlusion checks for hidden cards.
 		var impact_smoke_world_position: Vector2 = smoke.get("display_position", smoke.get("position", Vector2.ZERO)) # Render the held pixel-animation position rather than sub-frame drift.
-		if not _world_actor_overlaps_current_camera_fan(impact_smoke_world_position, 0.08) or not _world_point_has_clear_camera_line(impact_smoke_world_position):
-			wall_impact_smoke_render_cache[impact_smoke_render_cache_key] = {"visual_frame": impact_smoke_visual_frame, "visible": false} # Hold the off-camera or occluded state until this card's next visible sample.
+		if not reuse_impact_smoke_sample and (not _world_actor_overlaps_current_camera_fan(impact_smoke_world_position, 0.08) or not _world_point_has_clear_camera_line(impact_smoke_world_position)):
+			wall_impact_smoke_render_cache[impact_smoke_render_cache_key] = {"visual_frame": impact_smoke_visual_frame, "visible": false}
 			continue                                                                                   # Keep the impact cloud hidden behind real intervening wall geometry.
-		var impact_smoke_projection := _opponent_projection_from_current_camera(impact_smoke_world_position, true) # Project the cloud at the same visible front wall face as the contact.
+		var impact_smoke_projection := _opponent_projection_from_current_camera(impact_smoke_world_position, true, true) # Project the held world sample with the live camera, including near the wall.
 		var impact_smoke_layer := _impact_layer_for_current_view(String(smoke.get("wall_edge_key", "")), Vector2(smoke.get("direction", Vector2.ZERO)), int(impact_smoke_projection.get("z_index", 0)) + 3) # Reject the wall back face and keep the cloud near its contact layer.
+		if bool(smoke.get("barrel_hit", false)):
+			impact_smoke_layer = _world_actor_draw_layer(impact_smoke_world_position) + 3
 		if impact_smoke_layer < 0:
-			wall_impact_smoke_render_cache[impact_smoke_render_cache_key] = {"visual_frame": impact_smoke_visual_frame, "visible": false} # Hold the back-face rejection for this deliberately stepped visual interval.
+			if not reuse_impact_smoke_sample:
+				wall_impact_smoke_render_cache[impact_smoke_render_cache_key] = {"visual_frame": impact_smoke_visual_frame, "visible": false}
 			continue                                                                                   # This view sees only the opposite side of the struck wall.
 		var impact_smoke_sprite := _combat_sprite(impact_smoke_key)                                # Cache each procedural impact card independently from muzzle smoke and square particles.
-		impact_smoke_sprite.texture = _muzzle_smoke_cloud_texture(int(smoke.get("cloud_variant", 0))) # Reuse the tested low-resolution irregular cloud card system, not the authored GunSmoke sheets.
-		var wall_colors := _wall_impact_colors_for_current_view(String(smoke.get("wall_edge_key", "")), Vector2(smoke.get("sample_position", impact_smoke_world_position))) # Sample the same nearby wall texels used by splinters.
-		var wall_color: Color = wall_colors[posmod(int(smoke.get("color_sample_index", 0)), wall_colors.size())] # Give each card one sampled wall color from the local contact patch.
-		var dust_color := wall_color                                                               # Use the actual sampled wall texel so impact dust reads as wall material, not pale muzzle smoke.
-		var remaining_fraction := clampf(float(smoke.get("timer", 0.0)) / WALL_IMPACT_SMOKE_LIFETIME, 0.0, 1.0) # Fade the card as the compact impact dust disperses.
-		dust_color.a = minf(float(smoke.get("opacity", 0.84)), remaining_fraction / 0.70)         # Keep enough initial opacity for the material burst to read at a distance.
-		var cloud_material := impact_smoke_sprite.material as ShaderMaterial                       # Keep an independent material per cached card so split-screen depth can select its own mask stride.
-		if cloud_material == null or cloud_material.shader != PROCEDURAL_CLOUD_LOD_SHADER:
-			cloud_material = ShaderMaterial.new()
-			cloud_material.shader = PROCEDURAL_CLOUD_LOD_SHADER
-			impact_smoke_sprite.material = cloud_material
-		var world_texel_stride := _runtime_world_sprite_texel_stride(float(impact_smoke_projection.get("view_depth", 0.0))) # Start from the exact depth band that defines surrounding world art.
-		var cloud_texel_stride := 1.0 + floorf(maxf(world_texel_stride - 1.0, 0.0) * 2.0)         # Preserve the full 32x32 mask at close range, then step 1, 2, 3, 4, and 6-source-pixel tiers as the wall recedes.
-		cloud_material.set_shader_parameter("texel_stride", cloud_texel_stride)                    # Keep nearby material bursts detailed while retaining deliberately coarser cloud masses in distant grid cells.
-		cloud_material.set_shader_parameter("tint_color", dust_color)                            # Preserve the direct sampled wall color and the particle's independent fade.
-		impact_smoke_sprite.self_modulate = Color.WHITE                                            # Leave tinting entirely to the cloud shader so it cannot be overwritten by CanvasItem modulation.
+		if not reuse_impact_smoke_sample:
+			impact_smoke_sprite.texture = _muzzle_smoke_cloud_texture(int(smoke.get("cloud_variant", 0)))
+			var wall_colors := _barrel_surface_colors_for_current_view(smoke) if bool(smoke.get("barrel_hit", false)) else _wall_impact_colors_for_current_view(String(smoke.get("wall_edge_key", "")), Vector2(smoke.get("sample_position", impact_smoke_world_position)))
+			var dust_color: Color = wall_colors[posmod(int(smoke.get("color_sample_index", 0)), wall_colors.size())]
+			var remaining_fraction := clampf(float(smoke.get("timer", 0.0)) / WALL_IMPACT_SMOKE_LIFETIME, 0.0, 1.0)
+			dust_color.a = minf(float(smoke.get("opacity", 0.84)), remaining_fraction / 0.70)
+			var cloud_material := impact_smoke_sprite.material as ShaderMaterial
+			if cloud_material == null or cloud_material.shader != PROCEDURAL_CLOUD_LOD_SHADER:
+				cloud_material = ShaderMaterial.new()
+				cloud_material.shader = PROCEDURAL_CLOUD_LOD_SHADER
+				impact_smoke_sprite.material = cloud_material
+			var world_texel_stride := _runtime_world_sprite_texel_stride(float(impact_smoke_projection.get("view_depth", 0.0)))
+			var cloud_texel_stride := 1.0 + floorf(maxf(world_texel_stride - 1.0, 0.0) * 2.0)
+			cloud_material.set_shader_parameter("texel_stride", cloud_texel_stride)
+			cloud_material.set_shader_parameter("tint_color", dust_color)
+			impact_smoke_sprite.self_modulate = Color.WHITE
+			impact_smoke_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			impact_smoke_sprite.rotation = float(smoke.get("display_rotation", 0.0))
 		var impact_smoke_height := float(impact_smoke_projection.get("continuous_actor_height", impact_smoke_projection.get("actor_height", 0.0))) # Read continuous perspective scale so the cloud does not snap at the local-cell boundary.
 		var impact_smoke_anchor := _projectile_screen_position(impact_smoke_projection)            # Start from the actual wall-contact projection rather than a floor-space approximation.
 		impact_smoke_sprite.position = (impact_smoke_anchor - Vector2(0.0, impact_smoke_height * float(smoke.get("display_height", smoke.get("height", 0.0))))).round() # Project each card's independent upward/downward burst relative to the real bullet contact.
 		impact_smoke_sprite.scale = Vector2.ONE * float(smoke.get("base_scale", 1.12)) * clampf(impact_smoke_height / 42.0, 0.30, 1.0) # Make the three-card burst large enough to read as a violent material poof at distance.
-		impact_smoke_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                    # Retain the muzzle smoke's crisp low-resolution cloud pixels.
-		impact_smoke_sprite.rotation = float(smoke.get("display_rotation", 0.0))                 # Let individual cards turn in stepped pixel-grid increments instead of reading as one static sprite.
 		impact_smoke_sprite.z_index = impact_smoke_layer                                           # Draw over the struck face but beneath the later square debris motion.
 		impact_smoke_sprite.visible = true                                                         # Reveal this frame of the short impact cloud.
-		wall_impact_smoke_render_cache[impact_smoke_render_cache_key] = {"visual_frame": impact_smoke_visual_frame, "visible": true} # Reuse this complete material-card result until the burst's next stepped display update.
+		if not reuse_impact_smoke_sample:
+			wall_impact_smoke_render_cache[impact_smoke_render_cache_key] = {"visual_frame": impact_smoke_visual_frame, "visible": true} # Hold the appearance while the camera-dependent projection and layer refresh each render.
 		used[impact_smoke_key] = true                                                              # Preserve it until its shared cloud event expires.
 	combat_vfx_render_profile["wall_dust_us"] = Time.get_ticks_usec() - wall_dust_started_us
 	for hole in active_wall_bullet_holes:                                                       # Render the retained one-pixel black mark directly on the struck wall face.
@@ -4047,13 +4398,17 @@ func _update_combat_view() -> void:
 		if float(hole_projection.get("view_depth", INF)) > WALL_BULLET_HOLE_MAX_VIEW_DEPTH:
 			continue                                                                                   # Keep the single-pixel mark from becoming an oversized distant decal beyond three grid cells.
 		var hole_layer := _impact_layer_for_current_view(String(hole.get("wall_edge_key", "")), Vector2(hole.get("direction", Vector2.ZERO)), int(hole_projection.get("z_index", 0)) + 3) # Retain the struck front face's layering and reject its back face.
+		if bool(hole.get("barrel_hit", false)):
+			hole_layer = _world_actor_draw_layer(hole_world_position) + 3
 		if hole_layer < 0:
 			continue                                                                                   # This camera only sees the wall's opposite side.
 		var hole_sprite := _combat_sprite("wall_hole_%d" % int(hole["id"]))                     # Cache the decal separately from every moving chunk.
 		hole_sprite.texture = _projectile_pixel_texture()                                          # Use the same generated neutral texel; no decal image asset is required.
 		hole_sprite.material = null                                                                # Keep the decal a literal opaque black square.
 		hole_sprite.self_modulate = Color.BLACK                                                    # Mark the impact point as the requested one-pixel bullet hole.
-		hole_sprite.position = _projectile_screen_position(hole_projection)                       # Register the decal at the same stable physical bullet height used at contact.
+		var hole_height := float(hole.get("height", 0.72))
+		var hole_projected_height := float(hole_projection.get("continuous_actor_height", hole_projection.get("actor_height", 0.0)))
+		hole_sprite.position = Vector2(float(hole_projection["screen_x"]), float(hole_projection["feet_y"]) - hole_projected_height * hole_height).round()
 		hole_sprite.scale = Vector2.ONE                                                           # Keep the decal exactly one logical pixel.
 		hole_sprite.z_index = hole_layer                                                          # Draw just above the face that the bullet struck.
 		hole_sprite.visible = true                                                                # Reveal the retained mark.
@@ -4095,6 +4450,8 @@ func _update_combat_view() -> void:
 		var debris_world_position: Vector2 = debris.get("display_position", debris.get("position", Vector2.ZERO)) # Render only the latest visual-frame sample, rather than smoothly interpolating the physical splinter point.
 		var debris_projection := _opponent_projection_from_current_camera(debris_world_position, true, true) # Project its continuous world movement through the live effect camera path.
 		var debris_layer := _impact_layer_for_current_view(String(debris.get("wall_edge_key", "")), Vector2(debris.get("direction", Vector2.ZERO)), int(debris_projection.get("z_index", 0)) + 4) # Keep debris visible only from the struck wall side.
+		if bool(debris.get("barrel_hit", false)) and not bool(debris.get("barrel_fragment", false)):
+			debris_layer = _world_actor_draw_layer(debris_world_position) + 3 # Use barrel-compatible depth ordering for chips flying off the impact surface.
 		if debris_layer < 0:
 			wall_debris_render_cache[debris_render_cache_key] = {"visual_frame": debris_visual_frame, "visible": false} # Avoid repeating projection/face testing for this hidden particle until its next visual sample.
 			continue                                                                                   # This camera is behind the struck wall face.
@@ -4103,18 +4460,21 @@ func _update_combat_view() -> void:
 			continue                                                                                   # Keep chunks behind a real intervening wall hidden from this camera.
 		var debris_sprite := _combat_sprite(debris_key)                                            # Cache the image-free square particle by its shared ID.
 		var debris_shape := String(debris.get("shape", "dot"))                                   # Read the near-impact procedural splinter silhouette chosen at spawn.
-		if float(debris_projection.get("view_depth", INF)) > WALL_DEBRIS_LARGE_MAX_VIEW_DEPTH:
+		if not bool(debris.get("barrel_fragment", false)) and float(debris_projection.get("view_depth", INF)) > WALL_DEBRIS_LARGE_MAX_VIEW_DEPTH:
 			debris_shape = "dot"                                                                     # Keep all distant splinters to one pixel beyond three grid cells.
-		debris_sprite.texture = _wall_debris_shape_texture(debris_shape)                           # Draw a generated dot, domino, block, or L mask with no authored texture asset.
+		var small_barrel_hit := bool(debris.get("barrel_hit", false)) and not bool(debris.get("barrel_fragment", false))
+		debris_sprite.texture = _barrel_small_splinter_texture(debris_shape) if small_barrel_hit else _wall_debris_shape_texture(debris_shape)                           # Draw a generated dot, domino, block, or L mask with no authored texture asset.
 		debris_sprite.material = null                                                              # Preserve the sampled wall color exactly.
-		var debris_color_cache_key := "%d:%d" % [active_player_index, int(debris.get("id", -1))] # The same shared splinter can need a distinct sampled source texture in each split-screen view.
-		var wood_colors: Array = wall_debris_color_cache.get(debris_color_cache_key, [])          # Read the generic cached array directly: Dictionary storage cannot retain Array[Color]'s static type, but its Color values remain valid.
-		if wood_colors.size() < 4:
-			wood_colors = _wall_impact_colors_for_current_view(String(debris.get("wall_edge_key", "")), Vector2(debris.get("sample_position", debris_world_position))) # Read the four real wall texels surrounding the actual contact only once per splinter/view.
-			wall_debris_color_cache[debris_color_cache_key] = wood_colors                            # Retain this fixed impact palette; it cannot change during the particle's short lifetime.
-		var wood_color: Color = wood_colors[posmod(int(debris.get("color_sample_index", 0)), wood_colors.size())] # Give this chunk its assigned color from the 2×2 texture patch.
-		var color_variation: Color = debris.get("color_variation", Color.WHITE)                  # Read this chunk's subtle warm color variation chosen at impact time.
-		wood_color = Color(wood_color.r * color_variation.r, wood_color.g * color_variation.g, wood_color.b * color_variation.b, wood_color.a) # Vary sampled wood color slightly without replacing the impacted texture's palette.
+		var wood_color := Color.WHITE
+		if not small_barrel_hit:
+			var debris_color_cache_key := "%d:%d" % [active_player_index, int(debris.get("id", -1))]
+			var wood_colors: Array = wall_debris_color_cache.get(debris_color_cache_key, [])
+			if wood_colors.size() < 4:
+				wood_colors = _barrel_surface_colors_for_current_view(debris) if bool(debris.get("barrel_hit", false)) else _wall_impact_colors_for_current_view(String(debris.get("wall_edge_key", "")), Vector2(debris.get("sample_position", debris_world_position)))
+				wall_debris_color_cache[debris_color_cache_key] = wood_colors
+			wood_color = wood_colors[posmod(int(debris.get("color_sample_index", 0)), wood_colors.size())]
+			var color_variation: Color = debris.get("color_variation", Color.WHITE)
+			wood_color = Color(wood_color.r * color_variation.r, wood_color.g * color_variation.g, wood_color.b * color_variation.b, wood_color.a)
 		var ground_fade_seconds := float(debris.get("ground_fade_seconds", WALL_DEBRIS_NEAR_GROUND_FADE_SECONDS)) # Read the near/far lifetime LOD selected at impact time.
 		wood_color.a = clampf(float(debris.get("timer", 0.0)) / maxf(ground_fade_seconds, 0.001), 0.0, 1.0) if bool(debris.get("settled", false)) else 1.0 # Close chunks fade after their linger; a zero far duration becomes invisible immediately on settlement.
 		debris_sprite.self_modulate = wood_color                                                   # Tint the square chunk with the sampled texel color.
@@ -4144,7 +4504,7 @@ func _update_combat_view() -> void:
 		else:
 			var target_world := _player_state_world_position(state)                                  # Project the opposing hit body into this view.
 			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18):
-				continue                                                                                 # Let the wall mask retain only genuinely uncovered hit-pose pixels.
+				continue                                                                                 # Skip hit poses outside the camera fan.
 			var projection := _opponent_projection_from_current_camera(target_world, true)           # Keep hit characters immediately after their cell's facing walls.
 			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
@@ -4321,7 +4681,7 @@ func _gun_animation_texture() -> Texture2D:
 
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
-func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0, use_authored_coin_lod := false, coin_frame_index := 0, use_authored_heart_lod := false, heart_frame_index := 0) -> void:
+func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0, use_authored_coin_lod := false, coin_frame_index := 0, use_authored_heart_lod := false, heart_frame_index := 0, extra_height := 0.0) -> void:
 	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
 	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16)): # Keep remote collectibles inside the camera fan; normal back-to-front Canvas drawing resolves wall coverage.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
@@ -4343,7 +4703,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 		return                                                                                    # Skip the pickup safely if its edited resource has no valid animation frame.
 	var sprite := _combat_sprite(key)                                                          # Fetch/create this pickup's per-view cached sprite.
 	sprite.texture = render_texture                                                             # Use the authored coin LOD, heart, or gun pixel art.
-	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * lift_fraction) # Lift the pickup slightly from the floor at its projected depth.
+	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * (lift_fraction + extra_height)) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
 	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, world_view_depth, not (use_authored_coin_lod or use_authored_heart_lod)) # Keep non-LOD pickups on the shader grid while authored coin and heart LODs remain unmodified.
 	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
@@ -4353,28 +4713,17 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 
 # _render_world_barrel: Projects one non-colliding barrel with the authored eight-view Blender render matching this camera's side of the prop.
 func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary) -> void:
-	if not _world_actor_overlaps_current_camera_fan(world_position, 0.22) or not _world_point_has_clear_camera_line(world_position):
-		return                                                                                    # Treat props like every other shared-world object: no local-cell exception and no viewing through real walls.
+	if not _world_actor_overlaps_current_camera_fan(world_position, 0.22):
+		return                                                                                    # Skip props outside this view; wall surfaces handle partial occlusion through draw order.
 	var projection := _opponent_projection_from_current_camera(world_position, true, true)     # Use the raw live camera projector so the barrel follows the same continuous world truth as walls, actors, and effects.
 	var actor_height := float(projection.get("continuous_actor_height", projection.get("actor_height", 0.0))) # Never use the actor-only protected-near LOD height for a fixed world prop.
 	var world_view_depth := float(projection.get("view_depth", 0.0))
 	if actor_height <= 0.0:
 		return
 	var feet := Vector2(float(projection["screen_x"]), float(projection["feet_y"])).round()
-	var sprite_scale := clampf(actor_height / 56.91699, 0.2024, 1.1638) * BARREL_SIZE_MULTIPLIER # Keep perspective scaling while applying the artist-tunable barrel size.
+	var barrel_scale := maxf(actor_height / 56.91699, 0.2024) * BARREL_SIZE_MULTIPLIER            # Keep the far visibility floor, but let near barrels grow continuously with world perspective.
+	var sprite_scale := barrel_scale * BARREL_REFERENCE_ART_HEIGHT / BARREL_ART_HEIGHT            # Compensate for the larger source canvas without enlarging the barrel in the world.
 	var draw_layer := _world_actor_draw_layer(world_position)
-	# A restrained one-logical-pixel ground contact shadow gives the Blender
-	# barrel a floor anchor without baking a view-specific shadow into 16 PNGs.
-	var shadow := _combat_sprite("%s_shadow" % key)
-	shadow.texture = _projectile_pixel_texture()
-	shadow.material = null
-	shadow.self_modulate = Color(0.10, 0.055, 0.028, 0.48)
-	shadow.position = feet + Vector2(0.0, 1.0)
-	shadow.scale = Vector2(maxf(3.0, roundf(8.0 * sprite_scale)), 1.0)
-	shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	shadow.z_index = draw_layer
-	shadow.visible = true
-	used["%s_shadow" % key] = true
 	var sprite := _combat_sprite(key)
 	sprite.texture = _barrel_texture_for_current_camera()                                      # Swap only the source image; the Sprite2D is already isolated per local view.
 	sprite.scale = Vector2.ONE * sprite_scale
@@ -4384,6 +4733,25 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	sprite.z_index = draw_layer + 1                                                            # Keep the barrel immediately in front of its own floor shadow while retaining world-depth ordering.
 	sprite.visible = true
 	used[key] = true
+	# Reuse the actual directional PNG and LOD grid as the mask. The shader keeps
+	# only its bottom 10 source pixels, shifted down one logical screen pixel.
+	var shadow := _combat_sprite("%s_shadow" % key)
+	shadow.texture = sprite.texture
+	var shadow_material := shadow.material as ShaderMaterial
+	if shadow_material == null or shadow_material.shader != BARREL_CONTACT_SHADOW_SHADER:
+		shadow_material = ShaderMaterial.new()
+		shadow_material.shader = BARREL_CONTACT_SHADOW_SHADER
+		shadow.material = shadow_material
+	shadow_material.set_shader_parameter("sprite_scale", sprite.scale.x)
+	shadow_material.set_shader_parameter("grid_origin", sprite.position - sprite.texture.get_size() * sprite.scale * 0.5) # The one-pixel shadow offset keeps the same grid phase.
+	shadow.self_modulate = Color.WHITE
+	shadow.centered = true
+	shadow.position = sprite.position + Vector2.DOWN
+	shadow.scale = sprite.scale
+	shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shadow.z_index = draw_layer
+	shadow.visible = true
+	used["%s_shadow" % key] = true
 
 
 # _barrel_direction_for_world_vector: Selects the nearest 22.5-degree barrel camera without changing the eight-way character animation vocabulary.
@@ -4509,6 +4877,7 @@ func _bind_player_context(player_index: int) -> void:                           
 	run_animation_reversed = bool(state.get("run_animation_reversed", false))                  # Restore the requested straight-backward playback direction.
 	last_animation_reversed = bool(state.get("last_animation_reversed", false))                 # Restore the last playback direction latch.
 	character_is_moving = bool(state.get("character_is_moving", false))                        # Restore whether this player is actively running.
+	character_is_crouching = bool(state.get("character_is_crouching", false))
 	world_run_dir = String(state.get("world_run_dir", _direction_string_for_facing(facing)))    # Restore this player's world movement direction.
 	world_aim_dir = String(state.get("world_aim_dir", _direction_string_for_facing(facing)))    # Restore this player's world aim direction.
 	pending_grid_delta = state.get("pending_grid_delta", Vector2i.ZERO)                        # Restore this player's pending cell crossing.
@@ -4555,6 +4924,7 @@ func _save_player_context(player_index: int) -> void:                           
 	state["run_animation_reversed"] = run_animation_reversed                                   # Save whether straight-backward movement requests reverse playback.
 	state["last_animation_reversed"] = last_animation_reversed                                 # Save the direction of the last started playback.
 	state["character_is_moving"] = character_is_moving                                         # Save whether this player is actively running.
+	state["character_is_crouching"] = character_is_crouching
 	state["world_run_dir"] = world_run_dir                                                     # Save this player's world movement direction for other views.
 	state["world_aim_dir"] = world_aim_dir                                                     # Save this player's world aim direction for other views.
 	state["pending_grid_delta"] = pending_grid_delta                                           # Save this player's pending cell crossing.
@@ -4577,8 +4947,13 @@ func _texture_sequence_from_state(value: Variant) -> Array[Texture2D]:          
 
 
 
+func _movement_speed_multiplier(is_crouching: bool) -> float:
+	return maxf(crouch_move_speed_multiplier, 0.05) if is_crouching else 1.0
+
+
 # _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
+	character_is_crouching = _is_player_crouch_pressed_for(active_player_index)
 	_ensure_forward_cell_experiment_position()                                                 # Keep this opt-in experiment's real capsule in the cell ahead before reading input or rendering a new pose.
 	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)): # Let the explicit death sequence own the body and camera while down.
 		character_is_moving = false                                                               # Prevent normal locomotion from competing with the authored Death frames.
@@ -4676,7 +5051,7 @@ func _process_continuous_third_person_input(delta: float) -> void:
 		run_animation_reversed = movement.y > 0.0 and absf(movement.x) < absf(movement.y) * 0.5
 		world_run_dir = _direction_string_for_world_vector((right * movement.x - forward * movement.y).normalized())
 		_play_best_animation(true)
-		var world_delta := (right * movement.x - forward * movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta
+		var world_delta := (right * movement.x - forward * movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta
 		var moved := _move_world_with_wall_slide(player_world_position, world_delta, "right", "left", "back", "front") # Resolve one continuous input vector, preserving its tangent instead of repeatedly correcting an ordered X/Y pair at a wall.
 		_set_player_world_position_for_current_view(moved)
 	else:
@@ -6760,6 +7135,7 @@ func _setup_player_animation() -> void:                                         
 		player_sprite.sprite_frames = SpriteFrames.new()                                          # Update player sprite rendering or animation state.
 
 	_add_idle_animations(player_sprite.sprite_frames)                                          # Add the twelve-frame directional idle clips to the primary player's run resource.
+	_add_crouch_walk_animations(player_sprite.sprite_frames)
 	_add_dual_wield_idle_animations(player_sprite.sprite_frames)                              # Add the dual-pistol idle loops alongside normal idle clips.
 	_add_death_animations(player_sprite.sprite_frames)                                         # Add the preliminary directional death clips to the primary player's run resource.
 	_add_dual_wield_forward_animations(player_sprite.sprite_frames)                            # Add the dual-pistol forward runs alongside the existing animations.
@@ -6769,6 +7145,26 @@ func _setup_player_animation() -> void:                                         
 	player_sprite.centered = true                                                              # Update player sprite rendering or animation state.
 	player_sprite.z_index = 10                                                                 # Update player sprite rendering or animation state.
 
+
+
+# Copy all eight crouch views into each mutable character resource.
+func _add_crouch_walk_animations(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	for resource_path in [CROUCH_WALK_FRAMES, CROUCH_WALK_RIGHT_FRAMES, CROUCH_WALK_DUAL_RIGHT_FRAMES, CROUCH_WALK_DUAL_FWD_FRAMES, CROUCH_WALK_DUAL_LEFT_FRAMES, CROUCH_WALK_LEFT_FRAMES, CROUCH_IDLE_FRAMES, CROUCH_IDLE_DUAL_WIELD_FRAMES]:
+		var source := load(resource_path) as SpriteFrames
+		if source == null:
+			continue
+		for animation in source.get_animation_names():
+			if not String(animation).begins_with("Crouch"):
+				continue
+			if frames.has_animation(animation):
+				frames.remove_animation(animation)
+			frames.add_animation(animation)
+			frames.set_animation_loop(animation, source.get_animation_loop(animation))
+			frames.set_animation_speed(animation, source.get_animation_speed(animation))
+			for frame_index in source.get_frame_count(animation):
+				frames.add_frame(animation, source.get_frame_texture(animation, frame_index), source.get_frame_duration(animation, frame_index))
 
 
 # _add_idle_animations: Copies all eight new idle directions into one sprite's mutable run resource.
@@ -8736,7 +9132,7 @@ func _move_inside_tile(movement: Vector2, delta: float) -> void:                
 		return
 	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into right/forward physical tile-offset movement.
 	var tile_offset := _local_position_to_tile_offset(local_floor_position)                     # Convert current local art position into normalized physical tile offset.
-	tile_offset += physical_movement * MOVE_UNITS_PER_SECOND * delta                           # Move in physical tile space so every direction uses the same ground speed.
+	tile_offset += physical_movement * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta # Apply the same crouch multiplier in cardinal movement.
 	local_floor_position = _tile_offset_to_local_position(tile_offset)                         # Convert the physical offset back into local art-space registration.
 
 	if physical_movement.y > 0.0 and tile_offset.y >= 1.0:                                     # Handle crossing or blocking at the camera-forward physical edge.
@@ -8799,7 +9195,7 @@ func _move_inside_tile_diagonal(movement: Vector2, delta: float) -> void:       
 		return
 	var physical_movement := Vector2(movement.x, -movement.y)                                  # Convert screen-local input into camera-right/camera-forward movement.
 	var world_position := _constrain_player_world_position_to_camera_cell(_current_player_world_position()) # Diagonal local axes form a diamond, so keep ordinary movement inside the source-map cell rather than allowing a side push to leak into a wall.
-	var world_delta := (_view_right_vector() * physical_movement.x + _view_forward_vector() * physical_movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * diagonal_move_distance_multiplier * delta # Convert visible diagonal input into independently live-tunable world-grid travel.
+	var world_delta := (_view_right_vector() * physical_movement.x + _view_forward_vector() * physical_movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * diagonal_move_distance_multiplier * _movement_speed_multiplier(character_is_crouching) * delta # Convert visible diagonal input into independently live-tunable world-grid travel.
 	last_blocked_direction = ""                                                               # Clear stale feedback before applying this frame's collision checks.
 	if _try_move_diagonal_corner_direct(world_position, world_delta):                          # Let a genuine diagonal crossing land in its diagonal cell without briefly visiting a side-adjacent camera cell.
 		return                                                                                    # Keep the world/grid state already committed by the diagonal-corner helper.
@@ -9075,7 +9471,7 @@ func _ensure_forward_cell_experiment_position() -> void:
 # _move_inside_forward_camera_cell: Moves only inside the full source-map cell ahead of the camera, with no near-view screen retention or camera-cell reassignment.
 func _move_inside_forward_camera_cell(movement: Vector2, delta: float) -> void:
 	var play_cell := _forward_experiment_cell()                                                # Keep the experiment bounded to one entire logical grid cell rather than crossing the camera's near cell.
-	var world_delta := (_view_right_vector() * movement.x - _view_forward_vector() * movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta # Map local input directly into the displayed cell's world axes.
+	var world_delta := (_view_right_vector() * movement.x - _view_forward_vector() * movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta # Map local input directly into the displayed cell's world axes.
 	var candidate := player_world_position + world_delta                                      # Move the single authoritative capsule used by combat, pickups, and opponent rendering.
 	var radius := 0.0 if walk_through_walls_cheat else PLAYER_CAPSULE_RADIUS                  # The experiment removes near-view limits, not the optional real wall-collision radius.
 	candidate.x = clampf(candidate.x, float(play_cell.x) + radius, float(play_cell.x + 1) - radius) # Keep all free X travel inside the complete forward cell.
@@ -9178,7 +9574,7 @@ func _position_player() -> void:                                                
 		var continuous_projection_scale := 1.0 if use_continuous_world_projection_for_near_actors else near_self_scale_multiplier # Option 1 must not apply an actor-only scale multiplier that bullets and smoke cannot share.
 		var projected_height := float(truth_projection.get("continuous_actor_height", truth_projection.get("actor_height", near_actor_height_pixels))) * continuous_projection_scale # Start from the literal world-projected height used by the point-effect camera path.
 		var truth_height := projected_height if use_continuous_world_projection_for_near_actors or experimental_forward_cell_play_space else minf(projected_height, near_body_height_cap_pixels) # Remove the actor-only near size cap in Option 1 so the cowboy and raised effects share one camera scale.
-		var truth_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite)
+		var truth_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") or String(player_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(player_sprite)
 		var truth_scale := truth_height / truth_source_height
 		var truth_screen_x := float(truth_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5))   # Keep the actual projected world X; do not pin the player to a screen edge.
 		var truth_feet_y := float(truth_projection.get("feet_y", VIEWPORT_SIZE.y))              # Let the elevated-camera projection continue beneath the player instead of holding their feet at the bottom.
@@ -9194,7 +9590,7 @@ func _position_player() -> void:                                                
 			var diagonal_projection: Variant = diagonal_renderer.call("runtime_project_world_point_for_current_pose", _current_player_world_position(), 0.36, true)
 			if diagonal_projection is Dictionary and bool(diagonal_projection.get("visible", false)):
 				var diagonal_height := float(diagonal_projection.get("actor_height", near_actor_height_pixels))
-				var diagonal_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite)
+				var diagonal_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") or String(player_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(player_sprite)
 				var diagonal_scale := diagonal_height / diagonal_source_height
 				player_sprite.scale = Vector2.ONE * diagonal_scale
 				player_sprite.position = Vector2(float(diagonal_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5)), _sprite_center_y_for_feet(player_sprite, float(diagonal_projection.get("feet_y", VIEWPORT_SIZE.y)), diagonal_scale))
@@ -9205,7 +9601,7 @@ func _position_player() -> void:                                                
 	var projection := _near_cell_motion_projection(display_local_position)                    # Project the real near-cell local motion into the fixed wireframe's own deliberately extended rear envelope.
 	var screen_x := float(projection["screen_x"])                                             # Keep the body on the envelope's continuous side trajectory, including only the desired rear-corner exit.
 	var actor_height := float(projection["actor_height"])                                    # Preserve the existing live-tunable near body size without changing the world camera.
-	var source_body_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(player_sprite) # Keep Death and breathing Idle sheets at one stable projected scale despite their changing alpha bounds.
+	var source_body_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") or String(player_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(player_sprite) # Keep crouching, Death and Idle at the standing scale.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the calibrated self-view feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
@@ -9285,16 +9681,13 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection.get("continuous_actor_height", projection["actor_height"])) if use_continuous_world_projection_for_near_actors else float(projection["actor_height"]) # Option 1 uses the continuous world scale rather than an actor-only near LOD cap.
-	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") or String(opponent_sprite.animation).begins_with("Idle") else _sprite_body_height_to_foot(opponent_sprite) # Keep Death and breathing Idle sheets at one stable projected scale in every camera.
+	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") or String(opponent_sprite.animation).begins_with("Idle") or String(opponent_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(opponent_sprite) # Keep crouching, Death and Idle at the standing scale in every camera.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
 	if not target_in_viewer_near_cell and not _world_actor_overlaps_current_camera_fan(target_world, actor_half_width): # The near-envelope path owns same-cell framing; other cells retain true camera-fan culling.
 		opponent_sprite.visible = false                                                           # Hide the opponent once no body pixels should remain visible.
 		return                                                                                    # Return without displaying this opponent.
-	if continuous_third_person_camera and not _world_actor_has_clear_line_of_sight(target_world):
-		opponent_sprite.visible = false                                                           # Camera cutaways preserve local-player readability only; enemies remain hidden behind real gameplay walls.
-		return
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
@@ -9339,6 +9732,7 @@ func _effective_player_state(player_index: int) -> Dictionary:                  
 			"local_floor_position": local_floor_position,                                           # Include the current local position.
 			"world_position": player_world_position,                                                # Include the shared gameplay capsule center rather than recomputing it from display state.
 			"character_is_moving": character_is_moving,                                             # Include whether the current player is running.
+			"character_is_crouching": character_is_crouching,
 			"world_run_dir": world_run_dir,                                                         # Include the current player's world movement direction.
 			"world_aim_dir": world_aim_dir,                                                         # Include the current player's world aim direction.
 		}                                                                                           # Close the live state dictionary.
@@ -9998,6 +10392,10 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 			dual_wield_animation = _dual_wield_right_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Use the separately authored right-strafe view for the remaining strafe-side routing.
 		if dual_wield_animation != &"":
 			animation = dual_wield_animation
+	if bool(other_state.get("character_is_crouching", false)):
+		var crouch_animation := _crouch_walk_animation_for(relative_run, relative_aim, moving, opponent_sprite.sprite_frames, int(other_state.get("machine_gun_ammo", 0)) > 0)
+		if opponent_sprite.sprite_frames.has_animation(crouch_animation):
+			animation = crouch_animation
 	if animation == &"":                                                                       # Skip if no usable animation exists.
 		return                                                                                    # Return without changing the opponent sprite.
 	var playing_backward := opponent_sprite.get_playing_speed() < 0.0                          # Detect a forward-to-reverse change even when both directions share the same forward clip name.
@@ -10012,6 +10410,9 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 				opponent_sprite.play_backwards(animation)                                             # Resume a paused straight retreat in reverse.
 			else:
 				opponent_sprite.play(animation)                                                       # Resume ordinary forward playback.
+	elif bool(other_state.get("character_is_crouching", false)) and String(animation).begins_with("CrouchWalk"):
+		opponent_sprite.pause()
+		opponent_sprite.set_frame_and_progress(0, 0.0)
 	else:                                                                                      # Keep stopped opponents visibly breathing in their view-relative idle loop.
 		if not opponent_sprite.is_playing():
 			opponent_sprite.play(animation)
@@ -10093,6 +10494,37 @@ func _strafe_animation_for(run: String, aim: String, frames: SpriteFrames) -> St
 
 
 # _play_best_animation: Chooses and starts the best available player animation for the current movement state.
+func _crouch_walk_animation_for(run: String, aim: String, moving: bool, frames: SpriteFrames, dual_wield_armed: bool = false) -> StringName:
+	if not moving:
+		var dual_idle_animation := StringName("CrouchIdleDual" + aim)
+		if dual_wield_armed and frames.has_animation(dual_idle_animation):
+			return dual_idle_animation
+		var idle_animation := StringName("CrouchIdle" + aim)
+		if frames.has_animation(idle_animation):
+			return idle_animation
+	if moving:
+		var screen_run := _world_vector_for_direction_string(run) * Vector2(-1.0, 1.0)
+		var screen_aim := _world_vector_for_direction_string(aim) * Vector2(-1.0, 1.0)
+		var right_animation := StringName("CrouchWalkRight" + aim)
+		if screen_aim.cross(screen_run) > 0.001:
+			var dual_right_animation := StringName("CrouchWalkDualRight" + aim)
+			if dual_wield_armed and frames.has_animation(dual_right_animation):
+				return dual_right_animation
+			if frames.has_animation(right_animation):
+				return right_animation
+		var left_animation := StringName("CrouchWalkLeft" + aim)
+		if screen_aim.cross(screen_run) < -0.001:
+			var dual_left_animation := StringName("CrouchWalkDualLeft" + aim)
+			if dual_wield_armed and frames.has_animation(dual_left_animation):
+				return dual_left_animation
+			if frames.has_animation(left_animation):
+				return left_animation
+	var dual_forward_animation := StringName("CrouchWalkDual" + aim)
+	if moving and dual_wield_armed and frames.has_animation(dual_forward_animation):
+		return dual_forward_animation
+	return StringName("CrouchWalk" + aim)
+
+
 func _play_best_animation(is_moving: bool) -> void:                                         # Declare this function.
 	var normal_animation := &"RunN_AimN" if run_animation_reversed else _best_animation_for(run_dir, aim_dir, is_moving) # Reuse forward art backwards for straight local-backward movement.
 	var dual_wield_armed := active_player_index >= 0 and active_player_index < player_states.size() and int(player_states[active_player_index].get("machine_gun_ammo", 0)) > 0 # Read the current player's held powerup without changing its round count.
@@ -10102,6 +10534,8 @@ func _play_best_animation(is_moving: bool) -> void:                             
 	if dual_wield_animation == &"" and not run_animation_reversed:
 		dual_wield_animation = _dual_wield_right_animation_for(run_dir, aim_dir, player_sprite.sprite_frames) # Switch the remaining authored right strafe to dual wield.
 	var animation := dual_wield_animation if is_moving and dual_wield_armed and dual_wield_animation != &"" else normal_animation
+	if character_is_crouching and player_sprite.sprite_frames.has_animation(&"CrouchWalkN"):
+		animation = _crouch_walk_animation_for(run_dir, aim_dir, is_moving, player_sprite.sprite_frames, dual_wield_armed)
 	if animation == &"":                                                                       # Run the following block only when this condition is true.
 		return                                                                                    # Return to the caller without producing a value.
 	if animation == last_animation and run_animation_reversed == last_animation_reversed and player_sprite.is_playing(): # Avoid restarting unless playback direction changed.
@@ -10117,6 +10551,24 @@ func _play_best_animation(is_moving: bool) -> void:                             
 
 # _play_idle_animation: Plays the camera-forward idle; the local player's body always faces their own camera.
 func _play_idle_animation() -> void:
+	if character_is_crouching and player_sprite.sprite_frames.has_animation(&"CrouchIdleN"):
+		var crouch_dual_wield_armed := active_player_index >= 0 and active_player_index < player_states.size() and int(player_states[active_player_index].get("machine_gun_ammo", 0)) > 0
+		var crouch_idle_animation := &"CrouchIdleDualN" if crouch_dual_wield_armed and player_sprite.sprite_frames.has_animation(&"CrouchIdleDualN") else &"CrouchIdleN"
+		player_sprite.speed_scale = 1.0
+		if player_sprite.animation != crouch_idle_animation or not player_sprite.is_playing():
+			player_sprite.play(crouch_idle_animation)
+		last_animation = crouch_idle_animation
+		last_animation_reversed = false
+		return
+	if character_is_crouching and player_sprite.sprite_frames.has_animation(&"CrouchWalkN"):
+		if player_sprite.animation != &"CrouchWalkN":
+			player_sprite.play(&"CrouchWalkN")
+		player_sprite.pause()
+		player_sprite.set_frame_and_progress(0, 0.0)
+		player_sprite.speed_scale = 1.0
+		last_animation = &"CrouchWalkN"
+		last_animation_reversed = false
+		return
 	var idle_animation := _idle_animation_for(DIR_N, player_sprite.sprite_frames)
 	var dual_wield_armed := active_player_index >= 0 and active_player_index < player_states.size() and int(player_states[active_player_index].get("machine_gun_ammo", 0)) > 0 # Select the dual-pistol idle only while this player retains powerup rounds.
 	if dual_wield_armed:
@@ -10182,7 +10634,7 @@ func _keep_forward_run_animating() -> void:
 	_play_best_animation(true)                                                                 # Select the same view-relative running set used during ordinary held movement.
 	if not player_sprite.is_playing():                                                         # Recover if another render/state change stopped the AnimatedSprite2D at the crossing edge.
 		player_sprite.play()                                                                     # Resume the current run without resetting it to frame zero.
-	player_sprite.speed_scale = FORWARD_RUN_ANIMATION_SPEED                                    # Advance enough frames during Fwd 1/Fwd 2 for the body to remain visibly active.
+	player_sprite.speed_scale = FORWARD_RUN_ANIMATION_SPEED                                    # Preserve the existing animation cadence through camera transitions.
 
 
 
@@ -10242,7 +10694,7 @@ func _begin_forward_passthrough(sequence_name: String) -> void:
 # _advance_forward_passthrough: Advances one Fwd stage automatically or from one fresh manual forward input.
 func _advance_forward_passthrough(delta: float, manual_step: bool = false) -> void:
 	if not manual_step:                                                                        # Time stages only during normal automatic playback.
-		forward_passthrough_timer += delta                                                       # Accumulate visible duration for the current authored frame.
+		forward_passthrough_timer += delta * _movement_speed_multiplier(character_is_crouching) # Slow the actual crossing as well as free movement.
 		if forward_passthrough_timer < FORWARD_PASSTHROUGH_SECONDS:
 			return
 	forward_passthrough_timer = 0.0                                                            # Restart timing for the second frame or clear it before the stable result.
@@ -10273,7 +10725,7 @@ func _begin_strafe_passthrough(sequence_name: String) -> void:
 # _advance_strafe_passthrough: Advances one Right stage automatically or from one fresh matching lateral input.
 func _advance_strafe_passthrough(delta: float, manual_step: bool = false) -> void:
 	if not manual_step:                                                                        # Time stages only during normal automatic playback.
-		strafe_passthrough_timer += delta                                                        # Accumulate visible duration for the active authored side frame.
+		strafe_passthrough_timer += delta * _movement_speed_multiplier(character_is_crouching) # Slow lateral crossings by the same factor.
 		if strafe_passthrough_timer < STRAFE_PASSTHROUGH_SECONDS:
 			return                                                                                # Keep the active frame visible for its full brief duration.
 	strafe_passthrough_timer = 0.0                                                            # Restart timing for the next frame or clear it before the stable result.
@@ -10425,7 +10877,8 @@ func _start_transition(sequence_name: String) -> void:                          
 
 # _advance_transition: Advances the active captured transition sequence based on elapsed time.
 func _advance_transition(delta: float) -> void:                                             # Declare this function.
-	phase_timer += delta                                                                       # Continue the controller logic for this section.
+	var movement_phase := active_sequence_name in ["forward", "backward", "strafe_left", "strafe_right"]
+	phase_timer += delta * _movement_speed_multiplier(character_is_crouching) if movement_phase else delta # Turning keeps its normal timing.
 	if phase_timer < PHASE_SECONDS:                                                            # Run the following block only when this condition is true.
 		return                                                                                    # Return to the caller without producing a value.
 

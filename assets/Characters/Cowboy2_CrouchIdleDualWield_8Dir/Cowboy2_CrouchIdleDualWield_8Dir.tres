@@ -1,0 +1,442 @@
+[gd_resource type="SpriteFrames" load_steps=97 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_001.png" id="N_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_002.png" id="N_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_003.png" id="N_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_004.png" id="N_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_005.png" id="N_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_006.png" id="N_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_007.png" id="N_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_008.png" id="N_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_009.png" id="N_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_010.png" id="N_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_011.png" id="N_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/N/N_012.png" id="N_012"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_001.png" id="NE_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_002.png" id="NE_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_003.png" id="NE_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_004.png" id="NE_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_005.png" id="NE_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_006.png" id="NE_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_007.png" id="NE_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_008.png" id="NE_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_009.png" id="NE_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_010.png" id="NE_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_011.png" id="NE_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NE/NE_012.png" id="NE_012"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_001.png" id="E_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_002.png" id="E_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_003.png" id="E_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_004.png" id="E_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_005.png" id="E_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_006.png" id="E_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_007.png" id="E_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_008.png" id="E_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_009.png" id="E_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_010.png" id="E_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_011.png" id="E_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/E/E_012.png" id="E_012"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_001.png" id="SE_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_002.png" id="SE_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_003.png" id="SE_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_004.png" id="SE_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_005.png" id="SE_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_006.png" id="SE_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_007.png" id="SE_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_008.png" id="SE_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_009.png" id="SE_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_010.png" id="SE_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_011.png" id="SE_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SE/SE_012.png" id="SE_012"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_001.png" id="S_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_002.png" id="S_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_003.png" id="S_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_004.png" id="S_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_005.png" id="S_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_006.png" id="S_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_007.png" id="S_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_008.png" id="S_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_009.png" id="S_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_010.png" id="S_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_011.png" id="S_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/S/S_012.png" id="S_012"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_001.png" id="SW_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_002.png" id="SW_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_003.png" id="SW_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_004.png" id="SW_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_005.png" id="SW_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_006.png" id="SW_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_007.png" id="SW_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_008.png" id="SW_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_009.png" id="SW_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_010.png" id="SW_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_011.png" id="SW_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/SW/SW_012.png" id="SW_012"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_001.png" id="W_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_002.png" id="W_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_003.png" id="W_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_004.png" id="W_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_005.png" id="W_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_006.png" id="W_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_007.png" id="W_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_008.png" id="W_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_009.png" id="W_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_010.png" id="W_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_011.png" id="W_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/W/W_012.png" id="W_012"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_001.png" id="NW_001"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_002.png" id="NW_002"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_003.png" id="NW_003"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_004.png" id="NW_004"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_005.png" id="NW_005"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_006.png" id="NW_006"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_007.png" id="NW_007"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_008.png" id="NW_008"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_009.png" id="NW_009"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_010.png" id="NW_010"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_011.png" id="NW_011"]
+[ext_resource type="Texture2D" path="res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/NW/NW_012.png" id="NW_012"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("N_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("N_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualN",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("NE_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NE_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualNE",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("E_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("E_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualE",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("SE_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SE_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualSE",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("S_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("S_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualS",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("SW_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("SW_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualSW",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("W_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("W_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualW",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("NW_001")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_002")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_003")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_004")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_005")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_006")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_007")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_008")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_009")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_010")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_011")
+}, {
+"duration": 1.0,
+"texture": ExtResource("NW_012")
+}
+],
+"loop": 1,
+"name": &"CrouchIdleDualNW",
+"speed": 6.0
+}, {
+"frames": [],
+"loop": 1,
+"name": &"default",
+"speed": 5.0
+}]

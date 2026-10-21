@@ -4,8 +4,176 @@
 
 [resource]
 script = ExtResource("1_muzzle")
-sprite_frames_path = "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8Dir_Strafe.tres"
+sprite_frames_path = "res://assets/Characters/Cowboy2_CrouchWalkFwdDualWield_8Dir/Cowboy2_CrouchWalkFwdDualWield_8Dir.tres"
 anchors = {
+"CrouchIdleDualE": {
+"left": Vector2i(3, 20),
+"right": Vector2i(2, 20)
+},
+"CrouchIdleDualN": {
+"left": Vector2i(16, 20),
+"right": Vector2i(26, 20)
+},
+"CrouchIdleDualNE": {
+"left": Vector2i(2, 20),
+"right": Vector2i(10, 20)
+},
+"CrouchIdleDualNW": {
+"left": Vector2i(33, 20),
+"right": Vector2i(41, 20)
+},
+"CrouchIdleDualS": {
+"left": Vector2i(31, 20),
+"right": Vector2i(21, 21)
+},
+"CrouchIdleDualSE": {
+"left": Vector2i(14, 21),
+"right": Vector2i(6, 21)
+},
+"CrouchIdleDualSW": {
+"left": Vector2i(45, 20),
+"right": Vector2i(37, 20)
+},
+"CrouchIdleDualW": {
+"left": Vector2i(46, 20),
+"right": Vector2i(44, 21)
+},
+"CrouchIdleE": {
+"right": Vector2i(2, 20)
+},
+"CrouchIdleN": {
+"right": Vector2i(25, 20)
+},
+"CrouchIdleNE": {
+"right": Vector2i(9, 20)
+},
+"CrouchIdleNW": {
+"right": Vector2i(40, 20)
+},
+"CrouchIdleS": {
+"right": Vector2i(23, 20)
+},
+"CrouchIdleSE": {
+"right": Vector2i(8, 20)
+},
+"CrouchIdleSW": {
+"right": Vector2i(38, 20)
+},
+"CrouchIdleW": {
+"right": Vector2i(45, 20)
+},
+"CrouchWalkDualE": {
+"left": Vector2i(1, 14),
+"right": Vector2i(1, 14)
+},
+"CrouchWalkDualLeftE": {
+"left": Vector2i(3, 16),
+"right": Vector2i(3, 14)
+},
+"CrouchWalkDualLeftN": {
+"left": Vector2i(14, 15),
+"right": Vector2i(27, 14)
+},
+"CrouchWalkDualLeftNE": {
+"left": Vector2i(2, 15),
+"right": Vector2i(12, 14)
+},
+"CrouchWalkDualLeftNW": {
+"left": Vector2i(31, 15),
+"right": Vector2i(40, 14)
+},
+"CrouchWalkDualLeftS": {
+"left": Vector2i(33, 16),
+"right": Vector2i(20, 15)
+},
+"CrouchWalkDualLeftSE": {
+"left": Vector2i(16, 16),
+"right": Vector2i(7, 14)
+},
+"CrouchWalkDualLeftSW": {
+"left": Vector2i(45, 16),
+"right": Vector2i(35, 14)
+},
+"CrouchWalkDualLeftW": {
+"left": Vector2i(44, 15),
+"right": Vector2i(42, 15)
+},
+"CrouchWalkDualN": {
+"left": Vector2i(18, 14),
+"right": Vector2i(28, 14)
+},
+"CrouchWalkDualNE": {
+"left": Vector2i(3, 14),
+"right": Vector2i(12, 14)
+},
+"CrouchWalkDualNW": {
+"left": Vector2i(35, 14),
+"right": Vector2i(43, 14)
+},
+"CrouchWalkDualS": {
+"left": Vector2i(30, 15),
+"right": Vector2i(18, 14)
+},
+"CrouchWalkDualSE": {
+"left": Vector2i(12, 15),
+"right": Vector2i(5, 14)
+},
+"CrouchWalkDualSW": {
+"left": Vector2i(44, 15),
+"right": Vector2i(35, 14)
+},
+"CrouchWalkDualW": {
+"left": Vector2i(47, 14),
+"right": Vector2i(45, 14)
+},
+"CrouchWalkE": {
+"right": Vector2i(0, 14)
+},
+"CrouchWalkN": {
+"right": Vector2i(26, 13)
+},
+"CrouchWalkNE": {
+"right": Vector2i(9, 14)
+},
+"CrouchWalkNW": {
+"right": Vector2i(42, 14)
+},
+"CrouchWalkRightE": {
+"right": Vector2i(3, 16)
+},
+"CrouchWalkRightN": {
+"right": Vector2i(22, 16)
+},
+"CrouchWalkRightNE": {
+"right": Vector2i(9, 16)
+},
+"CrouchWalkRightNW": {
+"right": Vector2i(37, 16)
+},
+"CrouchWalkRightS": {
+"right": Vector2i(24, 16)
+},
+"CrouchWalkRightSE": {
+"right": Vector2i(10, 16)
+},
+"CrouchWalkRightSW": {
+"right": Vector2i(38, 16)
+},
+"CrouchWalkRightW": {
+"right": Vector2i(43, 16)
+},
+"CrouchWalkS": {
+"right": Vector2i(21, 14)
+},
+"CrouchWalkSE": {
+"right": Vector2i(6, 14)
+},
+"CrouchWalkSW": {
+"right": Vector2i(38, 14)
+},
+"CrouchWalkW": {
+"right": Vector2i(47, 14)
+},
 "DualRunE": {
 "left": Vector2i(2, 10),
 "right": Vector2i(0, 11)
