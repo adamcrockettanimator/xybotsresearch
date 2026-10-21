@@ -31,6 +31,12 @@ func run() -> void:
 		if actor_layer <= wall_layer:
 			failures.append("Actor in camera-facing cell %s did not draw after wall %s" % [facing_cell, entry["edge_key"]])
 			break
+		var camera_origin: Vector2 = entry["camera_origin"]
+		var forward: Vector2 = game._view_forward_vector().normalized()
+		var expected_depth := maxf((actor_world - camera_origin).dot(forward), 0.0)
+		if not is_equal_approx(game._world_cell_draw_depth(actor_world, camera_origin, forward), expected_depth):
+			failures.append("Actor cell %s is not ordered by camera-forward depth" % facing_cell)
+			break
 	print("FACING_CELL_SORT checked=", checked, " failures=", failures.size())
 	wrapper.queue_free()
 	await process_frame

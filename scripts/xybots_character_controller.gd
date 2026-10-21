@@ -9817,13 +9817,13 @@ func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_
 
 
 # _world_cell_draw_depth: Groups an actor with the camera-facing walls in its
-# source cell using distance from the camera point, not only forward-axis depth.
-# This makes an off-axis wall between the camera and a side-cell actor win the
-# painter's order while same-cell walls still paint immediately before the actor.
-func _world_cell_draw_depth(world_position: Vector2, camera_origin: Vector2, _forward: Vector2) -> float:
+# source cell. Group order is the camera's back-to-front axis: radial distance
+# is not valid painter depth for an off-axis wall endpoint and a neighbouring
+# actor.
+func _world_cell_draw_depth(world_position: Vector2, camera_origin: Vector2, forward: Vector2) -> float:
 	var cell := _world_cell_for_draw_depth(world_position, camera_origin)
 	var cell_center := Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5)
-	return clampf(cell_center.distance_to(camera_origin), 0.0, WORLD_DRAW_DEPTH_RANGE)
+	return clampf((cell_center - camera_origin).dot(forward), 0.0, WORLD_DRAW_DEPTH_RANGE)
 
 
 # _world_cell_for_draw_depth: Gives a point resting exactly on a thin grid wall

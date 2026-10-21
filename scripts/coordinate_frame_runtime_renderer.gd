@@ -1774,10 +1774,11 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var average_depth := (maxf(first_local.y, NEAR_CLIP) + maxf(second_local.y, NEAR_CLIP)) * 0.5
 		var facing_cell := _wall_facing_cell(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin)
 		var facing_center := Vector2(float(facing_cell.x) + 0.5, float(facing_cell.y) + 0.5)
-		# This layer depth must share the controller's complete painter range. The
-		# visible-wall distance cap is shorter than that range; clamping here made
-		# a far camera-facing wall sort in front of an actor in its own cell.
-		var cell_draw_depth := maxf(facing_center.distance_to(camera_origin), NEAR_CLIP)
+		# A camera-facing wall belongs to this grid cell, but cells must be ordered
+		# by the camera's forward axis, not radial distance from the camera. A
+		# neighbouring actor can be in front of this wall's endpoint while farther
+		# away diagonally; radial grouping incorrectly hid that actor.
+		var cell_draw_depth := maxf((facing_center - camera_origin).dot(forward), NEAR_CLIP)
 		var projected_entry := {
 			"edge_key": String(edge["key"]),
 			"camera_origin": camera_origin,
