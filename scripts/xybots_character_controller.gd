@@ -310,6 +310,7 @@ const LOCAL_CHARACTER_LAYER := 3500                                             
 const WORLD_EFFECT_FOREGROUND_LAYER := 3400                                                  # Keep travelling combat effects continuously visible above camera-facing wall art until their real collision.
 const WORLD_DRAW_DEPTH_RANGE := 6.25                                                        # Cover the coordinate renderer's useful 5.5-cell view plus its far clip margin.
 const WORLD_DRAW_DEPTH_SCALE := 500.0                                                       # Preserve sub-centicell actor-versus-wall depth differences without exceeding Godot's normal Canvas z range.
+const SAME_CELL_ACTOR_SORT_SPAN := 80.0                                                     # Reserve a small depth range inside one wall-cell layer so same-cell actors and future props sort by real camera distance.
 const LOCAL_REAR_CAMERA_CROP_PIXELS := 22.0                                                   # Let the local body sink out of frame when backed into the camera-side wall.
 const LOCAL_REAR_CAMERA_SCALE_BOOST := 0.20                                                   # Enlarge the local body near the camera after cropping hides the lower frame.
 const DEBUG_WALL_LABELS_ENABLED := false                                                    # Hide renderer-selected wall labels while the blue slot-grid audit is being checked.
@@ -9752,7 +9753,7 @@ func _player_state_world_position(state: Dictionary) -> Vector2:                
 
 
 # _opponent_projection_from_current_camera: Projects an opponent using the same corridor wall/floor perspective at every depth.
-func _opponent_projection_from_current_camera(target_world: Vector2, _draw_after_cell_walls := false, use_unclamped_effect_projection := false) -> Dictionary: # Project world art from its collision-safe center point.
+func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_cell_walls := false, use_unclamped_effect_projection := false) -> Dictionary: # Project world art from its collision-safe center point.
 	# The coordinate compositor owns the live in-between camera pose.  Use its
 	# exact wall/floor projection for every remote world object so actors,
 	# pickups, bullets, and impacts travel continuously with a transition rather
@@ -9771,12 +9772,15 @@ func _opponent_projection_from_current_camera(target_world: Vector2, _draw_after
 		var runtime_projection: Variant = coordinate_renderer.call(projection_method, target_world)
 		if runtime_projection is Dictionary and bool(runtime_projection.get("visible", false)):
 			var runtime_depth := float(runtime_projection.get("view_depth", 0.0))
+			var runtime_camera_origin: Vector2 = runtime_projection.get("camera_origin", Vector2.ZERO)
+			var runtime_forward: Vector2 = runtime_projection.get("forward", _view_forward_vector()).normalized()
+			var sort_depth := _world_cell_draw_depth(target_world, runtime_camera_origin, runtime_forward) if draw_after_cell_walls else runtime_depth # Characters use cell groups; pickups/effects retain their exact physical depth.
 			var runtime_result: Dictionary = runtime_projection.duplicate()
 			# Both the remote body's position and stepped size come from the live
 			# coordinate renderer, so its camera pose remains authoritative.
 			runtime_result["scale_view_depth"] = runtime_depth
-			runtime_result["sort_view_depth"] = runtime_depth
-			runtime_result["z_index"] = _character_layer_for_view_depth(runtime_depth)
+			runtime_result["sort_view_depth"] = sort_depth
+			runtime_result["z_index"] = _character_layer_for_view_depth(sort_depth) + (2 if draw_after_cell_walls else 0) # A character follows only its own cell's wall group; nearer wall cells remain in front.
 			return runtime_result
 	var origin := _runtime_camera_origin_for_visibility()                                      # Use the identical staged camera origin used for renderer visibility and actor culling.
 	var forward := _view_forward_vector().normalized()                                         # Use the exact live heading used by the coordinate walls, including NE/NW halfway poses.
@@ -9804,15 +9808,38 @@ func _opponent_projection_from_current_camera(target_world: Vector2, _draw_after
 	var scale_projection := _corridor_projection_at_view_depth(scale_view_depth)               # Sample only actor scale from the protected near-camera depth.
 	actor_height = float(scale_projection["actor_height"])                                    # Replace actor height while keeping true feet and screen-side position.
 	var screen_y := feet_y - actor_height * 0.5                                                 # Keep a legacy centered y value for debugging; final sprite registration uses feet_y.
-	var sort_depth := view_depth
-	var character_layer := _character_layer_for_view_depth(sort_depth)
+	var sort_depth := _world_cell_draw_depth(target_world, origin, forward) if draw_after_cell_walls else view_depth # Preserve exact depth for non-character world objects.
+	var character_layer := _character_layer_for_view_depth(sort_depth) + (2 if draw_after_cell_walls else 0) # Keep characters immediately above their cell's walls.
 	var corridor_width := maxf(float(corridor["right_x"]) - float(corridor["left_x"]), 1.0)    # Measure how many screen pixels represent one visible tile width at this depth.
 	return {"screen_x": screen_x, "screen_y": screen_y, "feet_y": feet_y, "actor_height": actor_height, "scale_view_depth": scale_view_depth, "view_depth": view_depth, "sort_view_depth": sort_depth, "z_index": character_layer, "corridor_width": corridor_width} # Return projected geometry plus the distinct physical sort depth.
 
 
 
 
+# _world_cell_draw_depth: Groups an actor with the camera-facing walls in its
+# source cell using distance from the camera point, not only forward-axis depth.
+# This makes an off-axis wall between the camera and a side-cell actor win the
+# painter's order while same-cell walls still paint immediately before the actor.
+func _world_cell_draw_depth(world_position: Vector2, camera_origin: Vector2, _forward: Vector2) -> float:
+	var cell := _world_cell_for_draw_depth(world_position, camera_origin)
+	var cell_center := Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5)
+	return clampf(cell_center.distance_to(camera_origin), 0.0, WORLD_DRAW_DEPTH_RANGE)
 
+
+# _world_cell_for_draw_depth: Gives a point resting exactly on a thin grid wall
+# to the camera-side cell. This keeps a shot/effect traveling along that wall
+# in the same post-wall group as the visible wall surface instead of letting
+# floating-point floor selection place it on the hidden side.
+func _world_cell_for_draw_depth(world_position: Vector2, camera_origin: Vector2) -> Vector2i:
+	var sample := world_position
+	const WALL_LINE_EPSILON := 0.001
+	var vertical_line := roundi(sample.x)
+	if absf(sample.x - float(vertical_line)) <= WALL_LINE_EPSILON:
+		sample.x += WALL_LINE_EPSILON if camera_origin.x >= float(vertical_line) else -WALL_LINE_EPSILON
+	var horizontal_line := roundi(sample.y)
+	if absf(sample.y - float(horizontal_line)) <= WALL_LINE_EPSILON:
+		sample.y += WALL_LINE_EPSILON if camera_origin.y >= float(horizontal_line) else -WALL_LINE_EPSILON
+	return Vector2i(floori(sample.x), floori(sample.y))
 # _side_entry_projection_at_view_depth: Samples a side-entry floor wedge for actors outside the main corridor span.
 func _side_entry_projection_at_view_depth(view_depth: float, side_sign: float) -> Dictionary: # Declare this function.
 	var first_cell: Dictionary = SIDE_PERSPECTIVE_CELL_EXTENTS[0]                              # Read the nearest measured side square.
@@ -9946,14 +9973,18 @@ func _character_layer_for_view_depth(view_depth: float) -> int:                 
 	return roundi((WORLD_DRAW_DEPTH_RANGE - clampf(view_depth, 0.0, WORLD_DRAW_DEPTH_RANGE)) * WORLD_DRAW_DEPTH_SCALE) # Nearer geometry receives the later Canvas draw layer.
 
 
-# _world_actor_draw_layer: Returns the camera-space painter layer for one
-# world point. Every object uses its true forward depth; there are no
-# near-field, source-cell, or actor-over-wall overrides.
+# _world_actor_draw_layer: Returns a wall-cell layer plus a bounded real-depth tie-breaker so bodies/props inside one cell paint in their actual front-to-back order.
 func _world_actor_draw_layer(world_position: Vector2) -> int:
-	var camera_origin := _runtime_camera_origin_for_visibility()
-	var forward := _view_forward_vector().normalized()
-	var view_depth := maxf((world_position - camera_origin).dot(forward), 0.0)
-	return _character_layer_for_view_depth(view_depth)
+	var camera_origin := _runtime_camera_origin_for_visibility()                               # Use the same live camera origin as wall visibility and all world projections.
+	var forward := _view_forward_vector().normalized()                                         # Measure front/back in the current cardinal or diagonal camera basis.
+	var cell := _world_cell_for_draw_depth(world_position, camera_origin)                      # Keep the broad painter group attached to the same source-map cell as its camera-facing walls.
+	var cell_center := Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5)                       # Use the cell centre as a neutral tie-break reference.
+	var within_cell_depth := (world_position - cell_center).dot(forward)                       # Positive means farther forward from the camera; negative means nearer/camera-side.
+	var cell_depth := _world_cell_draw_depth(world_position, camera_origin, forward)           # Preserve existing across-cell wall layering before applying the small in-cell adjustment.
+	var cell_layer := _character_layer_for_view_depth(cell_depth) + 2                          # Match the pickup rule: this is the first wall-safe layer after the cell's camera-facing wall group.
+	var camera_side_amount := clampf(0.5 - within_cell_depth, 0.0, 1.0)                        # Map the cell's far edge to zero and its camera-side edge to one without ever subtracting from the wall-safe layer.
+	var within_cell_layer := roundi(camera_side_amount * SAME_CELL_ACTOR_SORT_SPAN)            # Give the camera-side body a later positive sublayer so it draws over a farther body in the same cell.
+	return cell_layer + within_cell_layer                                                       # Never let same-cell sorting move a body behind its own walls; other cells remain separated by the larger world-depth spacing.
 
 
 # _opponent_camera_side_margin_from_projection: Converts projected sprite width into camera-space fan overlap.

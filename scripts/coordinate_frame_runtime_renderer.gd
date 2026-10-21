@@ -851,10 +851,10 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("clamp_layer_edges", layer_uv_edge_clamp_enabled)
-		# Canvas ordering is camera-space painter ordering only: farther geometry
-		# draws first and nearer geometry overwrites it. Do not reassign a wall to
-		# a source-cell group, which lets an actor overwrite a nearer wall.
-		sprite.z_index = controller._character_layer_for_view_depth(float(entry["depth"])) if controller != null else index
+		# Each wall is painted inside its camera-facing source cell. Characters in
+		# that cell use the immediately later layer, while nearer cells paint over
+		# the complete far-cell group.
+		sprite.z_index = (controller._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1) if controller != null else index
 	wall_art_sprite.visible = false
 	return entries.size()
 
@@ -1033,7 +1033,7 @@ func get_wall_depth_debug_entries() -> Array[Dictionary]:
 			"edge_key": entry.get("edge_key", ""),
 			"facing_cell": entry.get("facing_cell", Vector2i(-1, -1)),
 			"depth": depth,
-			"z_index": controller._character_layer_for_view_depth(depth) if controller != null else 0,
+			"z_index": (controller._character_layer_for_view_depth(float(entry.get("cell_draw_depth", depth))) + 1) if controller != null else 0,
 		})
 	return result
 
@@ -1060,7 +1060,7 @@ func runtime_wall_impact_layer(edge_key: String, projectile_direction: Vector2) 
 		if viewer_side * impact_side <= 0.0001:
 			return -1
 		var depth := float(entry.get("depth", 0.0))
-		return controller._character_layer_for_view_depth(depth) + 2
+		return controller._character_layer_for_view_depth(float(entry.get("cell_draw_depth", depth))) + 4
 	return -1
 
 
@@ -1773,6 +1773,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var quad := _project_wall_quad(first_local, second_local)
 		var average_depth := (maxf(first_local.y, NEAR_CLIP) + maxf(second_local.y, NEAR_CLIP)) * 0.5
 		var facing_cell := _wall_facing_cell(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin)
+		var facing_center := Vector2(float(facing_cell.x) + 0.5, float(facing_cell.y) + 0.5)
+		var cell_draw_depth := clampf(facing_center.distance_to(camera_origin), NEAR_CLIP, MAX_DEPTH)
 		var projected_entry := {
 			"edge_key": String(edge["key"]),
 			"camera_origin": camera_origin,
@@ -1783,6 +1785,7 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"second_local": second_local,
 			"depths": Vector2(maxf(first_local.y, NEAR_CLIP), maxf(second_local.y, NEAR_CLIP)),
 			"depth": average_depth,
+			"cell_draw_depth": cell_draw_depth,
 			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
 			"corner_tone_a": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
