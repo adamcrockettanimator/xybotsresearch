@@ -1931,7 +1931,11 @@ func get_camera_cutaway_debug_data(camera_origin: Vector2) -> Dictionary:
 	var detection_half_width := player_half_width - side_guard
 	var fan_left := player_world - camera_right * detection_half_width
 	var fan_right := player_world + camera_right * detection_half_width
-	var dither_half_width := CAMERA_CUTAWAY_DITHER_HALF_WIDTH_PIXELS * world_units_per_pixel
+	# The dither contact fan is allowed to be narrower than the visible body,
+	# never wider.  It must inherit the left/right silhouette inset; otherwise a
+	# side wall can be selected by the blue debug cone even though it does not
+	# block the player.
+	var dither_half_width := minf(CAMERA_CUTAWAY_DITHER_HALF_WIDTH_PIXELS * world_units_per_pixel, detection_half_width)
 	var dither_fan_left := player_world - camera_right * dither_half_width
 	var dither_fan_right := player_world + camera_right * dither_half_width
 	var blocked_keys := {}
