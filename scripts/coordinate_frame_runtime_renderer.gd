@@ -854,7 +854,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		# Each wall is painted inside its camera-facing source cell. Characters in
 		# that cell use the immediately later layer, while nearer cells paint over
 		# the complete far-cell group.
-		sprite.z_index = (controller._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1) if controller != null else index
+		sprite.z_index = int(entry.get("wall_draw_layer", (controller._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1) if controller != null else index))
 	wall_art_sprite.visible = false
 	return entries.size()
 
@@ -1033,7 +1033,24 @@ func get_wall_depth_debug_entries() -> Array[Dictionary]:
 			"edge_key": entry.get("edge_key", ""),
 			"facing_cell": entry.get("facing_cell", Vector2i(-1, -1)),
 			"depth": depth,
-			"z_index": (controller._character_layer_for_view_depth(float(entry.get("cell_draw_depth", depth))) + 1) if controller != null else 0,
+			"z_index": int(entry.get("wall_draw_layer", (controller._character_layer_for_view_depth(float(entry.get("cell_draw_depth", depth))) + 1) if controller != null else 0)),
+		})
+	return result
+
+
+# get_local_player_fan_draw_order_debug_entries: Supplies the exact visible
+# wall segments and their final local-player painter decision.  The controller
+# consumes this read-only snapshot for its F3 diagnostic; it never feeds back
+# into wall selection, fading, or ordering.
+func get_local_player_fan_draw_order_debug_entries() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for entry in last_wall_entries:
+		result.append({
+			"edge_key": String(entry.get("edge_key", "")),
+			"a": Vector2(entry.get("world_a", Vector2.ZERO)),
+			"b": Vector2(entry.get("world_b", Vector2.ZERO)),
+			"fan_contact": bool(entry.get("local_player_fan_contact", false)),
+			"wall_draw_layer": int(entry.get("wall_draw_layer", 0)),
 		})
 	return result
 
@@ -1141,6 +1158,57 @@ func _visible_floor_cells() -> Array[Dictionary]:
 	# Far-to-near retains predictable ownership at shared cell borders.
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	return result
+
+
+# _assign_overlapping_wall_draw_layers: Preserve the established camera-facing
+# cell layer for every wall/actor relationship.  The only exception is a pair
+# of wall faces whose projected quads overlap while their cell layers reverse
+# their far-to-near face order; move only the farther wall backward.  This can
+# never put that wall in front of an actor in its own camera-facing cell.
+func _assign_overlapping_wall_draw_layers(entries: Array[Dictionary]) -> void:
+	for index in range(entries.size()):
+		var entry: Dictionary = entries[index]
+		var cell_depth: float = float(entry.get("cell_draw_depth", entry.get("depth", 0.0)))
+		entry["wall_draw_layer"] = int(controller._character_layer_for_view_depth(cell_depth)) + 1 if controller != null else index
+	for nearer_index in range(1, entries.size()):
+		var nearer: Dictionary = entries[nearer_index]
+		var nearer_quad: PackedVector2Array = nearer.get("quad", PackedVector2Array())
+		if nearer_quad.size() != 4:
+			continue
+		for farther_index in range(nearer_index):
+			var farther: Dictionary = entries[farther_index]
+			var farther_quad: PackedVector2Array = farther.get("quad", PackedVector2Array())
+			if farther_quad.size() != 4 or not _wall_quads_overlap(farther_quad, nearer_quad):
+				continue
+			var farther_layer: int = int(farther.get("wall_draw_layer", 0))
+			var nearer_layer: int = int(nearer.get("wall_draw_layer", 0))
+			if farther_layer > nearer_layer:
+				farther["wall_draw_layer"] = nearer_layer
+
+
+# _apply_local_player_fan_draw_layers: Use the same solid, animated-silhouette
+# fan that selects local cutaways to resolve the local player against every
+# wall. A wall with no contact span cannot cover the body, so it belongs below
+# the player; a contacting wall owns the camera-to-body ray and belongs above.
+# This deliberately consumes the continuous segment-vs-triangle result, not a
+# collection of sample rays or a wall/actor centre-depth shortcut.
+func _apply_local_player_fan_draw_layers(entries: Array[Dictionary]) -> void:
+	if controller == null or not bool(controller.get("continuous_third_person_camera")):
+		return
+	if not controller.has_method("_current_player_world_position") or not controller.has_method("_world_actor_draw_layer"):
+		return
+	var player_world: Vector2 = controller.call("_current_player_world_position")
+	var player_layer: int = int(controller.call("_world_actor_draw_layer", player_world))
+	for entry in entries:
+		var wall_layer: int = int(entry.get("wall_draw_layer", 0))
+		if bool(entry.get("local_player_fan_contact", false)):
+			entry["wall_draw_layer"] = max(wall_layer, player_layer + 1)
+		else:
+			entry["wall_draw_layer"] = min(wall_layer, player_layer - 1)
+
+
+func _wall_quads_overlap(first: PackedVector2Array, second: PackedVector2Array) -> bool:
+	return not Geometry2D.intersect_polygons(first, second).is_empty()
 
 
 func _quad_bounds(quad: PackedVector2Array) -> Rect2:
@@ -1744,6 +1812,7 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	var right: Vector2 = controller._view_right_vector().normalized()
 	var camera_origin := _runtime_camera_origin(forward, right)
 	var cutaway_data := get_camera_cutaway_debug_data(camera_origin)
+	var local_player_fan_keys: Dictionary = cutaway_data.get("blocked_keys", {})
 	var result: Array[Dictionary] = []
 	# The first-hit ray fan is still useful for ordinary visibility, but it can
 	# miss a wall that only enters through the extreme left or right edge between
@@ -1794,6 +1863,7 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"light": _depth_light(average_depth),
 			"corner_tone_a": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
 			"corner_tone_b": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
+			"local_player_fan_contact": local_player_fan_keys.has(String(edge["key"])),
 		}
 		# Fade outward from the actual camera-fan contact, not from the player's
 		# centre. That keeps a still-occluding wall clear after the player backs
@@ -1825,6 +1895,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	if result.size() > MAX_WALLS:
 		result = result.slice(0, MAX_WALLS)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
+	_assign_overlapping_wall_draw_layers(result)
+	_apply_local_player_fan_draw_layers(result)
 	return result
 
 

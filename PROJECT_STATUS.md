@@ -1,6 +1,6 @@
 # Xybots Research — Compact Working Context
 
-Updated: 2026-08-20
+Updated: 2026-10-22
 
 Use this file when resuming work. It is the compact working reference for the project, not a replacement for the source art, Blender scenes, or task-specific visual guides.
 
@@ -25,6 +25,13 @@ Use this file when resuming work. It is the compact working reference for the pr
 - Master textures are projected onto coordinate-derived quads, with GPU-based projective/homography rendering.
 - Pixelated look, mip/UV snapping, seam coverage, layered wall parallax, and floor/ceiling mapping are experimental controls that should remain available while the visual language is refined.
 - World objects (players, coins, shots, effects) need to follow the same camera-pose/projection model as the geometry.
+
+## Renderer rules that must not regress
+
+- The local player uses a **continuous opaque-silhouette fan** from the live camera to the current animation frame's left and right opaque body bounds.  It is a solid segment-versus-triangle test, not a sparse set of visibility rays: a finite wall segment that contacts the fan draws above the player; every visible wall segment without contact draws below.  The narrow side guard prevents the fan from falsely fading a wall merely because it grazes the player's side, while preserving a wall directly behind the player as a cutaway.
+- The `Fan Draw Order` F3 diagnostic is the inspection tool for that rule: cyan is the local fan, amber is a clipped wall-contact span, green walls ended below the player, and red walls ended above.  It is diagnostic only; it must not change selection, fading, or layer values.
+- Props and opponents must be culled from the **actual runtime camera projection**, not from the player center and not from the old `DEBUG_VIEW_CONE` approximation.  `_world_actor_overlaps_current_camera_fan()` first asks the coordinate renderer for the live projected screen position, including current camera yaw, origin, and overscan; only an unavailable renderer falls back to the geometric cone.  This prevents right-edge objects from popping out after a small camera turn.
+- Normal painter ordering remains the physical-wall/actor baseline for props and opponents.  Do not apply the local-player fan layer rule independently to every prop or opponent: one Canvas `z_index` cannot encode conflicting per-object wall relationships, and the earlier attempt hoisted barrels/pickups above the local player.  A future general solution needs per-object compositing/masking rather than a second global layer override.
 
 ## Known state to preserve
 
