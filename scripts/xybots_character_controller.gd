@@ -175,14 +175,10 @@ const BARREL_COLLISION_RADIUS := .05                                            
 const BARREL_HIT_POINTS := 3
 const BARREL_PROJECTILE_RADIUS := 0.08                                                     # Approximate the visible barrel width, which is narrower than its 32-pixel canvas.
 enum OcclusionFootprintShape { CIRCLE, RECTANGLE, CAPSULE }                                # Floor props start as circles; later furniture can opt into authored rectangle/capsule bounds without replacing the renderer contract.
-@export var barrel_placement_radius := 0.09                                                 # Physical wall-clearance circle used when placing a barrel; deliberately independent from combat hit radius.
-@export var barrel_visual_radius := 0.12                                                    # Camera-occlusion circle covering the full rendered barrel silhouette.
-@export var coin_placement_radius := 0.045                                                  # Keep coins thrown from a broken barrel out of thin walls.
-@export var coin_visual_radius := 0.075                                                     # Cover the complete rotating coin animation, not only its current narrow frame.
-@export var heart_placement_radius := 0.055                                                 # Keep heart drops clear of walls after their landing bounce.
-@export var heart_visual_radius := 0.080                                                    # Cover the whole pulsing/spinning heart silhouette.
-@export var gun_placement_radius := 0.065                                                   # Keep rotating gun pickups away from wall planes.
-@export var gun_visual_radius := 0.105                                                      # Cover the maximum rotating gun frame extent.
+@export var barrel_footprint_radius := 0.09                                                 # One authoritative circle: wall-clearance and camera-depth footprint for a barrel.
+@export var coin_footprint_radius := 0.045                                                  # One authoritative circle for every rotating coin frame.
+@export var heart_footprint_radius := 0.055                                                 # One authoritative circle for a heart drop and its camera depth test.
+@export var gun_footprint_radius := 0.065                                                   # One authoritative circle for rotating gun pickups.
 const BARREL_PROJECTILE_HEIGHT := BARREL_REFERENCE_ART_HEIGHT / 56.91699 * BARREL_SIZE_MULTIPLIER # Barrel canvas height in the same standing-character units used by projectiles.
 const BARREL_PROJECTILE_TOP_MARGIN := 0.12                                                 # Allow for the gun and barrel's pixelated upper silhouette at grazing contacts.
 const CROUCH_PROJECTILE_HEIGHT_OFFSET := 0.22                                             # Aim crouched shots below the wall rail while keeping muzzle smoke on the authored gun marker.
@@ -4803,7 +4799,7 @@ func _world_footprint_has_visible_camera_span(footprint: Dictionary) -> bool:
 	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) != OcclusionFootprintShape.CIRCLE:
 		return _world_point_has_clear_camera_line(Vector2(footprint.get("position", Vector2.ZERO)))
 	var center := Vector2(footprint.get("position", Vector2.ZERO))
-	var radius := float(footprint.get("visual_radius", 0.0))
+	var radius := float(footprint.get("radius", 0.0))
 	var origin := _runtime_camera_origin_for_visibility()
 	var to_center := center - origin
 	var distance_squared := to_center.length_squared()
@@ -6490,27 +6486,19 @@ func _add_debug_pickup_collection_ellipse() -> void:
 	_add_debug_player_marker(_debug_map_world_position(center_world), Color(1.0, 0.84, 0.10, 0.96))
 
 
-# _world_item_footprint: Supplies one data contract for collision-safe placement,
-# camera occlusion, and F3 diagnostics. Circle is the current implementation;
+# _world_item_footprint: Supplies one authoritative data contract for
+# collision-safe placement, camera occlusion, and F3 diagnostics. Circle is the current implementation;
 # rectangle/capsule are explicit future shape slots rather than ad-hoc booleans.
 func _world_item_footprint(kind: String, position: Vector2) -> Dictionary:
-	var placement_radius := coin_placement_radius
-	var visual_radius := coin_visual_radius
-	var color := Color(1.0, 0.86, 0.08, 0.96)
+	var radius := coin_footprint_radius
 	match kind:
 		"barrel":
-			placement_radius = barrel_placement_radius
-			visual_radius = barrel_visual_radius
-			color = Color(0.46, 0.92, 0.18, 0.96)
+			radius = barrel_footprint_radius
 		"heart":
-			placement_radius = heart_placement_radius
-			visual_radius = heart_visual_radius
-			color = Color(1.0, 0.20, 0.44, 0.96)
+			radius = heart_footprint_radius
 		"gun":
-			placement_radius = gun_placement_radius
-			visual_radius = gun_visual_radius
-			color = Color(1.0, 0.52, 0.10, 0.96)
-	return {"shape": OcclusionFootprintShape.CIRCLE, "kind": kind, "position": position, "placement_radius": placement_radius, "visual_radius": visual_radius, "color": color}
+			radius = gun_footprint_radius
+	return {"shape": OcclusionFootprintShape.CIRCLE, "kind": kind, "position": position, "radius": radius}
 
 
 # _resolve_world_item_placement: Push a floor item out of physical wall edges.
@@ -6519,7 +6507,7 @@ func _resolve_world_item_placement(footprint: Dictionary) -> Vector2:
 	var position := Vector2(footprint.get("position", Vector2.ZERO))
 	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) != OcclusionFootprintShape.CIRCLE:
 		return position
-	var radius := float(footprint.get("placement_radius", 0.0))
+	var radius := float(footprint.get("radius", 0.0))
 	for _pass in range(3):
 		for edge in _all_physical_wall_edges():
 			var a := Vector2(edge["a"])
@@ -6537,15 +6525,13 @@ func _resolve_world_item_placement(footprint: Dictionary) -> Vector2:
 	return Vector2(clampf(position.x, radius, float(MAP_WIDTH) - radius), clampf(position.y, radius, float(MAP_HEIGHT) - radius))
 
 
-# _add_debug_world_footprints: Draws the smaller physical clearance circle in
-# lime and the larger visual/occlusion footprint in the item's own color.
+# _add_debug_world_footprints: Draws the single lime authoritative footprint.
 func _add_debug_world_footprints() -> void:
 	if not show_world_footprints_debug:
 		return
 	for footprint in _world_occlusion_footprints():
 		var center_world := Vector2(footprint["position"])
-		_add_debug_footprint_circle(center_world, float(footprint["placement_radius"]), Color(0.30, 1.0, 0.38, 0.95), 1.0)
-		_add_debug_footprint_circle(center_world, float(footprint["visual_radius"]), Color(footprint["color"]), 2.0)
+		_add_debug_footprint_circle(center_world, float(footprint["radius"]), Color(0.30, 1.0, 0.38, 0.95), 2.0)
 
 
 func _add_debug_footprint_circle(center_world: Vector2, radius: float, color: Color, width: float) -> void:

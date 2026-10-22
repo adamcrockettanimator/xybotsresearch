@@ -66,11 +66,11 @@ func _initialize() -> void:
 		if material == null or barrel_material == null or material.get_shader_parameter("sprite_scale") != barrel_material.get_shader_parameter("sprite_scale") or material.get_shader_parameter("grid_origin") != barrel_material.get_shader_parameter("grid_origin"):
 			failures.append("Shadow sampling differs from barrel sampling at depth %s" % depth)
 		print("depth=%.2f barrel_scale=%.3f" % [depth, barrel.scale.x])
-	# A center ray is deliberately irrelevant. One of the two true visual-circle
+	# A center ray is deliberately irrelevant. One of the two true footprint
 	# tangents can be exposed at a wall end, and the generic footprint rule must
 	# retain the barrel in that case; with both tangent edges blocked it vanishes.
 	var occlusion_probe := Vector2(4.0, 4.0)
-	var probe_radius := game.barrel_visual_radius
+	var probe_radius := game.barrel_footprint_radius
 	var probe_distance := occlusion_probe.length()
 	var probe_direction := occlusion_probe / probe_distance
 	var probe_perpendicular := Vector2(-probe_direction.y, probe_direction.x)

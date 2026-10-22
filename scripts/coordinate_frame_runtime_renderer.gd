@@ -2689,9 +2689,8 @@ func _update_debug_outlines(entries: Array[Dictionary]) -> void:
 
 
 # _update_world_footprint_view_debug: Draws each current floor-world item's
-# physical clearance circle (lime) and visual occlusion circle (item colour)
-# in the actual camera projection. The latter also shows its two tangent edges
-# as a filled continuous cone boundary, not sampled visibility rays.
+# one authoritative lime footprint in the actual camera projection, followed
+# by its two tangent edges as a continuous cone boundary, not sampled rays.
 func _update_world_footprint_view_debug() -> void:
 	_remove_environment_debug_node("CoordinateFrameWorldFootprintsDebug")
 	if controller == null or not bool(controller.get("show_world_footprints_debug")) or not controller.has_method("_world_occlusion_footprints"):
@@ -2704,10 +2703,10 @@ func _update_world_footprint_view_debug() -> void:
 	debug.z_index = 62
 	for footprint in controller.call("_world_occlusion_footprints"):
 		var center := Vector2(footprint.get("position", Vector2.ZERO))
-		_append_world_footprint_camera_circle(debug, center, float(footprint.get("placement_radius", 0.0)), Color(0.30, 1.0, 0.38, 0.92), origin, forward, right)
-		var visual_color := Color(footprint.get("color", Color.WHITE))
-		_append_world_footprint_camera_circle(debug, center, float(footprint.get("visual_radius", 0.0)), visual_color, origin, forward, right)
-		_append_world_footprint_cone(debug, center, float(footprint.get("visual_radius", 0.0)), visual_color, origin, forward, right)
+		var footprint_color := Color(0.30, 1.0, 0.38, 0.92)
+		var radius := float(footprint.get("radius", 0.0))
+		_append_world_footprint_camera_circle(debug, center, radius, footprint_color, origin, forward, right)
+		_append_world_footprint_cone(debug, center, radius, footprint_color, origin, forward, right)
 	controller.environment_layer.add_child(debug)
 
 
