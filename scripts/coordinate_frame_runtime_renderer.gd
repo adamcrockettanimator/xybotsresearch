@@ -1801,19 +1801,21 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var edge_a := Vector2(edge["a"])
 		var edge_b := Vector2(edge["b"])
 		var dither_contact := _segment_contact_points_in_cutaway_fan(edge_a, edge_b, camera_origin, Vector2(cutaway_data.get("dither_fan_left", Vector2.ZERO)), Vector2(cutaway_data.get("dither_fan_right", Vector2.ZERO)))
+		var silhouette_contact := _nearest_camera_cutaway_contact(edge_a, edge_b, cutaway_data.get("blocked_contact_spans", []))
 		# Pre-arm the immediately connected wall face before the moving fan reaches
 		# its seam. This avoids a one-segment dither hitch while keeping unrelated
-		# side walls outside the camera fan opaque.
-		if dither_contact.is_empty() and not _is_camera_cutaway_neighbor_edge(edge_a, edge_b, cutaway_data.get("blocked_edges", [])):
+		# side walls outside the camera fan opaque. A directly silhouette-blocking
+		# wall must also pass even if the intentionally narrow dither fan misses it:
+		# otherwise an along-wall camera pose can hide its own player completely.
+		if dither_contact.is_empty() and silhouette_contact.is_empty() and not _is_camera_cutaway_neighbor_edge(edge_a, edge_b, cutaway_data.get("blocked_edges", [])):
 			result.append(projected_entry)
 			continue
 		var inner_radius := float(cutaway_data.get("dither_inner_radius", 0.01))
 		var fade_width := float(cutaway_data.get("dither_fade_width", 0.01))
-		var nearest_contact := _nearest_camera_cutaway_contact(Vector2(edge["a"]), Vector2(edge["b"]), cutaway_data.get("blocked_contact_spans", []))
-		if not nearest_contact.is_empty() and float(nearest_contact["distance"]) <= inner_radius + fade_width:
+		if not silhouette_contact.is_empty() and float(silhouette_contact["distance"]) <= inner_radius + fade_width:
 			projected_entry["camera_cutaway_fade"] = true
-			projected_entry["camera_cutaway_contact_a"] = Vector2(nearest_contact["a"])
-			projected_entry["camera_cutaway_contact_b"] = Vector2(nearest_contact["b"])
+			projected_entry["camera_cutaway_contact_a"] = Vector2(silhouette_contact["a"])
+			projected_entry["camera_cutaway_contact_b"] = Vector2(silhouette_contact["b"])
 			projected_entry["camera_cutaway_inner_radius"] = inner_radius
 			projected_entry["camera_cutaway_fade_width"] = fade_width
 		result.append(projected_entry)
@@ -2104,6 +2106,59 @@ func _wall_facing_cell(world_a: Vector2, world_b: Vector2, camera_origin: Vector
 	if is_equal_approx(world_a.x, world_b.x):
 		return Vector2i(floori(world_a.x) if camera_origin.x >= world_a.x else floori(world_a.x) - 1, floori(midpoint.y))
 	return Vector2i(floori(midpoint.x), floori(world_a.y) if camera_origin.y >= world_a.y else floori(world_a.y) - 1)
+
+
+# runtime_actor_layer_after_visible_walls: Resolves the one place where cell
+# ownership alone is deliberately too coarse: an actor standing at the end of
+# a wall in its neighbouring cell.  The wall still owns its camera-facing
+# source cell (which is needed for the wall art and its AO), but its painter
+# layer can jump when the virtual camera crosses the wall line during a turn.
+# At an actual projected overlap, bracket the actor between walls behind it and
+# walls in front of it using real view depth at that exact side coordinate.
+#
+# This is not a general foreground override.  Walls in the actor's own
+# camera-facing cell retain the established +2 character tie-breaker, and wall
+# segments outside the actor's projected side span do not participate.
+func runtime_actor_layer_after_visible_walls(world_position: Vector2, fallback_layer: int) -> int:
+	if controller == null:
+		return fallback_layer
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var camera_origin := _runtime_camera_origin(forward, right)
+	var actor_view := _to_view(world_position, camera_origin, forward, right)
+	var actor_cell: Vector2i = controller._world_cell_for_draw_depth(world_position, camera_origin)
+	return runtime_actor_layer_after_wall_entries(actor_view, actor_cell, last_wall_entries, fallback_layer)
+
+
+# runtime_actor_layer_after_wall_entries: Exposed separately so the endpoint
+# rule can be regression-tested without depending on a particular maze pose.
+func runtime_actor_layer_after_wall_entries(actor_view: Vector2, actor_cell: Vector2i, wall_entries: Array[Dictionary], fallback_layer: int) -> int:
+	const ENDPOINT_SIDE_MARGIN := 0.06
+	const DEPTH_EPSILON := 0.002
+	var earliest_actor_layer := -1000000
+	var latest_actor_layer := 1000000
+	for entry in wall_entries:
+		if Vector2i(entry.get("facing_cell", Vector2i(-1, -1))) == actor_cell:
+			continue # The actor's own camera-facing cell keeps the established wall-then-actor ordering.
+		var first_local: Vector2 = entry.get("first_local", Vector2.ZERO)
+		var second_local: Vector2 = entry.get("second_local", Vector2.ZERO)
+		var side_span := second_local.x - first_local.x
+		var minimum_side := minf(first_local.x, second_local.x) - ENDPOINT_SIDE_MARGIN
+		var maximum_side := maxf(first_local.x, second_local.x) + ENDPOINT_SIDE_MARGIN
+		if actor_view.x < minimum_side or actor_view.x > maximum_side:
+			continue # A wall cannot cover the actor when its projected side interval misses the actor's foot point.
+		var along_wall := 0.5
+		if absf(side_span) > 0.0001:
+			along_wall = clampf((actor_view.x - first_local.x) / side_span, 0.0, 1.0)
+		var wall_view_depth := lerpf(first_local.y, second_local.y, along_wall)
+		var wall_layer: int = controller._character_layer_for_view_depth(float(entry.get("cell_draw_depth", wall_view_depth))) + 1
+		if actor_view.y < wall_view_depth - DEPTH_EPSILON:
+			earliest_actor_layer = max(earliest_actor_layer, wall_layer + 1) # This wall is behind the actor at their shared screen-side coordinate.
+		elif actor_view.y > wall_view_depth + DEPTH_EPSILON:
+			latest_actor_layer = min(latest_actor_layer, wall_layer - 1) # This wall is genuinely in front and must remain so.
+	if earliest_actor_layer > latest_actor_layer:
+		return fallback_layer # Contradictory overlaps are safer left to the existing topology order than guessed through.
+	return clampi(fallback_layer, earliest_actor_layer, latest_actor_layer)
 
 func _wall_edge_points(cell: Vector2i, edge: int) -> Array[Vector2]:
 	match edge:
