@@ -4723,6 +4723,8 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary) -> void:
 	if not _world_actor_overlaps_current_camera_fan(world_position, 0.22):
 		return                                                                                    # Skip props outside this view; wall surfaces handle partial occlusion through draw order.
+	if not _world_barrel_has_visible_camera_span(world_position):
+		return                                                                                    # Do not draw a prop when every point across its visible width is behind an opaque wall.
 	var projection := _opponent_projection_from_current_camera(world_position, true, true)     # Use the raw live camera projector so the barrel follows the same continuous world truth as walls, actors, and effects.
 	var actor_height := float(projection.get("continuous_actor_height", projection.get("actor_height", 0.0))) # Never use the actor-only protected-near LOD height for a fixed world prop.
 	var world_view_depth := float(projection.get("view_depth", 0.0))
@@ -4738,7 +4740,10 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	sprite.position = Vector2(feet.x, feet.y - BARREL_ART_HEIGHT * sprite_scale * 0.5).round() # Register the bottom of the PNG directly to the projected floor.
 	_apply_runtime_world_prop_style(sprite, world_view_depth, feet) # Reduce source pixels and darken from the exact floor pixel beneath the barrel.
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.z_index = draw_layer + 1                                                            # Keep the barrel immediately in front of its own floor shadow while retaining world-depth ordering.
+	# A barrel is an ordinary world prop: use the shared actor depth layer exactly.
+	# The former extra +1 could promote it past a nearer wall layer at cell
+	# boundaries, making it intermittently show through the wall.
+	sprite.z_index = draw_layer
 	sprite.visible = true
 	used[key] = true
 	# Reuse the actual directional PNG and LOD grid as the mask. The shader keeps
@@ -4757,9 +4762,21 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	shadow.position = sprite.position + Vector2.DOWN
 	shadow.scale = sprite.scale
 	shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	shadow.z_index = draw_layer
+	shadow.z_index = draw_layer - 1                                                            # Keep the contact mask beneath its barrel without promoting either over nearer walls.
 	shadow.visible = true
 	used["%s_shadow" % key] = true
+
+
+# _world_barrel_has_visible_camera_span: Preserve a barrel at a wall edge when
+# either rim can still be seen, but reject it once the complete prop is behind
+# opaque geometry. A single center ray is too coarse: it incorrectly removes a
+# barrel that is genuinely partially exposed around a wall end.
+func _world_barrel_has_visible_camera_span(world_position: Vector2) -> bool:
+	if _world_point_has_clear_camera_line(world_position):
+		return true
+	var side_axis := _view_right_vector().normalized()
+	var visible_radius := BARREL_PROJECTILE_RADIUS
+	return _world_point_has_clear_camera_line(world_position - side_axis * visible_radius) or _world_point_has_clear_camera_line(world_position + side_axis * visible_radius)
 
 
 # _barrel_direction_for_world_vector: Selects the nearest 22.5-degree barrel camera without changing the eight-way character animation vocabulary.

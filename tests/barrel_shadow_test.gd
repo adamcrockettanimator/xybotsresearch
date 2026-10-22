@@ -11,6 +11,8 @@ class TestRenderer extends "res://scripts/coordinate_frame_runtime_renderer.gd":
 
 class TestController extends "res://scripts/xybots_character_controller.gd":
 	var test_sprites: Dictionary = {}
+	var clear_barrel_samples: Array[Vector2] = []
+	var force_barrel_line_samples := false
 
 	func _view_forward_vector() -> Vector2:
 		return Vector2.DOWN
@@ -22,7 +24,12 @@ class TestController extends "res://scripts/xybots_character_controller.gd":
 		return true
 
 	func _world_point_has_clear_camera_line(_target_world: Vector2) -> bool:
-		return true
+		if not force_barrel_line_samples:
+			return true
+		for sample in clear_barrel_samples:
+			if _target_world.is_equal_approx(sample):
+				return true
+		return false
 
 	func _world_actor_draw_layer(_world_position: Vector2) -> int:
 		return 0
@@ -53,10 +60,24 @@ func _initialize() -> void:
 			failures.append("Shadow is not an identical copy shifted down one pixel at depth %s" % depth)
 		if shadow.z_index >= barrel.z_index or material == null or material.shader != game.BARREL_CONTACT_SHADOW_SHADER:
 			failures.append("Shadow layering or mask shader is incorrect at depth %s" % depth)
+		if barrel.z_index != 0 or shadow.z_index != -1:
+			failures.append("Barrel no longer uses the shared actor layer at depth %s" % depth)
 		var barrel_material := barrel.material as ShaderMaterial
 		if material == null or barrel_material == null or material.get_shader_parameter("sprite_scale") != barrel_material.get_shader_parameter("sprite_scale") or material.get_shader_parameter("grid_origin") != barrel_material.get_shader_parameter("grid_origin"):
 			failures.append("Shadow sampling differs from barrel sampling at depth %s" % depth)
 		print("depth=%.2f barrel_scale=%.3f" % [depth, barrel.scale.x])
+	# A center ray may be blocked at a wall end while one rim is exposed; the
+	# barrel must survive that case. It must disappear when all three width
+	# samples are blocked, which prevents the fully x-rayed prop in gameplay.
+	var occlusion_probe := Vector2(4.0, 4.0)
+	game.force_barrel_line_samples = true
+	game.clear_barrel_samples = [occlusion_probe + Vector2.RIGHT * game.BARREL_PROJECTILE_RADIUS]
+	if not game._world_barrel_has_visible_camera_span(occlusion_probe):
+		failures.append("Barrel edge sample was hidden despite a visible rim")
+	game.clear_barrel_samples.clear()
+	if game._world_barrel_has_visible_camera_span(occlusion_probe):
+		failures.append("Fully wall-occluded barrel remained visible")
+	game.force_barrel_line_samples = false
 	for sprite in game.test_sprites.values():
 		sprite.free()
 	renderer.free()

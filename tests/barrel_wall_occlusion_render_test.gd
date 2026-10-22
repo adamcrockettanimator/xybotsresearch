@@ -45,6 +45,7 @@ func _run() -> void:
 	var before_clear: bool = game._world_point_has_clear_camera_line(target)
 	bind(game, after)
 	var after_clear: bool = game._world_point_has_clear_camera_line(target)
+	var after_barrel_span_visible: bool = game._world_barrel_has_visible_camera_span(target)
 	var origin_after: Vector2 = game._runtime_camera_origin_for_visibility()
 	print("before=", before, " camera=", camera, " after camera=", origin_after, " target=", target, " ray before=", before_clear, " after=", after_clear)
 	game.world_barrels.clear()
@@ -107,7 +108,7 @@ func _run() -> void:
 	print("pixels before=", before_visible, " partly covered=", shown, " fully covered=", fully_covered, " sprite retained=", retained_when_covered)
 	wrapper.queue_free()
 	await process_frame
-	if before_clear and not after_clear and shown > 0 and covered > 0 and before_visible > shown and fully_covered == 0 and retained_when_covered:
+	if before_clear and not after_clear and after_barrel_span_visible and shown > 0 and covered > 0 and before_visible > shown and fully_covered == 0 and not retained_when_covered:
 		print("Wall edge test passed")
 		quit(0)
 	else:
