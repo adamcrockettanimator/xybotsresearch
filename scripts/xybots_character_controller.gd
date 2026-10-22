@@ -174,6 +174,15 @@ const PLAYER_CAPSULE_RADIUS := 0.10                                             
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const BARREL_HIT_POINTS := 3
 const BARREL_PROJECTILE_RADIUS := 0.08                                                     # Approximate the visible barrel width, which is narrower than its 32-pixel canvas.
+enum OcclusionFootprintShape { CIRCLE, RECTANGLE, CAPSULE }                                # Floor props start as circles; later furniture can opt into authored rectangle/capsule bounds without replacing the renderer contract.
+@export var barrel_placement_radius := 0.09                                                 # Physical wall-clearance circle used when placing a barrel; deliberately independent from combat hit radius.
+@export var barrel_visual_radius := 0.12                                                    # Camera-occlusion circle covering the full rendered barrel silhouette.
+@export var coin_placement_radius := 0.045                                                  # Keep coins thrown from a broken barrel out of thin walls.
+@export var coin_visual_radius := 0.075                                                     # Cover the complete rotating coin animation, not only its current narrow frame.
+@export var heart_placement_radius := 0.055                                                 # Keep heart drops clear of walls after their landing bounce.
+@export var heart_visual_radius := 0.080                                                    # Cover the whole pulsing/spinning heart silhouette.
+@export var gun_placement_radius := 0.065                                                   # Keep rotating gun pickups away from wall planes.
+@export var gun_visual_radius := 0.105                                                      # Cover the maximum rotating gun frame extent.
 const BARREL_PROJECTILE_HEIGHT := BARREL_REFERENCE_ART_HEIGHT / 56.91699 * BARREL_SIZE_MULTIPLIER # Barrel canvas height in the same standing-character units used by projectiles.
 const BARREL_PROJECTILE_TOP_MARGIN := 0.12                                                 # Allow for the gun and barrel's pixelated upper silhouette at grazing contacts.
 const CROUCH_PROJECTILE_HEIGHT_OFFSET := 0.22                                             # Aim crouched shots below the wall rail while keeping muzzle smoke on the authored gun marker.
@@ -778,6 +787,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_near_view_tuning_debug := false                                             # Show raw-versus-clamped local anchors in every player view plus their shared top-down truth guides.
 @export var show_camera_cutaway_debug := false                                               # Show the camera-to-player presentation rays and walls selected for local cutaway fading.
 @export var show_fan_draw_order_debug := false                                               # Show the exact solid fan, clipped wall spans, and final above/below-player layer decision.
+@export var show_world_footprints_debug := false                                             # Show physical placement circles and camera-visible footprint cones for every floor-world item.
 @export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
 @export var pause_round_timer_for_debug := false                                             # Pause only the shared round clock when deliberately requested from the debug menu; guide visibility stays independent.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
@@ -1221,6 +1231,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "near_view_tuning", "Near View Truth Guides")             # Show raw world truth versus the optional screen-retention presentation in both player views and the shared top-down map.
 	_add_debug_menu_check(content, "camera_cutaway", "Camera Cutaway Rays")                  # Show the exact widened camera-to-player fan that selects walls for local fading.
 	_add_debug_menu_check(content, "fan_draw_order", "Fan Draw Order")                       # Show which visible wall segments the continuous silhouette fan puts above or below the local player.
+	_add_debug_menu_check(content, "world_footprints", "World Footprints")                   # Compare physical wall-clearance circles to camera-visible footprint cones.
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
 	_add_debug_menu_tuning_spin(content, "rear_exit", "Rear exit", 0.0, 48.0, 1.0)            # Tune the south-edge partial body exit without changing the fixed camera or wireframe geometry.
@@ -1493,6 +1504,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_camera_cutaway_debug                                                       # Return whether the local wall-fade ray fan is visible on the source map.
 		"fan_draw_order":
 			return show_fan_draw_order_debug                                                       # Return whether the local player-versus-wall ordering diagnostic is visible.
+		"world_footprints":
+			return show_world_footprints_debug
 		"muzzle_anchors":
 			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
 		"pause_round_timer":
@@ -1567,6 +1580,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_fan_draw_order_debug = enabled                                                    # Show the resulting above/below-player wall layer decision without altering it.
 			if enabled:
 				show_top_down_source_overlay = true                                                  # The segment/fan relationship is meaningful only alongside the physical wall map.
+		"world_footprints":
+			show_world_footprints_debug = enabled
+			if enabled:
+				show_top_down_source_overlay = true
 		"muzzle_anchors":
 			show_muzzle_anchor_debug = enabled                                                     # Keep the marker diagnostic opt-in and independent of combat.
 			if not enabled:
@@ -2080,7 +2097,7 @@ func _reset_world_barrels() -> void:
 		var chosen_index := randi() % candidates.size()
 		var chosen_cell := candidates[chosen_index]
 		candidates.remove_at(chosen_index)                                                       # Keep one barrel maximum per cell so art remains readable in the tight maze.
-		var position := _barrel_position_in_cell(chosen_cell)                                    # Keep the pickup-safe middle of every grid cell clear.
+		var position := _resolve_world_item_placement(_world_item_footprint("barrel", _barrel_position_in_cell(chosen_cell))) # Keep the prop's physical clearance circle away from thin wall edges.
 		world_barrels.append({"id": next_combat_visual_id, "position": position, "hits": 0})
 		next_combat_visual_id += 1                                                               # Give every prop a stable cache key across all player cameras.
 
@@ -3142,9 +3159,14 @@ func _drop_barrel_loot(position: Vector2) -> void:
 		match kinds[index]:
 			"coin":
 				item["value"] = 1
+				item["footprint_kind"] = "coin"
 				world_coins.append(item)
-			"heart": world_hearts.append(item)
-			"gun": world_barrel_guns.append(item)
+			"heart":
+				item["footprint_kind"] = "heart"
+				world_hearts.append(item)
+			"gun":
+				item["footprint_kind"] = "gun"
+				world_barrel_guns.append(item)
 		next_combat_visual_id += 1
 
 
@@ -3166,7 +3188,8 @@ func _advance_barrel_loot(delta: float) -> void:
 					velocity = Vector2.ZERO
 				else:
 					position += travel
-			item["position"] = position
+			var footprint_kind := String(item.get("footprint_kind", "coin"))
+			item["position"] = _resolve_world_item_placement(_world_item_footprint(footprint_kind, position))
 			var vertical_velocity := float(item["loot_vertical_velocity"]) - WALL_DEBRIS_GRAVITY * delta
 			var height := float(item["loot_height"]) + vertical_velocity * delta
 			if height <= 0.0:
@@ -4233,16 +4256,16 @@ func _update_combat_view() -> void:
 	var coin_frame_index := _coin_animation_frame_index()                                      # Keep every coin on the same authored spin frame while allowing each depth to choose its own authored silhouette.
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
-		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), null, coin_position, used, 0.16, 1, true, coin_frame_index, false, 0, float(coin.get("loot_height", 0.0))) # Use each coin's exact authored LOD frame instead of shader-derived pixel grouping.
+		_render_world_pickup("coin_%d" % int(coin.get("id", -1)), null, coin_position, used, 0.16, 1, true, coin_frame_index, false, 0, float(coin.get("loot_height", 0.0)), "coin") # Use each coin's exact authored LOD frame instead of shader-derived pixel grouping.
 	var heart_frame_index := _heart_animation_frame_index()                                    # Keep every heart on the same authored pulse frame while allowing each depth to choose its own silhouette.
 	for heart in world_hearts:
 		var heart_position: Vector2 = heart.get("position", Vector2.ZERO)
-		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), null, heart_position, used, 0.18, 1, false, 0, true, heart_frame_index, float(heart.get("loot_height", 0.0))) # Use each heart's exact authored LOD pulse frame only in the world pickup view.
+		_render_world_pickup("heart_%d" % int(heart.get("id", -1)), null, heart_position, used, 0.18, 1, false, 0, true, heart_frame_index, float(heart.get("loot_height", 0.0)), "heart") # Use each heart's exact authored LOD pulse frame only in the world pickup view.
 	for gun in world_barrel_guns:
-		_render_world_pickup("barrel_gun_%d" % int(gun["id"]), _gun_animation_texture(), Vector2(gun["position"]), used, 0.10, 1, false, 0, false, 0, float(gun.get("loot_height", 0.0)))
+		_render_world_pickup("barrel_gun_%d" % int(gun["id"]), _gun_animation_texture(), Vector2(gun["position"]), used, 0.10, 1, false, 0, false, 0, float(gun.get("loot_height", 0.0)), "gun")
 	if not machine_gun_pickup.is_empty():                                                       # Draw the contested rapid-fire pickup only while it remains unclaimed.
 		var gun_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)            # Read the shared Vector2 directly instead of reconstructing it from a Variant.
-		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), _gun_animation_texture(), gun_position, used, 0.10) # Cycle the authored Gun.tres rotation at its configured speed.
+		_render_world_pickup("machine_gun_%d" % int(machine_gun_pickup.get("id", -1)), _gun_animation_texture(), gun_position, used, 0.10, 1.0, false, 0, false, 0, 0.0, "gun") # Cycle the authored Gun.tres rotation at its configured speed.
 	var muzzle_smoke_started_us := Time.get_ticks_usec()                                       # Measure the complete per-card projection, occlusion, and cached-sprite update pass.
 	for particle in active_muzzle_smoke_particles:                                              # Project every individual procedural barrel-smoke puff instead of one authored cloud sprite.
 		var smoke_id := int(particle.get("id", -1))                                               # Reuse the stable puff ID for its Sprite2D and its per-camera stepped render state.
@@ -4689,10 +4712,12 @@ func _gun_animation_texture() -> Texture2D:
 
 
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
-func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0, use_authored_coin_lod := false, coin_frame_index := 0, use_authored_heart_lod := false, heart_frame_index := 0, extra_height := 0.0) -> void:
+func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0, use_authored_coin_lod := false, coin_frame_index := 0, use_authored_heart_lod := false, heart_frame_index := 0, extra_height := 0.0, footprint_kind := "coin") -> void:
 	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
 	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16)): # Keep remote collectibles inside the camera fan; normal back-to-front Canvas drawing resolves wall coverage.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
+	if not _world_footprint_has_visible_camera_span(_world_item_footprint(footprint_kind, world_position)):
+		return                                                                                    # A completely covered visual circle cannot leak through a nearer opaque wall.
 	# Collectibles are fixed points in the map, not protected near-cell bodies.
 	# In the continuous third-person view they must use the raw live-camera
 	# projector, otherwise they inherit the body display envelope and appear to
@@ -4723,7 +4748,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary) -> void:
 	if not _world_actor_overlaps_current_camera_fan(world_position, 0.22):
 		return                                                                                    # Skip props outside this view; wall surfaces handle partial occlusion through draw order.
-	if not _world_barrel_has_visible_camera_span(world_position):
+	if not _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", world_position)):
 		return                                                                                    # Do not draw a prop when every point across its visible width is behind an opaque wall.
 	var projection := _opponent_projection_from_current_camera(world_position, true, true)     # Use the raw live camera projector so the barrel follows the same continuous world truth as walls, actors, and effects.
 	var actor_height := float(projection.get("continuous_actor_height", projection.get("actor_height", 0.0))) # Never use the actor-only protected-near LOD height for a fixed world prop.
@@ -4767,16 +4792,52 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	used["%s_shadow" % key] = true
 
 
-# _world_barrel_has_visible_camera_span: Preserve a barrel at a wall edge when
-# either rim can still be seen, but reject it once the complete prop is behind
-# opaque geometry. A single center ray is too coarse: it incorrectly removes a
-# barrel that is genuinely partially exposed around a wall end.
-func _world_barrel_has_visible_camera_span(world_position: Vector2) -> bool:
-	if _world_point_has_clear_camera_line(world_position):
+# _world_footprint_has_visible_camera_span: Tests a circular floor item's two
+# true camera tangents. A *single continuous wall segment* which reaches both
+# tangents before the circle blocks every ray in the filled cone between them;
+# that is a geometry proof, not a center check or a sparse sample set. More
+# complicated partial overlaps stay drawable and remain the renderer's normal
+# painter-order case. A future rectangle/capsule descriptor can provide its
+# support points through this same call site.
+func _world_footprint_has_visible_camera_span(footprint: Dictionary) -> bool:
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) != OcclusionFootprintShape.CIRCLE:
+		return _world_point_has_clear_camera_line(Vector2(footprint.get("position", Vector2.ZERO)))
+	var center := Vector2(footprint.get("position", Vector2.ZERO))
+	var radius := float(footprint.get("visual_radius", 0.0))
+	var origin := _runtime_camera_origin_for_visibility()
+	var to_center := center - origin
+	var distance_squared := to_center.length_squared()
+	if radius <= 0.0 or distance_squared <= radius * radius + 0.000001:
 		return true
-	var side_axis := _view_right_vector().normalized()
-	var visible_radius := BARREL_PROJECTILE_RADIUS
-	return _world_point_has_clear_camera_line(world_position - side_axis * visible_radius) or _world_point_has_clear_camera_line(world_position + side_axis * visible_radius)
+	var distance := sqrt(distance_squared)
+	var direction := to_center / distance
+	var perpendicular := Vector2(-direction.y, direction.x)
+	var tangent_base := origin + direction * (radius * radius / distance)
+	var tangent_offset := perpendicular * (radius * sqrt(maxf(distance_squared - radius * radius, 0.0)) / distance)
+	var tangent_a := tangent_base - tangent_offset
+	var tangent_b := tangent_base + tangent_offset
+	var tangent_a_distance := tangent_a.distance_to(origin)
+	var tangent_b_distance := tangent_b.distance_to(origin)
+	# Preserve the local third-person cutaway exception: if either cone edge is
+	# clear after its renderer-owned hidden-face decision, the prop is exposed.
+	if _world_point_has_clear_camera_line(tangent_a) or _world_point_has_clear_camera_line(tangent_b):
+		return true
+	for edge in _all_physical_wall_edges():
+		var edge_a := Vector2(edge["a"])
+		var edge_b := Vector2(edge["b"])
+		var hit_a := _ray_segment_hit_distance_limited(origin, (tangent_a - origin).normalized(), edge_a, edge_b, tangent_a_distance - 0.001)
+		if hit_a < 0.0:
+			continue
+		var hit_b := _ray_segment_hit_distance_limited(origin, (tangent_b - origin).normalized(), edge_a, edge_b, tangent_b_distance - 0.001)
+		if hit_b >= 0.0:
+			return false
+	return true
+
+
+# Kept solely as the barrel regression-test entry point. Runtime props use the
+# descriptor-based method above, so this does not preserve a barrel-only rule.
+func _world_barrel_has_visible_camera_span(world_position: Vector2) -> bool:
+	return _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", world_position))
 
 
 # _barrel_direction_for_world_vector: Selects the nearest 22.5-degree barrel camera without changing the eight-way character animation vocabulary.
@@ -6312,13 +6373,13 @@ func _update_debug_map_overlay() -> void:                                       
 		return                                                                                    # Return without drawing the map.
 	var show_ray_diagnostic := show_raycast_debug                                               # Ray inspection explicitly overrides the normal clean-minimap presentation.
 	var show_pickup_diagnostic := show_pickup_range_debug                                      # Pickup tuning uses the same source-map panel without enabling ray clutter.
-	if not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic and not show_near_view_tuning_debug and not show_camera_cutaway_debug and not show_fan_draw_order_debug: # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
+	if not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic and not show_near_view_tuning_debug and not show_camera_cutaway_debug and not show_fan_draw_order_debug and not show_world_footprints_debug: # The match normally uses the compact clean minimap instead of the old diagnostic source-map panel.
 		debug_map_overlay.visible = false                                                         # Keep blue guides, cones, and slot labels out of normal local play.
 		_update_match_minimap_overlay()                                                          # Keep the map replacement synchronized with movement and orientation.
 		return                                                                                    # Skip all legacy diagnostic geometry.
 	var is_shared_match_map := TEMP_GRID_AUDIT or active_player_index == 0                     # In the normal match layout only P1 owns the one source-map diagnostic panel.
-	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug or show_camera_cutaway_debug or show_fan_draw_order_debug) and is_shared_match_map # Focused diagnostics may reveal the source map without the full audit.
-	if not (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug or show_camera_cutaway_debug or show_fan_draw_order_debug) or not is_shared_match_map: # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
+	debug_map_overlay.visible = (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug or show_camera_cutaway_debug or show_fan_draw_order_debug or show_world_footprints_debug) and is_shared_match_map # Focused diagnostics may reveal the source map without the full audit.
+	if not (show_top_down_source_overlay or show_ray_diagnostic or show_pickup_diagnostic or show_near_view_tuning_debug or show_camera_cutaway_debug or show_fan_draw_order_debug or show_world_footprints_debug) or not is_shared_match_map: # Avoid rebuilding hidden debug primitives when the overlay is off or this is P2's hidden copy.
 		return                                                                                    # Return without drawing the map.
 	if show_near_view_tuning_debug and not TEMP_GRID_AUDIT and not show_ray_diagnostic and not show_pickup_diagnostic: # The live clamp map is useful at a stepped diagnostic cadence, not as a node-rebuild every render frame.
 		var current_frame := Engine.get_process_frames()
@@ -6376,6 +6437,7 @@ func _update_debug_map_overlay() -> void:                                       
 	_add_debug_near_view_tuning_map_guides()                                                    # Draw cardinal screen-clamp rails in world space when live near-view tuning is enabled.
 	_add_debug_camera_cutaway_rays()                                                            # Draw the exact presentation fan that selects walls for local cutaway fading.
 	_add_debug_fan_draw_order()                                                                 # Draw the exact fan contact spans and final local player wall layers when requested.
+	_add_debug_world_footprints()                                                               # Draw physical and visual item circles from the same descriptors used by placement and occlusion.
 	_add_debug_other_player_view_cones()                                                        # Draw each other joined player's camera cone on this shared source-of-truth map.
 	_add_debug_all_wall_slot_numbers()                                                         # Draw the independent blue slot-number audit on every local slot candidate.
 	_add_debug_raycast_rays()                                                                   # Draw sampled raycast lines and first-hit points so visibility can be inspected.
@@ -6426,6 +6488,91 @@ func _add_debug_pickup_collection_ellipse() -> void:
 			_add_debug_line(previous, point, Color(1.0, 0.84, 0.10, 0.96), 2.0)
 		previous = point
 	_add_debug_player_marker(_debug_map_world_position(center_world), Color(1.0, 0.84, 0.10, 0.96))
+
+
+# _world_item_footprint: Supplies one data contract for collision-safe placement,
+# camera occlusion, and F3 diagnostics. Circle is the current implementation;
+# rectangle/capsule are explicit future shape slots rather than ad-hoc booleans.
+func _world_item_footprint(kind: String, position: Vector2) -> Dictionary:
+	var placement_radius := coin_placement_radius
+	var visual_radius := coin_visual_radius
+	var color := Color(1.0, 0.86, 0.08, 0.96)
+	match kind:
+		"barrel":
+			placement_radius = barrel_placement_radius
+			visual_radius = barrel_visual_radius
+			color = Color(0.46, 0.92, 0.18, 0.96)
+		"heart":
+			placement_radius = heart_placement_radius
+			visual_radius = heart_visual_radius
+			color = Color(1.0, 0.20, 0.44, 0.96)
+		"gun":
+			placement_radius = gun_placement_radius
+			visual_radius = gun_visual_radius
+			color = Color(1.0, 0.52, 0.10, 0.96)
+	return {"shape": OcclusionFootprintShape.CIRCLE, "kind": kind, "position": position, "placement_radius": placement_radius, "visual_radius": visual_radius, "color": color}
+
+
+# _resolve_world_item_placement: Push a floor item out of physical wall edges.
+# This is placement clearance, not player collision: pickups remain collectible.
+func _resolve_world_item_placement(footprint: Dictionary) -> Vector2:
+	var position := Vector2(footprint.get("position", Vector2.ZERO))
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) != OcclusionFootprintShape.CIRCLE:
+		return position
+	var radius := float(footprint.get("placement_radius", 0.0))
+	for _pass in range(3):
+		for edge in _all_physical_wall_edges():
+			var a := Vector2(edge["a"])
+			var b := Vector2(edge["b"])
+			var segment := b - a
+			var length_squared := segment.length_squared()
+			var amount := clampf((position - a).dot(segment) / length_squared, 0.0, 1.0) if length_squared > 0.000001 else 0.0
+			var nearest := a + segment * amount
+			var offset := position - nearest
+			var distance := offset.length()
+			if distance >= radius:
+				continue
+			var normal := offset / distance if distance > 0.00001 else Vector2(-segment.y, segment.x).normalized()
+			position = nearest + normal * radius
+	return Vector2(clampf(position.x, radius, float(MAP_WIDTH) - radius), clampf(position.y, radius, float(MAP_HEIGHT) - radius))
+
+
+# _add_debug_world_footprints: Draws the smaller physical clearance circle in
+# lime and the larger visual/occlusion footprint in the item's own color.
+func _add_debug_world_footprints() -> void:
+	if not show_world_footprints_debug:
+		return
+	for footprint in _world_occlusion_footprints():
+		var center_world := Vector2(footprint["position"])
+		_add_debug_footprint_circle(center_world, float(footprint["placement_radius"]), Color(0.30, 1.0, 0.38, 0.95), 1.0)
+		_add_debug_footprint_circle(center_world, float(footprint["visual_radius"]), Color(footprint["color"]), 2.0)
+
+
+func _add_debug_footprint_circle(center_world: Vector2, radius: float, color: Color, width: float) -> void:
+	var previous := Vector2.ZERO
+	for index in range(17):
+		var point_world := center_world + Vector2(cos(TAU * float(index) / 16.0), sin(TAU * float(index) / 16.0)) * radius
+		var point := _debug_map_world_position(point_world)
+		if index > 0:
+			_add_debug_line(previous, point, color, width)
+		previous = point
+
+
+# _world_occlusion_footprints: Returns every current floor object as the shared
+# descriptor consumed by both top-down and camera-view diagnostics.
+func _world_occlusion_footprints() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for barrel in world_barrels:
+		result.append(_world_item_footprint("barrel", Vector2(barrel.get("position", Vector2.ZERO))))
+	for coin in world_coins:
+		result.append(_world_item_footprint("coin", Vector2(coin.get("position", Vector2.ZERO))))
+	for heart in world_hearts:
+		result.append(_world_item_footprint("heart", Vector2(heart.get("position", Vector2.ZERO))))
+	for gun in world_barrel_guns:
+		result.append(_world_item_footprint("gun", Vector2(gun.get("position", Vector2.ZERO))))
+	if not machine_gun_pickup.is_empty():
+		result.append(_world_item_footprint("gun", Vector2(machine_gun_pickup.get("position", Vector2.ZERO))))
+	return result
 
 
 

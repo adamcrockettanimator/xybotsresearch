@@ -640,6 +640,7 @@ func _rebuild() -> void:
 	_rebuild_runtime_wall_surfaces(entries)
 	_update_debug_outlines(entries)
 	_update_camera_cutaway_view_debug(entries)
+	_update_world_footprint_view_debug()
 	_update_projection_point_debug()
 	runtime_wall_layer.visible = show_runtime_walls
 	_refresh_runtime_status(accepted_count)
@@ -2685,6 +2686,58 @@ func _update_debug_outlines(entries: Array[Dictionary]) -> void:
 		# walk-through-walls cheat remains a useful projection diagnostic.
 		_append_continuous_world_wireframe(debug)
 	controller.environment_layer.add_child(debug)
+
+
+# _update_world_footprint_view_debug: Draws each current floor-world item's
+# physical clearance circle (lime) and visual occlusion circle (item colour)
+# in the actual camera projection. The latter also shows its two tangent edges
+# as a filled continuous cone boundary, not sampled visibility rays.
+func _update_world_footprint_view_debug() -> void:
+	_remove_environment_debug_node("CoordinateFrameWorldFootprintsDebug")
+	if controller == null or not bool(controller.get("show_world_footprints_debug")) or not controller.has_method("_world_occlusion_footprints"):
+		return
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var origin := _runtime_camera_origin(forward, right)
+	var debug := Node2D.new()
+	debug.name = "CoordinateFrameWorldFootprintsDebug"
+	debug.z_index = 62
+	for footprint in controller.call("_world_occlusion_footprints"):
+		var center := Vector2(footprint.get("position", Vector2.ZERO))
+		_append_world_footprint_camera_circle(debug, center, float(footprint.get("placement_radius", 0.0)), Color(0.30, 1.0, 0.38, 0.92), origin, forward, right)
+		var visual_color := Color(footprint.get("color", Color.WHITE))
+		_append_world_footprint_camera_circle(debug, center, float(footprint.get("visual_radius", 0.0)), visual_color, origin, forward, right)
+		_append_world_footprint_cone(debug, center, float(footprint.get("visual_radius", 0.0)), visual_color, origin, forward, right)
+	controller.environment_layer.add_child(debug)
+
+
+func _append_world_footprint_camera_circle(debug: Node2D, center: Vector2, radius: float, color: Color, origin: Vector2, forward: Vector2, right: Vector2) -> void:
+	var line := Line2D.new()
+	line.width = 1.0
+	line.default_color = color
+	line.antialiased = false
+	for index in range(17):
+		var world_point := center + Vector2(cos(TAU * float(index) / 16.0), sin(TAU * float(index) / 16.0)) * radius
+		var local := _to_view(world_point, origin, forward, right)
+		if local.y <= NEAR_CLIP:
+			return
+		line.add_point(_project_view_point(local, 0.012))
+	debug.add_child(line)
+
+
+func _append_world_footprint_cone(debug: Node2D, center: Vector2, radius: float, color: Color, origin: Vector2, forward: Vector2, right: Vector2) -> void:
+	var left_local := _to_view(center - right * radius, origin, forward, right)
+	var right_local := _to_view(center + right * radius, origin, forward, right)
+	if left_local.y <= NEAR_CLIP or right_local.y <= NEAR_CLIP:
+		return
+	var near_left := left_local * (NEAR_CLIP / left_local.y)
+	var near_right := right_local * (NEAR_CLIP / right_local.y)
+	var cone := Line2D.new()
+	cone.width = 1.0
+	cone.default_color = Color(color.r, color.g, color.b, 0.60)
+	cone.antialiased = false
+	cone.points = PackedVector2Array([_project_view_point(near_left, 0.010), _project_view_point(left_local, 0.010), _project_view_point(right_local, 0.010), _project_view_point(near_right, 0.010)])
+	debug.add_child(cone)
 
 
 # _update_camera_cutaway_view_debug: Draws the cutaway decision directly over

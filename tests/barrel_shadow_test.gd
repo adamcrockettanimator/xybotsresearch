@@ -66,14 +66,20 @@ func _initialize() -> void:
 		if material == null or barrel_material == null or material.get_shader_parameter("sprite_scale") != barrel_material.get_shader_parameter("sprite_scale") or material.get_shader_parameter("grid_origin") != barrel_material.get_shader_parameter("grid_origin"):
 			failures.append("Shadow sampling differs from barrel sampling at depth %s" % depth)
 		print("depth=%.2f barrel_scale=%.3f" % [depth, barrel.scale.x])
-	# A center ray may be blocked at a wall end while one rim is exposed; the
-	# barrel must survive that case. It must disappear when all three width
-	# samples are blocked, which prevents the fully x-rayed prop in gameplay.
+	# A center ray is deliberately irrelevant. One of the two true visual-circle
+	# tangents can be exposed at a wall end, and the generic footprint rule must
+	# retain the barrel in that case; with both tangent edges blocked it vanishes.
 	var occlusion_probe := Vector2(4.0, 4.0)
+	var probe_radius := game.barrel_visual_radius
+	var probe_distance := occlusion_probe.length()
+	var probe_direction := occlusion_probe / probe_distance
+	var probe_perpendicular := Vector2(-probe_direction.y, probe_direction.x)
+	var probe_base := probe_direction * (probe_radius * probe_radius / probe_distance)
+	var probe_offset := probe_perpendicular * (probe_radius * sqrt(probe_distance * probe_distance - probe_radius * probe_radius) / probe_distance)
 	game.force_barrel_line_samples = true
-	game.clear_barrel_samples = [occlusion_probe + Vector2.RIGHT * game.BARREL_PROJECTILE_RADIUS]
+	game.clear_barrel_samples = [probe_base + probe_offset]
 	if not game._world_barrel_has_visible_camera_span(occlusion_probe):
-		failures.append("Barrel edge sample was hidden despite a visible rim")
+		failures.append("Barrel tangent edge was hidden despite a visible rim")
 	game.clear_barrel_samples.clear()
 	if game._world_barrel_has_visible_camera_span(occlusion_probe):
 		failures.append("Fully wall-occluded barrel remained visible")
