@@ -9984,17 +9984,7 @@ func _world_actor_draw_layer(world_position: Vector2) -> int:
 	var cell_layer := _character_layer_for_view_depth(cell_depth) + 2                          # Match the pickup rule: this is the first wall-safe layer after the cell's camera-facing wall group.
 	var camera_side_amount := clampf(0.5 - within_cell_depth, 0.0, 1.0)                        # Map the cell's far edge to zero and its camera-side edge to one without ever subtracting from the wall-safe layer.
 	var within_cell_layer := roundi(camera_side_amount * SAME_CELL_ACTOR_SORT_SPAN)            # Give the camera-side body a later positive sublayer so it draws over a farther body in the same cell.
-	var actor_layer := cell_layer + within_cell_layer                                            # Never let same-cell sorting move a body behind its own walls; other cells remain separated by the larger world-depth spacing.
-	var coordinate_renderer: Node = null
-	if active_player_index >= 0 and active_player_index < coordinate_renderers.size():
-		var candidate_renderer := coordinate_renderers[active_player_index]
-		if is_instance_valid(candidate_renderer):
-			coordinate_renderer = candidate_renderer
-	if coordinate_renderer != null and coordinate_renderer.has_method("runtime_actor_layer_after_visible_walls"):
-		var reconciled_layer: Variant = coordinate_renderer.call("runtime_actor_layer_after_visible_walls", world_position, actor_layer)
-		if reconciled_layer is int:
-			return reconciled_layer
-	return actor_layer
+	return cell_layer + within_cell_layer                                                       # Never let same-cell sorting move a body behind its own walls; other cells remain separated by the larger world-depth spacing.
 
 
 # _opponent_camera_side_margin_from_projection: Converts projected sprite width into camera-space fan overlap.
