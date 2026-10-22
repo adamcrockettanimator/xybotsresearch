@@ -2689,8 +2689,7 @@ func _update_debug_outlines(entries: Array[Dictionary]) -> void:
 
 
 # _update_world_footprint_view_debug: Draws each current floor-world item's
-# one authoritative lime footprint in the actual camera projection, followed
-# by its two tangent edges as a continuous cone boundary, not sampled rays.
+# one authoritative lime footprint in the actual camera projection.
 func _update_world_footprint_view_debug() -> void:
 	_remove_environment_debug_node("CoordinateFrameWorldFootprintsDebug")
 	if controller == null or not bool(controller.get("show_world_footprints_debug")) or not controller.has_method("_world_occlusion_footprints"):
@@ -2706,7 +2705,6 @@ func _update_world_footprint_view_debug() -> void:
 		var footprint_color := Color(0.30, 1.0, 0.38, 0.92)
 		var radius := float(footprint.get("radius", 0.0))
 		_append_world_footprint_camera_circle(debug, center, radius, footprint_color, origin, forward, right)
-		_append_world_footprint_cone(debug, center, radius, footprint_color, origin, forward, right)
 	controller.environment_layer.add_child(debug)
 
 
@@ -2722,21 +2720,6 @@ func _append_world_footprint_camera_circle(debug: Node2D, center: Vector2, radiu
 			return
 		line.add_point(_project_view_point(local, 0.012))
 	debug.add_child(line)
-
-
-func _append_world_footprint_cone(debug: Node2D, center: Vector2, radius: float, color: Color, origin: Vector2, forward: Vector2, right: Vector2) -> void:
-	var left_local := _to_view(center - right * radius, origin, forward, right)
-	var right_local := _to_view(center + right * radius, origin, forward, right)
-	if left_local.y <= NEAR_CLIP or right_local.y <= NEAR_CLIP:
-		return
-	var near_left := left_local * (NEAR_CLIP / left_local.y)
-	var near_right := right_local * (NEAR_CLIP / right_local.y)
-	var cone := Line2D.new()
-	cone.width = 1.0
-	cone.default_color = Color(color.r, color.g, color.b, 0.60)
-	cone.antialiased = false
-	cone.points = PackedVector2Array([_project_view_point(near_left, 0.010), _project_view_point(left_local, 0.010), _project_view_point(right_local, 0.010), _project_view_point(near_right, 0.010)])
-	debug.add_child(cone)
 
 
 # _update_camera_cutaway_view_debug: Draws the cutaway decision directly over
