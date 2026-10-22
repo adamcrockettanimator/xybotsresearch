@@ -1801,10 +1801,11 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var edge_a := Vector2(edge["a"])
 		var edge_b := Vector2(edge["b"])
 		var dither_contact := _segment_contact_points_in_cutaway_fan(edge_a, edge_b, camera_origin, Vector2(cutaway_data.get("dither_fan_left", Vector2.ZERO)), Vector2(cutaway_data.get("dither_fan_right", Vector2.ZERO)))
-		# Pre-arm the immediately connected wall face before the moving fan reaches
-		# its seam. This avoids a one-segment dither hitch while keeping unrelated
-		# side walls outside the camera fan opaque.
-		if dither_contact.is_empty() and not _is_camera_cutaway_neighbor_edge(edge_a, edge_b, cutaway_data.get("blocked_edges", [])):
+		# A cutaway is presentation-only for the local camera-to-player path.
+		# Connected faces must remain opaque until their own segment intersects that
+		# path; pre-arming them made a wall transparent merely because it shared an
+		# endpoint with a real obstruction.
+		if dither_contact.is_empty():
 			result.append(projected_entry)
 			continue
 		var inner_radius := float(cutaway_data.get("dither_inner_radius", 0.01))
@@ -2041,20 +2042,6 @@ func _nearest_camera_cutaway_contact(edge_a: Vector2, edge_b: Vector2, contact_s
 		nearest_distance_squared = distance_squared
 		nearest = {"a": contact_a, "b": contact_b, "distance": sqrt(nearest_distance_squared)}
 	return nearest
-
-
-# _is_camera_cutaway_neighbor_edge: An edge sharing a real endpoint with a
-# currently camera-blocking face receives the dither a moment early. Physical
-# adjacency is deliberate here: proximity alone would spill the effect onto a
-# separate wall on the other side of a corridor.
-func _is_camera_cutaway_neighbor_edge(edge_a: Vector2, edge_b: Vector2, blocked_edges: Array) -> bool:
-	const ENDPOINT_EPSILON_SQUARED := 0.00001
-	for blocked_edge in blocked_edges:
-		var blocked_a := Vector2(blocked_edge.get("a", Vector2.ZERO))
-		var blocked_b := Vector2(blocked_edge.get("b", Vector2.ZERO))
-		if edge_a.distance_squared_to(blocked_a) <= ENDPOINT_EPSILON_SQUARED or edge_a.distance_squared_to(blocked_b) <= ENDPOINT_EPSILON_SQUARED or edge_b.distance_squared_to(blocked_a) <= ENDPOINT_EPSILON_SQUARED or edge_b.distance_squared_to(blocked_b) <= ENDPOINT_EPSILON_SQUARED:
-			return true
-	return false
 
 
 func _segment_to_segment_distance_squared(a0: Vector2, a1: Vector2, b0: Vector2, b1: Vector2) -> float:
