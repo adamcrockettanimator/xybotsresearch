@@ -27,8 +27,16 @@ uniform vec2 layer_texture_size = vec2(128.0, 88.0);
 uniform vec2 layer1_offset = vec2(0.0);
 uniform vec2 layer2_offset = vec2(0.0);
 uniform vec2 wall_depths = vec2(1.0);
+// Each fragment intersects this real camera-local wall segment. This is the
+// same camera-ray projection used for the horizontal world planes; no endpoint
+// is ever near-clamped or geometrically clipped for the wall renderer.
+uniform vec2 wall_local_a = vec2(-0.5, 1.0);
+uniform vec2 wall_local_b = vec2(0.5, 1.0);
 uniform float camera_height = 0.5;
+uniform float wall_height = 0.6666667;
 uniform float focal_length = 128.0;
+uniform float horizon_y = 31.5;
+uniform vec2 projection_offset = vec2(0.0);
 uniform float light_dither_near_half_width_pixels = 3.0;
 uniform float light_dither_far_half_width_pixels = 1.0;
 uniform int light_dither_steps = 4;
@@ -54,6 +62,26 @@ vec2 homography_uv(vec2 pixel) {
 		dot(inverse_row2, vec3(pixel, 1.0))
 	);
 	return homogeneous.xy / homogeneous.z;
+}
+
+float cross2(vec2 a, vec2 b) {
+	return a.x * b.y - a.y * b.x;
+}
+
+// Return the source UV and physical forward depth for the screen ray. Rays
+// with no positive intersection simply do not own this wall pixel.
+bool wall_ray_uv(vec2 pixel, out vec2 source_uv, out float depth) {
+	vec2 ray = vec2((pixel.x - canvas_size.x * 0.5 - projection_offset.x) / focal_length, 1.0);
+	vec2 segment = wall_local_b - wall_local_a;
+	float denominator = cross2(ray, segment);
+	if (abs(denominator) < 0.000001) return false;
+	depth = cross2(wall_local_a, segment) / denominator;
+	float segment_u = cross2(wall_local_a, ray) / denominator;
+	if (depth <= 0.0 || segment_u < 0.0 || segment_u > 1.0) return false;
+	float world_height = camera_height - (pixel.y - horizon_y - projection_offset.y) * depth / focal_length;
+	if (world_height < 0.0 || world_height > wall_height) return false;
+	source_uv = vec2(segment_u, 1.0 - world_height / wall_height);
+	return true;
 }
 
 float bayer2(vec2 pixel) {
@@ -107,22 +135,18 @@ void fragment() {
 	if (quantize_logical_pixels) {
 		pixel = floor(pixel) + vec2(0.5);
 	}
-	vec3 homogeneous = vec3(
-		dot(inverse_row0, vec3(pixel, 1.0)),
-		dot(inverse_row1, vec3(pixel, 1.0)),
-		dot(inverse_row2, vec3(pixel, 1.0))
-	);
-	if (abs(homogeneous.z) < 0.00001) {
-		discard;
-	}
-	vec2 source_uv = homogeneous.xy / homogeneous.z;
-	if (source_uv.x < 0.0 || source_uv.x > 1.0 || source_uv.y < 0.0 || source_uv.y > 1.0) {
-		discard;
-	}
+	vec2 source_uv;
+	float ray_depth;
+	if (!wall_ray_uv(pixel, source_uv, ray_depth)) discard;
 	float mip_level = 0.0;
 	if (use_integer_uv_scale_snap) {
-		vec2 uv_x = homography_uv(pixel + vec2(1.0, 0.0));
-		vec2 uv_y = homography_uv(pixel + vec2(0.0, 1.0));
+		vec2 uv_x;
+		vec2 uv_y;
+		float ignored_depth;
+		if (!wall_ray_uv(pixel + vec2(1.0, 0.0), uv_x, ignored_depth) || !wall_ray_uv(pixel + vec2(0.0, 1.0), uv_y, ignored_depth)) {
+			uv_x = source_uv;
+			uv_y = source_uv;
+		}
 		vec2 span_x = (uv_x - source_uv) * base_texture_size;
 		vec2 span_y = (uv_y - source_uv) * base_texture_size;
 		float minor_footprint = max(1.0, min(length(span_x), length(span_y)));
@@ -146,7 +170,9 @@ void fragment() {
 	// Derive the stroke thickness from the projected UV footprint, rather than
 	// from a source texel. This keeps a corner line one 160x120 logical pixel at
 	// every distance and viewing angle.
-	vec2 corner_uv_x = homography_uv(pixel + vec2(1.0, 0.0));
+	vec2 corner_uv_x;
+	float ignored_corner_depth;
+	if (!wall_ray_uv(pixel + vec2(1.0, 0.0), corner_uv_x, ignored_corner_depth)) corner_uv_x = source_uv;
 	// Wall endpoints are vertical under the yaw-only projector, so only the
 	// horizontal neighboring sample measures the perpendicular one-pixel width.
 	// Including the vertical UV derivative made oblique faces produce broad,
@@ -174,6 +200,6 @@ void fragment() {
 		float dither_coverage = smoothstep(cutaway_inner_radius, cutaway_inner_radius + max(cutaway_fade_width, 0.0001), contact_distance);
 		cutaway_opacity *= step(bayer2_threshold(pixel), dither_coverage);
 	}
-	float wall_light = depth_light_dither(mix(wall_depths.x, wall_depths.y, source_uv.x), pixel);
+	float wall_light = depth_light_dither(ray_depth, pixel);
 	COLOR = vec4(result.rgb * wall_light, result.a * cutaway_opacity);
 }
