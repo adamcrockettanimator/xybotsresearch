@@ -78,22 +78,22 @@ const DUAL_WIELD_IDLE_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Idle_
 const MUZZLE_ANCHORS: MuzzleAnchorLibrary = preload("res://assets/Characters/Cowboy2_MuzzleAnchors.tres") # Store user-authored PNG-local barrel pixels independently of SpriteFrames artwork.
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
 # Numbered frames follow the clockwise camera order, starting at north.
-const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/N.png")
-const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/NNE.png")
-const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/NE.png")
-const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/ENE.png")
-const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/E.png")
-const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/ESE.png")
-const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/SE.png")
-const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/SSE.png")
-const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/S.png")
-const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/SSW.png")
-const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/SW.png")
-const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/WSW.png")
-const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/W.png")
-const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/WNW.png")
-const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/NW.png")
-const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/NNW.png")
+const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_000.png")
+const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_001.png")
+const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_002.png")
+const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_003.png")
+const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_004.png")
+const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_005.png")
+const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_006.png")
+const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_007.png")
+const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_008.png")
+const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_009.png")
+const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_010.png")
+const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_011.png")
+const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_012.png")
+const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_013.png")
+const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_014.png")
+const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_015.png")
 const BARREL_VIEW_DIRECTIONS: Array[String] = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"] # Keep the barrel-only ring ordered clockwise in 22.5-degree steps.
 const MAP_BARREL_COUNT := 8                                                                    # Keep the compact six-by-six arena dressed without filling every playable cell.
 const BARREL_ART_HEIGHT := 32.0                                                               # The sprite canvas height, used to anchor its bottom to the floor.
@@ -785,7 +785,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_fan_draw_order_debug := false                                               # Show the exact solid fan, clipped wall spans, and final above/below-player layer decision.
 @export var show_world_footprints_debug := false                                             # Show physical placement circles and camera-visible footprint cones for every floor-world item.
 @export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
-@export var pause_round_timer_for_debug := false                                             # Pause only the shared round clock when deliberately requested from the debug menu; guide visibility stays independent.
+@export var pause_round_timer_for_debug := true                                              # Default rendering/LOD test sessions to a paused shared round clock; the debug menu can still resume it deliberately.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
@@ -5119,6 +5119,11 @@ func _process_player_context(delta: float) -> void:                             
 func _process_continuous_third_person_input(delta: float) -> void:
 	var device_id := _xbox_joypad_id_for_player()
 	var stick_x := Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_X) if device_id >= 0 else 0.0
+	# The coordinate-frame renderer temporarily borrows the right stick while
+	# its LB-held depth-dither radial menu is open.  Keep camera yaw stationary
+	# until LB is released, then resume ordinary controller input immediately.
+	if bool(get_meta("coordinate_dither_menu_captures_right_stick", false)):
+		stick_x = 0.0
 	if absf(stick_x) < XBOX_STICK_DEADZONE:
 		stick_x = 0.0
 	var key_turn := float(int(_is_player_turn_right_pressed()) - int(_is_player_turn_left_pressed()))
@@ -9092,24 +9097,16 @@ func _xbox_left_stick() -> Vector2:                                             
 	var stick := Vector2(Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X), Input.get_joy_axis(device_id, JOY_AXIS_LEFT_Y)) # Read the standard Xbox left-stick axes.
 	if stick.length() >= XBOX_STICK_DEADZONE:
 		return stick.limit_length(1.0)                                                          # Preserve analog strength while keeping diagonal travel bounded.
-	# D-pad input is digital but should move the selected character exactly like
-	# the left stick. This also supports controllers whose directional pad is the
-	# input used to navigate the character-selection lobby.
-	var dpad := Vector2.ZERO
-	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_LEFT):
-		dpad.x -= 1.0
-	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_RIGHT):
-		dpad.x += 1.0
-	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_UP):
-		dpad.y -= 1.0
-	if Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_DOWN):
-		dpad.y += 1.0
-	return dpad.limit_length(1.0)
+	# The D-pad is reserved for renderer tuning controls. It intentionally no
+	# longer selects or moves a character anywhere in the game.
+	return Vector2.ZERO
 
 
 
 # _xbox_right_stick_turn: Converts a deliberate right-stick horizontal push into the bound player's one-shot turn direction.
 func _xbox_right_stick_turn() -> int:                                                       # Declare this function.
+	if bool(get_meta("coordinate_dither_menu_captures_right_stick", false)):                  # Let the held LB radial menu own the stick.
+		return 0                                                                                # Do not queue cardinal turns while choosing a dither.
 	var device_id := _xbox_joypad_id_for_player()                                              # Find the controller assigned to the currently bound local player.
 	if device_id < 0:                                                                          # Return no turn when no controller is attached.
 		return 0                                                                                 # Keep keyboard-only use unchanged.

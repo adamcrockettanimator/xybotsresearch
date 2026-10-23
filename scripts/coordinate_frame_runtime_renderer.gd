@@ -16,6 +16,9 @@ const OVERSCAN_STABLE_PATH := "res://assets/CoordinateFrames/coord_n_stable_over
 const OVERSCAN_REFERENCE_CROP_ORIGIN := Vector2(80.0, 32.0)
 const WALL_LAYER1_PATH := "res://assets/Environment/Wall_Layer1.png"
 const WALL_LAYER2_PATH := "res://assets/Environment/Wall_layer2.png"
+const WINDOW_FRAME_TOP_PATH := "res://assets/Environment/Window_Frame_TopLayer.png"
+const WINDOW_GLASS_MIDDLE_PATH := "res://assets/Environment/Window_Glass_MiddleLayer.png"
+const WINDOW_SHADOW_BOTTOM_PATH := "res://assets/Environment/Window_Shadow_BottomLayer.png"
 const CEILING_LAYER1_PATH := "res://assets/Environment/ceiling_layer1.png"
 const CEILING_LAYER2_PATH := "res://assets/Environment/ceiling_layer2.png"
 const MASTER_WALL_PATH := WALL_LAYER1_PATH
@@ -132,6 +135,9 @@ var wall_layer1_image: Image
 var wall_layer2_image: Image
 var wall_layer1_texture: Texture2D
 var wall_layer2_texture: Texture2D
+var window_frame_top_texture: Texture2D
+var window_glass_middle_texture: Texture2D
+var window_shadow_bottom_texture: Texture2D
 var gpu_wall_shader: Shader
 var gpu_wall_dummy_texture: ImageTexture
 var gpu_wall_base_mip_texture: Texture2D
@@ -152,6 +158,12 @@ var coordinate_background: Sprite2D
 var coordinate_screen_overlay: Sprite2D
 var status: Label
 var runtime_status: Label
+var tuning_readout: Label
+var tuning_readout_remaining := 0.0
+var dither_radial_menu: Label
+var dither_menu_open := false
+var dither_menu_selection := 0
+var dither_menu_right_stick := Vector2.ZERO
 var last_signature := ""
 var show_runtime_walls := true
 var show_quad_outlines := false
@@ -174,6 +186,31 @@ var wall_layer2_mip_images: Array[Image] = []
 # levels itself; CPU is retained only for the optional EWA comparison pass.
 var integer_uv_scale_snap_enabled := true
 var wall_ewa_filter_enabled := false
+# First semantic-material experiment: keep the wall's trim, wallpaper lattice,
+# and paneling as named shader features instead of reducing the bitmap through
+# its mip chain.  B compares this against the untouched bitmap path live.
+var semantic_wall_material_enabled := true
+# Logical-pixel floor for a semantic wallpaper lattice stroke. [ and ] adjust
+# it live in quarter-pixel increments; 0.25 is the default thin-stroke look.
+# Zero remains available as an intentionally un-clamped comparison.
+var semantic_lattice_min_logical_line_width := 0.25
+# Xbox RB toggles the GPU semantic-wall anisotropic coverage experiment.
+var semantic_lattice_anisotropic_filter_enabled := true
+# Toggle only the ordered dither between wall depth-light bands; it never
+# changes the semantic wallpaper coverage or palette.
+var wall_depth_light_dither_enabled := true
+# O is an isolated grayscale view of the ordered depth-light dither on walls.
+var wall_depth_light_dither_debug_enabled := false
+# Shared across walls, floor, and ceiling: 0 is a continuous gradient; 2/4/8
+# select ordered Bayer matrices.  The width preserves the previous 3 px near,
+# 1 px far baseline while letting the player widen or narrow it live.
+var depth_dither_matrix_size := 0
+var depth_dither_near_half_width_pixels := 4.0
+# Keep the procedural floor bound specifically to the WoodFloor2 comparison;
+# M can still show the other authored floor assets unchanged. The ceiling is
+# simple enough to use its semantic version continuously.
+var semantic_floor_material_enabled := true
+var semantic_ceiling_material_enabled := true
 # Wall_Layer2 remains available for future windows and wall art, but the
 # base wallpaper should render without a permanent decorative overlay.
 # Press P during play to enable the layered/parallax composition.
@@ -405,6 +442,28 @@ func _initialize() -> void:
 		runtime_status.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0))
 		runtime_status.add_theme_constant_override("outline_size", 3)
 		controller.canvas_layer.add_child(runtime_status)
+		tuning_readout = Label.new()
+		tuning_readout.position = Vector2(12, 56)
+		tuning_readout.add_theme_font_size_override("font_size", 16)
+		tuning_readout.add_theme_color_override("font_color", Color(1.0, 0.9, 0.35))
+		tuning_readout.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0))
+		tuning_readout.add_theme_constant_override("outline_size", 3)
+		tuning_readout.visible = false
+		controller.canvas_layer.add_child(tuning_readout)
+		dither_radial_menu = Label.new()
+		# The menu belongs to player one's 160×120 logical viewport, not the
+		# shared screen.  A full-viewport centered label keeps it over the player
+		# regardless of split-screen scaling.
+		dither_radial_menu.position = Vector2.ZERO
+		dither_radial_menu.size = VIEW_SIZE
+		dither_radial_menu.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		dither_radial_menu.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		dither_radial_menu.add_theme_font_size_override("font_size", 12)
+		dither_radial_menu.add_theme_color_override("font_color", Color.WHITE)
+		dither_radial_menu.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0))
+		dither_radial_menu.add_theme_constant_override("outline_size", 2)
+		dither_radial_menu.visible = false
+		controller.canvas_layer.add_child(dither_radial_menu)
 	initialized = true
 	_rebuild()
 	controller._bind_player_context(0)
@@ -412,7 +471,11 @@ func _initialize() -> void:
 func _process(delta: float) -> void:
 	# Rendering is driven by the controller's per-player pass below.  That avoids
 	# a child renderer rebinding the other player's legacy globals after a frame.
-	pass
+	if tuning_readout_remaining <= 0.0:
+		return
+	tuning_readout_remaining = maxf(0.0, tuning_readout_remaining - delta)
+	if tuning_readout_remaining <= 0.0 and is_instance_valid(tuning_readout):
+		tuning_readout.visible = false
 
 
 # render_bound_player_context: Rebuild this compositor only while the controller
@@ -580,6 +643,52 @@ func _input(event: InputEvent) -> void:
 	# shared diagnostic controls so a single press cannot toggle each layer twice.
 	if target_player_index != 0:
 		return
+	if event is InputEventJoypadMotion and dither_menu_open:
+		if event.axis == JOY_AXIS_RIGHT_X:
+			dither_menu_right_stick.x = event.axis_value
+		elif event.axis == JOY_AXIS_RIGHT_Y:
+			dither_menu_right_stick.y = event.axis_value
+		else:
+			return
+		if dither_menu_right_stick.length() >= 0.55:
+			if absf(dither_menu_right_stick.x) >= absf(dither_menu_right_stick.y):
+				dither_menu_selection = 2 if dither_menu_right_stick.x > 0.0 else 0 # 4×4 / smooth
+			else:
+				dither_menu_selection = 3 if dither_menu_right_stick.y > 0.0 else 1 # 8×8 / 2×2
+			_refresh_dither_radial_menu()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventJoypadButton:
+		if event.button_index == JOY_BUTTON_LEFT_SHOULDER:
+			if event.pressed:
+				dither_menu_open = true
+				_set_dither_menu_right_stick_capture(true)
+				dither_menu_selection = _dither_menu_index_for_size(depth_dither_matrix_size)
+				dither_menu_right_stick = Vector2.ZERO
+				_refresh_dither_radial_menu()
+			elif dither_menu_open:
+				dither_menu_open = false
+				_set_dither_menu_right_stick_capture(false)
+				if is_instance_valid(dither_radial_menu):
+					dither_radial_menu.visible = false
+				set_depth_dither_matrix_size(_dither_matrix_size_for_menu_index(dither_menu_selection))
+			get_viewport().set_input_as_handled()
+			return
+		if dither_menu_open:
+			get_viewport().set_input_as_handled()
+			return
+		if event.pressed and event.button_index == JOY_BUTTON_DPAD_LEFT:
+			set_depth_dither_gradient_width(depth_dither_near_half_width_pixels - 0.5)
+			get_viewport().set_input_as_handled()
+			return
+		if event.pressed and event.button_index == JOY_BUTTON_DPAD_RIGHT:
+			set_depth_dither_gradient_width(depth_dither_near_half_width_pixels + 0.5)
+			get_viewport().set_input_as_handled()
+			return
+		if event.pressed and event.button_index == JOY_BUTTON_RIGHT_SHOULDER:
+			set_semantic_lattice_anisotropic_filter_enabled(not semantic_lattice_anisotropic_filter_enabled)
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_T:
 			show_runtime_walls = not show_runtime_walls
@@ -607,6 +716,21 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_J:
 			set_wall_ewa_filter_enabled(not wall_ewa_filter_enabled)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_B:
+			set_semantic_wall_material_enabled(not semantic_wall_material_enabled)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_BRACKETLEFT:
+			set_semantic_lattice_min_logical_line_width(maxf(0.0, semantic_lattice_min_logical_line_width - 0.25))
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_BRACKETRIGHT:
+			set_semantic_lattice_min_logical_line_width(minf(4.0, semantic_lattice_min_logical_line_width + 0.25))
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_I:
+			set_wall_depth_light_dither_enabled(not wall_depth_light_dither_enabled)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_O:
+			set_wall_depth_light_dither_debug_enabled(not wall_depth_light_dither_debug_enabled)
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_P:
 			set_wall_parallax_enabled(not wall_parallax_enabled)
@@ -719,6 +843,9 @@ func _load_runtime_wall_layers() -> void:
 	wall_layer2_image = null
 	wall_layer1_texture = load(WALL_LAYER1_PATH) as Texture2D
 	wall_layer2_texture = load(WALL_LAYER2_PATH) as Texture2D
+	window_frame_top_texture = load(WINDOW_FRAME_TOP_PATH) as Texture2D
+	window_glass_middle_texture = load(WINDOW_GLASS_MIDDLE_PATH) as Texture2D
+	window_shadow_bottom_texture = load(WINDOW_SHADOW_BOTTOM_PATH) as Texture2D
 	if wall_layer1_texture == null or wall_layer2_texture == null:
 		push_error("Could not load runtime wall layer textures.")
 		return
@@ -734,6 +861,8 @@ func _load_runtime_wall_layers() -> void:
 		return
 	wall_layer1_mip_images = _build_mip_chain(wall_layer1_image)
 	wall_layer2_mip_images = _build_mip_chain(wall_layer2_image)
+	if window_frame_top_texture == null or window_glass_middle_texture == null or window_shadow_bottom_texture == null:
+		push_error("Could not load the three exterior window prop layers.")
 	_rebuild_gpu_wall_sampling_textures()
 
 
@@ -820,7 +949,10 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		var source_texture: Texture2D = wall_source_texture
 		var source_size: Vector2 = Vector2(source_texture.get_size()) if source_texture != null else Vector2.ONE
 		var use_layers := wall_parallax_enabled and wall_layer1_texture != null and wall_layer2_texture != null
-		var layer_offset: Vector2 = _layer_parallax_uv_offset(entry) if use_layers else Vector2.ZERO
+		# Wall-art props retain their own three-depth parallax even when the legacy
+		# full-wall layer experiment is disabled.
+		var parallax_offset := _layer_parallax_uv_offset(entry)
+		var layer_offset: Vector2 = parallax_offset if use_layers else Vector2.ZERO
 		var layer1_weight := (layer_movement_balance - 1.0) * 0.5
 		var layer2_weight := (layer_movement_balance + 1.0) * 0.5
 		material.set_shader_parameter("inverse_row0", inverse[0])
@@ -829,14 +961,25 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("wall_local_a", Vector2(entry["first_local"]))
 		material.set_shader_parameter("wall_local_b", Vector2(entry["second_local"]))
 		material.set_shader_parameter("wall_depths", Vector2(entry["depths"]))
+		# Semantic wallpaper palettes are chosen from the real 6x6 maze cell, not
+		# from camera order or UVs. This must be per-wall: each Sprite2D owns its
+		# own ShaderMaterial instance.
+		material.set_shader_parameter("cell_world", Vector2(Vector2i(entry.get("facing_cell", Vector2i.ZERO))))
+		material.set_shader_parameter("window_parallax_offset", parallax_offset)
+		material.set_shader_parameter("window_frame_texture", window_frame_top_texture)
+		material.set_shader_parameter("window_glass_texture", window_glass_middle_texture)
+		material.set_shader_parameter("window_shadow_texture", window_shadow_bottom_texture)
+		material.set_shader_parameter("window_asset_size", Vector2(36.0, 40.0))
+		material.set_shader_parameter("show_exterior_window", _wall_entry_gets_window(entry))
 		material.set_shader_parameter("camera_height", VIRTUAL_CAMERA_HEIGHT)
 		material.set_shader_parameter("wall_height", WALL_HEIGHT)
 		material.set_shader_parameter("focal_length", FOCAL_LENGTH)
 		material.set_shader_parameter("horizon_y", HORIZON_Y)
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
-		material.set_shader_parameter("light_dither_near_half_width_pixels", FLOOR_LIGHT_DITHER_NEAR_HALF_WIDTH_PIXELS)
-		material.set_shader_parameter("light_dither_far_half_width_pixels", FLOOR_LIGHT_DITHER_FAR_HALF_WIDTH_PIXELS)
+		material.set_shader_parameter("light_dither_near_half_width_pixels", depth_dither_near_half_width_pixels)
+		material.set_shader_parameter("light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
 		material.set_shader_parameter("light_dither_steps", FLOOR_LIGHT_DITHER_STEPS)
+		material.set_shader_parameter("light_dither_matrix_size", depth_dither_matrix_size)
 		material.set_shader_parameter("endpoint_corner_tones", Vector2(entry.get("corner_tone_a", 0.0), entry.get("corner_tone_b", 0.0)))
 		material.set_shader_parameter("wall_opacity", float(entry.get("camera_cutaway_opacity", 1.0)))
 		material.set_shader_parameter("use_camera_cutaway_fade", bool(entry.get("camera_cutaway_fade", false)))
@@ -850,6 +993,11 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips else source_texture)
 		material.set_shader_parameter("base_texture_size", source_size)
 		material.set_shader_parameter("use_integer_uv_scale_snap", use_gpu_mips)
+		material.set_shader_parameter("use_semantic_wall_material", semantic_wall_material_enabled)
+		material.set_shader_parameter("semantic_lattice_min_logical_line_width", semantic_lattice_min_logical_line_width)
+		material.set_shader_parameter("use_semantic_lattice_anisotropic_filter", semantic_lattice_anisotropic_filter_enabled)
+		material.set_shader_parameter("use_depth_light_dither", wall_depth_light_dither_enabled)
+		material.set_shader_parameter("show_depth_light_dither_debug", wall_depth_light_dither_debug_enabled)
 		material.set_shader_parameter("use_layer_parallax", use_layers)
 		material.set_shader_parameter("layer1_texture", gpu_wall_layer1_mip_texture if use_gpu_mips and gpu_wall_layer1_mip_texture != null else (wall_layer1_texture if wall_layer1_texture != null else wall_source_texture))
 		material.set_shader_parameter("layer2_texture", gpu_wall_layer2_mip_texture if use_gpu_mips and gpu_wall_layer2_mip_texture != null else (wall_layer2_texture if wall_layer2_texture != null else wall_source_texture))
@@ -932,6 +1080,113 @@ func set_wall_ewa_filter_enabled(enabled: bool) -> void:
 	_refresh_runtime_status(last_wall_entries.size())
 
 
+# set_semantic_wall_material_enabled: A/B the authored bitmap plus runtime
+# mipmaps against the procedural trim/wallpaper/panel material.  It changes
+# no geometry, camera state, wall ordering, or lighting.
+func set_semantic_wall_material_enabled(enabled: bool) -> void:
+	semantic_wall_material_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
+
+func set_semantic_lattice_min_logical_line_width(width: float) -> void:
+	semantic_lattice_min_logical_line_width = clampf(width, 0.0, 4.0)
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+	_show_tuning_readout("Lattice minimum: %.2f px" % semantic_lattice_min_logical_line_width)
+
+
+func set_wall_depth_light_dither_enabled(enabled: bool) -> void:
+	wall_depth_light_dither_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+
+
+func set_wall_depth_light_dither_debug_enabled(enabled: bool) -> void:
+	wall_depth_light_dither_debug_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+	_show_tuning_readout("Depth dither view: %s" % ("ON" if enabled else "OFF"))
+
+
+func _depth_dither_far_half_width_pixels() -> float:
+	# Retain the original 3 px near / 1 px far relationship as width changes.
+	return maxf(0.25, depth_dither_near_half_width_pixels / 3.0)
+
+
+func _dither_menu_index_for_size(matrix_size: int) -> int:
+	match matrix_size:
+		0: return 0
+		2: return 1
+		4: return 2
+		8: return 3
+		_: return 1
+
+
+func _dither_matrix_size_for_menu_index(index: int) -> int:
+	match index:
+		0: return 0
+		1: return 2
+		2: return 4
+		3: return 8
+		_: return 2
+
+
+func _refresh_dither_radial_menu() -> void:
+	if !is_instance_valid(dither_radial_menu):
+		return
+	var smooth_marker := ">" if dither_menu_selection == 0 else " "
+	var bayer2_marker := ">" if dither_menu_selection == 1 else " "
+	var bayer4_marker := ">" if dither_menu_selection == 2 else " "
+	var bayer8_marker := ">" if dither_menu_selection == 3 else " "
+	dither_radial_menu.text = "DEPTH DITHER\n\n        %s 2×2\n\n%s Smooth       %s 4×4\n\n        %s 8×8\n\nHold LB · aim right stick · release" % [bayer2_marker, smooth_marker, bayer4_marker, bayer8_marker]
+	dither_radial_menu.visible = true
+
+
+func _set_dither_menu_right_stick_capture(captured: bool) -> void:
+	# The character controller samples the stick directly for camera turning.
+	# Flag that one live controller while LB is held so the menu can own it.
+	if is_instance_valid(controller):
+		controller.set_meta("coordinate_dither_menu_captures_right_stick", captured)
+
+
+func set_depth_dither_matrix_size(matrix_size: int) -> void:
+	depth_dither_matrix_size = matrix_size if matrix_size in [0, 2, 4, 8] else 2
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
+	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
+	_refresh_runtime_status(last_wall_entries.size())
+	var label := "Smooth" if depth_dither_matrix_size == 0 else "Bayer %d×%d" % [depth_dither_matrix_size, depth_dither_matrix_size]
+	_show_tuning_readout("Depth dither: %s" % label)
+
+
+func set_depth_dither_gradient_width(near_width: float) -> void:
+	depth_dither_near_half_width_pixels = clampf(near_width, 0.5, 12.0)
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
+	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
+	_refresh_runtime_status(last_wall_entries.size())
+	_show_tuning_readout("Depth gradient: %.1f px" % depth_dither_near_half_width_pixels)
+
+
+func set_semantic_lattice_anisotropic_filter_enabled(enabled: bool) -> void:
+	semantic_lattice_anisotropic_filter_enabled = enabled
+	_rebuild_runtime_wall_surfaces(last_wall_entries)
+	_refresh_runtime_status(last_wall_entries.size())
+	_show_tuning_readout("Wallpaper EWA: %s" % ("ON" if enabled else "OFF"))
+
+
+# _show_tuning_readout: Brief confirmation for the live wallpaper controls.
+# It is separate from the debug panel so it remains legible even when that
+# panel is hidden, and never persists longer than three seconds.
+func _show_tuning_readout(message: String) -> void:
+	if !is_instance_valid(tuning_readout):
+		return
+	tuning_readout.text = message
+	tuning_readout.visible = true
+	tuning_readout_remaining = 3.0
+
+
 # set_wall_parallax_enabled: Lets the raised/recessed master-wall test be
 # compared directly against the same projected quads without relief mapping.
 func set_wall_parallax_enabled(enabled: bool) -> void:
@@ -994,7 +1249,7 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 	var displayed_texture_label := "Wall_Layer1+Layer2" if wall_parallax_enabled and layer_mode_available else active_wall_texture_label
 	var ceiling_layers_available := ceiling_layer1_image != null and ceiling_layer2_image != null
 	var render_backend := "GPU" if _can_use_gpu_wall_renderer() else "CPU"
-	var status_text := "Coord %s | %d walls | %s | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  P:%s  C:%s  L:%s  V:%s" % [_pose_key(), visible_wall_count, render_backend, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if show_projection_points else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if gpu_wall_renderer_enabled else "OFF"]
+	var status_text := "Coord %s | %d walls | %s | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  B:%s  N:%s [/]  I:%s  O:%s  RB:%s  P:%s  C:%s  L:%s  V:%s" % [_pose_key(), visible_wall_count, render_backend, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "SEM" if semantic_wall_material_enabled else "BMP", str(semantic_lattice_min_logical_line_width), "ON" if wall_depth_light_dither_enabled else "OFF", "ON" if wall_depth_light_dither_debug_enabled else "OFF", "ON" if semantic_lattice_anisotropic_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if gpu_wall_renderer_enabled else "OFF", "SEM" if semantic_floor_material_enabled else "BMP"]
 	if is_instance_valid(status):
 		status.text = status_text
 	if is_instance_valid(runtime_status):
@@ -1299,6 +1554,12 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("wall_edge_mask", _cell_wall_edge_mask(Vector2i(entry["cell"]), Vector2(entry["origin"])))
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
 		material.set_shader_parameter("use_depth_light_dither", true)                            # Blend only the authored depth-light boundaries; texture ownership stays exact.
+		material.set_shader_parameter("floor_light_dither_near_half_width_pixels", depth_dither_near_half_width_pixels)
+		material.set_shader_parameter("floor_light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
+		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
+		material.set_shader_parameter("use_semantic_floor_material", semantic_floor_material_enabled and active_floor_texture_label == "WoodFloor2")
+		material.set_shader_parameter("use_semantic_ceiling_material", false)
+		material.set_shader_parameter("use_semantic_plane_anisotropic_filter", semantic_lattice_anisotropic_filter_enabled)
 		material.set_shader_parameter("use_layers", false)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT)
 	floor_art_sprite.visible = false
@@ -1499,6 +1760,12 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("layer2_texture", gpu_ceiling_layer2_mip_texture if use_gpu_mips and gpu_ceiling_layer2_mip_texture != null else (ceiling_layer2_texture if ceiling_layer2_texture != null else ceiling_layer1_texture))
 		material.set_shader_parameter("use_layers", ceiling_parallax_enabled and ceiling_layer2_texture != null)
 		material.set_shader_parameter("use_depth_light_dither", true)                            # Use the same ordered transition as the floor so ceiling brightness bands do not form hard lines.
+		material.set_shader_parameter("floor_light_dither_near_half_width_pixels", depth_dither_near_half_width_pixels)
+		material.set_shader_parameter("floor_light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
+		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
+		material.set_shader_parameter("use_semantic_floor_material", false)
+		material.set_shader_parameter("use_semantic_ceiling_material", semantic_ceiling_material_enabled)
+		material.set_shader_parameter("use_semantic_plane_anisotropic_filter", semantic_lattice_anisotropic_filter_enabled)
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT)
@@ -1682,6 +1949,34 @@ func _layer_parallax_uv_offset(entry: Dictionary) -> Vector2:
 		sideways_view * parallax_side_multiplier * parallax_max_texels / float(wall_layer1_image.get_width()),
 		vertical_view * parallax_vertical_multiplier * parallax_max_texels / float(wall_layer1_image.get_height())
 	)
+
+
+func _is_exterior_wall_entry(entry: Dictionary) -> bool:
+	var world_a: Vector2 = entry.get("world_a", Vector2.ZERO)
+	var world_b: Vector2 = entry.get("world_b", Vector2.ZERO)
+	var horizontal := absf(world_a.y - world_b.y) < 0.001
+	if horizontal:
+		return world_a.y < 0.001 or world_a.y > float(controller.MAP_HEIGHT) - 0.001
+	return world_a.x < 0.001 or world_a.x > float(controller.MAP_WIDTH) - 0.001
+
+
+func _wall_entry_gets_window(entry: Dictionary) -> bool:
+	if not _is_exterior_wall_entry(entry):
+		return false
+	# Alternate by the physical segment's map position, rather than a hash: this
+	# guarantees one window on every other exterior segment around the building.
+	var world_a: Vector2 = entry.get("world_a", Vector2.ZERO)
+	var world_b: Vector2 = entry.get("world_b", Vector2.ZERO)
+	var horizontal := absf(world_a.y - world_b.y) < 0.001
+	var segment_index := floori(minf(world_a.x, world_b.x)) if horizontal else floori(minf(world_a.y, world_b.y))
+	# Opposite building sides have inverse phase so adjacent corner facades do
+	# not always both start with a window.
+	var phase := 0
+	if horizontal:
+		phase = 0 if world_a.y < 0.001 else 1
+	else:
+		phase = 1 if world_a.x < 0.001 else 0
+	return posmod(segment_index + phase, 2) == 0
 
 
 func _sample_projected_image(source_image: Image, mip_chain: Array[Image], row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, sample_uv: Vector2, clamp_to_edge := false) -> Color:
