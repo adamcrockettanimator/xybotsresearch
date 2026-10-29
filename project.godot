@@ -8,6 +8,20 @@
 
 config_version=5
 
+[addons]
+
+curved_lines_2d/rect_create_as_path=false
+curved_lines_2d/close_pencil_path=false
+curved_lines_2d/fill_color=Color(0.6117647, 0.39215687, 0.23921569, 1)
+curved_lines_2d/stroke_color=Color(0.61, 0.3929417, 0.2379, 1)
+curved_lines_2d/stroke_width=6.0
+curved_lines_2d/add_fill_enabled=true
+curved_lines_2d/add_stroke_enabled=true
+curved_lines_2d/use_line_2d_for_stroke=true
+curved_lines_2d/line_begin_cap=2
+curved_lines_2d/line_end_cap=2
+curved_lines_2d/line_joint_mode=2
+
 [application]
 
 config/name="XybotsResearch"
@@ -17,8 +31,8 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 GrudgeSession="*res://scripts/grudge_session.gd"
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]
 
@@ -31,7 +45,7 @@ window/mode=0
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/muzzle_anchor_editor/plugin.cfg")
+enabled=PackedStringArray("res://addons/curved_lines_2d/plugin.cfg", "res://addons/godot_ai/plugin.cfg", "res://addons/muzzle_anchor_editor/plugin.cfg")
 
 [filesystem]
 

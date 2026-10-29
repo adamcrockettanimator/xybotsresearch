@@ -41,7 +41,7 @@ func _initialize() -> void:
 	var renderer := TestRenderer.new()
 	renderer.controller = game
 	game.coordinate_renderers.append(renderer)
-	var previous_scale := 0.0
+	var previous_rendered_height := 0.0
 	var expected_scale_depth_product := -1.0
 	var failures: Array[String] = []
 	# Include both sides of the old near cap and the point where the barrel's top
@@ -56,16 +56,18 @@ func _initialize() -> void:
 			failures.append("Barrel was not rendered at depth %s" % depth)
 			continue
 		var scale_value := sprite.scale.x
-		var scale_depth_product := scale_value * float(depth)
+		var art_height := game._barrel_art_height_for_view_depth(float(projection["view_depth"]))
+		var rendered_height := art_height * scale_value
+		var scale_depth_product := rendered_height * float(depth)
 		if expected_scale_depth_product < 0.0:
 			expected_scale_depth_product = scale_depth_product
-		if scale_value <= previous_scale or not is_equal_approx(scale_depth_product, expected_scale_depth_product):
-			failures.append("Scale did not follow inverse depth at %s: %s" % [depth, scale_value])
-		var expected_y := roundf(roundf(float(projection["feet_y"])) - game.BARREL_ART_HEIGHT * scale_value * 0.5)
+		if rendered_height <= previous_rendered_height or not is_equal_approx(scale_depth_product, expected_scale_depth_product):
+			failures.append("Rendered barrel height did not follow inverse depth at %s: %s" % [depth, rendered_height])
+		var expected_y := roundf(roundf(float(projection["feet_y"])) - art_height * scale_value * 0.5)
 		if not is_equal_approx(sprite.position.y, expected_y):
 			failures.append("Ground anchor diverged at depth %s" % depth)
-		print("depth=%.2f scale=%.4f feet=%.2f top=%.2f" % [depth, scale_value, projection["feet_y"], sprite.position.y - game.BARREL_ART_HEIGHT * scale_value * 0.5])
-		previous_scale = scale_value
+		print("depth=%.2f scale=%.4f feet=%.2f top=%.2f" % [depth, scale_value, projection["feet_y"], sprite.position.y - art_height * scale_value * 0.5])
+		previous_rendered_height = rendered_height
 	for sprite in game.test_sprites.values():
 		sprite.free()
 	renderer.free()

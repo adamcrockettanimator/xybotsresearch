@@ -1,0 +1,4618 @@
+{
+  "schema_version": 1,
+  "logical_canvas": {
+    "width": 160,
+    "height": 120
+  },
+  "notes": "Transparent full-frame plates; foot_screen is in logical pixels.",
+  "plates": [
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/sphere.png",
+      "foot_screen": [
+        201.3793,
+        -23.4077
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/cube.png",
+      "foot_screen": [
+        110.4762,
+        -19.0289
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/tall_narrow_box.png",
+      "foot_screen": [
+        231.1111,
+        76.2092
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/short_wide_box.png",
+      "foot_screen": [
+        459.6611,
+        140.2393
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/cone.png",
+      "foot_screen": [
+        -393.0434,
+        -107.3656
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/pyramid.png",
+      "foot_screen": [
+        0.0,
+        -15.2941
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/upright_cylinder.png",
+      "foot_screen": [
+        -206.6666,
+        -34.9019
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/sideways_cylinder.png",
+      "foot_screen": [
+        6960.0116,
+        1631.7673
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/beveled_cube.png",
+      "foot_screen": [
+        187.2251,
+        -1.7431
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north",
+      "path": "assets/Calibration/primitive_plates/north/stepped_block.png",
+      "foot_screen": [
+        73.4694,
+        -0.8883
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/sphere.png",
+      "foot_screen": [
+        152.1512,
+        -15.8935
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/cube.png",
+      "foot_screen": [
+        75.3007,
+        -18.0446
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/tall_narrow_box.png",
+      "foot_screen": [
+        188.1875,
+        68.2652
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/short_wide_box.png",
+      "foot_screen": [
+        313.676,
+        100.6199
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/cone.png",
+      "foot_screen": [
+        -2074.024,
+        -549.5647
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/pyramid.png",
+      "foot_screen": [
+        -51.9726,
+        -23.4731
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/upright_cylinder.png",
+      "foot_screen": [
+        -517.0826,
+        -93.066
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/sideways_cylinder.png",
+      "foot_screen": [
+        680.6298,
+        168.4903
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/beveled_cube.png",
+      "foot_screen": [
+        144.7661,
+        2.3533
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_by_east",
+      "path": "assets/Calibration/primitive_plates/north_by_east/stepped_block.png",
+      "foot_screen": [
+        41.0575,
+        -2.0366
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/sphere.png",
+      "foot_screen": [
+        113.8471,
+        -12.2109
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/cube.png",
+      "foot_screen": [
+        39.5326,
+        -19.7819
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/tall_narrow_box.png",
+      "foot_screen": [
+        156.5525,
+        63.4754
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/short_wide_box.png",
+      "foot_screen": [
+        241.3715,
+        82.8795
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/cone.png",
+      "foot_screen": [
+        1021.7755,
+        275.2252
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/pyramid.png",
+      "foot_screen": [
+        -133.8252,
+        -39.832
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/upright_cylinder.png",
+      "foot_screen": [
+        -12031.9556,
+        -2351.323
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/sideways_cylinder.png",
+      "foot_screen": [
+        388.0122,
+        103.1118
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/beveled_cube.png",
+      "foot_screen": [
+        110.6249,
+        4.4096
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_north_east",
+      "path": "assets/Calibration/primitive_plates/north_north_east/stepped_block.png",
+      "foot_screen": [
+        4.0247,
+        -5.1179
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/sphere.png",
+      "foot_screen": [
+        79.8222,
+        -11.1005
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/cube.png",
+      "foot_screen": [
+        -1.7494,
+        -24.7853
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/tall_narrow_box.png",
+      "foot_screen": [
+        130.9675,
+        60.5369
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/short_wide_box.png",
+      "foot_screen": [
+        195.9172,
+        73.178
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/cone.png",
+      "foot_screen": [
+        465.5033,
+        131.0552
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/pyramid.png",
+      "foot_screen": [
+        -305.4671,
+        -79.3495
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/upright_cylinder.png",
+      "foot_screen": [
+        773.1977,
+        165.4196
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/sideways_cylinder.png",
+      "foot_screen": [
+        279.0524,
+        80.6079
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/beveled_cube.png",
+      "foot_screen": [
+        79.8387,
+        5.0361
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_east_by_north",
+      "path": "assets/Calibration/primitive_plates/north_east_by_north/stepped_block.png",
+      "foot_screen": [
+        -43.9452,
+        -11.1439
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/sphere.png",
+      "foot_screen": [
+        45.776,
+        -12.2354
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/cube.png",
+      "foot_screen": [
+        -56.7687,
+        -34.9319
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/tall_narrow_box.png",
+      "foot_screen": [
+        108.717,
+        58.8394
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/short_wide_box.png",
+      "foot_screen": [
+        163.0527,
+        67.3569
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/cone.png",
+      "foot_screen": [
+        315.0717,
+        94.4895
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/pyramid.png",
+      "foot_screen": [
+        -1045.6026,
+        -263.0208
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/upright_cylinder.png",
+      "foot_screen": [
+        410.8053,
+        96.7409
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/sideways_cylinder.png",
+      "foot_screen": [
+        219.0744,
+        69.5879
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/beveled_cube.png",
+      "foot_screen": [
+        49.0357,
+        4.3959
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_east",
+      "path": "assets/Calibration/primitive_plates/north_east/stepped_block.png",
+      "foot_screen": [
+        -116.9783,
+        -22.8567
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/sphere.png",
+      "foot_screen": [
+        7.3977,
+        -15.9499
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/cube.png",
+      "foot_screen": [
+        -145.3899,
+        -55.7042
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/tall_narrow_box.png",
+      "foot_screen": [
+        88.1378,
+        58.0882
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/short_wide_box.png",
+      "foot_screen": [
+        136.8846,
+        63.7547
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/cone.png",
+      "foot_screen": [
+        241.3707,
+        78.2863
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/pyramid.png",
+      "foot_screen": [
+        1603.2141,
+        410.5883
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/upright_cylinder.png",
+      "foot_screen": [
+        288.6932,
+        75.2405
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/sideways_cylinder.png",
+      "foot_screen": [
+        179.0236,
+        63.3283
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/beveled_cube.png",
+      "foot_screen": [
+        14.8368,
+        2.3221
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_east_by_east",
+      "path": "assets/Calibration/primitive_plates/north_east_by_east/stepped_block.png",
+      "foot_screen": [
+        -259.9239,
+        -49.4535
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/sphere.png",
+      "foot_screen": [
+        -42.0024,
+        -23.5175
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/cube.png",
+      "foot_screen": [
+        -340.8161,
+        -108.3219
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/tall_narrow_box.png",
+      "foot_screen": [
+        68.0074,
+        58.1658
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/short_wide_box.png",
+      "foot_screen": [
+        114.4491,
+        61.6007
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/cone.png",
+      "foot_screen": [
+        195.2683,
+        69.4773
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/pyramid.png",
+      "foot_screen": [
+        539.0081,
+        144.573
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/upright_cylinder.png",
+      "foot_screen": [
+        224.0508,
+        65.0728
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/sideways_cylinder.png",
+      "foot_screen": [
+        148.8024,
+        59.5409
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/beveled_cube.png",
+      "foot_screen": [
+        -27.7505,
+        -1.802
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "east_north_east",
+      "path": "assets/Calibration/primitive_plates/east_north_east/stepped_block.png",
+      "foot_screen": [
+        -749.4999,
+        -148.4222
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/sphere.png",
+      "foot_screen": [
+        -117.2776,
+        -38.5061
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/cube.png",
+      "foot_screen": [
+        -1377.0107,
+        -407.6637
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/tall_narrow_box.png",
+      "foot_screen": [
+        47.2119,
+        59.084
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/short_wide_box.png",
+      "foot_screen": [
+        93.9927,
+        60.5173
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/cone.png",
+      "foot_screen": [
+        162.0057,
+        64.2191
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/pyramid.png",
+      "foot_screen": [
+        343.283,
+        98.2409
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/upright_cylinder.png",
+      "foot_screen": [
+        181.7885,
+        59.4008
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/sideways_cylinder.png",
+      "foot_screen": [
+        123.8816,
+        57.2536
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/beveled_cube.png",
+      "foot_screen": [
+        -88.8835,
+        -9.593
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "east_by_north",
+      "path": "assets/Calibration/primitive_plates/east_by_north/stepped_block.png",
+      "foot_screen": [
+        2896.0876,
+        613.0163
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/sphere.png",
+      "foot_screen": [
+        -266.2295,
+        -73.1533
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/cube.png",
+      "foot_screen": [
+        1258.947,
+        368.6067
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/tall_narrow_box.png",
+      "foot_screen": [
+        24.4749,
+        60.9884
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/short_wide_box.png",
+      "foot_screen": [
+        74.2857,
+        60.3361
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/cone.png",
+      "foot_screen": [
+        135.5251,
+        60.9884
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/pyramid.png",
+      "foot_screen": [
+        256.7164,
+        79.5259
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/upright_cylinder.png",
+      "foot_screen": [
+        150.303,
+        56.0071
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/sideways_cylinder.png",
+      "foot_screen": [
+        101.8182,
+        56.0071
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/beveled_cube.png",
+      "foot_screen": [
+        -196.7568,
+        -25.893
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "east",
+      "path": "assets/Calibration/primitive_plates/east/stepped_block.png",
+      "foot_screen": [
+        611.5253,
+        140.2392
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/sphere.png",
+      "foot_screen": [
+        -798.808,
+        -207.9674
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/cube.png",
+      "foot_screen": [
+        502.9317,
+        150.907
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/tall_narrow_box.png",
+      "foot_screen": [
+        -2.0057,
+        64.2191
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/short_wide_box.png",
+      "foot_screen": [
+        54.2763,
+        61.0303
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/cone.png",
+      "foot_screen": [
+        112.7881,
+        59.0839
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/pyramid.png",
+      "foot_screen": [
+        205.2677,
+        69.7562
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/upright_cylinder.png",
+      "foot_screen": [
+        124.5399,
+        53.9748
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/sideways_cylinder.png",
+      "foot_screen": [
+        81.0439,
+        55.5877
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/beveled_cube.png",
+      "foot_screen": [
+        -478.4775,
+        -72.9748
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "east_by_south",
+      "path": "assets/Calibration/primitive_plates/east_by_south/stepped_block.png",
+      "foot_screen": [
+        366.1752,
+        91.7994
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/sphere.png",
+      "foot_screen": [
+        2447.8589,
+        640.358
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/cube.png",
+      "foot_screen": [
+        331.1455,
+        104.2833
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/tall_narrow_box.png",
+      "foot_screen": [
+        -35.2684,
+        69.4773
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/short_wide_box.png",
+      "foot_screen": [
+        32.8422,
+        62.7047
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/cone.png",
+      "foot_screen": [
+        91.9926,
+        58.1658
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/pyramid.png",
+      "foot_screen": [
+        169.3168,
+        64.0348
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/upright_cylinder.png",
+      "foot_screen": [
+        101.8253,
+        52.8783
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/sideways_cylinder.png",
+      "foot_screen": [
+        60.3292,
+        55.9289
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/beveled_cube.png",
+      "foot_screen": [
+        -5111.4539,
+        -885.5809
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "east_south_east",
+      "path": "assets/Calibration/primitive_plates/east_south_east/stepped_block.png",
+      "foot_screen": [
+        267.3929,
+        73.871
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/sphere.png",
+      "foot_screen": [
+        595.8379,
+        161.8262
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/cube.png",
+      "foot_screen": [
+        251.1592,
+        84.5348
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/tall_narrow_box.png",
+      "foot_screen": [
+        -81.3708,
+        78.2863
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/short_wide_box.png",
+      "foot_screen": [
+        8.5051,
+        65.6359
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/cone.png",
+      "foot_screen": [
+        71.8622,
+        58.0882
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/pyramid.png",
+      "foot_screen": [
+        141.3363,
+        60.5345
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/upright_cylinder.png",
+      "foot_screen": [
+        80.4631,
+        52.5221
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/sideways_cylinder.png",
+      "foot_screen": [
+        38.4596,
+        57.0845
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/beveled_cube.png",
+      "foot_screen": [
+        828.8744,
+        161.5774
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_east_by_east",
+      "path": "assets/Calibration/primitive_plates/south_east_by_east/stepped_block.png",
+      "foot_screen": [
+        211.1266,
+        64.8517
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/sphere.png",
+      "foot_screen": [
+        363.1937,
+        104.5822
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/cube.png",
+      "foot_screen": [
+        202.4471,
+        74.0004
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/tall_narrow_box.png",
+      "foot_screen": [
+        -155.0717,
+        94.4895
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/short_wide_box.png",
+      "foot_screen": [
+        -21.0686,
+        70.3951
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/cone.png",
+      "foot_screen": [
+        51.2829,
+        58.8394
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/pyramid.png",
+      "foot_screen": [
+        117.7251,
+        58.4404
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/upright_cylinder.png",
+      "foot_screen": [
+        59.1286,
+        52.848
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/sideways_cylinder.png",
+      "foot_screen": [
+        13.9197,
+        59.2505
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/beveled_cube.png",
+      "foot_screen": [
+        422.9415,
+        92.3888
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_east",
+      "path": "assets/Calibration/primitive_plates/south_east/stepped_block.png",
+      "foot_screen": [
+        172.7546,
+        59.6742
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/sphere.png",
+      "foot_screen": [
+        267.4063,
+        82.9321
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/cube.png",
+      "foot_screen": [
+        167.9308,
+        67.7521
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/tall_narrow_box.png",
+      "foot_screen": [
+        -305.5032,
+        131.0551
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/short_wide_box.png",
+      "foot_screen": [
+        -60.2076,
+        78.1717
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/cone.png",
+      "foot_screen": [
+        29.0325,
+        60.537
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/pyramid.png",
+      "foot_screen": [
+        96.4351,
+        57.3601
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/upright_cylinder.png",
+      "foot_screen": [
+        36.5045,
+        53.9092
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/sideways_cylinder.png",
+      "foot_screen": [
+        -15.6067,
+        62.8532
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/beveled_cube.png",
+      "foot_screen": [
+        293.5495,
+        71.8496
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_east_by_south",
+      "path": "assets/Calibration/primitive_plates/south_east_by_south/stepped_block.png",
+      "foot_screen": [
+        143.3394,
+        56.5454
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/sphere.png",
+      "foot_screen": [
+        212.3574,
+        71.9291
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/cube.png",
+      "foot_screen": [
+        140.8428,
+        63.8935
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/tall_narrow_box.png",
+      "foot_screen": [
+        -861.7768,
+        275.2255
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/short_wide_box.png",
+      "foot_screen": [
+        -118.4876,
+        91.7286
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/cone.png",
+      "foot_screen": [
+        3.4475,
+        63.4754
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/pyramid.png",
+      "foot_screen": [
+        76.0789,
+        57.1167
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/upright_cylinder.png",
+      "foot_screen": [
+        10.9207,
+        55.8938
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/sideways_cylinder.png",
+      "foot_screen": [
+        -54.3402,
+        68.7907
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/beveled_cube.png",
+      "foot_screen": [
+        226.4287,
+        62.3134
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_south_east",
+      "path": "assets/Calibration/primitive_plates/south_south_east/stepped_block.png",
+      "foot_screen": [
+        118.7509,
+        54.6892
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/sphere.png",
+      "foot_screen": [
+        174.6813,
+        65.561
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/cube.png",
+      "foot_screen": [
+        117.8809,
+        61.562
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/tall_narrow_box.png",
+      "foot_screen": [
+        2234.025,
+        -549.565
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/short_wide_box.png",
+      "foot_screen": [
+        -222.9921,
+        119.0379
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/cone.png",
+      "foot_screen": [
+        -28.1875,
+        68.2652
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/pyramid.png",
+      "foot_screen": [
+        55.504,
+        57.6727
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/upright_cylinder.png",
+      "foot_screen": [
+        -20.2338,
+        59.2139
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/sideways_cylinder.png",
+      "foot_screen": [
+        -111.4979,
+        79.1441
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/beveled_cube.png",
+      "foot_screen": [
+        183.0108,
+        57.0437
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_by_east",
+      "path": "assets/Calibration/primitive_plates/south_by_east/stepped_block.png",
+      "foot_screen": [
+        96.6961,
+        53.7395
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/sphere.png",
+      "foot_screen": [
+        145.7944,
+        61.6712
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/cube.png",
+      "foot_screen": [
+        97.1429,
+        60.3361
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/tall_narrow_box.png",
+      "foot_screen": [
+        553.0434,
+        -107.3658
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/short_wide_box.png",
+      "foot_screen": [
+        -494.3589,
+        195.8673
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/cone.png",
+      "foot_screen": [
+        -71.1111,
+        76.2092
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/pyramid.png",
+      "foot_screen": [
+        33.5043,
+        59.1151
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/upright_cylinder.png",
+      "foot_screen": [
+        -61.8557,
+        64.7544
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/sideways_cylinder.png",
+      "foot_screen": [
+        -212.766,
+        99.8499
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/beveled_cube.png",
+      "foot_screen": [
+        150.865,
+        53.91
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south",
+      "path": "assets/Calibration/primitive_plates/south/stepped_block.png",
+      "foot_screen": [
+        75.6463,
+        53.5334
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/sphere.png",
+      "foot_screen": [
+        121.7115,
+        59.3165
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/cube.png",
+      "foot_screen": [
+        77.3341,
+        60.022
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/tall_narrow_box.png",
+      "foot_screen": [
+        325.2755,
+        -50.9868
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/short_wide_box.png",
+      "foot_screen": [
+        -4219.8187,
+        1298.7536
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/cone.png",
+      "foot_screen": [
+        -137.5429,
+        90.4753
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/pyramid.png",
+      "foot_screen": [
+        8.5023,
+        61.6905
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/upright_cylinder.png",
+      "foot_screen": [
+        -125.0794,
+        74.6402
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/sideways_cylinder.png",
+      "foot_screen": [
+        -469.2171,
+        156.7869
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/beveled_cube.png",
+      "foot_screen": [
+        124.6552,
+        52.0433
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_by_west",
+      "path": "assets/Calibration/primitive_plates/south_by_west/stepped_block.png",
+      "foot_screen": [
+        54.3391,
+        54.0378
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/sphere.png",
+      "foot_screen": [
+        100.2269,
+        58.0442
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/cube.png",
+      "foot_screen": [
+        57.3838,
+        60.5728
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/tall_narrow_box.png",
+      "foot_screen": [
+        228.8103,
+        -29.8777
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/short_wide_box.png",
+      "foot_screen": [
+        822.6048,
+        -203.4571
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/cone.png",
+      "foot_screen": [
+        -265.2268,
+        121.0101
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/pyramid.png",
+      "foot_screen": [
+        -22.0,
+        65.9181
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/upright_cylinder.png",
+      "foot_screen": [
+        -243.0626,
+        95.3289
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/sideways_cylinder.png",
+      "foot_screen": [
+        -3249.7797,
+        803.0655
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/beveled_cube.png",
+      "foot_screen": [
+        101.584,
+        51.0441
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_south_west",
+      "path": "assets/Calibration/primitive_plates/south_south_west/stepped_block.png",
+      "foot_screen": [
+        31.4462,
+        55.3354
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/sphere.png",
+      "foot_screen": [
+        79.8926,
+        57.6437
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/cube.png",
+      "foot_screen": [
+        36.1882,
+        62.0715
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/tall_narrow_box.png",
+      "foot_screen": [
+        171.107,
+        -19.6671
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/short_wide_box.png",
+      "foot_screen": [
+        396.8366,
+        -81.4305
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/cone.png",
+      "foot_screen": [
+        -660.8037,
+        222.5668
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/pyramid.png",
+      "foot_screen": [
+        -62.6897,
+        72.8963
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/upright_cylinder.png",
+      "foot_screen": [
+        -582.3392,
+        159.47
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/sideways_cylinder.png",
+      "foot_screen": [
+        869.6133,
+        -161.9898
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/beveled_cube.png",
+      "foot_screen": [
+        79.8855,
+        50.7308
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_west_by_south",
+      "path": "assets/Calibration/primitive_plates/south_west_by_south/stepped_block.png",
+      "foot_screen": [
+        5.2007,
+        57.6595
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/sphere.png",
+      "foot_screen": [
+        59.5525,
+        58.053
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/cube.png",
+      "foot_screen": [
+        12.336,
+        64.7617
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/tall_narrow_box.png",
+      "foot_screen": [
+        129.0538,
+        -14.4836
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/short_wide_box.png",
+      "foot_screen": [
+        262.5355,
+        -46.4608
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/cone.png",
+      "foot_screen": [
+        6027.2546,
+        -1555.1572
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/pyramid.png",
+      "foot_screen": [
+        -124.1388,
+        85.2269
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/upright_cylinder.png",
+      "foot_screen": [
+        65585.1416,
+        -12834.657
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/sideways_cylinder.png",
+      "foot_screen": [
+        410.4752,
+        -58.1127
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/beveled_cube.png",
+      "foot_screen": [
+        58.1801,
+        51.0509
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_west",
+      "path": "assets/Calibration/primitive_plates/south_west/stepped_block.png",
+      "foot_screen": [
+        -27.2637,
+        61.5086
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/sphere.png",
+      "foot_screen": [
+        38.0486,
+        59.3354
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/cube.png",
+      "foot_screen": [
+        -16.3465,
+        69.1547
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/tall_narrow_box.png",
+      "foot_screen": [
+        93.633,
+        -12.334
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/short_wide_box.png",
+      "foot_screen": [
+        191.5047,
+        -30.9417
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/cone.png",
+      "foot_screen": [
+        641.0188,
+        -129.9712
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/pyramid.png",
+      "foot_screen": [
+        -237.2876,
+        110.6741
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/upright_cylinder.png",
+      "foot_screen": [
+        704.3134,
+        -98.2947
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/sideways_cylinder.png",
+      "foot_screen": [
+        271.6528,
+        -29.3242
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/beveled_cube.png",
+      "foot_screen": [
+        35.0859,
+        52.0582
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "south_west_by_west",
+      "path": "assets/Calibration/primitive_plates/south_west_by_west/stepped_block.png",
+      "foot_screen": [
+        -71.5046,
+        67.9638
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/sphere.png",
+      "foot_screen": [
+        13.9282,
+        61.7035
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/cube.png",
+      "foot_screen": [
+        -53.8014,
+        76.3063
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/tall_narrow_box.png",
+      "foot_screen": [
+        59.8692,
+        -12.5522
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/short_wide_box.png",
+      "foot_screen": [
+        143.4265,
+        -23.1682
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/cone.png",
+      "foot_screen": [
+        352.8078,
+        -57.4903
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/pyramid.png",
+      "foot_screen": [
+        -551.0429,
+        186.8534
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/upright_cylinder.png",
+      "foot_screen": [
+        374.0004,
+        -36.2155
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/sideways_cylinder.png",
+      "foot_screen": [
+        199.7236,
+        -16.5687
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/beveled_cube.png",
+      "foot_screen": [
+        8.8302,
+        53.9358
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "west_south_west",
+      "path": "assets/Calibration/primitive_plates/west_south_west/stepped_block.png",
+      "foot_screen": [
+        -140.6635,
+        79.6981
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/sphere.png",
+      "foot_screen": [
+        -15.0268,
+        65.6135
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/cube.png",
+      "foot_screen": [
+        -108.5182,
+        88.621
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/tall_narrow_box.png",
+      "foot_screen": [
+        23.6314,
+        -15.2019
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/short_wide_box.png",
+      "foot_screen": [
+        104.9993,
+        -19.6045
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/cone.png",
+      "foot_screen": [
+        243.0195,
+        -32.7515
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/pyramid.png",
+      "foot_screen": [
+        -14614.3738,
+        3741.939
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/upright_cylinder.png",
+      "foot_screen": [
+        256.4646,
+        -16.1464
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/sideways_cylinder.png",
+      "foot_screen": [
+        151.9722,
+        -10.0408
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/beveled_cube.png",
+      "foot_screen": [
+        -23.4008,
+        57.0864
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "west_by_south",
+      "path": "assets/Calibration/primitive_plates/west_by_south/stepped_block.png",
+      "foot_screen": [
+        -276.4477,
+        105.3369
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/sphere.png",
+      "foot_screen": [
+        -52.8302,
+        72.0163
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/cube.png",
+      "foot_screen": [
+        -203.5443,
+        112.7773
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/tall_narrow_box.png",
+      "foot_screen": [
+        -20.4958,
+        -21.1279
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/short_wide_box.png",
+      "foot_screen": [
+        69.8413,
+        -19.0289
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/cone.png",
+      "foot_screen": [
+        180.4959,
+        -21.1279
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/pyramid.png",
+      "foot_screen": [
+        737.7778,
+        -146.0131
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/upright_cylinder.png",
+      "foot_screen": [
+        191.8072,
+        -6.7895
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/sideways_cylinder.png",
+      "foot_screen": [
+        114.6988,
+        -6.7895
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/beveled_cube.png",
+      "foot_screen": [
+        -66.9856,
+        62.3867
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "west",
+      "path": "assets/Calibration/primitive_plates/west/stepped_block.png",
+      "foot_screen": [
+        -724.1023,
+        195.8672
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/sphere.png",
+      "foot_screen": [
+        -108.1453,
+        83.0893
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/cube.png",
+      "foot_screen": [
+        -433.0381,
+        176.2904
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/tall_narrow_box.png",
+      "foot_screen": [
+        -83.0194,
+        -32.7515
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/short_wide_box.png",
+      "foot_screen": [
+        33.3881,
+        -21.2653
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/cone.png",
+      "foot_screen": [
+        136.3686,
+        -15.2019
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/pyramid.png",
+      "foot_screen": [
+        379.5015,
+        -59.0689
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/upright_cylinder.png",
+      "foot_screen": [
+        147.4942,
+        -1.8917
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/sideways_cylinder.png",
+      "foot_screen": [
+        81.6434,
+        -5.7394
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/beveled_cube.png",
+      "foot_screen": [
+        -134.4835,
+        71.9899
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "west_by_north",
+      "path": "assets/Calibration/primitive_plates/west_by_north/stepped_block.png",
+      "foot_screen": [
+        3625.3513,
+        -711.9895
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/sphere.png",
+      "foot_screen": [
+        -204.6294,
+        104.9209
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/cube.png",
+      "foot_screen": [
+        -2194.0192,
+        688.3899
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/tall_narrow_box.png",
+      "foot_screen": [
+        -192.8075,
+        -57.4904
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/short_wide_box.png",
+      "foot_screen": [
+        -9.614,
+        -27.0307
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/cone.png",
+      "foot_screen": [
+        100.1309,
+        -12.5522
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/pyramid.png",
+      "foot_screen": [
+        256.5628,
+        -32.0272
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/upright_cylinder.png",
+      "foot_screen": [
+        112.2526,
+        0.564
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/sideways_cylinder.png",
+      "foot_screen": [
+        48.7759,
+        -6.592
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/beveled_cube.png",
+      "foot_screen": [
+        -265.0187,
+        92.7305
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "west_north_west",
+      "path": "assets/Calibration/primitive_plates/west_north_west/stepped_block.png",
+      "foot_screen": [
+        607.5004,
+        -86.762
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/sphere.png",
+      "foot_screen": [
+        -440.2242,
+        162.9323
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/cube.png",
+      "foot_screen": [
+        971.6525,
+        -243.1409
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/tall_narrow_box.png",
+      "foot_screen": [
+        -481.0186,
+        -129.9713
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/short_wide_box.png",
+      "foot_screen": [
+        -68.5304,
+        -38.6025
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/cone.png",
+      "foot_screen": [
+        66.367,
+        -12.334
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/pyramid.png",
+      "foot_screen": [
+        189.6344,
+        -19.6593
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/upright_cylinder.png",
+      "foot_screen": [
+        80.6789,
+        1.3354
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/sideways_cylinder.png",
+      "foot_screen": [
+        12.1557,
+        -9.5879
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/beveled_cube.png",
+      "foot_screen": [
+        -678.155,
+        163.1863
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_west_by_west",
+      "path": "assets/Calibration/primitive_plates/north_west_by_west/stepped_block.png",
+      "foot_screen": [
+        345.7855,
+        -35.3006
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/sphere.png",
+      "foot_screen": [
+        -2382.1486,
+        664.856
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/cube.png",
+      "foot_screen": [
+        426.6151,
+        -87.7933
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/tall_narrow_box.png",
+      "foot_screen": [
+        -5867.1844,
+        -1555.1398
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/short_wide_box.png",
+      "foot_screen": [
+        -167.4307,
+        -62.8083
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/cone.png",
+      "foot_screen": [
+        30.9462,
+        -14.4837
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/pyramid.png",
+      "foot_screen": [
+        143.7757,
+        -13.3315
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/upright_cylinder.png",
+      "foot_screen": [
+        49.1782,
+        0.63
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/sideways_cylinder.png",
+      "foot_screen": [
+        -34.1038,
+        -15.6962
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/beveled_cube.png",
+      "foot_screen": [
+        4863.4576,
+        -813.8384
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_west",
+      "path": "assets/Calibration/primitive_plates/north_west/stepped_block.png",
+      "foot_screen": [
+        241.9786,
+        -16.9741
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.3769
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/sphere.png",
+      "foot_screen": [
+        945.6182,
+        -204.5742
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/cube.png",
+      "foot_screen": [
+        275.8617,
+        -48.3956
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/tall_narrow_box.png",
+      "foot_screen": [
+        820.8025,
+        222.5663
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/short_wide_box.png",
+      "foot_screen": [
+        -404.4903,
+        -128.5958
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/cone.png",
+      "foot_screen": [
+        -11.107,
+        -19.6672
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/pyramid.png",
+      "foot_screen": [
+        107.0282,
+        -10.328
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/upright_cylinder.png",
+      "foot_screen": [
+        14.1887,
+        -1.7413
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/sideways_cylinder.png",
+      "foot_screen": [
+        -102.4706,
+        -27.5695
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/beveled_cube.png",
+      "foot_screen": [
+        632.9483,
+        -72.0278
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_west_by_north",
+      "path": "assets/Calibration/primitive_plates/north_west_by_north/stepped_block.png",
+      "foot_screen": [
+        182.0704,
+        -8.169
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/sphere.png",
+      "foot_screen": [
+        423.8017,
+        -72.5634
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/cube.png",
+      "foot_screen": [
+        199.7628,
+        -31.4774
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/tall_narrow_box.png",
+      "foot_screen": [
+        425.2271,
+        121.0101
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/short_wide_box.png",
+      "foot_screen": [
+        -2346.4307,
+        -701.2705
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/cone.png",
+      "foot_screen": [
+        -68.8102,
+        -29.8776
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/pyramid.png",
+      "foot_screen": [
+        73.5909,
+        -9.6738
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/upright_cylinder.png",
+      "foot_screen": [
+        -29.5588,
+        -6.5038
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/sideways_cylinder.png",
+      "foot_screen": [
+        -230.2262,
+        -53.7379
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/beveled_cube.png",
+      "foot_screen": [
+        355.1266,
+        -25.6335
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_north_west",
+      "path": "assets/Calibration/primitive_plates/north_north_west/stepped_block.png",
+      "foot_screen": [
+        139.7116,
+        -3.5598
+      ]
+    },
+    {
+      "name": "Grid_Cell_Block",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/grid_cell_block.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Rig_Barrel_LOD_00",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/rig_barrel_lod_00.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Barrel_01",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/original_barrel_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Original_Crate_01",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/original_crate_01.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Square",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/crate_footprint_square.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Crate_Footprint_Circle",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/crate_footprint_circle.png",
+      "foot_screen": [
+        80.0,
+        162.377
+      ]
+    },
+    {
+      "name": "Sphere",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/sphere.png",
+      "foot_screen": [
+        276.2333,
+        -38.2804
+      ]
+    },
+    {
+      "name": "Cube",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/cube.png",
+      "foot_screen": [
+        149.6687,
+        -23.037
+      ]
+    },
+    {
+      "name": "Tall_Narrow_Box",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/tall_narrow_box.png",
+      "foot_screen": [
+        297.5429,
+        90.4753
+      ]
+    },
+    {
+      "name": "Short_Wide_Box",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/short_wide_box.png",
+      "foot_screen": [
+        980.7693,
+        291.2204
+      ]
+    },
+    {
+      "name": "Cone",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/cone.png",
+      "foot_screen": [
+        -165.2753,
+        -50.9868
+      ]
+    },
+    {
+      "name": "Pyramid",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/pyramid.png",
+      "foot_screen": [
+        39.3955,
+        -11.1802
+      ]
+    },
+    {
+      "name": "Upright_Cylinder",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/upright_cylinder.png",
+      "foot_screen": [
+        -92.9108,
+        -15.5872
+      ]
+    },
+    {
+      "name": "Sideways_Cylinder",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/sideways_cylinder.png",
+      "foot_screen": [
+        -617.6172,
+        -140.8361
+      ]
+    },
+    {
+      "name": "Beveled_Cube",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/beveled_cube.png",
+      "foot_screen": [
+        248.0672,
+        -9.4793
+      ]
+    },
+    {
+      "name": "Stepped_Block",
+      "view": "north_by_west",
+      "path": "assets/Calibration/primitive_plates/north_by_west/stepped_block.png",
+      "foot_screen": [
+        105.1632,
+        -1.3542
+      ]
+    }
+  ]
+}

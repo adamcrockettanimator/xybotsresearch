@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="GpuCageBarrelStyle" format=3]
+
+[ext_resource type="Script" path="res://scripts/semantic_gpu_cage_barrel_style.gd" id="1_style"]
+
+[resource]
+script = ExtResource("1_style")
+wood_edge = Color(0.30980393, 0.24705882, 0.18431373, 1)
+wood_centre = Color(0.5294118, 0.42352942, 0.31764707, 1)
+interior_colour = Color(0.30376613, 0.24038592, 0.17374524, 1)
+interior_shadow_colour = Color(0.21960784, 0.1764706, 0.12941177, 1)
+interior_highlight_colour = Color(0.36340764, 0.28556278, 0.21081066, 1)
+interior_radius_fraction = 0.9
+lid_colour = Color(0.5294118, 0.42352942, 0.31764707, 1)
+lid_radius_fraction = 0.9
+lid_height_fraction = 0.9
+lid_stave_colour = Color(0.30980393, 0.24705882, 0.18431373, 1)
+lid_stave_highlight_colour = Color(0.6784314, 0.54901963, 0.42352942, 1)
+rim_colour = Color(0.5529412, 0.4392157, 0.32941177, 1)
+rim_highlight_colour = Color(0.7089142, 0.576442, 0.44899052, 1)
+metal_dark = Color(0.15487608, 0.15487596, 0.1548759, 1)
+metal_light = Color(0.2728, 0.29698, 0.31, 1)
+hoop_shadow_colour = Color(0.22, 0.1771, 0.1342, 0.6392157)
+hoop_highlight_colour = Color(0.45759997, 0.49919996, 0.52, 1)
+stave_shadow_colour = Color(0.22, 0.17339666, 0.1298, 0.5058824)
+stave_highlight_colour = Color(0.61, 0.488, 0.36600003, 1)
+floor_shadow_colour = Color(0.21579883, 0.16885045, 0.12705934, 1)
+interior_rim_width_logical_pixels = 2
+stave_silhouette_cutoff = 0.48
+floor_shadow_radius = 1.2
+floor_shadow_opacity = 0.7
+stave_bottom_light = 0.35
+stave_top_light = 1.0
+interior_full_opening_logical_pixels = 0.0
+interior_hidden_opening_logical_pixels = 1.5
+stave_detail_full_distance = 1.3
+stave_detail_hidden_distance = 5.050000000000001
+hoop_accent_full_distance = 0.55
+hoop_accent_hidden_distance = 2.75
+hoop_highlight_full_distance = 1.7000000000000002
+hoop_highlight_hidden_distance = 2.51
+hoop_shadow_full_distance = 2.05
+hoop_shadow_hidden_distance = 3.9099999999999997
+rim_highlight_full_distance = 0.7999999999999999
+rim_highlight_hidden_distance = 1.2
+rim_width_full_distance = 0.5
+rim_one_pixel_distance = 0.85
+floor_shadow_full_distance = 1.95
+floor_shadow_hidden_distance = 2.55

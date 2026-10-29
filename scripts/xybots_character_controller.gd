@@ -17,6 +17,15 @@ const DIR_NW := "NW"                                                            
 const ANIMATION_DIRECTIONS: Array[String] = [DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW] # Keep clockwise names for eight-way aim/run selection.
 
 const VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
+const SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT := preload("res://scripts/semantic_lod_floor_outline.gd") # Draw semantic floor footprints from live projected world corners instead of anchoring a baked sprite.
+const SEMANTIC_LOD_CYLINDER_SCRIPT := preload("res://scripts/semantic_lod_cylinder.gd")
+const SEMANTIC_GPU_BARREL_SCRIPT := preload("res://scripts/semantic_gpu_barrel.gd")
+const SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT := preload("res://scripts/semantic_projected_canvas_barrel.gd") # Draw all projected Canvas barrels through one shared logical-pixel viewport per player, without a ray-march shader.
+const SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT := preload("res://scripts/semantic_authored_vector_barrel.gd") # Render the artist's six Curved Lines objects directly as a live world prop.
+const SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT := preload("res://scripts/semantic_vector_world_barrel.gd") # Keep one clean vector-and-gradient barrel bound to real world projection for comparison.
+const SEMANTIC_GPU_LATTICE_BARREL_SCRIPT := preload("res://scripts/semantic_gpu_cage_barrel.gd") # Static 8x5 cage pieces: the GPU projects real panels, ribbons, and staves from transform/camera uniforms.
+const SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT := preload("res://scripts/semantic_meshinstance2d_barrel.gd") # Render the authored 3D barrel into a MeshInstance2D-backed Canvas fixture for the semantic gallery.
+const SHOW_CANVAS_BARREL_LAYER_INSPECTOR := false                                            # Retire the procedural-barrel hide/isolate UI while evaluating the 3D-backed fixture.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
 const PHASE_SECONDS := 0.10                                                                 # Set how long each captured transition frame is displayed.
 const TURN_PASSTHROUGH_SECONDS := 0.10                                                      # Display each 22/66 camera interpolation frame briefly before the next stable orientation.
@@ -34,6 +43,9 @@ const MAP_HEIGHT := 6                                                           
 const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
 const TEMP_RANDOM_GRID_AUDIT := false                                                       # Keep the temporary one-player slot audit off while local multiplayer gameplay is active.
 const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
+var BARREL_LOD_REVIEW_LEVEL := false                                                        # The comparison gallery opts into its empty review arena before this node enters the tree.
+var barrel_authoring_single_player_mode := false                                             # The barrel calibration scene keeps only the P1 camera, letting its embedded Game tab share space with the Remote Inspector.
+var semantic_typical_props_enabled := true                                                  # Populate normal matches with the GPU-cage semantic barrel set.
 const MAP_EXTRA_OPENING_CHANCE := 0.18                                                      # Add a few loops after maze carving so the interior is not a strict tree.
 
 const PHASE_ROOT := "res://assets/reference_xybots_local/playfield_phases"                  # Point to captured full-frame movement and turn phase assets.
@@ -78,25 +90,52 @@ const DUAL_WIELD_IDLE_FRAMES := "res://assets/Characters/Cowboy2_DualWield_Idle_
 const MUZZLE_ANCHORS: MuzzleAnchorLibrary = preload("res://assets/Characters/Cowboy2_MuzzleAnchors.tres") # Store user-authored PNG-local barrel pixels independently of SpriteFrames artwork.
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
 # Numbered frames follow the clockwise camera order, starting at north.
-const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_000.png")
-const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_001.png")
-const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_002.png")
-const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_003.png")
-const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_004.png")
-const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_005.png")
-const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_006.png")
-const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_007.png")
-const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_008.png")
-const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_009.png")
-const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_010.png")
-const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_011.png")
-const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_012.png")
-const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_013.png")
-const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_014.png")
-const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-22_14-54-02/barrel_015.png")
+# LOD 00 remains the close 32px authored source set.
+const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_000.png")
+const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_001.png")
+const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_002.png")
+const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_003.png")
+const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_004.png")
+const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_005.png")
+const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_006.png")
+const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_007.png")
+const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_008.png")
+const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_009.png")
+const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_010.png")
+const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_011.png")
+const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_012.png")
+const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_013.png")
+const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_014.png")
+const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_015.png")
+# LOD 01 is the user-authored 28px set. Keep it separate from LOD 00 so later
+# authored levels can be inserted without changing the directional mapping.
+const BARREL_LOD_01_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_000.png")
+const BARREL_LOD_01_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_001.png")
+const BARREL_LOD_01_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_002.png")
+const BARREL_LOD_01_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_003.png")
+const BARREL_LOD_01_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_004.png")
+const BARREL_LOD_01_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_005.png")
+const BARREL_LOD_01_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_006.png")
+const BARREL_LOD_01_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_007.png")
+const BARREL_LOD_01_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_008.png")
+const BARREL_LOD_01_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_009.png")
+const BARREL_LOD_01_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_010.png")
+const BARREL_LOD_01_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_011.png")
+const BARREL_LOD_01_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_012.png")
+const BARREL_LOD_01_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_013.png")
+const BARREL_LOD_01_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_014.png")
+const BARREL_LOD_01_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_015.png")
 const BARREL_VIEW_DIRECTIONS: Array[String] = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"] # Keep the barrel-only ring ordered clockwise in 22.5-degree steps.
 const MAP_BARREL_COUNT := 8                                                                    # Keep the compact six-by-six arena dressed without filling every playable cell.
-const BARREL_ART_HEIGHT := 32.0                                                               # The sprite canvas height, used to anchor its bottom to the floor.
+const BARREL_ART_HEIGHT := 32.0                                                               # The LOD 00 sprite canvas height, used to anchor its bottom to the floor.
+const BARREL_LOD_01_ART_HEIGHT := 28.0                                                        # Preserve the 28px authored canvas at the same projected world size.
+const BARREL_LOD_01_MIN_VIEW_DEPTH := 0.96                                                    # Match the first distance band used by the world renderer before later automatic pixel reduction.
+const BARREL_LOD_ART_HEIGHTS := [32.0, 28.0, 24.0, 21.0, 18.0, 15.0, 12.0, 9.0, 6.0, 4.0]    # Keep ten authored/static source sizes rather than asking the shader to synthesize each reduction.
+const BARREL_LOD_MIN_VIEW_DEPTHS := [0.0, 0.96, 1.46, 1.96, 2.46, 2.96, 3.30, 3.63, 4.30, 5.00] # Continue the established remote-depth bands through the two extra authored barrel levels.
+const BARREL_LOD_02_RENDER_DIRECTORY := "res://assets/Props/Barrel_LOD_02/Render_2026-10-23_09-42-28_NoComposite"
+const BARREL_LOD_GENERATED_DIRECTORY_TEMPLATE := "res://assets/Props/Barrel_LOD_%02d/Generated_Godot_Static_10_LOD"
+const BARREL_LOD_LABEL_COLOR := Color(0.20, 1.0, 0.28, 1.0)                                 # Bright green stays readable over the brown floor without recoloring the barrel.
+const BARREL_LOD_LABEL_SIZE := Vector2(30.0, 8.0)                                            # Keep the compact diagnostic's screen-space extent fixed, independent of prop scale.
 const BARREL_REFERENCE_ART_HEIGHT := 43.0                                                     # Preserve the in-game size calibrated for the previous 43-pixel-tall sprite.
 const BARREL_SIZE_MULTIPLIER := 0.85                                                          # Let barrel art be tuned independently without changing world depth scaling or collision.
 
@@ -176,6 +215,14 @@ const BARREL_HIT_POINTS := 3
 const BARREL_PROJECTILE_RADIUS := 0.08                                                     # Approximate the visible barrel width, which is narrower than its 32-pixel canvas.
 enum OcclusionFootprintShape { CIRCLE, RECTANGLE, CAPSULE }                                # Floor props start as circles; later furniture can opt into authored rectangle/capsule bounds without replacing the renderer contract.
 @export var barrel_footprint_radius := 0.09                                                 # One authoritative circle: wall-clearance and camera-depth footprint for a barrel.
+@export_group("Vector Barrel Prototype")
+@export var vector_barrel_gallery_position := Vector2(4.45, 2.5)                            # Smooth CPU-projected vector/gradient comparison retained in the tightened row.
+@export_range(0.04, 0.20, 0.005) var vector_barrel_radius := 0.08                          # Physical radius; projection, culling and collision footprint use this value.
+@export_range(0.05, 0.45, 0.005) var vector_barrel_height := 0.20                          # Physical height passed through the shared world projector.
+@export var gpu_lattice_barrel_gallery_position := Vector2(4.95, 2.5)                       # Newest GPU cage sample, at the end of the tightened chronological row.
+@export_range(0.04, 0.20, 0.005) var gpu_lattice_barrel_radius := 0.08                     # One physical radius uniform; the GPU expands its shared lattice around this world point.
+@export_range(0.05, 0.45, 0.005) var gpu_lattice_barrel_height := 0.20                     # One physical height uniform; no CPU screen-space vertex list is produced.
+@export_group("")
 @export var coin_footprint_radius := 0.045                                                  # One authoritative circle for every rotating coin frame.
 @export var heart_footprint_radius := 0.055                                                 # One authoritative circle for a heart drop and its camera depth test.
 @export var gun_footprint_radius := 0.065                                                   # One authoritative circle for rotating gun pickups.
@@ -271,6 +318,7 @@ const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")     
 const WORLD_SPRITE_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_lod.gdshader") # Apply the same coarse GPU pixel language and depth bands to every projected world sprite.
 const WORLD_SPRITE_TEAM2_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_team2_lod.gdshader") # Use the green-tinted Team 2 world-sprite variant.
 const WORLD_PROP_LOD_SHADER := preload("res://scripts/coordinate_frame_world_prop_lod.gdshader") # Apply neutral depth-reduced, depth-lit rendering to static map props without player team tint.
+const SEMANTIC_BARREL_SPRITE := preload("res://scripts/semantic_barrel_sprite.gd")             # Bake named barrel features into compact comparison textures without replacing the authored PNG barrel.
 const BARREL_CONTACT_SHADOW_SHADER := preload("res://scripts/barrel_contact_shadow.gdshader") # Stencil a shifted, darkened copy of the barrel's lower silhouette onto the floor.
 const PROCEDURAL_CLOUD_LOD_SHADER := preload("res://scripts/procedural_cloud_lod.gdshader")  # Reduce procedural cloud-mask detail with the same depth bands while retaining independent material tinting.
 const PLAYER_BLOOD_DECAL_SHADER := preload("res://scripts/player_blood_decal.gdshader")      # Stencil world-body blood blobs by the alpha of the exact currently displayed character frame.
@@ -785,7 +833,8 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_fan_draw_order_debug := false                                               # Show the exact solid fan, clipped wall spans, and final above/below-player layer decision.
 @export var show_world_footprints_debug := false                                             # Show physical placement circles and camera-visible footprint cones for every floor-world item.
 @export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
-@export var pause_round_timer_for_debug := true                                              # Default rendering/LOD test sessions to a paused shared round clock; the debug menu can still resume it deliberately.
+@export var show_barrel_lod_visualizer := false                                              # Keep the gallery readable; labels remain available from the F3 diagnostic toggle.
+@export var pause_round_timer_for_debug := false                                             # Normal matches start with the shared countdown running.
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
@@ -793,7 +842,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export_range(0.0, 900.0, 0.001, "or_greater") var combat_round_duration_seconds := DEFAULT_COMBAT_ROUND_SECONDS # Let the inspector use zero for an infinite test round or tune the music-length match.
 
 @export_group("Audio")
-@export var music_enabled := false                                                           # Keep repeated local playtests quiet by default; the F3 menu or Inspector can re-enable music deliberately.
+@export var music_enabled := true                                                            # Normal matches play the round track by default.
 
 @export_group("Near View Live Tuning")                                                       # Keep first-person camera-clamp controls editable in the Remote inspector while the game runs.
 @export var experimental_forward_cell_play_space := false                                     # Kept disabled: the accepted experiment keeps the player in the original near/source cell, never the cell ahead.
@@ -971,6 +1020,18 @@ var world_coins: Array[Dictionary] = []                                         
 var world_barrel_guns: Array[Dictionary] = [] # Independent bonus pickups do not replace the contested weapon.
 var world_hearts: Array[Dictionary] = []                                                      # Keep rare one-health drops in the same shared world space as coins and guns.
 var world_barrels: Array[Dictionary] = []                                                     # Keep decorative barrel positions in shared world coordinates for every local camera.
+var calibration_sprite_gallery_enabled := false                                                # Keep the temporary Blender-to-game sprite gallery opt-in and out of normal matches.
+var calibration_semantic_stress_props_enabled := false                                         # Keep the expensive ray-march stress field opt-in; it is a profiler workload, not an authoring default.
+var calibration_gpu_ray_fixture_enabled := false                                               # Keep the one GPU ray-march barrel out of ordinary visual authoring; enable only for its focused comparison/profile.
+var calibration_sprite_gallery: Array[Dictionary] = []                                        # Store non-colliding gallery props separately from gameplay barrels.
+var calibration_sprite_gallery_sprites: Dictionary = {}                                       # Index cropped sprite metadata by primitive/view once, rather than parsing JSON per frame.
+var calibration_sprite_gallery_textures: Dictionary = {}                                      # Retain imported PNGs after their first use in the test gallery.
+var calibration_sprite_gallery_source_pixels_per_logical_pixel := 1.0                        # Keep the high-resolution Blender source at the same projected physical size.
+var calibration_sprite_gallery_perspective_lods: Array[Dictionary] = []                      # Keep the authored depth references from the manifest for the one-cell perspective fixture.
+var calibration_sprite_gallery_barrel_semantic_lods: Array[Dictionary] = []                  # Keep the imported barrel's separate ten-depth semantic set independent from the cell fixture.
+var semantic_lod_floor_footprints: Array[Dictionary] = []                                    # Keep live world-space footprint tests separate from the baked-sprite gallery.
+var semantic_lod_floor_outline_nodes: Dictionary = {}                                        # Cache one live outline CanvasItem per active player view and semantic test key.
+var semantic_lod_outline_creation_disabled := false                                          # Fail closed after a creation error instead of retrying and logging every frame.
 var projectile_pixel_texture: ImageTexture = null                                             # Lazily create one white texel, then tint and scale it into every crisp bullet/trail particle.
 var barrel_source_images: Dictionary = {} # Cache the imported directional source images used for particle colors.
 var barrel_source_bounds: Dictionary = {}
@@ -1017,14 +1078,18 @@ var machine_gun_pickup_player: AudioStreamPlayer
 var next_combat_visual_id := 1                                                                  # Give shared shots and impacts stable keys inside each split-screen view.
 var debug_menu_panel: PanelContainer                                                         # Store the shared CanvasLayer panel that exposes the existing debug draw toggles.
 var debug_menu_right_panel: PanelContainer                                                   # Store the second compact control column for four-player debugging.
+var debug_barrel_layers_panel: PanelContainer                                                # Store the F3 Canvas-barrel painter-order inspector separately from general debug toggles.
+var debug_barrel_layers_content: VBoxContainer                                               # Rebuild the layer rows when visibility or painter order changes.
 var debug_menu_canvas: CanvasLayer                                                           # Keep the F3 controls on their own highest-priority canvas instead of whichever player HUD is currently bound.
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_tuning_spins: Dictionary = {}                                                 # Store live near-view SpinBoxes so F3 tuning never depends on the Remote debugger.
 var debug_menu_layer_tuning_spins: Dictionary = {}                                           # Store runtime wall/ceiling layer SpinBoxes in the same F3 menu.
 var near_view_debug_last_map_frame := -1                                                     # Throttle the optional dynamic top-down diagnostic so it does not create a large Remote-debugger packet.
-var debug_menu_open := false                                                                 # Track whether the debug-menu panel is currently visible.
+var debug_menu_open := false                                                                 # Keep the retired Canvas-barrel layer inspector closed during MeshInstance2D authoring.
 var debug_combat_hit_label: Label                                                            # Show the most recent final combat line-of-sight verdict only inside the F3 menu.
 var last_projectile_hit_debug := "No final projectile hit check yet."                        # Preserve the exact wall/cell evidence from the latest attempted damage event.
+var barrel_generated_lod_textures: Dictionary = {}                                           # Cache imported static PNG resources after each direction/LOD is first requested.
+var semantic_barrel_textures: Dictionary = {}                                                # Cache generated semantic barrel textures by logical size and view direction.
 var slot_graph_tuner_enabled := false                                                        # Let the visible current graph accept direct endpoint tuning.
 var slot_graph_tuner_overrides: Dictionary = {}                                              # Store source-vector edits by active graph and slot ID.
 var slot_graph_tuner_drag: Dictionary = {}                                                   # Track the one player-view endpoint currently under the mouse.
@@ -1042,7 +1107,9 @@ func _ready() -> void:                                                          
 	pixel_hud_font.multichannel_signed_distance_field = false                                  # Disable MSDF smoothing for the same deliberately aliased presentation.
 	_setup_shared_audio()
 	status_label.add_theme_font_override("font", pixel_hud_font)                             # Keep even the legacy diagnostic readout consistent when it is temporarily shown.
-	if TEMP_EMPTY_GRID_AUDIT:                                                                  # Use the isolated wall-free slot-guide test surface when explicitly requested.
+	if BARREL_LOD_REVIEW_LEVEL:                                                               # Keep barrel-source review free of maze occlusion and unrelated props.
+		_build_barrel_lod_review_wall_edges()                                                     # Make one open arena with only an outer boundary.
+	elif TEMP_EMPTY_GRID_AUDIT:                                                                  # Use the isolated wall-free slot-guide test surface when explicitly requested.
 		_build_empty_grid_audit_wall_edges()                                                       # Build an empty 5x5 map with no physical wall edges.
 	elif TEMP_RANDOM_GRID_AUDIT:                                                               # Exercise the renderer and debug overlay against a populated test maze.
 		_build_random_maze_wall_edges()                                                             # Build a connected 9x9 maze while preserving its closed outer boundary.
@@ -1059,6 +1126,8 @@ func _ready() -> void:                                                          
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
 	_apply_session_roster()                                                                    # Convert title-menu vacancies into active bot combatants before views and HUDs are built.
+	if music_enabled and match_started and music_player != null:
+		music_player.play()                                                                      # The lobby starts the match immediately, without going through the late-join music trigger.
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
 	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
@@ -1192,7 +1261,7 @@ func _setup_debug_menu() -> void:
 	debug_menu_panel.z_index = 700                                                            # Keep F3 controls above the high-priority ray map while inspecting it.
 	debug_menu_panel.custom_minimum_size = Vector2(DEBUG_MENU_COLUMN_WIDTH, 0.0)              # Reserve a narrow side column beside the four-player view grid.
 	debug_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP                                  # Prevent mouse clicks on the menu from passing to the playfield.
-	debug_menu_panel.visible = false                                                           # Start closed so the prototype view stays uncluttered.
+	debug_menu_panel.visible = false                                                           # Keep the older general F3 camera column hidden while authoring Canvas barrel layers.
 	var pixel_theme := Theme.new()                                                             # Keep diagnostic controls as crisp as the retro game HUD.
 	pixel_theme.set_font("font", "Label", pixel_hud_font)                                  # Disable smoothing on the menu header and hint.
 	pixel_theme.set_font("font", "Button", pixel_hud_font)                                 # Disable smoothing on the JSON-save button.
@@ -1207,9 +1276,10 @@ func _setup_debug_menu() -> void:
 	debug_menu_right_panel.z_index = 700
 	debug_menu_right_panel.custom_minimum_size = Vector2(DEBUG_MENU_COLUMN_WIDTH, 0.0)
 	debug_menu_right_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	debug_menu_right_panel.visible = false
+	debug_menu_right_panel.visible = false                                                     # Keep the older renderer/debug column hidden with the camera column.
 	debug_menu_right_panel.theme = pixel_theme
 	debug_menu_canvas.add_child(debug_menu_right_panel)
+	_setup_barrel_layer_debug_panel(pixel_theme)
 
 	var content := VBoxContainer.new()                                                         # Stack the title, option rows, and usage hint vertically.
 	content.add_theme_constant_override("separation", 1)                                     # Keep the compact debug controls easy to scan.
@@ -1229,6 +1299,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "fan_draw_order", "Fan Draw Order")                       # Show which visible wall segments the continuous silhouette fan puts above or below the local player.
 	_add_debug_menu_check(content, "world_footprints", "World Footprints")                   # Compare physical wall-clearance circles to camera-visible footprint cones.
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
+	_add_debug_menu_check(content, "barrel_lod_visualizer", "Barrel LOD Labels")             # Keep the currently selected static barrel LOD readable while moving through depth bands.
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
 	_add_debug_menu_tuning_spin(content, "rear_exit", "Rear exit", 0.0, 48.0, 1.0)            # Tune the south-edge partial body exit without changing the fixed camera or wireframe geometry.
 	_add_debug_menu_tuning_spin(content, "rear_side_exit", "Rear side exit", 0.0, 48.0, 1.0) # Tune only the south-west/south-east corner flare of the near-cell body path.
@@ -1296,6 +1367,122 @@ func _setup_debug_menu() -> void:
 	hint.text = "F3 closes this menu"                                                         # Make the invocation/close behavior discoverable at runtime.
 	hint.add_theme_font_size_override("font_size", 7)                                        # Keep the hint secondary to the controls.
 	right_content.add_child(hint)                                                              # Finish the right column with the usage hint.
+
+
+# _setup_barrel_layer_debug_panel: Builds the dedicated F3 inspector for the
+# Canvas barrel's literal painter stack. It stays separate from camera tuning
+# because this panel is about understanding each 2D draw primitive.
+func _setup_barrel_layer_debug_panel(pixel_theme: Theme) -> void:
+	debug_barrel_layers_panel = PanelContainer.new()
+	debug_barrel_layers_panel.name = "DebugCanvasBarrelLayers"
+	debug_barrel_layers_panel.custom_minimum_size = Vector2(300.0, 0.0)
+	debug_barrel_layers_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	debug_barrel_layers_panel.visible = false                                                  # Leave the procedural-barrel layer inspector off for this comparison pass.
+	debug_barrel_layers_panel.theme = pixel_theme
+	debug_menu_canvas.add_child(debug_barrel_layers_panel)
+	var scroll := ScrollContainer.new()
+	debug_barrel_layers_panel.add_child(scroll)
+	debug_barrel_layers_content = VBoxContainer.new()
+	debug_barrel_layers_content.custom_minimum_size.x = 280.0
+	debug_barrel_layers_content.add_theme_constant_override("separation", 2)
+	scroll.add_child(debug_barrel_layers_content)
+	_rebuild_barrel_layer_debug_controls()
+
+
+# _rebuild_barrel_layer_debug_controls: Reflects the layer manager's current
+# order and visibility exactly. Buttons act on all active local-player views.
+func _rebuild_barrel_layer_debug_controls() -> void:
+	if debug_barrel_layers_content == null:
+		return
+	for child in debug_barrel_layers_content.get_children():
+		child.queue_free()
+	var title := Label.new()
+	title.text = "CANVAS BARREL LAYERS"
+	title.add_theme_font_size_override("font_size", 10)
+	debug_barrel_layers_content.add_child(title)
+	var explanation := Label.new()
+	explanation.text = "Draw order: first is behind. Hide, isolate, or move any layer."
+	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	debug_barrel_layers_content.add_child(explanation)
+	var reveal_all := Button.new()
+	reveal_all.text = "Reveal all layers"
+	reveal_all.pressed.connect(_reveal_all_canvas_barrel_layers)
+	debug_barrel_layers_content.add_child(reveal_all)
+	var entries := _canvas_barrel_layer_entries()
+	if entries.is_empty():
+		var waiting := Label.new()
+		waiting.text = "Waiting for a projected Canvas barrel."
+		debug_barrel_layers_content.add_child(waiting)
+		return
+	for entry in entries:
+		var layer_id: String = entry["id"]
+		var row := HBoxContainer.new()
+		debug_barrel_layers_content.add_child(row)
+		var visible := CheckBox.new()
+		visible.button_pressed = bool(entry["visible"])
+		visible.tooltip_text = "Show or hide this draw layer."
+		visible.toggled.connect(_set_canvas_barrel_layer_visible.bind(layer_id))
+		row.add_child(visible)
+		var label := Label.new()
+		label.text = String(entry["label"])
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+		var isolate := Button.new()
+		isolate.text = "Only"
+		isolate.tooltip_text = "Hide every other barrel layer."
+		isolate.pressed.connect(_isolate_canvas_barrel_layer.bind(layer_id))
+		row.add_child(isolate)
+		var earlier := Button.new()
+		earlier.text = "<"
+		earlier.tooltip_text = "Draw this layer earlier, behind the layer above it."
+		earlier.pressed.connect(_move_canvas_barrel_layer.bind(layer_id, -1))
+		row.add_child(earlier)
+		var later := Button.new()
+		later.text = ">"
+		later.tooltip_text = "Draw this layer later, above the layer below it."
+		later.pressed.connect(_move_canvas_barrel_layer.bind(layer_id, 1))
+		row.add_child(later)
+
+
+func _canvas_barrel_layer_managers() -> Array[Node]:
+	var managers: Array[Node] = []
+	for view_index in player_views.size():
+		var manager: Variant = semantic_lod_floor_outline_nodes.get("%d:projected_canvas_batch" % view_index, null)
+		if manager is Node and is_instance_valid(manager):
+			managers.append(manager)
+	return managers
+
+
+func _canvas_barrel_layer_entries() -> Array[Dictionary]:
+	for manager in _canvas_barrel_layer_managers():
+		var entries: Variant = manager.call("get_layer_debug_entries")
+		if entries is Array:
+			return entries
+	return []
+
+
+func _set_canvas_barrel_layer_visible(is_visible: bool, layer_id: String) -> void:
+	for manager in _canvas_barrel_layer_managers():
+		manager.call("set_layer_visible", layer_id, is_visible)
+	call_deferred("_rebuild_barrel_layer_debug_controls")
+
+
+func _isolate_canvas_barrel_layer(layer_id: String) -> void:
+	for manager in _canvas_barrel_layer_managers():
+		manager.call("isolate_layer", layer_id)
+	call_deferred("_rebuild_barrel_layer_debug_controls")
+
+
+func _reveal_all_canvas_barrel_layers() -> void:
+	for manager in _canvas_barrel_layer_managers():
+		manager.call("reveal_all_layers")
+	call_deferred("_rebuild_barrel_layer_debug_controls")
+
+
+func _move_canvas_barrel_layer(layer_id: String, direction: int) -> void:
+	for manager in _canvas_barrel_layer_managers():
+		manager.call("move_layer", layer_id, direction)
+	call_deferred("_rebuild_barrel_layer_debug_controls")
 
 
 
@@ -1471,13 +1658,23 @@ func _save_near_view_tuning() -> void:
 
 # _toggle_debug_menu: Opens or closes the debug control panel and refreshes its displayed state.
 func _toggle_debug_menu() -> void:
+	if not SHOW_CANVAS_BARREL_LAYER_INSPECTOR:
+		debug_menu_open = false
+		if debug_barrel_layers_panel != null:
+			debug_barrel_layers_panel.visible = false
+		_layout_viewport()
+		_update_status()
+		return
 	debug_menu_open = not debug_menu_open                                                      # Flip the menu visibility state once per F3 press.
-	if debug_menu_panel != null:                                                               # Guard against calls before _ready has created the panel.
-		debug_menu_panel.visible = debug_menu_open                                               # Apply the new panel visibility.
+	if debug_menu_panel != null:                                                               # Preserve the requested focused authoring mode.
+		debug_menu_panel.visible = false                                                         # Leave the older general F3 camera column hidden.
 	if debug_menu_right_panel != null:
-		debug_menu_right_panel.visible = debug_menu_open                                         # Keep the renderer/debug column paired with the camera column.
+		debug_menu_right_panel.visible = false                                                   # Leave the older renderer/debug column hidden.
+	if debug_barrel_layers_panel != null:
+		debug_barrel_layers_panel.visible = debug_menu_open                                      # F3 now hides/shows only the Canvas barrel layer inspector.
 	if debug_menu_open:                                                                        # Refresh checkbox state whenever the panel is opened.
 		_refresh_debug_menu()                                                                    # Reflect inspector values and F2 toggles in every row.
+		_rebuild_barrel_layer_debug_controls()                                                   # Reflect the current painter stack after reopening.
 	_layout_viewport()                                                                         # Reclaim the side gutters immediately when F3 closes, or make room only while it is open.
 	_update_status()                                                                           # Update the runtime help text to advertise the current menu state.
 
@@ -1504,6 +1701,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_world_footprints_debug
 		"muzzle_anchors":
 			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
+		"barrel_lod_visualizer":
+			return show_barrel_lod_visualizer
 		"pause_round_timer":
 			return pause_round_timer_for_debug                                                     # Return the independent debug pause state for the shared match clock.
 		"slot_grid":
@@ -1584,6 +1783,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_muzzle_anchor_debug = enabled                                                     # Keep the marker diagnostic opt-in and independent of combat.
 			if not enabled:
 				muzzle_anchor_debug_markers.clear()                                                  # Remove lingering snapshots immediately when the diagnostic closes.
+		"barrel_lod_visualizer":
+			show_barrel_lod_visualizer = enabled                                                   # F3's existing diagnostic menu owns this visual-only barrel LOD readout.
 		"pause_round_timer":
 			pause_round_timer_for_debug = enabled                                                  # Leave all diagnostics and simulation live; pause only the one shared round countdown.
 		"slot_grid":
@@ -1663,9 +1864,10 @@ func _refresh_debug_menu() -> void:
 
 # _setup_local_multiplayer: Creates player two's view nodes and initializes two independent local player states.
 func _setup_local_multiplayer() -> void:                                                    # Declare this function.
-	if TEMP_GRID_AUDIT:                                                                        # Keep this focused slot-grid test free of a second player or second viewport.
+	if TEMP_GRID_AUDIT or barrel_authoring_single_player_mode:                                 # Keep focused audits and barrel paint authoring free of extra camera views.
 		player_views = [{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": null}] # Retain only player one's existing view nodes.
-		player_states = [_make_player_state(0, Vector2i(4, 4), 0)]                               # Place one player at the center of the empty 9x9 grid, facing north.
+		player_states.clear()
+		player_states.append(_make_player_state(0, Vector2i(4, 4), 0) if TEMP_GRID_AUDIT else _make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0)) # Preserve the audit start while the barrel gallery uses the normal P1 start.
 		_bind_player_context(0)                                                                   # Bind the sole test player into the legacy renderer globals.
 		return                                                                                    # Skip creating player two's view and opponent sprites.
 	status_label.visible = false                                                                  # The separate player windows use focused HUD elements instead of the old shared debug readout.
@@ -1786,6 +1988,15 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 
 # _apply_session_roster: Makes title-menu players human-controlled and fills every remaining combat slot with a bot.
 func _apply_session_roster() -> void:
+	if BARREL_LOD_REVIEW_LEVEL:
+		var review_joypads := Input.get_connected_joypads()
+		for player_index in range(player_joined.size()):
+			player_bots[player_index] = false                                                     # Do not let AI bodies obscure the isolated barrel target.
+			player_device_ids[player_index] = review_joypads[0] if player_index == 0 and not review_joypads.is_empty() else -1 # Let the first connected controller drive the sole review viewer.
+			player_joined[player_index] = player_index == 0                                       # Keep one keyboard- and controller-controllable viewer and no opposing actors.
+		player_two_joined = false
+		match_started = true
+		return
 	var session := get_node_or_null("/root/GrudgeSession")
 	var roster_slots: Array = [false, false, false, false]
 	var roster_devices: Array = [-1, -1, -1, -1]
@@ -2037,8 +2248,13 @@ func _reset_combat_collectibles() -> void:
 	world_coins.clear()                                                                        # Remove old map/dropped coins before rebuilding the round objective.
 	world_hearts.clear()                                                                       # Remove unclaimed health drops with the completed round.
 	world_barrel_guns.clear()
-	_reset_world_barrels()                                                                     # Scatter a fresh decorative barrel layout with every maze/round rebuild.
+	_reset_world_barrels()                                                                     # Scatter normal props, or place the one centered review barrel.
 	_reset_combat_round()                                                                     # Restart the shared match clock and clear any prior frozen result with the new map.
+	if BARREL_LOD_REVIEW_LEVEL:
+		combat_total_coin_value = 0                                                             # Keep the focused review HUD honest: this map intentionally has no collectible objective.
+		machine_gun_pickup = {}                                                                  # Exclude every unrelated prop from the visual LOD review.
+		machine_gun_respawn_timer = 0.0
+		return                                                                                   # Leave the arena containing only its players and the one barrel.
 	combat_total_coin_value = MAP_WIDTH * MAP_HEIGHT                                          # Keep the original map total stable for both players' score readouts.
 	for y in range(MAP_HEIGHT):                                                                # Visit every walkable maze cell exactly once.
 		for x in range(MAP_WIDTH):                                                              # Place one coin or heart pickup at the center of each cell.
@@ -2078,6 +2294,20 @@ func _barrel_position_in_cell(cell: Vector2i) -> Vector2:
 # _reset_world_barrels: Decorates random non-spawn cells without changing the maze's collision topology.
 func _reset_world_barrels() -> void:
 	world_barrels.clear()                                                                      # Discard the previous map's purely visual barrel layout.
+	if semantic_typical_props_enabled:
+		for index in range(semantic_lod_floor_footprints.size() - 1, -1, -1):
+			if bool(semantic_lod_floor_footprints[index].get("typical_spawn", false)):
+				semantic_lod_floor_footprints.remove_at(index)
+		for node in semantic_lod_floor_outline_nodes.values():
+			if is_instance_valid(node):
+				node.visible = false
+	if BARREL_LOD_REVIEW_LEVEL:
+		# The authoring scene owns its comparison fixtures through
+		# enable_calibration_primitive_gallery(). Do not add the old SEM/PNG
+		# review pair here, or the room silently becomes a four-barrel test.
+		if calibration_sprite_gallery_enabled and calibration_semantic_stress_props_enabled:
+			_setup_semantic_stress_props()
+		return
 	var candidates: Array[Vector2i] = []                                                       # Build a pool so props never begin underneath a player spawn.
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
@@ -2094,8 +2324,24 @@ func _reset_world_barrels() -> void:
 		var chosen_cell := candidates[chosen_index]
 		candidates.remove_at(chosen_index)                                                       # Keep one barrel maximum per cell so art remains readable in the tight maze.
 		var position := _resolve_world_item_placement(_world_item_footprint("barrel", _barrel_position_in_cell(chosen_cell))) # Keep the prop's physical clearance circle away from thin wall edges.
-		world_barrels.append({"id": next_combat_visual_id, "position": position, "hits": 0})
-		next_combat_visual_id += 1                                                               # Give every prop a stable cache key across all player cameras.
+		if semantic_typical_props_enabled:
+			# The normal match is now a focused GPU-cage barrel population: no
+			# crate stand-ins and no older barrel renderer variants.  Each prop
+			# still registers in world_barrels below, so collision, shooting,
+			# destruction, debris, and loot use the established gameplay rules.
+			var width := gpu_lattice_barrel_radius * 2.0
+			var depth := width
+			var height := gpu_lattice_barrel_height
+			var clearance := _world_item_footprint("barrel", position)
+			clearance["radius"] = maxf(float(clearance["radius"]), Vector2(width, depth).length() * 0.5)
+			position = _resolve_world_item_placement(clearance)
+			var key := "barrel_gpu_lattice_instanced_room_%d" % barrel_index
+			var footprint := {"id": key, "position": position, "side_length": width, "depth": depth, "height": height, "low_resolution_vector": true, "typical_spawn": true}
+			semantic_lod_floor_footprints.append(footprint)
+			_register_semantic_gameplay_prop(footprint)
+		else:
+			world_barrels.append({"id": next_combat_visual_id, "position": position, "hits": 0})
+			next_combat_visual_id += 1                                                           # Give every prop a stable cache key across all player cameras.
 
 
 # _reset_combat_round: Re-arms the shared clock whenever a new map/coin layout begins.
@@ -3097,13 +3343,60 @@ func _ray_segment_hit_distance_limited(origin: Vector2, ray_direction: Vector2, 
 
 
 # Find the first barrel intersected by the horizontal ray at this shot's height.
+func _box_ray_hit(origin: Vector2, direction: Vector2, center: Vector2, half_extents: Vector2) -> Dictionary:
+	var relative := origin - center
+	var entry := -INF
+	var exit := INF
+	var normal := Vector2.ZERO
+	for axis in 2:
+		var component := direction[axis]
+		if absf(component) < 0.000001:
+			if absf(relative[axis]) > half_extents[axis]:
+				return {}
+			continue
+		var near_time := (-half_extents[axis] - relative[axis]) / component
+		var far_time := (half_extents[axis] - relative[axis]) / component
+		var near_normal := Vector2.ZERO
+		near_normal[axis] = -1.0
+		if near_time > far_time:
+			var swap := near_time
+			near_time = far_time
+			far_time = swap
+			near_normal[axis] = 1.0
+		if near_time > entry:
+			entry = near_time
+			normal = near_normal
+		exit = minf(exit, far_time)
+		if entry > exit:
+			return {}
+	if exit < 0.0:
+		return {}
+	if entry < 0.0:
+		var gap_x := half_extents.x - absf(relative.x)
+		var gap_y := half_extents.y - absf(relative.y)
+		var inside_normal := Vector2(signf(relative.x), 0.0) if gap_x < gap_y else Vector2(0.0, signf(relative.y))
+		if inside_normal == Vector2.ZERO:
+			inside_normal = -direction.normalized()
+		return {"distance": 0.0, "normal": inside_normal}
+	return {"distance": entry, "normal": normal}
+
+
+func _ray_box_distance(origin: Vector2, direction: Vector2, center: Vector2, half_extents: Vector2) -> float:
+	var hit := _box_ray_hit(origin, direction, center, half_extents)
+	return float(hit.get("distance", -1.0))
+
+
 func _nearest_projectile_barrel_hit(origin: Vector2, direction: Vector2, maximum_distance: float, height: float) -> Dictionary:
-	if height < 0.0 or height > BARREL_PROJECTILE_HEIGHT + BARREL_PROJECTILE_TOP_MARGIN:
+	if height < 0.0:
 		return {}
 	var nearest_distance := maximum_distance + 1.0
 	var nearest_id := -1
 	for barrel in world_barrels:
-		var distance := _ray_circle_hit_distance(origin, direction, Vector2(barrel.get("position", Vector2.ZERO)), BARREL_PROJECTILE_RADIUS)
+		var prop_height := float(barrel.get("projectile_height", BARREL_PROJECTILE_HEIGHT + BARREL_PROJECTILE_TOP_MARGIN))
+		if height > prop_height:
+			continue
+		var center := Vector2(barrel.get("position", Vector2.ZERO))
+		var distance := _ray_box_distance(origin, direction, center, Vector2(barrel["half_extents"])) if barrel.has("half_extents") else _ray_circle_hit_distance(origin, direction, center, float(barrel.get("projectile_radius", BARREL_PROJECTILE_RADIUS)))
 		if distance >= 0.0 and distance <= maximum_distance and distance < nearest_distance:
 			nearest_distance = distance
 			nearest_id = int(barrel.get("id", -1))
@@ -3122,6 +3415,15 @@ func _damage_barrel(barrel_id: int, direction: Vector2, impact_position: Vector2
 			return
 		var position: Vector2 = barrel["position"]
 		world_barrels.remove_at(index)
+		var footprint_key := String(barrel.get("footprint_key", ""))
+		if not footprint_key.is_empty():
+			for footprint_index in range(semantic_lod_floor_footprints.size() - 1, -1, -1):
+				if String(semantic_lod_floor_footprints[footprint_index].get("id", "")) == footprint_key:
+					semantic_lod_floor_footprints[footprint_index]["destroyed"] = true
+			for view_index in player_views.size():
+				var outline: Variant = semantic_lod_floor_outline_nodes.get("%d:%s" % [view_index, footprint_key])
+				if is_instance_valid(outline):
+					outline.visible = false
 		for hole_index in range(active_wall_bullet_holes.size() - 1, -1, -1):
 			if int(active_wall_bullet_holes[hole_index].get("barrel_id", -1)) == barrel_id:
 				active_wall_bullet_holes.remove_at(hole_index)
@@ -4200,6 +4502,7 @@ func _apply_runtime_world_prop_style(sprite: Sprite2D, world_view_depth: float, 
 		sprite.material = material
 	sprite.self_modulate = Color.WHITE
 	material.set_shader_parameter("sprite_scale", sprite.scale.x)
+	material.set_shader_parameter("quantize_scale_pixels", false) # Authored barrel LOD PNGs now provide the reduction; do not blend a second continuous source-grid LOD on top.
 	material.set_shader_parameter("grid_origin", sprite.position - sprite.texture.get_size() * sprite.scale * 0.5) # Anchor samples to whole playfield pixels, not fractional prop texels.
 	material.set_shader_parameter("depth_light", _environment_depth_light_at_pixel(world_view_depth, floor_pixel)) # Read the same dither phase as the floor at the barrel's feet.
 	sprite.position = sprite.position.round()
@@ -4224,6 +4527,43 @@ func _hide_unused_combat_sprites(used_keys: Dictionary) -> void:
 			node.visible = false                                                                     # Keep it ready for a later projectile.
 
 
+# _barrel_lod_label: Returns a fixed-size, green diagnostic label in this camera's clipped world layer.
+func _barrel_lod_label(key: String) -> Label:
+	var view := player_views[active_player_index]
+	var labels: Dictionary = view.get("barrel_lod_labels", {})
+	var label: Label = labels.get(key, null)
+	if label == null or not is_instance_valid(label):
+		label = Label.new()
+		label.name = "BarrelLodLabel_%s" % key
+		label.size = BARREL_LOD_LABEL_SIZE
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.add_theme_font_override("font", pixel_hud_font)
+		label.add_theme_font_size_override("font_size", 5)                                      # Keep the label readable but subordinate to the asset it identifies.
+		label.add_theme_color_override("font_color", BARREL_LOD_LABEL_COLOR)
+		label.add_theme_color_override("font_outline_color", Color(0.0, 0.08, 0.0, 1.0))
+		label.add_theme_constant_override("outline_size", 1)
+		label.z_index = 3600
+		var layer: Node2D = view.get("combat_layer", null)
+		if layer != null:
+			layer.add_child(label)
+		labels[key] = label
+		view["barrel_lod_labels"] = labels
+		player_views[active_player_index] = view
+	return label
+
+
+# _hide_unused_barrel_lod_labels: Keeps each debug label tied to its currently visible barrel only.
+func _hide_unused_barrel_lod_labels(used_keys: Dictionary) -> void:
+	var view := player_views[active_player_index]
+	var labels: Dictionary = view.get("barrel_lod_labels", {})
+	for key in labels.keys():
+		var label: Label = labels[key]
+		if is_instance_valid(label) and not used_keys.has(key):
+			label.visible = false
+
+
 # _hide_unused_muzzle_anchor_debug_sprites: Keeps diagnostic cross pixels alive only while a retained marker uses them.
 func _hide_unused_muzzle_anchor_debug_sprites(used_keys: Dictionary) -> void:
 	var view := player_views[active_player_index]
@@ -4238,6 +4578,7 @@ func _hide_unused_muzzle_anchor_debug_sprites(used_keys: Dictionary) -> void:
 # _update_combat_view: Projects shots, impact flashes, and temporary hit sprites through the same camera model as opponents.
 func _update_combat_view() -> void:
 	var used: Dictionary = {}                                                                   # Track which cached sprites are active in this camera this frame.
+	var barrel_lod_labels_used: Dictionary = {}                                                 # Keep each visual-only LOD label synchronized with its barrel's visibility.
 	var muzzle_debug_used: Dictionary = {}                                                      # Track the temporary topmost cross pixels separately from depth-sorted combat VFX.
 	var muzzle_debug_view := player_views[active_player_index]                                  # Keep the HUD diagnostic registered to this camera's actual on-window viewport rectangle.
 	var muzzle_debug_layer: Node2D = muzzle_debug_view.get("muzzle_anchor_debug_layer", null)
@@ -4247,8 +4588,15 @@ func _update_combat_view() -> void:
 		muzzle_debug_layer.scale = view_node.scale                                                # Match the exact integer player-view enlargement so the cross stays on its intended source pixel.
 	combat_vfx_render_profile = {"muzzle_smoke_us": 0, "trails_us": 0, "trail_smoke_us": 0, "projectile_hot_us": 0, "wall_dust_us": 0, "blood_us": 0, "debris_us": 0} # Reset this camera's small profiling payload before rendering its current effect passes.
 	for barrel in world_barrels:                                                                # Draw every static prop through this view's live wall/floor projection.
+		if barrel.has("footprint_key"):
+			continue
 		var barrel_position: Vector2 = barrel.get("position", Vector2.ZERO)
-		_render_world_barrel("barrel_%d" % int(barrel.get("id", -1)), barrel_position, used)
+		_render_world_barrel("barrel_%d" % int(barrel.get("id", -1)), barrel_position, used, barrel_lod_labels_used, bool(barrel.get("semantic_preview", false)))
+	if calibration_sprite_gallery_enabled:
+		for primitive in calibration_sprite_gallery:
+			_render_calibration_primitive_sprite("calibration_sprite_%d" % int(primitive.get("id", -1)), primitive, used, barrel_lod_labels_used)
+	if calibration_sprite_gallery_enabled or semantic_typical_props_enabled:
+		_render_live_semantic_floor_footprints()
 	var coin_frame_index := _coin_animation_frame_index()                                      # Keep every coin on the same authored spin frame while allowing each depth to choose its own authored silhouette.
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
@@ -4602,6 +4950,7 @@ func _update_combat_view() -> void:
 		for marker in muzzle_anchor_debug_markers:
 			_render_muzzle_anchor_debug_for_shot(marker, muzzle_debug_used)                         # Render the retained two-cross snapshot after all normal art, through its deliberately topmost overlay layer.
 	_hide_unused_combat_sprites(used)                                                          # Hide stale bullets, impacts, and hit art.
+	_hide_unused_barrel_lod_labels(barrel_lod_labels_used)
 	_hide_unused_muzzle_anchor_debug_sprites(muzzle_debug_used)                                # Hide only expired diagnostic pixels; regular combat cleanup never touches the overlay.
 
 
@@ -4741,7 +5090,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 
 
 # _render_world_barrel: Projects one non-colliding barrel with the authored eight-view Blender render matching this camera's side of the prop.
-func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary) -> void:
+func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary, barrel_lod_labels_used := {}, semantic_preview := false) -> void:
 	if not _world_actor_overlaps_current_camera_fan(world_position, 0.22):
 		return                                                                                    # Skip props outside this view; wall surfaces handle partial occlusion through draw order.
 	if not _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", world_position)):
@@ -4753,12 +5102,14 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 		return
 	var feet := Vector2(float(projection["screen_x"]), float(projection["feet_y"])).round()
 	var barrel_scale := maxf(actor_height / 56.91699, 0.2024) * BARREL_SIZE_MULTIPLIER            # Keep the far visibility floor, but let near barrels grow continuously with world perspective.
-	var sprite_scale := barrel_scale * BARREL_REFERENCE_ART_HEIGHT / BARREL_ART_HEIGHT            # Compensate for the larger source canvas without enlarging the barrel in the world.
+	var lod_index := _barrel_lod_index_for_view_depth(world_view_depth)
+	var art_height := _barrel_art_height_for_view_depth(world_view_depth)
+	var sprite_scale := barrel_scale * BARREL_REFERENCE_ART_HEIGHT / art_height                   # Compensate for the active source canvas without enlarging the barrel in the world.
 	var draw_layer := _world_actor_draw_layer(world_position)
 	var sprite := _combat_sprite(key)
-	sprite.texture = _barrel_texture_for_current_camera()                                      # Swap only the source image; the Sprite2D is already isolated per local view.
+	sprite.texture = _semantic_barrel_texture_for_current_camera(lod_index) if semantic_preview else _barrel_texture_for_current_camera(world_view_depth) # Keep the semantic comparison recipe independent from the authored PNG sequence.
 	sprite.scale = Vector2.ONE * sprite_scale
-	sprite.position = Vector2(feet.x, feet.y - BARREL_ART_HEIGHT * sprite_scale * 0.5).round() # Register the bottom of the PNG directly to the projected floor.
+	sprite.position = Vector2(feet.x, feet.y - art_height * sprite_scale * 0.5).round()         # Register the bottom of the active PNG directly to the projected floor.
 	_apply_runtime_world_prop_style(sprite, world_view_depth, feet) # Reduce source pixels and darken from the exact floor pixel beneath the barrel.
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# A barrel is an ordinary world prop: use the shared actor depth layer exactly.
@@ -4767,6 +5118,12 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	sprite.z_index = draw_layer
 	sprite.visible = true
 	used[key] = true
+	if show_barrel_lod_visualizer and not player_views.is_empty():
+		var label := _barrel_lod_label(key)
+		label.text = "%s %02d" % ["SEM" if semantic_preview else "PNG", lod_index]
+		label.position = Vector2(sprite.position.x - BARREL_LOD_LABEL_SIZE.x * 0.5, sprite.position.y - art_height * sprite_scale * 0.5 - BARREL_LOD_LABEL_SIZE.y - 9.0).round() # Leave a clear screen-space gap above the projected barrel top.
+		label.visible = true
+		barrel_lod_labels_used[key] = true
 	# Reuse the actual directional PNG and LOD grid as the mask. The shader keeps
 	# only its bottom 10 source pixels, shifted down one logical screen pixel.
 	var shadow := _combat_sprite("%s_shadow" % key)
@@ -4786,6 +5143,861 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	shadow.z_index = draw_layer - 1                                                            # Keep the contact mask beneath its barrel without promoting either over nearer walls.
 	shadow.visible = true
 	used["%s_shadow" % key] = true
+
+
+# enable_calibration_primitive_gallery: Adds a temporary, non-colliding row of
+# cropped Blender sprites in front of player one.  The test scene calls this;
+# normal rounds never do, so it cannot change gameplay or ordinary prop art.
+func enable_calibration_primitive_gallery() -> void:
+	if calibration_sprite_gallery_enabled:
+		return
+	# The authoring scene is now a deliberately small A/B test: the rendered
+	# Blender model carried by MeshInstance2D, and the GPU cage pixel barrel.
+	# Both are visual-only, so they leave a clear path through the room.
+	var gallery_row_y := 2.5
+	var meshinstance_position := Vector2(3.25, gallery_row_y)
+	var gpu_cage_position := Vector2(4.05, gallery_row_y)
+	calibration_sprite_gallery.clear()
+	semantic_lod_floor_footprints.clear()
+	# Imported 3D barrel -> transparent SubViewport -> MeshInstance2D carrier.
+	semantic_lod_floor_footprints.append({"id": "barrel_meshinstance2d_3d_source", "position": meshinstance_position, "side_length": 0.16000, "height": 0.20000, "low_resolution_vector": true, "gallery_preview": true})
+	# Static 8x5 GPU cage; the per-frame path supplies only transform and camera
+	# uniforms, while its semantic pieces rasterize in the shared logical view.
+	semantic_lod_floor_footprints.append({"id": "barrel_gpu_lattice_instanced", "position": gpu_cage_position, "side_length": gpu_lattice_barrel_radius * 2.0, "height": gpu_lattice_barrel_height, "low_resolution_vector": true, "gallery_preview": true})
+	calibration_sprite_gallery_enabled = true
+	if calibration_semantic_stress_props_enabled:
+		_setup_semantic_stress_props()
+
+
+func _setup_semantic_stress_props() -> void:
+	# Rebuild the gameplay-backed previews on a round reset without retaining
+	# stale draw nodes or duplicated collision records.
+	for index in range(semantic_lod_floor_footprints.size() - 1, -1, -1):
+		if bool(semantic_lod_floor_footprints[index].get("stress_spawn", false)):
+			semantic_lod_floor_footprints.remove_at(index)
+	for index in range(world_barrels.size() - 1, -1, -1):
+		if world_barrels[index].has("footprint_key"):
+			world_barrels.remove_at(index)
+	for node in semantic_lod_floor_outline_nodes.values():
+		if is_instance_valid(node):
+			node.visible = false
+	# The existing detailed crate and both GPU comparisons are also breakable.
+	for footprint in semantic_lod_floor_footprints:
+		var key := String(footprint.get("id", ""))
+		if (key == "crate_semantic_flat_box" or key.begins_with("barrel_ground_gpu_")) and not bool(footprint.get("gallery_preview", false)):
+			footprint["destroyed"] = false
+			_register_semantic_gameplay_prop(footprint)
+	# Deterministic placements keep spawn corners and the comparison row clear.
+	for y in 4:
+		for x in 4:
+			var position := Vector2(0.8 + float(x) * 1.35, 0.8 + float(y) * 1.35)
+			if position.distance_to(Vector2(2.5, 2.5)) < 0.9 or position.distance_to(Vector2(0.5, 5.5)) < 0.8 or position.distance_to(Vector2(5.5, 0.5)) < 0.8 or position.distance_to(Vector2(5.5, 5.5)) < 0.8:
+				continue
+			var serial := y * 4 + x
+			var barrel := serial % 2 == 0
+			var width := 0.16 if barrel else [0.12, 0.18, 0.23][serial % 3] as float
+			var depth := 0.16 if barrel else [0.20, 0.13, 0.17][serial % 3] as float
+			var height := 0.20 if barrel else [0.18, 0.21, 0.24][serial % 3] as float
+			var key := ("barrel_ground_gpu_ray_experiment_%d" if barrel else "stress_crate_%d") % serial
+			var footprint := {"id": key, "position": position, "side_length": width, "depth": depth, "height": height, "low_resolution_vector": true, "flat_faces": not barrel, "stress_spawn": true}
+			semantic_lod_floor_footprints.append(footprint)
+			_register_semantic_gameplay_prop(footprint)
+
+
+func _register_semantic_gameplay_prop(footprint: Dictionary) -> void:
+	var key := String(footprint["id"])
+	# Every normal-room semantic barrel is a round, breakable obstacle.  Crates
+	# retain their box branch for any focused calibration fixture that still uses one.
+	var is_barrel := key.begins_with("barrel_")
+	var width := float(footprint["side_length"])
+	var depth := float(footprint.get("depth", width))
+	var prop := {"id": next_combat_visual_id, "position": footprint["position"], "hits": 0, "footprint_key": key, "projectile_height": float(footprint["height"]) / 0.36}
+	if is_barrel:
+		prop["projectile_radius"] = width * 0.6
+		prop["collision_radius"] = width * 0.6
+	else:
+		prop["half_extents"] = Vector2(width, depth) * 0.5
+	world_barrels.append(prop)
+	next_combat_visual_id += 1
+
+
+# enable_live_cell_block_calibration: Isolate the one canonical game-cell
+# fixture in the real coordinate-frame level.  Unlike the prop gallery, this
+# sprite deliberately occupies a complete grid cell at its actual 1x1x2/3
+# game dimensions so its wireframe can be judged against live wall segments.
+func enable_live_cell_block_calibration() -> void:
+	if calibration_sprite_gallery_enabled:
+		return
+	if not _load_calibration_primitive_sprite_manifest():
+		return
+	var fixture_cell := Vector2i(2, 2)
+	# Give the known one-cell block two ordinary live wall edges.  These use the
+	# same wall-edge map and runtime renderer as gameplay—not a Blender stand-in—
+	# so their shared corners are the first pass/fail perspective landmarks.
+	_set_wall_between(fixture_cell, Vector2i(0, -1), true)
+	_set_wall_between(fixture_cell, Vector2i(1, 0), true)
+	physical_wall_edges_cache_dirty = true
+	_mark_debug_map_static_layers_dirty()
+	calibration_sprite_gallery.append({"id": 0, "name": "Grid_Cell_Block", "position": Vector2(fixture_cell) + Vector2(0.5, 0.5)})
+	# Place the Blender Asset Browser barrel beside the established authored and
+	# semantic barrel pair. It is non-colliding and exists only in this review
+	# scene, so its unnormalized source scale can be judged honestly first.
+	calibration_sprite_gallery.append({"id": 1, "name": "Imported_Barrel_01", "position": Vector2(1.78, float(MAP_HEIGHT) - 1.18)})
+	calibration_sprite_gallery_enabled = true
+	_render_all_player_views()
+
+
+# _semantic_lod_floor_outline: Returns one retained live CanvasItem for a
+# footprint test in the active viewport.  Unlike _combat_sprite(), the node
+# owns no bitmap and has no single world foot anchor to snap between pixels.
+func _semantic_lod_floor_outline(key: String) -> Node2D:
+	var view := player_views[active_player_index]
+	# Projected Canvas barrels share one 160x120 raster target per player view.
+	# Every other semantic test continues to retain its own node by stable key.
+	var view_key := "%d:authored_vector_batch" % active_player_index if key.begins_with("barrel_authored_vector_source") else ("%d:vector_world_barrel" % active_player_index if key.begins_with("barrel_vector_world_prototype") else ("%d:projected_canvas_batch" % active_player_index if key.begins_with("barrel_projected_canvas") else "%d:%s" % [active_player_index, key]))
+	var node: Node2D = semantic_lod_floor_outline_nodes.get(view_key, null)
+	var created := false
+	if node == null or not is_instance_valid(node):
+		if semantic_lod_outline_creation_disabled:
+			return null
+		var outline_script: Script = SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT if key.begins_with("barrel_authored_vector_source") else (SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT if key.begins_with("barrel_vector_world_prototype") else (SEMANTIC_GPU_LATTICE_BARREL_SCRIPT if key.begins_with("barrel_gpu_lattice_instanced") else (SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT if key.begins_with("barrel_meshinstance2d_3d_source") else (SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT if key.begins_with("barrel_projected_canvas") else (SEMANTIC_GPU_BARREL_SCRIPT if key.begins_with("barrel_ground_gpu_ray_experiment") else (SEMANTIC_LOD_CYLINDER_SCRIPT if key == "semantic_cylinder_test" else SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT))))))
+		if not outline_script.can_instantiate():
+			semantic_lod_outline_creation_disabled = true
+			push_error("Semantic LOD outline script cannot be instantiated; disabling outline creation for this run. Check earlier script errors.")
+			return null
+		# Latch before constructing: if a script error aborts .new(), subsequent
+		# frames must not repeat the same error indefinitely.
+		semantic_lod_outline_creation_disabled = true
+		node = outline_script.new()
+		if node == null:
+			push_error("Semantic LOD outline creation returned null; disabling further attempts for this run.")
+			return null
+		node.name = "SemanticLodFloorOutline_%s" % key
+		node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var layer: Node2D = view.get("combat_layer", null)
+		if layer != null:
+			layer.add_child(node)
+		semantic_lod_floor_outline_nodes[view_key] = node
+		semantic_lod_outline_creation_disabled = false
+		created = true
+	if created and key.begins_with("barrel_projected_canvas") and debug_barrel_layers_panel != null:
+		call_deferred("_rebuild_barrel_layer_debug_controls")
+	return node
+
+
+# ====================================================================================================
+# PROJECTED CANVAS BARREL
+#
+# This comparison path deliberately uses ordinary CanvasItem geometry rather
+# than a per-pixel barrel-intersection shader. The CPU projects a small,
+# authored set of circles and stave segments; the CanvasItem later fills and
+# strokes those shapes directly in the active logical game view.
+# ====================================================================================================
+func _render_projected_canvas_barrel(outline: Node2D, barrel_id: String, center: Vector2, radius: float, barrel_height: float) -> bool:
+	var renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+	if renderer == null or not renderer.has_method("runtime_project_world_point_for_current_pose"):
+		return false
+	var camera_delta := _runtime_camera_origin_for_visibility() - center
+	var camera_distance := camera_delta.length()
+	if camera_distance <= radius:
+		return false
+	var camera_direction := camera_delta / camera_distance
+
+	# ------------------------------------------------------------------------
+	# 1. PROJECT RINGS
+	# Each ring is a modest 12-point world circle. This is intentionally a
+	# small, explicit CPU cost for the first A/B comparison—not a hidden shader
+	# approximation or a texture substitute.
+	# ------------------------------------------------------------------------
+	const RING_SAMPLES := 12
+	var bottom_ring := _project_semantic_barrel_ring(center, radius, 0.0, RING_SAMPLES, renderer)
+	var middle_ring := _project_semantic_barrel_ring(center, _semantic_barrel_radius(radius, 0.5), barrel_height * 0.5, RING_SAMPLES, renderer)
+	var top_ring := _project_semantic_barrel_ring(center, radius, barrel_height, RING_SAMPLES, renderer)
+	var lid_inset := _project_semantic_barrel_ring(center, radius * 0.80, barrel_height * 0.92, RING_SAMPLES, renderer)
+	# Hoops are visible only on the near half of the barrel. The helper starts
+	# and ends at the world-space silhouette tangents, so their metal does not
+	# wrap around as a transparent-looking rear ellipse.
+	# Spread the hoops toward the ends of this short projected barrel. A literal
+	# quarter/three-quarter placement looks crowded at its visible body height;
+	# these positions retain the more even upper, middle, and lower rhythm of
+	# the reference barrels beside it.
+	const LOWER_HOOP_HEIGHT := 0.30
+	const UPPER_HOOP_HEIGHT := 0.82
+	var lower_hoop := _project_semantic_barrel_front_arc(center, _semantic_barrel_radius(radius, LOWER_HOOP_HEIGHT), barrel_height * LOWER_HOOP_HEIGHT, camera_direction, renderer)
+	var upper_hoop := _project_semantic_barrel_front_arc(center, _semantic_barrel_radius(radius, UPPER_HOOP_HEIGHT), barrel_height * UPPER_HOOP_HEIGHT, camera_direction, renderer)
+	var floor_shadow := _project_semantic_barrel_ring(center, radius * 1.12, 0.0, RING_SAMPLES, renderer)
+	if bottom_ring.size() != RING_SAMPLES or middle_ring.size() != RING_SAMPLES or top_ring.size() != RING_SAMPLES or lid_inset.size() != RING_SAMPLES or lower_hoop.size() < 3 or upper_hoop.size() < 3 or floor_shadow.size() != RING_SAMPLES:
+		return false
+	for index in floor_shadow.size():
+		floor_shadow[index] += Vector2.DOWN
+
+	# ------------------------------------------------------------------------
+	# 2. BUILD THE CURVED SILHOUETTE
+	# The hull joins lower, wider-middle, and top ring points into one filled
+	# 2D body. This is the direct CanvasItem alternative to ray-hit discovery.
+	# ------------------------------------------------------------------------
+	var silhouette_source := bottom_ring.duplicate()
+	silhouette_source.append_array(middle_ring)
+	silhouette_source.append_array(top_ring)
+	var body_silhouette := Geometry2D.convex_hull(silhouette_source)
+	if body_silhouette.size() < 3:
+		return false
+	var body_panels := _project_semantic_barrel_body_panels(center, radius, barrel_height, camera_direction, renderer)
+
+	# ------------------------------------------------------------------------
+	# 3. PROJECT OPTIONAL WOOD DETAIL
+	# Staves and lid seams use a few world-anchored line segments. Their own
+	# CanvasItem LOD will stop drawing highlight and then seam layers by range.
+	# ------------------------------------------------------------------------
+	var staves := PackedVector2Array()
+	if camera_distance < 3.0:
+		for stave in 8:
+			var direction := Vector2(cos(TAU * float(stave) / 8.0), sin(TAU * float(stave) / 8.0))
+			if direction.dot(camera_direction) <= 0.12:
+				continue
+			# A stave follows the barrel's swell: narrow at both rims and farther
+			# outward at mid-height. Projecting this middle point makes the visible
+			# seam a bowed two-segment arc instead of one misleading straight line.
+			var lower_height := 0.0
+			var middle_height := 0.50
+			var upper_height := 1.0
+			var lower_point: Variant = _project_semantic_barrel_world_point(center + direction * _semantic_barrel_radius(radius, lower_height), barrel_height * lower_height, renderer)
+			var middle_point: Variant = _project_semantic_barrel_world_point(center + direction * _semantic_barrel_radius(radius, middle_height), barrel_height * middle_height, renderer)
+			var upper_point: Variant = _project_semantic_barrel_world_point(center + direction * _semantic_barrel_radius(radius, upper_height), barrel_height * upper_height, renderer)
+			if lower_point is Vector2 and middle_point is Vector2 and upper_point is Vector2:
+				staves.append(lower_point)
+				staves.append(middle_point)
+				staves.append(middle_point)
+				staves.append(upper_point)
+
+	var lid_seams := PackedVector2Array()
+	if camera_distance < 2.5:
+		# Two cuts at one-third and two-thirds across the circle divide the lid
+		# into three equal-width planks, rather than a narrow centre board.
+		for seam_position in [-1.0 / 3.0, 1.0 / 3.0]:
+			var seam_x := float(seam_position) * radius * 0.80
+			var seam_y := sqrt(maxf(0.0, radius * radius * 0.80 * 0.80 - seam_x * seam_x))
+			var seam_a: Variant = _project_semantic_barrel_world_point(center + Vector2(seam_x, -seam_y), barrel_height * 0.92, renderer)
+			var seam_b: Variant = _project_semantic_barrel_world_point(center + Vector2(seam_x, seam_y), barrel_height * 0.92, renderer)
+			if seam_a is Vector2 and seam_b is Vector2:
+				lid_seams.append(seam_a)
+				lid_seams.append(seam_b)
+
+	# The room adopts the smooth Canvas barrel. Keep the stepped three-colour
+	# treatment confined to its explicit gallery sample for comparison.
+	var body_style := "authored_vector" if barrel_id.begins_with("barrel_projected_canvas_authored_vector") else ("three_colour_steps" if barrel_id.ends_with("three_colour_dither") else "smooth")
+	outline.call("set_projected_barrel", barrel_id, body_silhouette, body_panels, top_ring, lid_inset, lower_hoop, upper_hoop, floor_shadow, staves, lid_seams, camera_distance, _world_actor_draw_layer(center), body_style)
+	return true
+
+
+func _semantic_barrel_radius(rim_radius: float, height_fraction: float) -> float:
+	return rim_radius * (1.0 + 0.20 * sin(PI * clampf(height_fraction, 0.0, 1.0)))
+
+
+func _project_semantic_barrel_ring(center: Vector2, ring_radius: float, world_height: float, samples: int, renderer: Node) -> PackedVector2Array:
+	var result := PackedVector2Array()
+	for index in samples:
+		var angle := TAU * float(index) / float(samples)
+		var point: Variant = _project_semantic_barrel_world_point(center + Vector2(cos(angle), sin(angle)) * ring_radius, world_height, renderer)
+		if not (point is Vector2):
+			return PackedVector2Array()
+		result.append(point)
+	return result
+
+
+func _project_semantic_barrel_front_arc(center: Vector2, ring_radius: float, world_height: float, camera_direction: Vector2, renderer: Node) -> PackedVector2Array:
+	# Seven points give the near-facing hoop a visibly curved pixel arc while
+	# staying much cheaper than a fully sampled ring. The endpoints sit at the
+	# two camera tangents; the middle point is closest to the camera.
+	const ARC_SEGMENTS := 6
+	var result := PackedVector2Array()
+	var camera_angle := atan2(camera_direction.y, camera_direction.x)
+	for index in range(ARC_SEGMENTS + 1):
+		var angle := camera_angle - PI * 0.5 + PI * float(index) / float(ARC_SEGMENTS)
+		var point: Variant = _project_semantic_barrel_world_point(center + Vector2(cos(angle), sin(angle)) * ring_radius, world_height, renderer)
+		if not (point is Vector2):
+			return PackedVector2Array()
+		result.append(point)
+	return result
+
+
+func _project_semantic_barrel_body_panels(center: Vector2, rim_radius: float, barrel_height: float, camera_direction: Vector2, renderer: Node) -> Array[Dictionary]:
+	# The front half is split into broad, world-anchored stave panels. Each panel
+	# records its curved-face brightness here; the Canvas barrel then applies the
+	# same lower-dark / upper-light wood rule as the reference GPU barrel.
+	const STAVE_COUNT := 8
+	var result: Array[Dictionary] = []
+	for stave in STAVE_COUNT:
+		var angle_a := TAU * float(stave) / float(STAVE_COUNT)
+		var angle_b := TAU * float(stave + 1) / float(STAVE_COUNT)
+		var direction_a := Vector2(cos(angle_a), sin(angle_a))
+		var direction_b := Vector2(cos(angle_b), sin(angle_b))
+		var facing := (direction_a + direction_b).normalized().dot(camera_direction)
+		if facing <= 0.08:
+			continue
+		var round_light := 0.68 + 0.32 * clampf(facing, 0.0, 1.0)
+		for height_range in [Vector2(0.0, 0.33), Vector2(0.33, 0.70), Vector2(0.70, 1.0)]:
+			var lower_height: float = height_range.x
+			var upper_height: float = height_range.y
+			var panel := PackedVector2Array()
+			var samples := [
+				[direction_a, lower_height], [direction_b, lower_height],
+				[direction_b, upper_height], [direction_a, upper_height],
+			]
+			for sample in samples:
+				var direction: Vector2 = sample[0]
+				var height_fraction: float = sample[1]
+				var point: Variant = _project_semantic_barrel_world_point(center + direction * _semantic_barrel_radius(rim_radius, height_fraction), barrel_height * height_fraction, renderer)
+				if not (point is Vector2):
+					panel.clear()
+					break
+				panel.append(point)
+			if panel.size() == 4:
+				result.append({
+					"points": panel,
+					"light": round_light,
+					"lower_height": lower_height,
+					"upper_height": upper_height,
+					"stave_index": stave,
+				})
+	return result
+
+
+func _project_semantic_barrel_world_point(world_point: Vector2, world_height: float, renderer: Node) -> Variant:
+	if world_height <= 0.000001:
+		var floor_projection := _opponent_projection_from_current_camera(world_point, false, true)
+		if floor_projection.is_empty() or float(floor_projection.get("view_depth", 0.0)) <= 0.01:
+			return null
+		return Vector2(float(floor_projection.get("screen_x", 0.0)), float(floor_projection.get("feet_y", 0.0)))
+	var upper_projection: Variant = renderer.call("runtime_project_world_point_for_current_pose", world_point, world_height, false, false)
+	if not (upper_projection is Dictionary) or not bool(upper_projection.get("visible", false)):
+		return null
+	return Vector2(float(upper_projection.get("head_x", 0.0)), float(upper_projection.get("head_y", 0.0)))
+
+
+# _migrate_live_room_barrels_to_gpu_cage: Hot-reloads already spawned
+# normal-room barrels into the shared logical-pixel GPU-cage barrel without
+# modifying any central gallery sample. Spawned footprint IDs otherwise survive
+# script reloads until the player explicitly regenerates the map.
+func _migrate_live_room_barrels_to_gpu_cage() -> void:
+	const GPU_CAGE_PREFIX := "barrel_gpu_lattice_instanced_room_"
+	var retired_node_keys: Array[String] = []
+	for footprint_index in semantic_lod_floor_footprints.size():
+		var footprint: Dictionary = semantic_lod_floor_footprints[footprint_index]
+		# This marker belongs only to ordinary spawned room props. It is a safer
+		# discriminator than a historical renderer ID, and excludes the center
+		# samples as well as every flat-faced crate.
+		if not bool(footprint.get("typical_spawn", false)) or bool(footprint.get("flat_faces", false)):
+			continue
+		var old_id := String(footprint.get("id", ""))
+		if old_id.begins_with(GPU_CAGE_PREFIX):
+			continue
+		# Update an already-running normal match after a script reload.  Gallery
+		# fixtures are excluded above, so only ordinary gameplay barrels change.
+		var new_id := GPU_CAGE_PREFIX + str(footprint_index)
+		footprint["id"] = new_id
+		semantic_lod_floor_footprints[footprint_index] = footprint
+		for barrel in world_barrels:
+			if String(barrel.get("footprint_key", "")) == old_id:
+				barrel["footprint_key"] = new_id
+		for node_key in semantic_lod_floor_outline_nodes:
+			if String(node_key).ends_with(":" + old_id):
+				retired_node_keys.append(String(node_key))
+	for node_key in retired_node_keys:
+		var old_outline: Variant = semantic_lod_floor_outline_nodes.get(node_key, null)
+		if old_outline is Node and is_instance_valid(old_outline):
+			old_outline.queue_free()
+		semantic_lod_floor_outline_nodes.erase(node_key)
+
+
+# _render_live_semantic_floor_footprints: Projects every physical footprint
+# corner independently through the coordinate renderer's raw world-effect
+# path, then lets one CanvasItem join the four results with literal one-pixel
+# lines.  No pre-rendered camera heading or cropped-sprite floor anchor is
+# involved, so camera motion cannot make the complete square pogo together.
+func _render_live_semantic_floor_footprints() -> void:
+	_migrate_live_room_barrels_to_gpu_cage()
+	# Prepare one shared authored-vector pass for this player view. Unused
+	# sources are hidden after the loop and the target is disabled if none pass.
+	for manager_key in semantic_lod_floor_outline_nodes:
+		if String(manager_key).ends_with(":authored_vector_batch"):
+			var authored_manager: Node = semantic_lod_floor_outline_nodes[manager_key]
+			if is_instance_valid(authored_manager):
+				authored_manager.call("begin_frame")
+	for footprint in semantic_lod_floor_footprints:
+		if bool(footprint.get("destroyed", false)):
+			continue
+		var key := String(footprint.get("id", "floor_outline"))
+		var center: Vector2 = footprint.get("position", Vector2.ZERO)
+		var half_side := float(footprint.get("side_length", 0.0)) * 0.5
+		var half_depth := float(footprint.get("depth", half_side * 2.0)) * 0.5
+		if key.begins_with("barrel_ground_gpu_ray_experiment") and (not _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) or not _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", center))):
+			_set_semantic_gpu_barrel_screen_active(key, false)
+			continue
+		if key.begins_with("barrel_authored_vector_source") and (not _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) or not _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", center))):
+			continue
+		if key.begins_with("barrel_gpu_lattice_instanced"):
+			# Unlike the older Canvas comparison, this branch intentionally does
+			# not project corners, rings, staves, or any other screen-space point on
+			# the CPU. The 8x5 lattice already lives in its MeshInstance2D; the GPU
+			# receives only this prop transform and the current camera basis.
+			var lattice_outline := _semantic_lod_floor_outline(key)
+			if lattice_outline == null:
+				continue
+			lattice_outline.z_index = _world_actor_draw_layer(center)
+			var lattice_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", center))
+			lattice_outline.visible = lattice_visible
+			if lattice_visible:
+				var lattice_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+				if lattice_renderer == null or not lattice_renderer.has_method("_runtime_camera_origin"):
+					lattice_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
+				if lattice_renderer == null or not lattice_renderer.has_method("_runtime_camera_origin"):
+					lattice_outline.visible = false
+				else:
+					var lattice_forward := _view_forward_vector().normalized()
+					var lattice_right := _view_right_vector().normalized()
+					var lattice_camera_origin: Vector2 = lattice_renderer.call("_runtime_camera_origin", lattice_forward, lattice_right)
+					var lattice_projection_offset: Vector2 = lattice_renderer.call("_overscan_projection_offset") if lattice_renderer.has_method("_overscan_projection_offset") else Vector2.ZERO
+					lattice_outline.call("set_barrel", center, half_side, float(footprint.get("height", 0.0)), lattice_camera_origin, lattice_forward, lattice_right, lattice_projection_offset)
+			continue
+		if bool(footprint.get("cylinder", false)):
+			_render_semantic_cylinder(key, center, half_side, float(footprint.get("height", 0.0)))
+			continue
+		var world_corners := [
+			center + Vector2(-half_side, -half_depth),
+			center + Vector2(half_side, -half_depth),
+			center + Vector2(half_side, half_depth),
+			center + Vector2(-half_side, half_depth),
+		]
+		var projected_corners := PackedVector2Array()
+		var complete := true
+		for world_corner in world_corners:
+			# Raw effect projection is the coordinate renderer's unprotected world
+			# path: it is the correct one for floor geometry, not the actor body
+			# path with near-camera display retention.
+			var projection := _opponent_projection_from_current_camera(world_corner, false, true)
+			if projection.is_empty() or float(projection.get("view_depth", 0.0)) <= 0.01:
+				complete = false
+				break
+			projected_corners.append(Vector2(float(projection.get("screen_x", 0.0)), float(projection.get("feet_y", 0.0))))
+		var height := float(footprint.get("height", 0.0))
+		if complete and height > 0.0:
+			var coordinate_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+			if coordinate_renderer == null or not coordinate_renderer.has_method("runtime_project_world_point_for_current_pose"):
+				coordinate_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
+			if coordinate_renderer == null or not coordinate_renderer.has_method("runtime_project_world_point_for_current_pose"):
+				complete = false
+			else:
+				for world_corner in world_corners:
+					var top_projection: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", world_corner, height, false, false)
+					if not (top_projection is Dictionary) or not bool(top_projection.get("visible", false)):
+						complete = false
+						break
+					projected_corners.append(Vector2(float(top_projection.get("head_x", 0.0)), float(top_projection.get("head_y", 0.0))))
+		var outline := _semantic_lod_floor_outline(key)
+		if outline == null:
+			continue
+		# A semantic footprint is world geometry, not a HUD/debug overlay.  Give
+		# its authored ground position the same back-to-front Canvas layer as a
+		# world prop: farther cells paint first and nearer cells/actors paint over
+		# it.  This intentionally updates with the live camera heading.
+		outline.z_index = _world_actor_draw_layer(center)
+		outline.visible = complete
+		if key.begins_with("barrel_authored_vector_source"):
+			if complete:
+				var vector_projection := _opponent_projection_from_current_camera(center, true, true)
+				var vector_height := float(vector_projection.get("continuous_actor_height", vector_projection.get("actor_height", 0.0)))
+				outline.call("set_projected_barrel", key, Vector2(float(vector_projection.get("screen_x", 0.0)), float(vector_projection.get("feet_y", 0.0))), vector_height, _world_actor_draw_layer(center))
+			continue
+		if key.begins_with("barrel_meshinstance2d_3d_source"):
+			if complete:
+				var mesh_camera_origin := _runtime_camera_origin_for_visibility()
+				outline.visible = bool(outline.call("set_barrel", projected_corners, mesh_camera_origin, _view_forward_vector(), _view_right_vector(), center))
+			continue
+		if key.begins_with("barrel_vector_world_prototype"):
+			if complete:
+				outline.visible = _render_projected_canvas_barrel(outline, key, center, half_side, height)
+			continue
+		if key.begins_with("barrel_projected_canvas"):
+			if complete:
+				outline.visible = _render_projected_canvas_barrel(outline, key, center, half_side, height)
+			continue
+		if key.begins_with("barrel_ground_gpu_ray_experiment"):
+			if complete:
+				var ray_renderer: Node = coordinate_renderers[active_player_index]
+				var forward := _view_forward_vector().normalized()
+				var right := _view_right_vector().normalized()
+				var camera_origin: Vector2 = ray_renderer.call("_runtime_camera_origin", forward, right)
+				var projection_offset: Vector2 = ray_renderer.call("_overscan_projection_offset")
+				outline.call("set_barrel", projected_corners, center, half_side, height, camera_origin, forward, right, projection_offset)
+			continue
+		if complete:
+			var edges: Array[Vector2i] = [Vector2i(0, 1), Vector2i(1, 2), Vector2i(2, 3), Vector2i(3, 0)]
+			if height > 0.0:
+				edges.append_array([Vector2i(4, 5), Vector2i(5, 6), Vector2i(6, 7), Vector2i(7, 4), Vector2i(0, 4), Vector2i(1, 5), Vector2i(2, 6), Vector2i(3, 7)])
+			var camera_delta := _runtime_camera_origin_for_visibility() - center
+			var camera_distance := camera_delta.length()
+			var cylinder_edges := PackedVector2Array()
+			var barrel_paths: Array[PackedVector2Array] = []
+			var barrel_quads: Array[PackedVector2Array] = []
+			var lid_recess_quads: Array[PackedVector2Array] = []
+			var lid_stave_segments := PackedVector2Array()
+			var stave_segments := PackedVector2Array()
+			var wood_marks := PackedVector2Array()
+			if key == "barrel_ground_square" or key.begins_with("barrel_ground_gpu_"):
+				# The silhouette joins the two circular rims at the world-space
+				# tangent points from the camera, not at fixed cardinal points.
+				var renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+				if renderer == null or camera_distance <= half_side:
+					outline.visible = false
+					continue
+				var camera_direction := camera_delta / camera_distance
+				var tangent_along := half_side / camera_distance
+				var tangent_across := sqrt(maxf(0.0, 1.0 - tangent_along * tangent_along))
+				var perpendicular := Vector2(-camera_direction.y, camera_direction.x)
+				for side in [-1.0, 1.0]:
+					var point: Vector2 = center + half_side * (camera_direction * tangent_along + perpendicular * tangent_across * float(side))
+					var foot := _opponent_projection_from_current_camera(point, false, true)
+					var head: Variant = renderer.call("runtime_project_world_point_for_current_pose", point, height, false, false)
+					if foot.is_empty() or not (head is Dictionary) or not bool(head.get("visible", false)):
+						cylinder_edges.clear()
+						break
+					cylinder_edges.append(Vector2(float(foot.get("screen_x", 0.0)), float(foot.get("feet_y", 0.0))))
+					cylinder_edges.append(Vector2(float(head.get("head_x", 0.0)), float(head.get("head_y", 0.0))))
+				if cylinder_edges.size() != 4:
+					outline.visible = false
+					continue
+				# Three wider rings define a rounded barrel profile between the rims.
+				var profile := [1.0, 1.14, 1.20, 1.14, 1.0]
+				for side in [-1.0, 1.0]:
+					var path := PackedVector2Array()
+					for step in profile.size():
+						var ring_radius := half_side * float(profile[step])
+						var along := ring_radius / camera_distance
+						if along >= 1.0:
+							break
+						var across := sqrt(1.0 - along * along)
+						var point: Vector2 = center + ring_radius * (camera_direction * along + perpendicular * across * float(side))
+						var projection: Variant = renderer.call("runtime_project_world_point_for_current_pose", point, height * float(step) / 4.0, false, false)
+						if not (projection is Dictionary) or not bool(projection.get("visible", false)):
+							break
+						path.append(Vector2(float(projection.get("head_x", 0.0)), float(projection.get("head_y", 0.0))))
+					barrel_paths.append(path)
+				for step in range(1, 4):
+					var radius := half_side * float(profile[step])
+					var quad := PackedVector2Array()
+					for offset in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+						var projection: Variant = renderer.call("runtime_project_world_point_for_current_pose", center + offset * radius, height * float(step) / 4.0, false, false)
+						if not (projection is Dictionary) or not bool(projection.get("visible", false)):
+							break
+						quad.append(Vector2(float(projection.get("head_x", 0.0)), float(projection.get("head_y", 0.0))))
+					barrel_quads.append(quad)
+				if barrel_paths.size() != 2 or barrel_paths[0].size() != 5 or barrel_paths[1].size() != 5 or barrel_quads.size() != 3 or barrel_quads[0].size() != 4 or barrel_quads[1].size() != 4 or barrel_quads[2].size() != 4:
+					outline.visible = false
+					continue
+				# A narrow lip at the original height surrounds a slightly lowered
+				# inner lid. Both stay on the same world-anchored barrel.
+				for lid_height in [height, height * 0.92]:
+					var inner_quad := PackedVector2Array()
+					for offset in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+						var projection: Variant = renderer.call("runtime_project_world_point_for_current_pose", center + offset * half_side * 0.84, float(lid_height), false, false)
+						if not (projection is Dictionary) or not bool(projection.get("visible", false)):
+							break
+						inner_quad.append(Vector2(float(projection.get("head_x", 0.0)), float(projection.get("head_y", 0.0))))
+					lid_recess_quads.append(inner_quad)
+				# Two parallel chord seams split the inset into wooden boards.
+				# They are anchored in the world and projected at the inset height.
+				if camera_distance < 2.5:
+					var lid_radius := half_side * 0.84
+					for position in [-0.32, 0.32]:
+						var x := float(position) * lid_radius
+						var y := sqrt(maxf(0.0, lid_radius * lid_radius - x * x))
+						var segment := PackedVector2Array()
+						for world_point in [center + Vector2(x, -y), center + Vector2(x, y)]:
+							var projection: Variant = renderer.call("runtime_project_world_point_for_current_pose", world_point, height * 0.92, false, false)
+							if not (projection is Dictionary) or not bool(projection.get("visible", false)):
+								break
+							segment.append(Vector2(float(projection.get("head_x", 0.0)), float(projection.get("head_y", 0.0))))
+						if segment.size() == 2:
+							lid_stave_segments.append_array(segment)
+				# Eight fixed world-space stave boundaries follow the same five-ring
+				# profile. Clip each segment at the camera-facing silhouette.
+				if camera_distance < 3.0:
+					for stave in 8:
+						var previous_point := Vector2.ZERO
+						var previous_visibility := 0.0
+						var previous_valid := false
+						for step in profile.size():
+							var t := float(step) / 4.0
+							var radius := half_side * float(profile[step])
+							var angle := TAU * float(stave) / 8.0
+							var direction := Vector2(cos(angle), sin(angle))
+							var facing := direction.dot(camera_direction) - radius / camera_distance
+							var projection: Variant = renderer.call("runtime_project_world_point_for_current_pose", center + direction * radius, height * t, false, false)
+							if not (projection is Dictionary) or not bool(projection.get("visible", false)):
+								previous_valid = false
+								continue
+							var point := Vector2(float(projection.get("head_x", 0.0)), float(projection.get("head_y", 0.0)))
+							if previous_valid and (facing >= 0.0 or previous_visibility >= 0.0):
+								var from := previous_point
+								var to := point
+								if previous_visibility < 0.0:
+									from = from.lerp(to, -previous_visibility / (facing - previous_visibility))
+								elif facing < 0.0:
+									to = from.lerp(to, previous_visibility / (previous_visibility - facing))
+								stave_segments.append(from)
+								stave_segments.append(to)
+							previous_point = point
+							previous_visibility = facing
+							previous_valid = true
+				# Subtle, broken wood fibers on the reference barrel only; positions
+				# are fixed on the curved surface, not painted in screen space.
+				if key.begins_with("barrel_ground_gpu_reference") and camera_distance < 1.5:
+					for stave in 8:
+						for mark in 2:
+							var angle := TAU * (float(stave) + (0.3 if mark == 0 else 0.7)) / 8.0
+							var direction := Vector2(cos(angle), sin(angle))
+							var start := 0.12 + fposmod(float(stave) * 0.19 + float(mark) * 0.31, 0.65)
+							var points := PackedVector2Array()
+							for sample in 2:
+								var t := start + float(sample) * 0.13
+								var scaled := t * 4.0
+								var ring := mini(floori(scaled), 3)
+								var radius := half_side * lerpf(float(profile[ring]), float(profile[ring + 1]), scaled - float(ring))
+								if direction.dot(camera_direction) - radius / camera_distance <= 0.08:
+									break
+								var projection: Variant = renderer.call("runtime_project_world_point_for_current_pose", center + direction * radius, height * t, false, false)
+								if not (projection is Dictionary) or not bool(projection.get("visible", false)):
+									break
+								points.append(Vector2(float(projection.get("head_x", 0.0)), float(projection.get("head_y", 0.0))))
+							if points.size() == 2:
+								wood_marks.append_array(points)
+			if key.begins_with("barrel_ground_gpu_"):
+				edges.clear()
+				outline.call("set_projected_wireframe", PackedVector2Array([projected_corners[0]]), edges, false, false, true, false, camera_distance, camera_delta)
+				outline.call("set_reference_barrel_style", key.begins_with("barrel_ground_gpu_reference"))
+				outline.call("set_gpu_cylinder", projected_corners.slice(0, 4), projected_corners.slice(4, 8), cylinder_edges, camera_delta, half_side / camera_distance, barrel_paths, barrel_quads)
+				outline.call("set_barrel_staves", stave_segments)
+				outline.call("set_reference_wood_marks", wood_marks)
+				outline.call("set_barrel_lid_recess", lid_recess_quads)
+				outline.call("set_barrel_lid_staves", lid_stave_segments, camera_distance)
+			elif key == "barrel_ground_square":
+				var circle := PackedVector2Array()
+				var top_circle := PackedVector2Array()
+				var markers := PackedVector2Array()
+				var renderer: Node = coordinate_renderers[active_player_index]
+				# Sample the continuous world-space circle, project without snapping,
+				# and let the logical viewport rasterize the resulting vector outline.
+				const CIRCLE_VECTOR_SAMPLES := 64
+				for index in CIRCLE_VECTOR_SAMPLES:
+					var angle := TAU * float(index) / float(CIRCLE_VECTOR_SAMPLES)
+					var world_point := center + Vector2(cos(angle), sin(angle)) * half_side
+					var projection := _opponent_projection_from_current_camera(world_point, false, true)
+					var upper: Variant = renderer.call("runtime_project_world_point_for_current_pose", world_point, height, false, false)
+					if projection.is_empty() or float(projection.get("view_depth", 0.0)) <= 0.01 or not (upper is Dictionary) or not bool(upper.get("visible", false)):
+						circle.clear()
+						break
+					var screen_point := Vector2(float(projection.get("screen_x", 0.0)), float(projection.get("feet_y", 0.0)))
+					if index % (CIRCLE_VECTOR_SAMPLES / 4) == 0:
+						markers.append(screen_point)
+					circle.append(screen_point)
+					top_circle.append(Vector2(float(upper.get("head_x", 0.0)), float(upper.get("head_y", 0.0))))
+				if circle.is_empty() or markers.size() != 4:
+					outline.visible = false
+					continue
+				projected_corners = markers
+				edges.clear()
+				outline.call("set_projected_wireframe", projected_corners, edges, false, false, true, false, camera_distance, camera_delta)
+				outline.call("set_vector_cylinder", circle, top_circle, cylinder_edges, camera_delta, half_side / camera_distance, barrel_paths, barrel_quads)
+				outline.call("set_barrel_staves", stave_segments)
+				outline.call("set_barrel_lid_recess", lid_recess_quads)
+				outline.call("set_barrel_lid_staves", lid_stave_segments, camera_distance)
+			else:
+				outline.call("set_projected_wireframe", projected_corners, edges, bool(footprint.get("bresenham_reference", false)), bool(footprint.get("gpu_bresenham", false)), bool(footprint.get("low_resolution_vector", false)), bool(footprint.get("flat_faces", false)), camera_distance, camera_delta)
+	for manager_key in semantic_lod_floor_outline_nodes:
+		if String(manager_key).ends_with(":authored_vector_batch"):
+			var authored_manager_to_finish: Node = semantic_lod_floor_outline_nodes[manager_key]
+			if is_instance_valid(authored_manager_to_finish):
+				authored_manager_to_finish.call("end_frame")
+
+
+## Ray-march barrels used to remain active inside an invisible SubViewport.
+## Find an already-created retained fixture without allocating one for a prop
+## which has never entered this player view.
+func _set_semantic_gpu_barrel_screen_active(key: String, is_active: bool) -> void:
+	var view_key := "%d:%s" % [active_player_index, key]
+	var node: Variant = semantic_lod_floor_outline_nodes.get(view_key, null)
+	if node is Node and is_instance_valid(node):
+		node.call("set_screen_active", is_active)
+
+
+func _render_semantic_cylinder(key: String, center: Vector2, radius: float, height: float) -> void:
+	var outline := _semantic_lod_floor_outline(key)
+	if outline == null:
+		return
+	outline.z_index = _world_actor_draw_layer(center)
+	var coordinate_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+	if coordinate_renderer == null or not coordinate_renderer.has_method("runtime_project_world_point_for_current_pose"):
+		outline.visible = false
+		return
+	var bottom := PackedVector2Array()
+	var top := PackedVector2Array()
+	# Sample the circle in world space before projecting it. Every point is
+	# independently anchored, just like the four corners of the cube.
+	for index in 24:
+		var angle := TAU * float(index) / 24.0
+		var world_point := center + Vector2(cos(angle), sin(angle)) * radius
+		var ground := _opponent_projection_from_current_camera(world_point, false, true)
+		var upper: Variant = coordinate_renderer.call("runtime_project_world_point_for_current_pose", world_point, height, false, false)
+		if ground.is_empty() or float(ground.get("view_depth", 0.0)) <= 0.01 or not (upper is Dictionary) or not bool(upper.get("visible", false)):
+			outline.visible = false
+			return
+		bottom.append(Vector2(float(ground.get("screen_x", 0.0)), float(ground.get("feet_y", 0.0))))
+		top.append(Vector2(float(upper.get("head_x", 0.0)), float(upper.get("head_y", 0.0))))
+	outline.visible = true
+	outline.call("set_rings", bottom, top)
+
+
+# _load_calibration_primitive_sprite_manifest: Read the generated Blender
+# manifest once for either calibration view; ordinary gameplay never calls it.
+func _load_calibration_primitive_sprite_manifest() -> bool:
+	var manifest_text := FileAccess.get_file_as_string("res://assets/Calibration/primitive_sprites/manifest.json")
+	var parsed = JSON.parse_string(manifest_text)
+	if not (parsed is Dictionary):
+		push_error("Calibration primitive sprite manifest could not be read.")
+		return false
+	calibration_sprite_gallery_sprites.clear()
+	calibration_sprite_gallery_perspective_lods.clear()
+	calibration_sprite_gallery_barrel_semantic_lods.clear()
+	for lod in parsed.get("perspective_lods", []):
+		if lod is Dictionary:
+			calibration_sprite_gallery_perspective_lods.append(lod)
+	for lod in parsed.get("barrel_semantic_lods", []):
+		if lod is Dictionary:
+			calibration_sprite_gallery_barrel_semantic_lods.append(lod)
+	for record in parsed.get("sprites", []):
+		if record is Dictionary:
+			calibration_sprite_gallery_sprites[_calibration_sprite_record_key(String(record.get("name", "")), String(record.get("view", "")), String(record.get("perspective_lod", "base")))] = record
+	calibration_sprite_gallery_source_pixels_per_logical_pixel = maxf(float(parsed.get("source_pixels_per_logical_pixel", 1.0)), 1.0)
+	if calibration_sprite_gallery_sprites.is_empty():
+		push_error("Calibration primitive sprite gallery has no sprite records.")
+		return false
+	return true
+
+
+func _calibration_sprite_record_key(primitive_name: String, view: String, perspective_lod: String) -> String:
+	return "%s:%s:%s" % [primitive_name, view, perspective_lod]
+
+
+func _calibration_sprite_perspective_lod_for_depth(primitive_name: String, view_depth: float, feet_y: float = -INF) -> String:
+	# A base-only primitive deliberately has no Near record. This lets the same
+	# manifest serve ordinary greybox props while any future semantic asset opts
+	# into depth-authored sprite sets through its records alone.
+	var lods := calibration_sprite_gallery_perspective_lods
+	var first_lod_id := "near"
+	if _uses_calibrated_semantic_lods(primitive_name):
+		lods = calibration_sprite_gallery_barrel_semantic_lods
+		first_lod_id = "lod_00"
+	if lods.is_empty() or not calibration_sprite_gallery_sprites.has(_calibration_sprite_record_key(primitive_name, "north", first_lod_id)):
+		return "base"
+	var nearest_id := "base"
+	var nearest_distance := INF
+	for lod in lods:
+		# lod_00 is an edge-of-frame camera-overlap view, not the ordinary
+		# standing-next-to-a-barrel view. Until its floor point reaches the
+		# bottom two logical rows, leave that special steep close render unused
+		# and let lod_01 carry the nearest ordinary presentation.
+		if _is_calibrated_barrel_sprite(primitive_name) and String(lod.get("id", "")) == "lod_00" and feet_y < VIEWPORT_SIZE.y - 2.0:
+			continue
+		var lod_depth := float(lod.get("reference_depth_godot_units", 0.0))
+		var distance := absf(view_depth - lod_depth)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_id = String(lod.get("id", "base"))
+	return nearest_id
+
+
+# _render_calibration_primitive_sprite: Uses the normal live world projection
+# while anchoring a tightly cropped Blender image to its recorded floor pixel.
+func _render_calibration_primitive_sprite(key: String, primitive: Dictionary, used: Dictionary, barrel_lod_labels_used := {}) -> void:
+	var world_position: Vector2 = primitive.get("position", Vector2.ZERO)
+	if not _world_actor_overlaps_current_camera_fan(world_position, 0.16):
+		return
+	var projection := _opponent_projection_from_current_camera(world_position, true, true)
+	var view_depth := float(projection.get("view_depth", 0.0))
+	if view_depth <= 0.01:
+		return
+	var primitive_name := String(primitive.get("name", ""))
+	var view := _calibration_sprite_view_for_primitive(primitive_name)
+	var perspective_lod := _calibration_sprite_perspective_lod_for_depth(primitive_name, view_depth, float(projection.get("feet_y", -INF)))
+	var record: Dictionary = calibration_sprite_gallery_sprites.get(_calibration_sprite_record_key(primitive_name, view, perspective_lod), {})
+	if record.is_empty() and perspective_lod != "base":
+		record = calibration_sprite_gallery_sprites.get(_calibration_sprite_record_key(primitive_name, view, "base"), {})
+	if record.is_empty():
+		return
+	var texture_path := "res://%s" % String(record.get("path", ""))
+	var texture: Texture2D = calibration_sprite_gallery_textures.get(texture_path, null)
+	if texture == null:
+		texture = load(texture_path) as Texture2D
+		if texture == null:
+			return
+		calibration_sprite_gallery_textures[texture_path] = texture
+	var reference_depth := float(record.get("reference_depth_godot_units", 2.5))
+	var sprite_scale := reference_depth / view_depth / calibration_sprite_gallery_source_pixels_per_logical_pixel
+	var anchor_values: Array = record.get("ground_anchor", [0.0, 0.0])
+	var anchor := Vector2(float(anchor_values[0]), float(anchor_values[1]))
+	var feet := Vector2(float(projection.get("screen_x", 0.0)), float(projection.get("feet_y", 0.0))).round()
+	var sprite := _combat_sprite(key)
+	sprite.centered = false
+	sprite.texture = texture
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.scale = Vector2.ONE * sprite_scale
+	sprite.position = (feet - anchor * sprite_scale).round()
+	sprite.z_index = _world_actor_draw_layer(world_position)
+	sprite.visible = true
+	used[key] = true
+	if show_barrel_lod_visualizer and _uses_calibrated_semantic_lods(primitive_name) and not player_views.is_empty():
+		var label := _barrel_lod_label(key)
+		var label_prefixes := {"Rig_Barrel_LOD_00": "RIG", "Original_Barrel_01": "RAW", "Original_Crate_01": "CRT", "Crate_Footprint_Square": "SQR", "Crate_Footprint_Circle": "CIR"}
+		label.text = "%s %02d" % [String(label_prefixes.get(primitive_name, "BAR")), int(perspective_lod.trim_prefix("lod_"))]
+		label.add_theme_color_override("font_color", Color(0.62, 0.82, 1.0, 1.0))
+		label.position = Vector2(sprite.position.x - BARREL_LOD_LABEL_SIZE.x * 0.5 + texture.get_width() * sprite_scale * 0.5, sprite.position.y - BARREL_LOD_LABEL_SIZE.y - 36.0).round() # Match the clear elevated label band used by the old SEM/PNG comparison barrels.
+		label.visible = true
+		barrel_lod_labels_used[key] = true
+
+
+# _calibration_sprite_view_for_current_camera: Select the nearest of the 16
+# Blender camera headings.  This is intentionally a full signed turn rather
+# than the old 0..90-degree fold: asymmetric future props must preserve their
+# actual left/right and front/back read.
+func _calibration_sprite_view_for_current_camera() -> String:
+	var forward := _view_forward_vector().normalized()
+	var headings := ["north", "north_by_east", "north_north_east", "north_east_by_north", "north_east", "north_east_by_east", "east_north_east", "east_by_north", "east", "east_by_south", "east_south_east", "south_east_by_east", "south_east", "south_east_by_south", "south_south_east", "south_by_east", "south", "south_by_west", "south_south_west", "south_west_by_south", "south_west", "south_west_by_west", "west_south_west", "west_by_south", "west", "west_by_north", "west_north_west", "north_west_by_west", "north_west", "north_west_by_north", "north_north_west", "north_by_west"]
+	var degrees := fposmod(rad_to_deg(atan2(forward.x, -forward.y)), 360.0)
+	var index := posmod(int(floorf((degrees + 5.625) / 11.25)), headings.size())
+	return String(headings[index])
+
+
+# _calibration_sprite_view_for_primitive: The cell proof uses all 32 headings;
+# the semantic barrel intentionally uses its own 16 real renders at 22.5-degree
+# intervals.  This is a selection choice only—neither sprite is mirrored or
+# rotated by Godot after Blender has rendered it.
+func _is_calibrated_barrel_sprite(primitive_name: String) -> bool:
+	return primitive_name in ["Rig_Barrel_LOD_00", "Original_Barrel_01", "Original_Crate_01"]
+
+
+func _uses_calibrated_semantic_lods(primitive_name: String) -> bool:
+	return primitive_name in ["Rig_Barrel_LOD_00", "Original_Barrel_01", "Original_Crate_01", "Crate_Footprint_Square", "Crate_Footprint_Circle"]
+
+
+func _calibration_sprite_view_for_primitive(primitive_name: String) -> String:
+	if not _uses_calibrated_semantic_lods(primitive_name):
+		return _calibration_sprite_view_for_current_camera()
+	var forward := _view_forward_vector().normalized()
+	var headings := ["north", "north_north_east", "north_east", "east_north_east", "east", "east_south_east", "south_east", "south_south_east", "south", "south_south_west", "south_west", "west_south_west", "west", "west_north_west", "north_west", "north_north_west"]
+	var degrees := fposmod(rad_to_deg(atan2(forward.x, -forward.y)), 360.0)
+	var index := posmod(int(floorf((degrees + 11.25) / 22.5)), headings.size())
+	return String(headings[index])
 
 
 # _world_footprint_has_visible_camera_span: Tests a circular floor item's two
@@ -4845,41 +6057,90 @@ func _barrel_direction_for_world_vector(world_vector: Vector2) -> String:
 	return BARREL_VIEW_DIRECTIONS[direction_index]
 
 
-# _barrel_texture_for_current_camera: Maps the viewer's world-side position to the matching static barrel angle.
-func _barrel_texture_for_current_camera() -> Texture2D:
-	match _barrel_direction_for_world_vector(-_view_forward_vector()):
+# _barrel_lod_index_for_view_depth: Selects one complete static barrel PNG level from the continuous world depth.
+func _barrel_lod_index_for_view_depth(world_view_depth: float) -> int:
+	for lod_index in range(BARREL_LOD_MIN_VIEW_DEPTHS.size() - 1, -1, -1):
+		if world_view_depth > float(BARREL_LOD_MIN_VIEW_DEPTHS[lod_index]):
+			return lod_index
+	return 0
+
+
+# _barrel_art_height_for_view_depth: Returns the authored canvas height for the active semantic barrel level.
+func _barrel_art_height_for_view_depth(world_view_depth: float) -> float:
+	return float(BARREL_LOD_ART_HEIGHTS[_barrel_lod_index_for_view_depth(world_view_depth)])
+
+
+# _barrel_generated_lod_texture: Loads and retains one Godot-generated static source image for LOD 02 through LOD 09.
+func _barrel_generated_lod_texture(lod_index: int, direction_index: int) -> Texture2D:
+	var cache_key := "%02d:%03d" % [lod_index, direction_index]
+	var cached: Texture2D = barrel_generated_lod_textures.get(cache_key, null)
+	if cached != null:
+		return cached
+	var directory := BARREL_LOD_02_RENDER_DIRECTORY if lod_index == 2 else BARREL_LOD_GENERATED_DIRECTORY_TEMPLATE % lod_index
+	var source_path := "%s/barrel_LOD_%02d_%03d.png" % [directory, lod_index, direction_index]
+	var texture := load(source_path) as Texture2D
+	if texture != null:
+		barrel_generated_lod_textures[cache_key] = texture
+		return texture
+	push_error("Missing generated barrel LOD texture: %s" % source_path)
+	return BARREL_TEXTURE_N
+
+
+# _semantic_barrel_texture_for_current_camera: Produces the equivalent LOD size
+# from the procedural barrel recipe, keyed by the same sixteen view directions
+# as the authored comparison sprite. The cache means this recipe does not run
+# each frame; after first use the GPU samples a normal ImageTexture.
+func _semantic_barrel_texture_for_current_camera(lod_index: int) -> Texture2D:
+	var direction_index := BARREL_VIEW_DIRECTIONS.find(_barrel_direction_for_world_vector(-_view_forward_vector()))
+	var cache_key := "%02d:%02d" % [lod_index, direction_index]
+	var cached: Texture2D = semantic_barrel_textures.get(cache_key, null)
+	if cached != null:
+		return cached
+	var texture := SEMANTIC_BARREL_SPRITE.texture_for(int(BARREL_LOD_ART_HEIGHTS[lod_index]), direction_index)
+	semantic_barrel_textures[cache_key] = texture
+	return texture
+
+
+# _barrel_texture_for_current_camera: Maps the viewer's world-side position to the matching static barrel angle and authored LOD.
+func _barrel_texture_for_current_camera(world_view_depth := -1.0) -> Texture2D:
+	var lod_index := _barrel_lod_index_for_view_depth(world_view_depth)
+	var direction := _barrel_direction_for_world_vector(-_view_forward_vector())
+	if lod_index >= 2:
+		return _barrel_generated_lod_texture(lod_index, BARREL_VIEW_DIRECTIONS.find(direction))
+	var use_lod_01 := lod_index == 1
+	match direction:
 		"NNE":
-			return BARREL_TEXTURE_NNE
+			return BARREL_LOD_01_TEXTURE_NNE if use_lod_01 else BARREL_TEXTURE_NNE
 		"NE":
-			return BARREL_TEXTURE_NE
+			return BARREL_LOD_01_TEXTURE_NE if use_lod_01 else BARREL_TEXTURE_NE
 		"ENE":
-			return BARREL_TEXTURE_ENE
+			return BARREL_LOD_01_TEXTURE_ENE if use_lod_01 else BARREL_TEXTURE_ENE
 		"E":
-			return BARREL_TEXTURE_E
+			return BARREL_LOD_01_TEXTURE_E if use_lod_01 else BARREL_TEXTURE_E
 		"ESE":
-			return BARREL_TEXTURE_ESE
+			return BARREL_LOD_01_TEXTURE_ESE if use_lod_01 else BARREL_TEXTURE_ESE
 		"SE":
-			return BARREL_TEXTURE_SE
+			return BARREL_LOD_01_TEXTURE_SE if use_lod_01 else BARREL_TEXTURE_SE
 		"SSE":
-			return BARREL_TEXTURE_SSE
+			return BARREL_LOD_01_TEXTURE_SSE if use_lod_01 else BARREL_TEXTURE_SSE
 		"S":
-			return BARREL_TEXTURE_S
+			return BARREL_LOD_01_TEXTURE_S if use_lod_01 else BARREL_TEXTURE_S
 		"SSW":
-			return BARREL_TEXTURE_SSW
+			return BARREL_LOD_01_TEXTURE_SSW if use_lod_01 else BARREL_TEXTURE_SSW
 		"SW":
-			return BARREL_TEXTURE_SW
+			return BARREL_LOD_01_TEXTURE_SW if use_lod_01 else BARREL_TEXTURE_SW
 		"WSW":
-			return BARREL_TEXTURE_WSW
+			return BARREL_LOD_01_TEXTURE_WSW if use_lod_01 else BARREL_TEXTURE_WSW
 		"W":
-			return BARREL_TEXTURE_W
+			return BARREL_LOD_01_TEXTURE_W if use_lod_01 else BARREL_TEXTURE_W
 		"WNW":
-			return BARREL_TEXTURE_WNW
+			return BARREL_LOD_01_TEXTURE_WNW if use_lod_01 else BARREL_TEXTURE_WNW
 		"NW":
-			return BARREL_TEXTURE_NW
+			return BARREL_LOD_01_TEXTURE_NW if use_lod_01 else BARREL_TEXTURE_NW
 		"NNW":
-			return BARREL_TEXTURE_NNW
+			return BARREL_LOD_01_TEXTURE_NNW if use_lod_01 else BARREL_TEXTURE_NNW
 		_:
-			return BARREL_TEXTURE_N
+			return BARREL_LOD_01_TEXTURE_N if use_lod_01 else BARREL_TEXTURE_N
 
 
 
@@ -5231,6 +6492,8 @@ func _render_bound_player_context() -> void:                                    
 # _render_all_player_views: Redraws every local player view after setup or a map reset.
 func _render_all_player_views() -> void:                                                   # Declare this function.
 	for player_index in range(player_states.size()):                                          # Visit each local player.
+		if player_index >= player_joined.size() or not player_joined[player_index]:
+			continue # Unjoined slots show a join overlay; their world views need no redraw.
 		_bind_player_context(player_index)                                                       # Bind that player's view and state.
 		_play_best_animation(false)                                                               # Put the player in the idle animation after a full redraw.
 		_render_bound_player_context()                                                           # Redraw that player's view and map.
@@ -5329,6 +6592,8 @@ func _process(delta: float) -> void:                                            
 		_save_player_context(player_index)                                                       # Store this player's updated state before binding the next player.
 	_process_combat(delta)                                                                     # Advance shared pistol shots and resolve wall/player impacts after both actors moved.
 	for player_index in range(player_states.size()):                                          # Then render every local view against the completed shared player state.
+		if player_index >= player_joined.size() or not player_joined[player_index]:
+			continue # Joining happens above, so a newly joined view renders this same frame.
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
 		_render_bound_player_context()                                                           # Redraw that player's 2D view, opponent sprite, and source map.
 		_save_player_context(player_index)                                                       # Store renderer-updated debug values for this player.
@@ -6138,6 +7403,9 @@ func _layout_debug_menu_panels(viewport_size: Vector2) -> void:
 		debug_menu_panel.position = Vector2(DEBUG_MENU_SIDE_MARGIN, DEBUG_MENU_SIDE_MARGIN)
 	if debug_menu_right_panel != null:
 		debug_menu_right_panel.position = Vector2(viewport_size.x - DEBUG_MENU_COLUMN_WIDTH - DEBUG_MENU_SIDE_MARGIN, DEBUG_MENU_SIDE_MARGIN)
+	if debug_barrel_layers_panel != null:
+		debug_barrel_layers_panel.position = Vector2(viewport_size.x - 304.0, DEBUG_MENU_SIDE_MARGIN)
+		debug_barrel_layers_panel.size = Vector2(300.0, viewport_size.y - DEBUG_MENU_SIDE_MARGIN * 2.0)
 
 
 # _layout_viewport: Scales and centers the 160x120 playfield crop inside the current Godot window.
@@ -6173,6 +7441,17 @@ func _layout_viewport() -> void:                                                
 					source_map.position = Vector2((viewport_size.x - DEBUG_MAP_PANEL_SIZE.x * source_map_scale) * 0.5, viewport_size.y - DEBUG_MAP_PANEL_SIZE.y * source_map_scale - 8.0)
 				else:
 					source_map.visible = false
+		return
+	if barrel_authoring_single_player_mode and player_views.size() == 1:
+		var authoring_view: Dictionary = player_views[0]
+		var authoring_camera: Node2D = authoring_view.get("maze_viewport", null)
+		if authoring_camera != null:
+			var authoring_scale := maxf(1.0, floorf(minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)))
+			authoring_camera.scale = Vector2.ONE * authoring_scale
+			authoring_camera.position = (viewport_size - VIEWPORT_SIZE * authoring_scale) * 0.5
+		var authoring_map: Node2D = authoring_view.get("debug_map_overlay", null)
+		if authoring_map != null:
+			authoring_map.visible = false
 		return
 	var status_margin := 84.0                                                                  # Reserve screen space for the three-line debug status text.
 	if TEMP_GRID_AUDIT and player_views.size() == 1:                                           # Use a clean side-by-side layout for the one-player 9x9 audit.
@@ -9455,9 +10734,21 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 		return {}
 	var earliest_hit := 2.0                                                                    # Keep a no-hit sentinel outside the normalized sweep interval.
 	var hit_center := Vector2.ZERO
-	var combined_radius := PLAYER_CAPSULE_RADIUS + BARREL_COLLISION_RADIUS                    # Sweep the player capsule against every static barrel circle.
+	var hit_normal := Vector2.ZERO
 	for barrel in world_barrels:
 		var barrel_center: Vector2 = barrel.get("position", Vector2.ZERO)
+		if barrel.has("half_extents"):
+			var half_extents := Vector2(barrel["half_extents"]) + Vector2.ONE * PLAYER_CAPSULE_RADIUS
+			var box_hit := _box_ray_hit(world_position, world_delta, barrel_center, half_extents)
+			if not box_hit.is_empty():
+				var box_time := float(box_hit["distance"])
+				var box_normal := Vector2(box_hit["normal"])
+				if box_time >= 0.0 and box_time <= 1.0 and box_time < earliest_hit and world_delta.dot(box_normal) < 0.0:
+					earliest_hit = box_time
+					hit_center = barrel_center
+					hit_normal = box_normal
+			continue
+		var combined_radius := PLAYER_CAPSULE_RADIUS + float(barrel.get("collision_radius", BARREL_COLLISION_RADIUS))
 		var offset := world_position - barrel_center
 		var radius_squared := combined_radius * combined_radius
 		var start_distance_squared := offset.length_squared()
@@ -9466,6 +10757,7 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 			if movement_toward_center < 0.0 and 0.0 < earliest_hit:
 				earliest_hit = 0.0                                                                   # Resolve only an inward retained contact; outward motion must remain free.
 				hit_center = barrel_center
+				hit_normal = Vector2.ZERO
 			continue
 		if movement_toward_center >= 0.0:
 			continue                                                                              # A player already moving away cannot newly contact this barrel.
@@ -9476,9 +10768,10 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 		if hit_time >= 0.0 and hit_time <= 1.0 and hit_time < earliest_hit:
 			earliest_hit = hit_time
 			hit_center = barrel_center
+			hit_normal = Vector2.ZERO
 	if earliest_hit > 1.0:
 		return {}
-	return {"time": earliest_hit, "center": hit_center}
+	return {"time": earliest_hit, "center": hit_center, "normal": hit_normal}
 
 
 # _wall_endpoint_sweep_hit: Supplements the existing cardinal grid-edge
@@ -9588,7 +10881,9 @@ func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, 
 			last_blocked_direction = "corner"
 			continue
 		if hit_barrel:
-			var barrel_normal := position - Vector2(barrel_hit["center"])
+			var barrel_normal := Vector2(barrel_hit.get("normal", Vector2.ZERO))
+			if barrel_normal == Vector2.ZERO:
+				barrel_normal = position - Vector2(barrel_hit["center"])
 			if barrel_normal.length_squared() <= 0.00000001:
 				barrel_normal = -remaining.normalized()                                             # Pick the opposing motion direction for an exact-center recovery.
 			else:
@@ -11388,6 +12683,28 @@ func _left_vector_for_index(facing_index: int) -> Vector2i:                     
 
 
 
+# _build_barrel_lod_review_wall_edges: Builds an open arena with a closed perimeter for visual barrel-LOD evaluation.
+func _build_barrel_lod_review_wall_edges() -> void:
+	physical_wall_edges_cache_dirty = true                                                    # The review arena replaces every cached physical maze segment.
+	wall_edges.clear()
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			wall_edges[cell] = {
+				WALL_EDGE_N: y == 0,
+				WALL_EDGE_E: x == MAP_WIDTH - 1,
+				WALL_EDGE_S: y == MAP_HEIGHT - 1,
+				WALL_EDGE_W: x == 0,
+			}                                                                                       # Leave every shared interior edge open while retaining a physical boundary for normal movement.
+	grid_position = Vector2i(0, MAP_HEIGHT - 1)                                               # Keep the normal player-one start so approach and retreat can span the full depth range.
+	facing = 0
+	turn_45_direction = 0
+	turn_step = 0
+	local_floor_position = HOME_LOCAL_FLOOR_POSITION
+	pending_grid_delta = Vector2i.ZERO
+	last_blocked_direction = ""
+
+
 # _build_empty_grid_audit_wall_edges: Builds the temporary wall-free 5x5 grid used to isolate slot-guide geometry.
 func _build_empty_grid_audit_wall_edges() -> void:
 	physical_wall_edges_cache_dirty = true                                                    # The audit topology is about to replace every cached physical segment.
@@ -11454,6 +12771,13 @@ func _regenerate_runtime_map(restart_round_music := false) -> void:             
 	active_blood_splatters.clear()                                                              # Remove character-hit blood particles that belonged to the old maze topology.
 	was_regenerate_map_pressed = true                                                          # Keep the regenerate key from firing again until released.
 	_mark_debug_map_static_layers_dirty()                                                      # Make every local map rebuild its retained maze walls after the topology changes.
+	if BARREL_LOD_REVIEW_LEVEL:
+		_build_barrel_lod_review_wall_edges()                                                     # Recreate the same uncluttered, bounded arena instead of rolling a new maze.
+		_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                              # Return all players to their usual outer-corner starts, far enough to exercise every depth band.
+		_reset_combat_collectibles()                                                              # Restore exactly the one centered barrel and no pickup clutter.
+		_render_all_player_views()
+		_update_status()
+		return
 	if TEMP_GRID_AUDIT:                                                                        # Keep R scoped to the single-player 9x9 audit map.
 		if TEMP_RANDOM_GRID_AUDIT:                                                               # Generate another enclosed, connected random map for wall-render testing.
 			_build_random_maze_wall_edges()                                                           # Preserve the generator's closed exterior boundary.

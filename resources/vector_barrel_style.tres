@@ -1,0 +1,182 @@
+[gd_resource type="Resource" script_class="VectorBarrelStyle" format=3]
+
+[ext_resource type="Script" path="res://scripts/vector_barrel_style.gd" id="1_bynod"]
+
+[resource]
+script = ExtResource("1_bynod")
+wood_edge = Color(0.30980393, 0.24705882, 0.18431373, 1)
+wood_centre = Color(0.5294118, 0.42352942, 0.31764707, 1)
+wood_bottom_light = 0.25
+wood_top_light = 0.9
+barrel_interior_colour = Color(0.33460915, 0.26608709, 0.19406816, 1)
+lid_colour = Color(0.8979574, 0.88861674, 0.84708863, 1)
+body_gradient_mode = 1
+gradient_steps = 3
+rim_colour = Color(0.67058825, 0.5372549, 0.4, 1)
+rim_width = 1.0
+hoop_edge = Color(0, 0, 0, 1)
+hoop_centre = Color(1, 1, 1, 1)
+hoop_width = 2.0
+floor_shadow_colour = Color(0.23137255, 0.15686275, 0.09803922, 1)
+child_visual_overrides = {
+&"VectorBarrel_barrel_vector_world_prototype": {
+&"FloorShadow": {
+"colour": Color(0.23137255, 0.15686275, 0.09803922, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": false
+},
+&"InteriorOpening": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"LidStaveShadow_01": {
+"colour": Color(0.08, 0.035, 0.01, 0.72),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true,
+"width": 1.0
+},
+&"LidSurface": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": false
+},
+&"LowerHoopHighlight": {
+"colour": Color(1, 1, 1, 0.48),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true,
+"width": 0.5
+},
+&"OutsideStaveHighlight_01": {
+"colour": Color(1, 0.72, 0.36, 0.3),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true,
+"width": 0.5
+},
+&"OutsideStaveShadow_01": {
+"colour": Color(0.13, 0.055, 0.012, 0.64),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true,
+"width": 1.0
+},
+&"OutsideStave_01": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_02": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_03": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_04": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_05": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_06": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_07": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_08": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_09": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_10": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_11": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"OutsideStave_12": {
+"colour": Color(1, 1, 1, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true
+},
+&"UpperHoop": {
+"colour": Color(1, 1, 1, 1),
+"gradient_colours": PackedColorArray(0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1),
+"gradient_offsets": PackedFloat32Array(0, 0.5, 1),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true,
+"width": 2.0
+},
+&"UpperHoopHighlight": {
+"colour": Color(1, 1, 1, 0.48),
+"position": Vector2(0, 0),
+"rotation": 0.0,
+"scale": Vector2(1, 1),
+"visible": true,
+"width": 0.5
+}
+}
+}
+lid_dark = Color(0.33460915, 0.26608709, 0.19406816, 1)
+lid_light = Color(0.92811716, 0.87730116, 0.82854825, 1)
+style_version = 2

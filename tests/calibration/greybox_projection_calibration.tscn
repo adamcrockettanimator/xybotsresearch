@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/calibration/greybox_projection_calibration.gd" id="1"]
+
+[node name="GreyboxProjectionCalibration" type="Node2D"]
+script = ExtResource("1")

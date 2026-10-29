@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://g4horixn0d0l"]
+
+[ext_resource type="Script" uid="uid://twt577oiskce" path="res://tests/calibration/primitive_sprite_gallery_game.gd" id="1_gallery"]
+
+[node name="PrimitiveSpriteGalleryGame" type="Node2D" unique_id=937751270]
+script = ExtResource("1_gallery")

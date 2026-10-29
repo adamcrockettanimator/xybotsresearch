@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/calibration/semantic_typical_game.gd" id="1"]
+
+[node name="SemanticTypicalGame" type="Node2D"]
+script = ExtResource("1")

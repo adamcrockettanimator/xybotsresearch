@@ -6,10 +6,11 @@ render_mode unshaded;
 uniform float sprite_scale = 1.0;
 uniform vec2 grid_origin = vec2(0.0);
 uniform float depth_light = 1.0;
+uniform bool quantize_scale_pixels = true;
 
 void fragment() {
 	vec2 texture_size = vec2(1.0) / TEXTURE_PIXEL_SIZE;
-	float scale = max(sprite_scale, 0.0001);
+	float scale = quantize_scale_pixels ? max(sprite_scale, 0.0001) : 1.0;
 	vec2 texel = (floor(UV * texture_size * scale + grid_origin) + vec2(0.5) - grid_origin) / scale;
 	texel = clamp(texel, vec2(0.5), texture_size - vec2(0.5));
 	vec4 sampled = texture(TEXTURE, texel / texture_size);

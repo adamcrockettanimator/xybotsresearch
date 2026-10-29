@@ -2712,6 +2712,8 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 		"visible": (allow_protected_near_debug or raw_depth >= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH) and raw_depth <= MAX_DEPTH + 0.75,
 		"screen_x": feet.x,
 		"feet_y": feet.y,
+		"head_x": head.x,
+		"head_y": head.y,
 		"screen_y": (feet.y + head.y) * 0.5,
 		"actor_height": actor_height,
 		"continuous_actor_height": continuous_actor_height,

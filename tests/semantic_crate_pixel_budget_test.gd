@@ -1,0 +1,48 @@
+extends SceneTree
+
+const OUTLINE = preload("res://scripts/semantic_lod_floor_outline.gd")
+
+func _initialize() -> void:
+	var canvas = OUTLINE.LogicalVectorLineCanvas.new()
+	var large := PackedVector2Array([Vector2(0, 0), Vector2(30, 0), Vector2(30, 20), Vector2(0, 20)])
+	var narrow := PackedVector2Array([Vector2(0, 0), Vector2(2, 0), Vector2(2, 20), Vector2(0, 20)])
+	var lid := PackedVector2Array([Vector2(5, 0), Vector2(25, 0), Vector2(30, 3), Vector2(0, 3)])
+	var large_panel: PackedVector2Array = canvas._semantic_inset_quad(large, 0.19)
+	assert(canvas._minimum_frame_width(large, large_panel) >= canvas.MIN_FRAME_PIXELS)
+	assert(canvas._minimum_quad_span(large_panel) >= canvas.MIN_SHADOW_PANEL_SPAN_PIXELS)
+	assert(is_equal_approx(canvas._panel_contrast(canvas.MIN_PANEL_SPAN_PIXELS), canvas.PANEL_INITIAL_CONTRAST))
+	assert(is_equal_approx(canvas._panel_contrast(canvas.PANEL_FULL_CONTRAST_SPAN), 1.0))
+	assert(canvas._panel_contrast(3.0) > canvas._panel_contrast(2.0))
+	var edge: Color = canvas._semantic_edge_color(Color.RED, Color.BLUE, canvas.INTERIOR_LINES_FULL_DISTANCE)
+	assert(edge.is_equal_approx(Color(0.6, 0.2, 0.6, 1.0)))
+	assert(is_zero_approx(canvas._semantic_edge_color(Color.RED, Color.BLUE, canvas.INTERIOR_LINES_EXIT_DISTANCE).a))
+	assert(is_equal_approx(canvas._semantic_edge_color(Color.RED, Color.BLUE, (canvas.INTERIOR_LINES_FULL_DISTANCE + canvas.INTERIOR_LINES_EXIT_DISTANCE) * 0.5).a, 0.5))
+	canvas.authoring_settings = {"edge_color_balance": 1.0, "edge_full_distance": 1.0, "edge_fade_distance": 2.0, "edge_brightening": 0.0}
+	assert(canvas._semantic_edge_color(Color.WHITE, Color.BLACK, 1.0).is_equal_approx(Color.WHITE))
+	assert(is_equal_approx(canvas._semantic_edge_color(Color.BLACK, Color.WHITE, 1.5).a, 0.5))
+	canvas.authoring_settings["edge_color_balance"] = 0.0
+	assert(canvas._semantic_edge_color(Color.WHITE, Color.BLACK, 1.0).is_equal_approx(Color.BLACK))
+	canvas.authoring_settings.clear()
+	var head_on: Vector3 = canvas._inset_highlight_weights(0.0, 0.55)
+	assert(head_on.is_equal_approx(Vector3.ONE))
+	var from_right: Vector3 = canvas._inset_highlight_weights(0.5, 0.55)
+	assert(is_equal_approx(from_right.x, 1.0) and is_equal_approx(from_right.y, 0.5) and is_equal_approx(from_right.z, 1.0))
+	var from_left: Vector3 = canvas._inset_highlight_weights(-0.5, 0.55)
+	assert(is_equal_approx(from_left.x, 0.5) and is_equal_approx(from_left.y, 1.0) and is_equal_approx(from_left.z, 1.0))
+	assert(is_zero_approx(canvas._inset_highlight_weights(1.0, 0.55).z))
+	assert(canvas._inset_highlight_weights(0.0, 1.5).is_equal_approx(Vector3.ZERO))
+	assert(is_equal_approx(canvas._bevel_shadow_strength(0.4), 1.0))
+	assert(is_zero_approx(canvas._bevel_shadow_strength(1.0)))
+	assert(canvas._bevel_shadow_strength(0.7) > 0.0 and canvas._bevel_shadow_strength(0.7) < 1.0)
+	canvas.authoring_settings = {"side_slats_max_angle": 45.0, "top_slats_max_distance": 2.0}
+	assert(canvas._slats_view_allowed(false, 0, Vector2(0, 1), 1.0))
+	assert(not canvas._slats_view_allowed(false, 0, Vector2(1, 0), 1.0))
+	assert(canvas._slats_view_allowed(true, 4, Vector2(1, 0), 1.0))
+	assert(not canvas._slats_view_allowed(true, 4, Vector2(0, 1), 3.0))
+	canvas.authoring_settings.clear()
+	for quad in [narrow, lid]:
+		var inner: PackedVector2Array = canvas._semantic_inset_quad(quad, 0.4)
+		assert(canvas._minimum_frame_width(quad, inner) < canvas.MIN_FRAME_PIXELS or canvas._minimum_quad_span(inner) < canvas.MIN_PANEL_SPAN_PIXELS)
+	canvas.free()
+	print("Semantic crate pixel budget checks passed")
+	quit()

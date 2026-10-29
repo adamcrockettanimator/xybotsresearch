@@ -1,6 +1,6 @@
 # Xybots Research — Compact Working Context
 
-Updated: 2026-10-22
+Updated: 2026-10-26
 
 Use this file when resuming work. It is the compact working reference for the project, not a replacement for the source art, Blender scenes, or task-specific visual guides.
 
@@ -45,6 +45,16 @@ Use this file when resuming work. It is the compact working reference for the pr
 3. Restore consistent distance lighting only after object scale/position is stable.
 4. Finish the two independently movable/resizable player windows and minimalist per-player map presentation.
 5. Keep collision robust at diagonal poses; prevent wall clipping except when the explicit walk-through-walls cheat is enabled.
+
+## Semantic-prop renderer follow-up
+
+- The current GPU barrel proof-of-concept gives every barrel its own always-updating 160×120 transparent `SubViewport`.  That was acceptable for a one-barrel experiment but is the wrong ownership model for split-screen gameplay: every visible barrel repeats a full logical-screen offscreen pass per player.
+- Preserve the authored appearance while implementing these optimizations in this order: (1) one shared semantic-prop render layer/viewport per player instead of a viewport per barrel, (2) stop updates for culled props, (3) add a distance LOD that uses fewer barrel-intersection steps and simpler lid/stave/hoop work when the projected barrel is tiny, (4) replace the barrel's 49-sample body search with a lower-cost analytic or bounded-refinement intersection, and (5) move the crate face/panel/slat generation from CPU `draw_*` command construction into a projected-face GPU shader.  Keep CPU world-space corner projection, collision, destruction, and loot authoritative.
+- Do not sum the four per-player viewport GPU readings in `coordinate_runtime_profile.csv`; they can refer to shared rendering work.  Profile equivalent player counts and effect loads before and after each optimization.
+
+## Headless smoke-test safety
+
+- Never launch a headless Godot smoke test directly.  A failed `assert`, load failure, or runtime error can leave its `SceneTree` running indefinitely after the terminal/editor closes.  Use `pwsh -File .\tools\run_godot_smoke.ps1 -Script 'res://path/to_test.gd'`; it applies a frame cap, a 45-second wall-clock timeout, terminates a hung process, and treats `SCRIPT ERROR` output as a failure.
 
 ## Resumption rule
 
