@@ -24,6 +24,7 @@ const SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT := preload("res://scripts/semantic
 const SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT := preload("res://scripts/semantic_authored_vector_barrel.gd") # Render the artist's six Curved Lines objects directly as a live world prop.
 const SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT := preload("res://scripts/semantic_vector_world_barrel.gd") # Keep one clean vector-and-gradient barrel bound to real world projection for comparison.
 const SEMANTIC_GPU_LATTICE_BARREL_SCRIPT := preload("res://scripts/semantic_gpu_cage_barrel.gd") # Static 8x5 cage pieces: the GPU projects real panels, ribbons, and staves from transform/camera uniforms.
+const SEMANTIC_GPU_CAGE_CRATE_SCRIPT := preload("res://scripts/semantic_gpu_lattice_crate.gd") # Eight static cube corners; the GPU owns projection plus crate face construction.
 const SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT := preload("res://scripts/semantic_meshinstance2d_barrel.gd") # Render the authored 3D barrel into a MeshInstance2D-backed Canvas fixture for the semantic gallery.
 const SHOW_CANVAS_BARREL_LAYER_INSPECTOR := false                                            # Retire the procedural-barrel hide/isolate UI while evaluating the 3D-backed fixture.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
@@ -5154,16 +5155,28 @@ func enable_calibration_primitive_gallery() -> void:
 	# The authoring scene is now a deliberately small A/B test: the rendered
 	# Blender model carried by MeshInstance2D, and the GPU cage pixel barrel.
 	# Both are visual-only, so they leave a clear path through the room.
-	var gallery_row_y := 2.5
-	var meshinstance_position := Vector2(3.25, gallery_row_y)
-	var gpu_cage_position := Vector2(4.05, gallery_row_y)
+	# The review player spawns at the south-west corner facing into the room.
+	# Keep both comparison props in the first forward camera fan, rather than
+	# several cells diagonally away where an empty opening can hide the test.
+	var gallery_row_y := 4.45
+	var meshinstance_position := Vector2(0.78, gallery_row_y)
+	var crate_position := Vector2(1.32, gallery_row_y)
+	# Keep the known-good CPU Bresenham crate beside a GPU-only fragment-raster
+	# crate. They share the exact same cage, style resource, world dimensions,
+	# and camera inputs; only one-pixel effect ownership differs.
+	var fragment_raster_crate_position := Vector2(1.70, gallery_row_y)
+	var gpu_lattice_barrel_position := Vector2(1.86, gallery_row_y)
 	calibration_sprite_gallery.clear()
 	semantic_lod_floor_footprints.clear()
-	# Imported 3D barrel -> transparent SubViewport -> MeshInstance2D carrier.
-	semantic_lod_floor_footprints.append({"id": "barrel_meshinstance2d_3d_source", "position": meshinstance_position, "side_length": 0.16000, "height": 0.20000, "low_resolution_vector": true, "gallery_preview": true})
-	# Static 8x5 GPU cage; the per-frame path supplies only transform and camera
-	# uniforms, while its semantic pieces rasterize in the shared logical view.
-	semantic_lod_floor_footprints.append({"id": "barrel_gpu_lattice_instanced", "position": gpu_cage_position, "side_length": gpu_lattice_barrel_radius * 2.0, "height": gpu_lattice_barrel_height, "low_resolution_vector": true, "gallery_preview": true})
+	# The authoring scene returns to one live crate. The five forced stages were a
+	# temporary concept-art comparison; the real prop must be evaluated while its
+	# own distance LOD and camera-facing rules change continuously.
+	# The companion is a crate built from only the eight corners of a cube.
+	# A literal cube: all three physical dimensions deliberately share the one
+	# barrel-width value. Detail comes later; silhouette and floor contact first.
+	var crate_cube_side := gpu_lattice_barrel_radius * 2.0
+	semantic_lod_floor_footprints.append({"id": "crate_gpu_cage", "position": crate_position, "side_length": crate_cube_side, "depth": crate_cube_side, "height": crate_cube_side, "low_resolution_vector": true, "gallery_preview": true})
+	semantic_lod_floor_footprints.append({"id": "crate_gpu_fragment_raster", "position": fragment_raster_crate_position, "side_length": crate_cube_side, "depth": crate_cube_side, "height": crate_cube_side, "low_resolution_vector": true, "gallery_preview": true})
 	calibration_sprite_gallery_enabled = true
 	if calibration_semantic_stress_props_enabled:
 		_setup_semantic_stress_props()
@@ -5260,7 +5273,7 @@ func _semantic_lod_floor_outline(key: String) -> Node2D:
 	if node == null or not is_instance_valid(node):
 		if semantic_lod_outline_creation_disabled:
 			return null
-		var outline_script: Script = SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT if key.begins_with("barrel_authored_vector_source") else (SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT if key.begins_with("barrel_vector_world_prototype") else (SEMANTIC_GPU_LATTICE_BARREL_SCRIPT if key.begins_with("barrel_gpu_lattice_instanced") else (SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT if key.begins_with("barrel_meshinstance2d_3d_source") else (SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT if key.begins_with("barrel_projected_canvas") else (SEMANTIC_GPU_BARREL_SCRIPT if key.begins_with("barrel_ground_gpu_ray_experiment") else (SEMANTIC_LOD_CYLINDER_SCRIPT if key == "semantic_cylinder_test" else SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT))))))
+		var outline_script: Script = SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT if key.begins_with("barrel_authored_vector_source") else (SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT if key.begins_with("barrel_vector_world_prototype") else (SEMANTIC_GPU_CAGE_CRATE_SCRIPT if key.begins_with("crate_gpu_") else (SEMANTIC_GPU_LATTICE_BARREL_SCRIPT if key.begins_with("barrel_gpu_lattice_instanced") else (SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT if key.begins_with("barrel_meshinstance2d_3d_source") else (SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT if key.begins_with("barrel_projected_canvas") else (SEMANTIC_GPU_BARREL_SCRIPT if key.begins_with("barrel_ground_gpu_ray_experiment") else (SEMANTIC_LOD_CYLINDER_SCRIPT if key == "semantic_cylinder_test" else SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT)))))))
 		if not outline_script.can_instantiate():
 			semantic_lod_outline_creation_disabled = true
 			push_error("Semantic LOD outline script cannot be instantiated; disabling outline creation for this run. Check earlier script errors.")
@@ -5272,7 +5285,10 @@ func _semantic_lod_floor_outline(key: String) -> Node2D:
 		if node == null:
 			push_error("Semantic LOD outline creation returned null; disabling further attempts for this run.")
 			return null
-		node.name = "SemanticLodFloorOutline_%s" % key
+		# Keep the purpose-built semantic props readable in Remote.  The generic
+		# outline prefix is useful for experiments, but it obscures the actual
+		# crate authoring target behind a needlessly long generated name.
+		node.name = "CrateGpuFragmentRaster" if key == "crate_gpu_fragment_raster" else ("CrateGpuCage" if key.begins_with("crate_gpu_cage") else "SemanticLodFloorOutline_%s" % key)
 		node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var layer: Node2D = view.get("combat_layer", null)
 		if layer != null:
@@ -5535,6 +5551,30 @@ func _render_live_semantic_floor_footprints() -> void:
 			_set_semantic_gpu_barrel_screen_active(key, false)
 			continue
 		if key.begins_with("barrel_authored_vector_source") and (not _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) or not _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", center))):
+			continue
+		if key.begins_with("crate_gpu_"):
+			# The crate has exactly eight authored corners; only its transform and
+			# the live camera basis cross the CPU/GPU boundary each frame.
+			var crate_outline := _semantic_lod_floor_outline(key)
+			if crate_outline == null:
+				continue
+			crate_outline.set("authoring_lod_stage", int(footprint.get("authoring_lod_stage", -1)))
+			crate_outline.set("line_raster_backend", 1 if key == "crate_gpu_fragment_raster" else 0)
+			crate_outline.z_index = _world_actor_draw_layer(center)
+			var crate_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(_world_item_footprint("crate", center))
+			crate_outline.visible = crate_visible
+			if crate_visible:
+				var crate_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+				if crate_renderer == null or not crate_renderer.has_method("_runtime_camera_origin"):
+					crate_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
+				if crate_renderer == null or not crate_renderer.has_method("_runtime_camera_origin"):
+					crate_outline.visible = false
+				else:
+					var crate_forward := _view_forward_vector().normalized()
+					var crate_right := _view_right_vector().normalized()
+					var crate_camera_origin: Vector2 = crate_renderer.call("_runtime_camera_origin", crate_forward, crate_right)
+					var crate_projection_offset: Vector2 = crate_renderer.call("_overscan_projection_offset") if crate_renderer.has_method("_overscan_projection_offset") else Vector2.ZERO
+					crate_outline.call("set_crate", center, float(footprint.get("side_length", 0.0)), float(footprint.get("depth", footprint.get("side_length", 0.0))), float(footprint.get("height", 0.0)), crate_camera_origin, crate_forward, crate_right, crate_projection_offset)
 			continue
 		if key.begins_with("barrel_gpu_lattice_instanced"):
 			# Unlike the older Canvas comparison, this branch intentionally does

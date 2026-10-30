@@ -3,26 +3,31 @@ extends "res://tests/calibration/primitive_sprite_gallery_game.gd"
 
 const PRESET_PATH := "user://semantic_crate_authoring.cfg"
 var settings := {
-	"top_color": Color8(135, 108, 81),
-	"side_x_color": Color8(118, 94, 71),
-	"side_y_color": Color8(101, 81, 60),
-	"panel_top_color": Color8(118, 94, 71),
-	"panel_color": Color8(101, 81, 60),
-	"panel_dark_color": Color8(82, 64, 47),
-	"shadow_color": Color8(78, 60, 44),
+	"top_color": Color8(185, 128, 65),
+	"side_x_color": Color8(151, 94, 44),
+	"side_y_color": Color8(126, 72, 34),
+	"panel_top_color": Color8(163, 105, 50),
+	"panel_color": Color8(136, 77, 35),
+	"panel_dark_color": Color8(114, 61, 29),
+	"shadow_color": Color8(77, 42, 21),
 	"panel_enabled": true, "shadow_enabled": true,
-	"frame_inset": 0.19, "min_panel_pixels": 1.5,
+	"frame_inset": 0.14, "min_panel_pixels": 1.5,
 	"full_contrast_pixels": 6.0, "fade_steps": 0,
 	"panel_max_distance": 1000.0, "min_face_ratio": 0.0,
 	"lighting_shadow": 0.0,
 	"edge_enabled": true, "edge_full_distance": 0.55,
 	"edge_fade_distance": 1.15, "edge_color_balance": 0.5, "edge_brightening": 0.2,
-	"ao_enabled": true, "ao_depth": 0.08, "ao_strength": 0.55, "ao_color": Color8(78, 60, 44),
-	"shadow_depth": 0.07, "slats_enabled": true, "slat_count": 3, "slat_color": Color8(78, 60, 44),
+	"ao_enabled": true, "ao_depth": 0.08, "ao_strength": 0.22, "ao_color": Color8(77, 42, 21),
+	"shadow_depth": 0.07, "slats_enabled": true, "slat_count": 4, "slat_color": Color8(91, 48, 23),
 	"side_slats_max_angle": 90.0, "top_slats_max_distance": 1000.0,
-	"inset_highlight_enabled": true, "inset_highlight_color": Color8(167, 141, 108),
+	"inset_highlight_enabled": true, "inset_highlight_color": Color8(220, 163, 90),
 	"inset_highlight_full_distance": 0.55, "inset_highlight_fade_distance": 1.5,
 	"bevel_shadow_enabled": true, "bevel_shadow_fade_distance": 1.0,
+	"lid_enabled": true, "frame_color": Color8(207, 142, 68),
+	"diagonal_enabled": false, "diagonal_color": Color8(171, 103, 48), "diagonal_width": 1.0,
+	"rim_color": Color8(234, 172, 84), "rim_fade_distance": 1.4,
+	"floor_shadow_enabled": true, "floor_shadow_color": Color(0.08, 0.05, 0.025, 0.45), "floor_shadow_opacity": 0.45,
+	"ground_lift": 0.0,
 }
 var controls := {}
 var feature_groups := {}
@@ -38,14 +43,17 @@ func _process(_delta: float) -> void:
 		return
 	var nodes: Dictionary = game.get("semantic_lod_floor_outline_nodes")
 	for key in nodes:
-		if not String(key).contains("crate_semantic_flat_box"):
+		if not String(key).contains("crate_gpu_cage"):
 			continue
 		var outline = nodes[key]
 		if not is_instance_valid(outline):
 			continue
 		var canvas = outline.get("low_resolution_canvas")
 		if is_instance_valid(canvas):
-			canvas.authoring_settings = settings
+		# Direct Remote Inspector controls on GpuCageCrateEightCorners are now the
+		# authoritative authoring surface. Do not overwrite them every frame with
+		# this older F6 panel's defaults.
+			pass
 
 func _build_controls() -> void:
 	var layer := CanvasLayer.new()
@@ -69,9 +77,12 @@ func _build_controls() -> void:
 	_add_color(faces, "Top", "top_color")
 	_add_color(faces, "Side A", "side_x_color")
 	_add_color(faces, "Side B", "side_y_color")
+	_add_color(faces, "Frame", "frame_color")
 	_add_slider(faces, "Side lighting shadow", "lighting_shadow", 0.0, 0.6, 0.01)
+	_add_slider(faces, "Ground lift", "ground_lift", 0.0, 0.20, 0.01)
 	var panel_feature := _add_feature_group(column, "Inset panel")
 	_add_toggle(panel_feature, "Enabled", "panel_enabled")
+	_add_toggle(panel_feature, "Show lid", "lid_enabled")
 	_add_color(panel_feature, "Top panel", "panel_top_color")
 	_add_color(panel_feature, "Side A panel", "panel_color")
 	_add_color(panel_feature, "Side B panel", "panel_dark_color")
@@ -99,6 +110,9 @@ func _build_controls() -> void:
 	_add_slider(slats, "Number of slats", "slat_count", 2.0, 8.0, 1.0)
 	_add_slider(slats, "Side slats: maximum angle (degrees)", "side_slats_max_angle", 0.0, 90.0, 1.0)
 	_add_slider(slats, "Top slats: maximum distance", "top_slats_max_distance", 0.5, 20.0, 0.1)
+	_add_toggle(slats, "Diagonal brace", "diagonal_enabled")
+	_add_color(slats, "Diagonal color", "diagonal_color")
+	_add_slider(slats, "Diagonal width (pixels)", "diagonal_width", 0.5, 4.0, 0.5)
 	var inset_edge := _add_feature_group(column, "Inset frame highlight")
 	_add_toggle(inset_edge, "Enabled", "inset_highlight_enabled")
 	_add_color(inset_edge, "Color", "inset_highlight_color")
@@ -110,6 +124,11 @@ func _build_controls() -> void:
 	_add_slider(edge, "Disappears at distance", "edge_fade_distance", 0.05, 5.0, 0.05)
 	_add_slider(edge, "Color: dark to light", "edge_color_balance", 0.0, 1.0, 0.05)
 	_add_slider(edge, "Extra brightness", "edge_brightening", 0.0, 0.6, 0.01)
+	_add_color(edge, "Forward rim", "rim_color")
+	_add_slider(edge, "Rim fade distance", "rim_fade_distance", 0.05, 5.0, 0.05)
+	_add_toggle(edge, "Floor shadow", "floor_shadow_enabled")
+	_add_color(edge, "Floor shadow color", "floor_shadow_color")
+	_add_slider(edge, "Floor shadow opacity", "floor_shadow_opacity", 0.0, 1.0, 0.05)
 	var buttons := HBoxContainer.new()
 	column.add_child(buttons)
 	var save := Button.new()
