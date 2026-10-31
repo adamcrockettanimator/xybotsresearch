@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SemanticStoolStyle" format=3]
+
+[ext_resource type="Script" path="res://scripts/semantic_stool_style.gd" id="1_style"]
+
+[resource]
+script = ExtResource("1_style")
+footprint_x = 0.14
+footprint_y = 0.16
+leg_height = 0.11000000000000001
+maximum_leg_pixels = 2
+maximum_seat_height_pixels = 2
+maximum_pixels_distance = 2.05
+one_pixel_distance = 28.2
+show_logical_pixel_grid = true

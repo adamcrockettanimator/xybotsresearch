@@ -99,6 +99,15 @@ values. Remote Inspector tuning should survive stopping and restarting the
 game. Runtime transform, current projected points, and debug state should not
 become authored style accidentally.
 
+### Remote Inspector safety
+
+Do not store per-frame rebuilt projected faces, debug strokes, or raster-layer
+arrays as ordinary script members. The Remote Debugger serializes those members
+while an Inspector slider is sending updates; continuous mutation can overflow
+its 8 MB packet limit and disconnect the game. Keep transient geometry local to
+the rebuild method, update drawing nodes only when the geometry changes, and
+persist only the final artist-facing style values.
+
 ## Semantic LOD
 
 LOD is a visual decision per feature, not simply opacity for the whole prop.
