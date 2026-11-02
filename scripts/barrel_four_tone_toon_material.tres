@@ -1,0 +1,16 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://stf8lid8n7rm"]
+
+[ext_resource type="Shader" uid="uid://cg22vqc4h4012" path="res://scripts/barrel_four_tone_toon.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" uid="uid://cs25a8r3boqcu" path="res://assets/Calibration/Barrel_LOD_00_xybotsPallette.png" id="2_palette"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/lower_band = 0.4670000221825
+shader_parameter/middle_band = 0.55600002641
+shader_parameter/lid_band = 0.71200003382
+shader_parameter/base_texture = ExtResource("2_palette")
+shader_parameter/underside_value = 0.1270000060325
+shader_parameter/lower_side_value = 0.36800001748
+shader_parameter/upper_side_value = 0.6310000299725
+shader_parameter/lid_value = 1.0

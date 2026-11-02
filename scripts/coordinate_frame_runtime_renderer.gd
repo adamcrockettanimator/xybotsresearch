@@ -211,6 +211,58 @@ var depth_dither_near_half_width_pixels := 4.0
 # simple enough to use its semantic version continuously.
 var semantic_floor_material_enabled := true
 var semantic_ceiling_material_enabled := true
+# Plane-only EWA controls. Their setters immediately update allocated floor and
+# ceiling materials, making Inspector experiments visible without moving.
+@export var semantic_plane_ewa_filter_enabled := true:
+	set(value):
+		semantic_plane_ewa_filter_enabled = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(0.25, 16.0, 0.05) var semantic_floor_ewa_min_major_footprint := 1.25:
+	set(value):
+		semantic_floor_ewa_min_major_footprint = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(1.0, 8.0, 0.05) var semantic_floor_ewa_min_anisotropy := 1.50:
+	set(value):
+		semantic_floor_ewa_min_anisotropy = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(1.0, 64.0, 0.25) var semantic_floor_ewa_flat_start_footprint := 8.0:
+	set(value):
+		semantic_floor_ewa_flat_start_footprint = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(1.0, 64.0, 0.25) var semantic_floor_ewa_flat_end_footprint := 24.0:
+	set(value):
+		semantic_floor_ewa_flat_end_footprint = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(0.25, 64.0, 0.05) var semantic_ceiling_ewa_min_major_footprint := 12.0:
+	set(value):
+		semantic_ceiling_ewa_min_major_footprint = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(1.0, 8.0, 0.05) var semantic_ceiling_ewa_min_anisotropy := 1.50:
+	set(value):
+		semantic_ceiling_ewa_min_anisotropy = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(1.0, 96.0, 0.25) var semantic_ceiling_ewa_flat_start_footprint := 24.0:
+	set(value):
+		semantic_ceiling_ewa_flat_start_footprint = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(1.0, 96.0, 0.25) var semantic_ceiling_ewa_flat_end_footprint := 48.0:
+	set(value):
+		semantic_ceiling_ewa_flat_end_footprint = value
+		_apply_semantic_plane_ewa_tuning()
+# Blend EWA in after its footprint/stretch minima instead of presenting a
+# visible hard seam at the old Boolean activation boundary.
+@export_range(0.05, 32.0, 0.05) var semantic_plane_ewa_blend_footprint := 3.0:
+	set(value):
+		semantic_plane_ewa_blend_footprint = value
+		_apply_semantic_plane_ewa_tuning()
+@export_range(0.05, 4.0, 0.05) var semantic_plane_ewa_blend_anisotropy := 0.50:
+	set(value):
+		semantic_plane_ewa_blend_anisotropy = value
+		_apply_semantic_plane_ewa_tuning()
+# Semantic floor/ceiling pattern fades toward each material's palette mean at
+# distance. These Inspector values are passed to every GPU plane cell.
+@export_range(0.0, 5.0, 0.05) var semantic_plane_contrast_full_depth := 1.10
+@export_range(0.1, 5.5, 0.05) var semantic_plane_contrast_flat_depth := 4.75
 # Wall_Layer2 remains available for future windows and wall art, but the
 # base wallpaper should render without a permanent decorative overlay.
 # Press P during play to enable the layered/parallax composition.
@@ -1516,6 +1568,31 @@ func _set_gpu_floor_sprites_visible(visible: bool) -> void:
 			sprite.visible = visible
 
 
+# _apply_semantic_plane_ewa_tuning: Updates already-rendered plane materials
+# so Inspector edits take effect immediately, even before the next camera pose.
+func _apply_semantic_plane_ewa_tuning() -> void:
+	for material in gpu_floor_materials:
+		_apply_semantic_plane_ewa_tuning_to_material(material)
+	for material in gpu_ceiling_materials:
+		_apply_semantic_plane_ewa_tuning_to_material(material)
+
+
+func _apply_semantic_plane_ewa_tuning_to_material(material: ShaderMaterial) -> void:
+	if material == null:
+		return
+	material.set_shader_parameter("use_semantic_plane_anisotropic_filter", semantic_plane_ewa_filter_enabled)
+	material.set_shader_parameter("semantic_floor_ewa_min_major_footprint", semantic_floor_ewa_min_major_footprint)
+	material.set_shader_parameter("semantic_floor_ewa_min_anisotropy", semantic_floor_ewa_min_anisotropy)
+	material.set_shader_parameter("semantic_floor_ewa_flat_start_footprint", semantic_floor_ewa_flat_start_footprint)
+	material.set_shader_parameter("semantic_floor_ewa_flat_end_footprint", maxf(semantic_floor_ewa_flat_end_footprint, semantic_floor_ewa_flat_start_footprint + 0.01))
+	material.set_shader_parameter("semantic_ceiling_ewa_min_major_footprint", semantic_ceiling_ewa_min_major_footprint)
+	material.set_shader_parameter("semantic_ceiling_ewa_min_anisotropy", semantic_ceiling_ewa_min_anisotropy)
+	material.set_shader_parameter("semantic_ceiling_ewa_flat_start_footprint", semantic_ceiling_ewa_flat_start_footprint)
+	material.set_shader_parameter("semantic_ceiling_ewa_flat_end_footprint", maxf(semantic_ceiling_ewa_flat_end_footprint, semantic_ceiling_ewa_flat_start_footprint + 0.01))
+	material.set_shader_parameter("semantic_plane_ewa_blend_footprint", semantic_plane_ewa_blend_footprint)
+	material.set_shader_parameter("semantic_plane_ewa_blend_anisotropy", semantic_plane_ewa_blend_anisotropy)
+
+
 # _rebuild_gpu_floor_surfaces: Assigns one live ray-to-plane material per
 # visible floor cell; the GPU determines the owning cell from each world ray.
 func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
@@ -1559,7 +1636,9 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
 		material.set_shader_parameter("use_semantic_floor_material", semantic_floor_material_enabled and active_floor_texture_label == "WoodFloor2")
 		material.set_shader_parameter("use_semantic_ceiling_material", false)
-		material.set_shader_parameter("use_semantic_plane_anisotropic_filter", semantic_lattice_anisotropic_filter_enabled)
+		_apply_semantic_plane_ewa_tuning_to_material(material)
+		material.set_shader_parameter("semantic_plane_contrast_full_depth", semantic_plane_contrast_full_depth)
+		material.set_shader_parameter("semantic_plane_contrast_flat_depth", maxf(semantic_plane_contrast_flat_depth, semantic_plane_contrast_full_depth + 0.01))
 		material.set_shader_parameter("use_layers", false)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT)
 	floor_art_sprite.visible = false
@@ -1765,7 +1844,9 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
 		material.set_shader_parameter("use_semantic_floor_material", false)
 		material.set_shader_parameter("use_semantic_ceiling_material", semantic_ceiling_material_enabled)
-		material.set_shader_parameter("use_semantic_plane_anisotropic_filter", semantic_lattice_anisotropic_filter_enabled)
+		_apply_semantic_plane_ewa_tuning_to_material(material)
+		material.set_shader_parameter("semantic_plane_contrast_full_depth", semantic_plane_contrast_full_depth)
+		material.set_shader_parameter("semantic_plane_contrast_flat_depth", maxf(semantic_plane_contrast_flat_depth, semantic_plane_contrast_full_depth + 0.01))
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT)

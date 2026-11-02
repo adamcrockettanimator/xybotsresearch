@@ -4,11 +4,30 @@
 
 [resource]
 script = ExtResource("1_style")
-footprint_x = 0.14
-footprint_y = 0.16
-leg_height = 0.11000000000000001
+top_color = Color(0.5529412, 0.4392157, 0.32941177, 1)
+x_side_color = Color(0.49803922, 0.39607844, 0.29803923, 1)
+z_side_color = Color(0.41568628, 0.32941177, 0.24705882, 1)
+shadow_color = Color(0.3, 0.24200001, 0.18, 0.5294118)
+footprint_x = 0.32999999999999996
+footprint_y = 0.1
+leg_height = 0.1
 maximum_leg_pixels = 2
 maximum_seat_height_pixels = 2
-maximum_pixels_distance = 2.05
-one_pixel_distance = 28.2
-show_logical_pixel_grid = true
+maximum_pixels_distance = 1.4
+one_pixel_distance = 2.9
+near_edge_highlight_color = Color(0.60784316, 0.4862745, 0.3647059, 1)
+near_edge_highlight_end_fade = 1.0
+near_edge_highlight_full_distance = 1.0
+near_edge_highlight_hidden_distance = 2.0
+seat_slat_shadow_color = Color(0.39, 0.3159, 0.2418, 1)
+seat_slat_highlight_color = Color(0.66, 0.52800006, 0.39600003, 1)
+seat_slat_shadow_full_distance = 0.7999999999999999
+seat_slat_shadow_hidden_distance = 1.45
+seat_slat_highlight_full_distance = 0.75
+seat_slat_highlight_hidden_distance = 1.2999999999999998
+floor_darkening_strength = 0.39
+under_table_leg_darkening_strength = 0.69
+exterior_corner_brightening_strength = 0.19
+face_horizontal_span_hidden_pixels = 0.35
+face_horizontal_span_full_pixels = 0.5
+show_debug_geometry = false

@@ -1,6 +1,8 @@
 @tool
 extends RefCounted
 
+const VariantSerializer := preload("res://addons/godot_ai/utils/variant_serializer.gd")
+
 ## Read-only animation introspection + shared value-coercion / serialization.
 ##
 ## Holds:
@@ -66,7 +68,9 @@ func list_animations(params: Dictionary) -> Dictionary:
 
 	var handler = _h()
 	if handler == null:
-		return ErrorCodes.make(ErrorCodes.EDITOR_NOT_READY, "AnimationHandler not available")
+		return ErrorCodes.make_not_ready(
+			ErrorCodes.SUB_EDITOR_UNAVAILABLE,
+			"AnimationHandler not available", false)
 	var resolved: Dictionary = handler._resolve_player_read(player_path)
 	if resolved.has("error"):
 		return resolved
@@ -109,7 +113,9 @@ func get_animation(params: Dictionary) -> Dictionary:
 
 	var handler = _h()
 	if handler == null:
-		return ErrorCodes.make(ErrorCodes.EDITOR_NOT_READY, "AnimationHandler not available")
+		return ErrorCodes.make_not_ready(
+			ErrorCodes.SUB_EDITOR_UNAVAILABLE,
+			"AnimationHandler not available", false)
 	var resolved: Dictionary = handler._resolve_player_read(player_path)
 	if resolved.has("error"):
 		return resolved
@@ -168,7 +174,9 @@ func validate_animation(params: Dictionary) -> Dictionary:
 
 	var handler = _h()
 	if handler == null:
-		return ErrorCodes.make(ErrorCodes.EDITOR_NOT_READY, "AnimationHandler not available")
+		return ErrorCodes.make_not_ready(
+			ErrorCodes.SUB_EDITOR_UNAVAILABLE,
+			"AnimationHandler not available", false)
 	var resolved: Dictionary = handler._resolve_player_read(player_path)
 	if resolved.has("error"):
 		return resolved
@@ -344,46 +352,108 @@ static func coerce_with_context(value: Variant, ctx: Dictionary) -> Dictionary:
 	return coerce_for_type(value, ctx.prop_type, ctx.prop_name)
 
 
+## A rotation slerp can consume: all components finite and unit length within
+## float32 precision. Guards the normalization path against a scaled result
+## that is zero, infinite, or NaN.
+static func _is_usable_rotation(quat: Quaternion) -> bool:
+	if not is_finite(quat.x) or not is_finite(quat.y) or not is_finite(quat.z) or not is_finite(quat.w):
+		return false
+	return absf(quat.length() - 1.0) <= 0.001
+
+
 ## Coerce a single value to the given Godot variant type. Returns
 ## {"ok": coerced} or {"error": msg}. Unknown types pass through.
 static func coerce_for_type(value: Variant, prop_type: int, prop_name: String) -> Dictionary:
 	match prop_type:
 		TYPE_COLOR:
-			if value is Color:
-				return {"ok": value}
-			if value is String:
-				var s := value as String
-				var a := Color.from_string(s, Color(0, 0, 0, 0))
-				var b := Color.from_string(s, Color(1, 1, 1, 1))
-				if a == b:
-					return {"ok": a}
-				return {"error": "Cannot parse '%s' as Color for property '%s'" % [s, prop_name]}
-			if value is Dictionary and value.has("r") and value.has("g") and value.has("b"):
-				return {"ok": Color(float(value.r), float(value.g), float(value.b), float(value.get("a", 1.0)))}
-			return {"error": "Cannot coerce value to Color for property '%s' (expected string, {r,g,b}, or Color)" % prop_name}
+			## Canonical strict parser (#714): same shapes as every other
+			## color-accepting handler, including [r,g,b(,a)] arrays.
+			var col = McpJsonValues.parse_color(value)
+			if col != null:
+				return {"ok": col}
+			return {"error": "Cannot coerce value to Color for property '%s' (expected \"#rrggbb(aa)\"/named string, {r,g,b[,a]}, [r,g,b(,a)], or Color)" % prop_name}
 		TYPE_VECTOR2:
-			if value is Vector2:
-				return {"ok": value}
-			if value is Dictionary and value.has("x") and value.has("y"):
-				return {"ok": Vector2(float(value.x), float(value.y))}
-			if value is Array and value.size() >= 2:
-				return {"ok": Vector2(float(value[0]), float(value[1]))}
+			var v2 = McpJsonValues.parse_vector2(value)
+			if v2 != null:
+				return {"ok": v2}
 			return {"error": "Cannot coerce value to Vector2 for property '%s' (expected {x,y}, [x,y], or Vector2)" % prop_name}
 		TYPE_VECTOR3:
-			if value is Vector3:
-				return {"ok": value}
-			if value is Dictionary and value.has("x") and value.has("y") and value.has("z"):
-				return {"ok": Vector3(float(value.x), float(value.y), float(value.z))}
-			return {"error": "Cannot coerce value to Vector3 for property '%s' (expected {x,y,z} or Vector3)" % prop_name}
+			var v3 = McpJsonValues.parse_vector3(value)
+			if v3 != null:
+				return {"ok": v3}
+			return {"error": "Cannot coerce value to Vector3 for property '%s' (expected {x,y,z}, [x,y,z], or Vector3)" % prop_name}
 		TYPE_FLOAT:
-			if value is int or value is float:
-				return {"ok": float(value)}
+			## Canonical scalar parser (#964): int/float passthrough plus
+			## strictly-numeric strings. Null falls through to the generic
+			## passthrough below, matching the old behavior for garbage.
+			var parsed: Variant = McpJsonValues.parse_float(value)
+			if parsed != null:
+				return {"ok": parsed}
 		TYPE_INT:
 			if value is float or value is int:
 				return {"ok": int(value)}
 		TYPE_BOOL:
 			if value is int or value is float or value is bool:
 				return {"ok": bool(value)}
+		TYPE_VECTOR3I:
+			var v3i = McpJsonValues.parse_vector3i(value)
+			if v3i != null:
+				return {"ok": v3i}
+			return {"error": "Cannot coerce value to Vector3i for property '%s' (expected {x,y,z}, [x,y,z], or Vector3i; components must be finite and within int32 range)" % prop_name}
+		TYPE_QUATERNION:
+			var quat = McpJsonValues.parse_quaternion(value)
+			if quat == null:
+				return {"error": "Cannot coerce value to Quaternion for property '%s' (expected {x,y,z,w}, [x,y,z,w], or Quaternion; components must be finite)" % prop_name}
+			## Rotation contract at the animation boundary: AnimationPlayer
+			## slerps quaternions, and a non-unit one makes
+			## value_track_interpolate emit a normalization error and return
+			## identity. Normalize valid nonzero rotations so stored tracks are
+			## usable; only an exactly zero-length quaternion is refused.
+			## Scale by the largest component before measuring: components are
+			## float32, so squaring one near the type's maximum overflows to
+			## INF (normalized() then returns (0,0,0,0)), while squaring a tiny
+			## nonzero one underflows to zero and misreads as zero-length.
+			var largest := maxf(maxf(absf(quat.x), absf(quat.y)), maxf(absf(quat.z), absf(quat.w)))
+			if largest == 0.0:
+				return {"error": "Cannot coerce value to Quaternion for property '%s': zero-length quaternion is not a rotation" % prop_name}
+			var normalized := Quaternion(
+				quat.x / largest, quat.y / largest, quat.z / largest, quat.w / largest
+			).normalized()
+			## Validate the result instead of trusting the arithmetic: an
+			## unusable rotation must fail here, not reach slerp as zero.
+			if not _is_usable_rotation(normalized):
+				return {"error": "Cannot coerce value to Quaternion for property '%s': components cannot be normalized to a usable rotation" % prop_name}
+			return {"ok": normalized}
+		TYPE_BASIS:
+			var basis = McpJsonValues.parse_basis(value)
+			if basis != null:
+				return {"ok": basis}
+			return {"error": "Cannot coerce value to Basis for property '%s' (expected {x,y,z} axis vectors, a 3x3 nested array, or Basis)" % prop_name}
+		TYPE_TRANSFORM3D:
+			var xform = McpJsonValues.parse_transform3d(value)
+			if xform != null:
+				return {"ok": xform}
+			return {"error": "Cannot coerce value to Transform3D for property '%s' (expected {basis,origin}, {position,rotation_degrees?,scale?}, or Transform3D)" % prop_name}
+		TYPE_RECT2:
+			var rect = McpJsonValues.parse_rect2(value)
+			if rect != null:
+				return {"ok": rect}
+			return {"error": "Cannot coerce value to Rect2 for property '%s' (expected {position,size}, [x,y,w,h], or Rect2)" % prop_name}
+		TYPE_AABB:
+			var aabb = McpJsonValues.parse_aabb(value)
+			if aabb != null:
+				return {"ok": aabb}
+			return {"error": "Cannot coerce value to AABB for property '%s' (expected {position,size}, [x,y,z,w,h,d], or AABB)" % prop_name}
+		TYPE_NODE_PATH:
+			var node_path = McpJsonValues.parse_node_path(value)
+			if node_path != null:
+				return {"ok": node_path}
+			return {"error": "Cannot coerce value to NodePath for property '%s' (expected a string path)" % prop_name}
+		TYPE_STRING_NAME:
+			var string_name = McpJsonValues.parse_string_name(value)
+			if string_name != null:
+				return {"ok": string_name}
+			return {"error": "Cannot coerce value to StringName for property '%s' (expected a string)" % prop_name}
 	return {"ok": value}
 
 
@@ -437,29 +507,8 @@ static func interp_to_string(mode: int) -> String:
 
 ## Convert a Godot Variant to a JSON-safe value.
 static func serialize_value(value: Variant) -> Variant:
-	if value == null:
-		return null
-	match typeof(value):
-		TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING:
-			return value
-		TYPE_STRING_NAME:
-			return str(value)
-		TYPE_VECTOR2:
-			return {"x": value.x, "y": value.y}
-		TYPE_VECTOR3:
-			return {"x": value.x, "y": value.y, "z": value.z}
-		TYPE_COLOR:
-			return {"r": value.r, "g": value.g, "b": value.b, "a": value.a}
-		TYPE_NODE_PATH:
-			return str(value)
-		TYPE_ARRAY:
-			var arr: Array = []
-			for item in value:
-				arr.append(serialize_value(item))
-			return arr
-		TYPE_DICTIONARY:
-			var out := {}
-			for k in value:
-				out[str(k)] = serialize_value(value[k])
-			return out
-	return str(value)
+	## Delegates to the shared serializer (#714) — the drifted private copy
+	## stringified rotation_3d keyframe Quaternions into opaque text where
+	## McpVariantSerializer emits the {x,y,z,w} dict callers can round-trip
+	## (it also NaN/Inf-guards floats, matching the wire contract).
+	return VariantSerializer.serialize(value)

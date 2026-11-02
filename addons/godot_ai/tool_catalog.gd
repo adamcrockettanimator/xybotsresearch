@@ -22,6 +22,14 @@ const CORE_TOOLS := [
 	"session_activate",
 ]
 
+## Non-core tools that live in a NON-excludable domain (only `session`
+## today), so they appear in no DOMAINS row yet are always registered.
+## Counted alongside CORE_TOOLS so the dock's totals match the real
+## server surface.
+const ALWAYS_ON_TOOLS := [
+	"session_manage",
+]
+
 ## Ordered list of user-toggleable domains. Each entry:
 ##   id:    matches the name passed to `--exclude-domains`
 ##   label: human-friendly display (same as id for now, kept separate so
@@ -36,11 +44,13 @@ const DOMAINS := [
 	{"id": "batch", "label": "batch", "count": 1, "tools": ["batch_execute"]},
 	{"id": "camera", "label": "camera", "count": 1, "tools": ["camera_manage"]},
 	{"id": "client", "label": "client", "count": 1, "tools": ["client_manage"]},
+	{"id": "custom", "label": "custom", "count": 1, "tools": ["custom_manage"]},
 	{"id": "editor", "label": "editor", "count": 4, "tools": ["editor_manage", "editor_reload_plugin", "editor_screenshot", "logs_read"]},
 	{"id": "filesystem", "label": "filesystem", "count": 1, "tools": ["filesystem_manage"]},
 	{"id": "game", "label": "game", "count": 1, "tools": ["game_manage"]},
 	{"id": "input_map", "label": "input_map", "count": 1, "tools": ["input_map_manage"]},
 	{"id": "material", "label": "material", "count": 1, "tools": ["material_manage"]},
+	{"id": "navigation", "label": "navigation", "count": 1, "tools": ["navigation_manage"]},
 	{"id": "node", "label": "node", "count": 4, "tools": ["node_create", "node_find", "node_manage", "node_set_property"]},
 	{"id": "particle", "label": "particle", "count": 1, "tools": ["particle_manage"]},
 	{"id": "project", "label": "project", "count": 2, "tools": ["project_manage", "project_run"]},
@@ -52,14 +62,27 @@ const DOMAINS := [
 	{"id": "theme", "label": "theme", "count": 1, "tools": ["theme_manage"]},
 	{"id": "tilemap", "label": "tilemap", "count": 1, "tools": ["tilemap_manage"]},
 	{"id": "tileset", "label": "tileset", "count": 1, "tools": ["tileset_manage"]},
+	{"id": "gridmap", "label": "gridmap", "count": 1, "tools": ["gridmap_manage"]},
+	{"id": "csg", "label": "csg", "count": 1, "tools": ["csg_manage"]},
 	{"id": "ui", "label": "ui", "count": 1, "tools": ["ui_manage"]},
 ]
+
+
+## Whether `id` is a real, excludable domain in this plugin version. Used to
+## drop stale names (e.g. a domain removed since the setting was written) so
+## they never reach the server's `--exclude-domains`, whose `parse_exclude_list`
+## hard-fails on unknown names.
+static func is_excludable_domain(id: String) -> bool:
+	for d in DOMAINS:
+		if d["id"] == id:
+			return true
+	return false
 
 
 ## Total tool count when no domains are excluded. Used for the "Enabled: N / M"
 ## readout in the Tools tab without looping the catalog on every repaint.
 static func total_tool_count() -> int:
-	var n := CORE_TOOLS.size()
+	var n := CORE_TOOLS.size() + ALWAYS_ON_TOOLS.size()
 	for d in DOMAINS:
 		n += int(d["count"])
 	return n
@@ -67,7 +90,7 @@ static func total_tool_count() -> int:
 
 ## Tool count remaining after excluding the given set of domain ids.
 static func enabled_tool_count(excluded: PackedStringArray) -> int:
-	var n := CORE_TOOLS.size()
+	var n := CORE_TOOLS.size() + ALWAYS_ON_TOOLS.size()
 	for d in DOMAINS:
 		if excluded.find(d["id"]) == -1:
 			n += int(d["count"])

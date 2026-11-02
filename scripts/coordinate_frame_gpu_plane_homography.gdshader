@@ -21,6 +21,23 @@ uniform bool use_depth_light_dither = false;
 uniform bool use_semantic_floor_material = false;
 uniform bool use_semantic_ceiling_material = false;
 uniform bool use_semantic_plane_anisotropic_filter = true;
+uniform float semantic_floor_ewa_min_major_footprint = 1.25;
+uniform float semantic_floor_ewa_min_anisotropy = 1.50;
+uniform float semantic_floor_ewa_flat_start_footprint = 8.0;
+uniform float semantic_floor_ewa_flat_end_footprint = 24.0;
+uniform float semantic_ceiling_ewa_min_major_footprint = 12.0;
+uniform float semantic_ceiling_ewa_min_anisotropy = 1.50;
+uniform float semantic_ceiling_ewa_flat_start_footprint = 24.0;
+uniform float semantic_ceiling_ewa_flat_end_footprint = 48.0;
+// The EWA gate is a continuous coverage rather than an on/off threshold.
+// These spans describe how far past each minimum it takes to reach full EWA.
+uniform float semantic_plane_ewa_blend_footprint = 3.0;
+uniform float semantic_plane_ewa_blend_anisotropy = 0.50;
+// Fade the procedural palette's deviation from its material mean by world
+// depth. This is intentionally independent of the EWA footprint: a distant
+// plane can become calm even where its projected texels happen to be sharp.
+uniform float semantic_plane_contrast_full_depth = 1.10;
+uniform float semantic_plane_contrast_flat_depth = 4.75;
 uniform float floor_light_dither_near_half_width_pixels = 3.0;
 uniform float floor_light_dither_far_half_width_pixels = 1.0;
 uniform int floor_light_dither_steps = 4;
@@ -193,15 +210,20 @@ vec3 ewa_floor_material(vec2 source_uv, vec2 span_x, vec2 span_y) {
 	vec3 gaussian_color = center + axial * 0.10 + diagonal * 0.08;
 	float major_footprint = max(length(span_x), length(span_y));
 	vec3 average = vec3(118.0, 94.0, 71.0) / 255.0;
-	return mix(gaussian_color, average, smoothstep(8.0, 24.0, major_footprint));
+	return mix(gaussian_color, average, smoothstep(semantic_floor_ewa_flat_start_footprint, max(semantic_floor_ewa_flat_end_footprint, semantic_floor_ewa_flat_start_footprint + 0.01), major_footprint));
 }
 
 vec3 semantic_floor_material(vec2 source_uv, vec2 span_x, vec2 span_y) {
 	float major_footprint = max(length(span_x), length(span_y));
 	float minor_footprint = max(0.001, min(length(span_x), length(span_y)));
-	bool needs_ewa = major_footprint > 1.25 && major_footprint / minor_footprint > 1.5;
-	if (use_semantic_plane_anisotropic_filter && needs_ewa) return ewa_floor_material(source_uv, span_x, span_y);
-	return semantic_floor_board_color(source_uv);
+	vec3 unfiltered = semantic_floor_board_color(source_uv);
+	if (!use_semantic_plane_anisotropic_filter) return unfiltered;
+	float footprint_coverage = smoothstep(semantic_floor_ewa_min_major_footprint, semantic_floor_ewa_min_major_footprint + max(semantic_plane_ewa_blend_footprint, 0.01), major_footprint);
+	float anisotropy = major_footprint / minor_footprint;
+	float anisotropy_coverage = smoothstep(semantic_floor_ewa_min_anisotropy, semantic_floor_ewa_min_anisotropy + max(semantic_plane_ewa_blend_anisotropy, 0.01), anisotropy);
+	float ewa_coverage = footprint_coverage * anisotropy_coverage;
+	if (ewa_coverage <= 0.0) return unfiltered;
+	return mix(unfiltered, ewa_floor_material(source_uv, span_x, span_y), ewa_coverage);
 }
 
 float ceiling_beam_coverage(vec2 ceiling_texel) {
@@ -252,7 +274,7 @@ vec3 ewa_ceiling_material(vec2 source_uv, vec2 span_x, vec2 span_y) {
 	// Do not begin collapsing the structure until a beam itself is sub-pixel.
 	// This is deliberately later than the floor: a ceiling beam is a readable
 	// architectural feature, rather than surface grain.
-	return mix(gaussian_color, average, smoothstep(24.0, 48.0, major_footprint));
+	return mix(gaussian_color, average, smoothstep(semantic_ceiling_ewa_flat_start_footprint, max(semantic_ceiling_ewa_flat_end_footprint, semantic_ceiling_ewa_flat_start_footprint + 0.01), major_footprint));
 }
 
 vec3 semantic_ceiling_material(vec2 source_uv, vec2 span_x, vec2 span_y) {
@@ -261,9 +283,22 @@ vec3 semantic_ceiling_material(vec2 source_uv, vec2 span_x, vec2 span_y) {
 	// Preserve the 14-texel beam and its directional shadow until the footprint
 	// is genuinely too broad to represent either. Farther away EWA still removes
 	// the moire rather than turning those distinct shapes into close-range noise.
-	bool needs_ewa = major_footprint > 12.0 && major_footprint / minor_footprint > 1.5;
-	if (use_semantic_plane_anisotropic_filter && needs_ewa) return ewa_ceiling_material(source_uv, span_x, span_y);
-	return semantic_ceiling_material_unfiltered(source_uv);
+	vec3 unfiltered = semantic_ceiling_material_unfiltered(source_uv);
+	if (!use_semantic_plane_anisotropic_filter) return unfiltered;
+	float footprint_coverage = smoothstep(semantic_ceiling_ewa_min_major_footprint, semantic_ceiling_ewa_min_major_footprint + max(semantic_plane_ewa_blend_footprint, 0.01), major_footprint);
+	float anisotropy = major_footprint / minor_footprint;
+	float anisotropy_coverage = smoothstep(semantic_ceiling_ewa_min_anisotropy, semantic_ceiling_ewa_min_anisotropy + max(semantic_plane_ewa_blend_anisotropy, 0.01), anisotropy);
+	float ewa_coverage = footprint_coverage * anisotropy_coverage;
+	if (ewa_coverage <= 0.0) return unfiltered;
+	return mix(unfiltered, ewa_ceiling_material(source_uv, span_x, span_y), ewa_coverage);
+}
+
+vec3 semantic_plane_distance_contrast(vec3 material_color, vec3 material_average, float depth) {
+	// Preserve every near board/beam color, then smoothly remove only its
+	// contrast around the authored material mean. At the flat depth the output
+	// is exactly one stable palette color before depth lighting is applied.
+	float contrast = 1.0 - smoothstep(semantic_plane_contrast_full_depth, semantic_plane_contrast_flat_depth, depth);
+	return mix(material_average, material_color, contrast);
 }
 
 void fragment() {
@@ -292,9 +327,13 @@ void fragment() {
 	}
 	vec4 result;
 	if (use_semantic_floor_material) {
-		result = vec4(semantic_floor_material(source_uv, span_x, span_y), 1.0);
+		vec3 floor_color = semantic_floor_material(source_uv, span_x, span_y);
+		vec3 floor_average = vec3(118.0, 94.0, 71.0) / 255.0;
+		result = vec4(semantic_plane_distance_contrast(floor_color, floor_average, depth), 1.0);
 	} else if (use_semantic_ceiling_material) {
-		result = vec4(semantic_ceiling_material(source_uv, span_x, span_y), 1.0);
+		vec3 ceiling_color = semantic_ceiling_material(source_uv, span_x, span_y);
+		vec3 ceiling_average = vec3(116.0, 93.0, 70.0) / 255.0;
+		result = vec4(semantic_plane_distance_contrast(ceiling_color, ceiling_average, depth), 1.0);
 	} else if (use_layers) {
 		vec4 bottom = use_anisotropic_bottom_filter ? anisotropic_nearest_sample(layer1_texture, source_uv + layer1_offset, layer_texture_size, mip_level, uv_x + layer1_offset, uv_y + layer1_offset) : nearest_sample(layer1_texture, source_uv + layer1_offset, layer_texture_size, mip_level);
 		vec4 top = nearest_sample(layer2_texture, source_uv + layer2_offset, layer_texture_size, mip_level);

@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="SemanticStoolStyle" format=3]
+
+[ext_resource type="Script" path="res://scripts/semantic_stool_style.gd" id="1_style"]
+
+[resource]
+script = ExtResource("1_style")
+top_color = Color(0.5529412, 0.4392157, 0.32941177, 1)
+x_side_color = Color(0.49803922, 0.39607844, 0.29803923, 1)
+z_side_color = Color(0.41568628, 0.32941177, 0.24705882, 1)
+shadow_color = Color(0.24, 0.19243999, 0.1416, 0.5254902)
+footprint_x = 0.33
+footprint_y = 0.25
+leg_height = 0.13
+maximum_leg_pixels = 3
+maximum_pixels_distance = 0.1
+one_pixel_distance = 6.35
+near_edge_highlight_color = Color(0.60784316, 0.4862745, 0.3647059, 1)
+near_edge_highlight_end_fade = 1.0
+seat_slat_count = 4
+seat_slat_shadow_color = Color(0.4, 0.3254902, 0.2509804, 1)
+seat_slat_highlight_color = Color(0.6392157, 0.5137255, 0.38431373, 1)
+seat_slat_shadow_full_distance = 0.4
+seat_slat_shadow_hidden_distance = 2.1999999999999997
+seat_slat_highlight_full_distance = 0.35
+seat_slat_highlight_hidden_distance = 1.5499999999999998
+floor_darkening_strength = 0.26
+under_table_leg_darkening_strength = 0.82
+exterior_corner_brightening_strength = 0.24
+exterior_corner_brightening_fade_pixels = 16.0
+show_debug_geometry = false

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SemanticImportedChairEdgesStyle" format=3]
+
+[ext_resource type="Script" path="res://scripts/semantic_imported_chair_edges_style.gd" id="1_style"]
+
+[resource]
+script = ExtResource("1_style")
+y_axis_top_color = Color(0.17380002, 0.76946, 0.79, 1)
+y_axis_edge_highlight_color = Color(0.2724721, 0.88735753, 0.90822065, 1)
+z_axis_edge_highlight_color = Color(0.10588235, 0.6117647, 0.8862745, 1)
+slab_box_thickness = 0.015
+post_box_half_width = 0.030000000000000002
+maximum_edge_pixels = 1
+maximum_edge_distance = 0.6
+edge_highlight_full_distance = 0.1
+edge_highlight_hidden_distance = 0.15
+close_highlight_color = Color(0, 0, 0, 1)
+close_crevice_shadow_color = Color(0, 0, 0, 1)
+accent_full_distance = 0.1
+accent_hidden_distance = 0.15

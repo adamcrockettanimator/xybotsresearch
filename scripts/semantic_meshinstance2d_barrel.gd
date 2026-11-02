@@ -8,9 +8,7 @@
 extends Node2D
 
 
-const BARREL_SCENE := preload("res://assets/Calibration/SM_Prop_Barrel_01.fbx")
-const BARREL_ATLAS := preload("res://assets/Calibration/PolygonWestern_Texture_01.png")
-const BARREL_AO := preload("res://assets/Calibration/Barrel_AO.png")
+const BARREL_3D_SOURCE_SCENE := preload("res://tests/calibration/meshinstance2d_barrel_3d_source.tscn")
 # This is deliberately close to the authored 32px barrel language. The output
 # becomes chunky only after the 3D render, just like the neighboring sprites.
 const RENDER_SIZE := Vector2i(64, 64)
@@ -21,16 +19,23 @@ const GAME_VIRTUAL_CAMERA_HEIGHT := 0.5
 # It makes the barrel use most of 64x64 before its pixels are mapped back into
 # the fixed game-projected height. Perspective ratios remain camera-derived.
 const SOURCE_FRAME_VERTICAL_FOV_DEGREES := 32.0 # Leave room for the near-view lower rim; 28° clipped it below the source target.
+const LOD_01_MIN_VIEW_DEPTH := 1.46 # Match the authored world-barrel depth ladder: LOD 00 nearby, LOD 01 once it is smaller on screen.
 const SHOW_DEBUG_GUIDES := false
+const SHOW_SOURCE_PREVIEW := false # Keep the offscreen source inspectable in its own 3D authoring scene, not as a game-corner overlay.
 
 var render_viewport: SubViewport
 var barrel_camera: Camera3D
 var barrel_source: Node3D
+var barrel_lod_00_source: Node3D
+var barrel_lod_01_source: Node3D
 var display_mesh: MeshInstance2D
 var debug_overlay: BarrelDebugOverlay
 var display_material: ShaderMaterial
 var last_source_crop := Rect2()
 var resolution_readout: Label
+var source_preview_backdrop: ColorRect
+var source_preview: Sprite2D
+var source_preview_label: Label
 
 
 ## This overlay is deliberately drawn in the same CanvasItem coordinate space as
@@ -79,7 +84,9 @@ func set_barrel(projected_corners: PackedVector2Array, camera_origin: Vector2, v
 	var top_center := _projected_center(projected_corners, 4)
 	var world_from_camera := world_center - camera_origin
 	var view_depth := maxf(world_from_camera.dot(view_forward.normalized()), 0.01)
+	_set_active_barrel_lod(view_depth)
 	_set_source_resolution(view_depth)
+	_update_source_preview()
 	_update_3d_camera(camera_origin, world_center, view_forward, view_right, view_depth)
 	_fit_3d_camera_to_source_target()
 	var source_layout := _source_layout_in_viewport()
@@ -117,55 +124,23 @@ func _build_3d_source_view() -> void:
 	render_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(render_viewport)
 
-	var source_root := Node3D.new()
+	var source_root := BARREL_3D_SOURCE_SCENE.instantiate() as Node3D
+	if source_root == null:
+		push_error("MeshInstance2D barrel source did not instantiate as Node3D.")
+		return
 	source_root.name = "Barrel3DSource"
 	render_viewport.add_child(source_root)
-	# Ambient fill is intentionally a fixed studio choice for this comparison.
-	# It lifts the side staves and underside while the overhead key retains the
-	# much brighter lid. It is not yet game-world-responsive lighting.
-	var world_environment := WorldEnvironment.new()
-	world_environment.name = "BarrelStudioAmbient"
-	var studio_environment := Environment.new()
-	studio_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	studio_environment.ambient_light_color = Color(0.72, 0.72, 0.68, 1.0)
-	studio_environment.ambient_light_energy = 0.48
-	studio_environment.ambient_light_sky_contribution = 0.0
-	world_environment.environment = studio_environment
-	source_root.add_child(world_environment)
-	var barrel := BARREL_SCENE.instantiate() as Node3D
-	if barrel == null:
-		push_error("SM_Prop_Barrel_01.fbx did not instantiate as Node3D.")
+	barrel_lod_00_source = source_root.get_node_or_null("Barrel_LOD_00_3D") as Node3D
+	barrel_lod_01_source = source_root.get_node_or_null("Barrel_LOD_01_3D") as Node3D
+	barrel_camera = source_root.get_node_or_null("Barrel3DSourceCamera") as Camera3D
+	if barrel_lod_00_source == null or barrel_lod_01_source == null or barrel_camera == null:
+		push_error("MeshInstance2D barrel source is missing an authored model or camera node.")
 		return
-	barrel.name = "SM_Prop_Barrel_01_3D"
-	# Synty's source prop is deliberately kept intact: this is only a local
-	# display transform for the comparison renderer, not an edit to the FBX.
-	barrel.scale = Vector3.ONE * 0.72
-	source_root.add_child(barrel)
-	barrel_source = barrel
-	_apply_authored_barrel_material(barrel)
-
-	# A small studio-light rig for the source barrel: a true overhead key makes
-	# the lid bright and leaves the underside unlit; four equal, steep fills
-	# remove the old "one bright side" bias without becoming a realtime world
-	# lighting experiment.
-	var top_light := DirectionalLight3D.new()
-	top_light.name = "BarrelTopLight"
-	top_light.light_energy = 1.15
-	top_light.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
-	source_root.add_child(top_light)
-	for angle in [0.0, 90.0, 180.0, 270.0]:
-		var side_fill := DirectionalLight3D.new()
-		side_fill.name = "BarrelEvenSideFill_%d" % int(angle)
-		side_fill.light_energy = 0.22
-		side_fill.rotation_degrees = Vector3(-62.0, angle, 0.0)
-		source_root.add_child(side_fill)
-
-	barrel_camera = Camera3D.new()
-	barrel_camera.name = "Barrel3DSourceCamera"
+	barrel_lod_01_source.visible = false
+	barrel_source = barrel_lod_00_source
 	barrel_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	barrel_camera.fov = SOURCE_FRAME_VERTICAL_FOV_DEGREES
 	barrel_camera.current = true
-	source_root.add_child(barrel_camera)
 	_update_3d_camera(Vector2(0.0, -1.0), Vector2.ZERO, Vector2.DOWN, Vector2.RIGHT, 1.0)
 
 
@@ -216,6 +191,41 @@ func _build_meshinstance2d_display() -> void:
 	resolution_readout.visible = SHOW_DEBUG_GUIDES
 	add_child(resolution_readout)
 
+	# This is deliberately the raw SubViewportTexture, not the carrier mesh:
+	# it reveals the little 3D render before crop, scaling, or world projection.
+	source_preview_backdrop = ColorRect.new()
+	source_preview_backdrop.name = "RawBarrel3DSourceBackdrop"
+	source_preview_backdrop.position = Vector2(106.0, 12.0)
+	source_preview_backdrop.size = Vector2(52.0, 58.0)
+	source_preview_backdrop.color = Color(0.015, 0.012, 0.01, 0.88)
+	source_preview_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	source_preview_backdrop.z_index = 3
+	source_preview_backdrop.visible = SHOW_SOURCE_PREVIEW
+	add_child(source_preview_backdrop)
+
+	source_preview = Sprite2D.new()
+	source_preview.name = "RawBarrel3DSourcePreview"
+	source_preview.centered = false
+	source_preview.position = Vector2(108.0, 20.0)
+	source_preview.texture = render_viewport.get_texture()
+	source_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	source_preview.z_index = 4
+	source_preview.visible = SHOW_SOURCE_PREVIEW
+	add_child(source_preview)
+
+	source_preview_label = Label.new()
+	source_preview_label.name = "RawBarrel3DSourceLabel"
+	source_preview_label.position = Vector2(108.0, 14.0)
+	source_preview_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	source_preview_label.z_index = 5
+	source_preview_label.add_theme_font_size_override("font_size", 4)
+	source_preview_label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.7, 1.0))
+	source_preview_label.add_theme_color_override("font_outline_color", Color(0.0, 0.08, 0.02, 1.0))
+	source_preview_label.add_theme_constant_override("outline_size", 1)
+	source_preview_label.visible = SHOW_SOURCE_PREVIEW
+	add_child(source_preview_label)
+	_update_source_preview()
+
 
 func _update_resolution_readout(carrier_rect: Rect2, source_crop: Rect2) -> void:
 	if resolution_readout == null:
@@ -228,6 +238,17 @@ func _update_resolution_readout(carrier_rect: Rect2, source_crop: Rect2) -> void
 	# Keep this diagnostic just above the actual cropped card, rather than in
 	# screen UI, so it remains unambiguously attached to this one test barrel.
 	resolution_readout.position = carrier_rect.position + Vector2(0.0, -8.0)
+
+
+func _update_source_preview() -> void:
+	if source_preview == null or source_preview_label == null or render_viewport == null:
+		return
+	# Hold the debug card at 48 logical pixels wide while its real source
+	# resolution steps 64 → 12. That makes every source texel inspectable.
+	var target_width := 48.0
+	var scale_factor := target_width / maxf(float(render_viewport.size.x), 1.0)
+	source_preview.scale = Vector2.ONE * scale_factor
+	source_preview_label.text = "RAW 3D %dx%d" % [render_viewport.size.x, render_viewport.size.y]
 
 
 func _update_carrier_mesh(source_crop: Rect2) -> void:
@@ -336,22 +357,14 @@ func _set_source_resolution(camera_distance: float) -> void:
 	set_meta("source_resolution", desired_size)
 
 
-func _apply_authored_barrel_material(barrel: Node3D) -> void:
-	# The FBX contains the prop's original color UVs plus its authored AO_map as
-	# UV2. The matching Synty atlas restores wood/metal while Barrel_AO darkens
-	# only its baked creases and seams. Nearest sampling preserves source pixels.
-	var atlas_material := StandardMaterial3D.new()
-	atlas_material.albedo_texture = BARREL_ATLAS
-	atlas_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	atlas_material.roughness = 0.9
-	atlas_material.ao_enabled = true
-	atlas_material.ao_texture = BARREL_AO
-	atlas_material.ao_on_uv2 = true
-	atlas_material.ao_light_affect = 1.0
-	for child in barrel.find_children("*", "MeshInstance3D", true, false):
-		var mesh_instance := child as MeshInstance3D
-		if mesh_instance != null:
-			mesh_instance.material_override = atlas_material
+func _set_active_barrel_lod(view_depth: float) -> void:
+	var desired_source := barrel_lod_01_source if view_depth >= LOD_01_MIN_VIEW_DEPTH else barrel_lod_00_source
+	if desired_source == null or desired_source == barrel_source:
+		return
+	if barrel_source != null:
+		barrel_source.visible = false
+	desired_source.visible = true
+	barrel_source = desired_source
 
 
 func _projected_center(projected_corners: PackedVector2Array, start_index: int) -> Vector2:

@@ -25,6 +25,9 @@ const SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT := preload("res://scripts/semantic_
 const SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT := preload("res://scripts/semantic_vector_world_barrel.gd") # Keep one clean vector-and-gradient barrel bound to real world projection for comparison.
 const SEMANTIC_GPU_LATTICE_BARREL_SCRIPT := preload("res://scripts/semantic_gpu_cage_barrel.gd") # Static 8x5 cage pieces: the GPU projects real panels, ribbons, and staves from transform/camera uniforms.
 const SEMANTIC_GPU_CAGE_CRATE_SCRIPT := preload("res://scripts/semantic_gpu_lattice_crate.gd") # Eight static cube corners; the GPU owns projection plus crate face construction.
+const SEMANTIC_IMPORTED_CHAIR_SCRIPT := preload("res://scripts/semantic_imported_chair.gd") # Authored GLB polygons/materials drive a logical-pixel semantic chair prototype.
+const SEMANTIC_IMPORTED_CHAIR_EDGES_SCRIPT := preload("res://scripts/semantic_imported_chair_edges.gd") # Blender loose-edge markup becomes the all-stroke chair comparison.
+const SEMANTIC_STOOL_SCRIPT := preload("res://scripts/semantic_stool.gd") # Minimal point-footprint stool: inferred legs and seat box for semantic construction review.
 const SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT := preload("res://scripts/semantic_meshinstance2d_barrel.gd") # Render the authored 3D barrel into a MeshInstance2D-backed Canvas fixture for the semantic gallery.
 const SHOW_CANVAS_BARREL_LAYER_INSPECTOR := false                                            # Retire the procedural-barrel hide/isolate UI while evaluating the 3D-backed fixture.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
@@ -46,6 +49,7 @@ const TEMP_RANDOM_GRID_AUDIT := false                                           
 const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
 var BARREL_LOD_REVIEW_LEVEL := false                                                        # The comparison gallery opts into its empty review arena before this node enters the tree.
 var barrel_authoring_single_player_mode := false                                             # The barrel calibration scene keeps only the P1 camera, letting its embedded Game tab share space with the Remote Inspector.
+var single_player_sandbox_mode := false                                                      # The direct-play scene keeps one fullscreen player and no bots while retaining the normal maze, combat, and prop rules.
 var semantic_typical_props_enabled := true                                                  # Populate normal matches with the GPU-cage semantic barrel set.
 const MAP_EXTRA_OPENING_CHANCE := 0.18                                                      # Add a few loops after maze carving so the interior is not a strict tree.
 
@@ -960,8 +964,9 @@ var character_is_crouching := false                                             
 var world_run_dir := DIR_N                                                                  # Track this player's movement direction in shared world space for opponent rendering.
 var world_aim_dir := DIR_N                                                                  # Track this player's aim direction in shared world space for opponent rendering.
 var available_animations: Dictionary = {}                                                   # Store animation-name lookups for exact and fallback animation selection.
-var sprite_foot_anchor_cache: Dictionary = {}                                                # Cache per-texture foot/shadow anchor rows so sprite registration can ignore transparent padding.
-var sprite_body_height_cache: Dictionary = {}                                                # Cache per-texture visible body spans so sprite scale ignores transparent frame padding.
+var sprite_foot_anchor_cache: Dictionary = {}                                                # Cache per-texture foot/shadow anchor rows for source-art analysis.
+var sprite_body_height_cache: Dictionary = {}                                                # Cache per-texture visible body spans for source-art analysis.
+var animation_foot_anchor_cache: Dictionary = {}                                             # Cache one modal foot row per authored clip so a jump frame retains its intended lift.
 var pending_grid_delta := Vector2i.ZERO                                                     # Store the cell movement that will be applied after a transition finishes.
 var last_blocked_direction := ""                                                            # Store the most recent blocked movement label for debug display.
 var wall_edges: Dictionary = {}                                                             # Store explicit thin-wall edge flags for each open cell.
@@ -1989,7 +1994,7 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 
 # _apply_session_roster: Makes title-menu players human-controlled and fills every remaining combat slot with a bot.
 func _apply_session_roster() -> void:
-	if BARREL_LOD_REVIEW_LEVEL:
+	if BARREL_LOD_REVIEW_LEVEL or single_player_sandbox_mode:
 		var review_joypads := Input.get_connected_joypads()
 		for player_index in range(player_joined.size()):
 			player_bots[player_index] = false                                                     # Do not let AI bodies obscure the isolated barrel target.
@@ -2320,29 +2325,83 @@ func _reset_world_barrels() -> void:
 					break
 			if not occupied:
 				candidates.append(cell)
-	for barrel_index in range(mini(MAP_BARREL_COUNT, candidates.size())):
+	var dining_cell := _find_dining_set_room_cell()
+	if semantic_typical_props_enabled and dining_cell.x >= 0:
+		# Keep the table cell and its immediate walking approaches clear of the
+		# ordinary barrel scatter, leaving actual circulation around the set.
+		for index in range(candidates.size() - 1, -1, -1):
+			if absi(candidates[index].x - dining_cell.x) <= 1 and absi(candidates[index].y - dining_cell.y) <= 1:
+				candidates.remove_at(index)
+	for prop_index in range(mini(MAP_BARREL_COUNT, candidates.size())):
 		var chosen_index := randi() % candidates.size()
 		var chosen_cell := candidates[chosen_index]
 		candidates.remove_at(chosen_index)                                                       # Keep one barrel maximum per cell so art remains readable in the tight maze.
 		var position := _resolve_world_item_placement(_world_item_footprint("barrel", _barrel_position_in_cell(chosen_cell))) # Keep the prop's physical clearance circle away from thin wall edges.
 		if semantic_typical_props_enabled:
-			# The normal match is now a focused GPU-cage barrel population: no
-			# crate stand-ins and no older barrel renderer variants.  Each prop
-			# still registers in world_barrels below, so collision, shooting,
-			# destruction, debris, and loot use the established gameplay rules.
+			# Populate the normal maze with both production semantic props.  The
+			# fragment-raster crate joins the GPU lattice barrel through the same
+			# authoritative collision, projectile, destruction, and loot record.
+			var is_fragment_raster_crate := prop_index % 2 == 0
 			var width := gpu_lattice_barrel_radius * 2.0
 			var depth := width
-			var height := gpu_lattice_barrel_height
-			var clearance := _world_item_footprint("barrel", position)
+			var height := width if is_fragment_raster_crate else gpu_lattice_barrel_height
+			var clearance := _world_item_footprint("crate" if is_fragment_raster_crate else "barrel", position)
 			clearance["radius"] = maxf(float(clearance["radius"]), Vector2(width, depth).length() * 0.5)
 			position = _resolve_world_item_placement(clearance)
-			var key := "barrel_gpu_lattice_instanced_room_%d" % barrel_index
+			var key := ("crate_gpu_fragment_raster_room_%d" if is_fragment_raster_crate else "barrel_gpu_lattice_instanced_room_%d") % prop_index
 			var footprint := {"id": key, "position": position, "side_length": width, "depth": depth, "height": height, "low_resolution_vector": true, "typical_spawn": true}
 			semantic_lod_floor_footprints.append(footprint)
 			_register_semantic_gameplay_prop(footprint)
 		else:
 			world_barrels.append({"id": next_combat_visual_id, "position": position, "hits": 0})
 			next_combat_visual_id += 1                                                           # Give every prop a stable cache key across all player cameras.
+	if semantic_typical_props_enabled and dining_cell.x >= 0:
+		_spawn_semantic_dining_set(dining_cell)
+
+
+# _find_dining_set_room_cell: Prefer a four-way open cell, with a three-way
+# fallback, so the set has walkable circulation rather than occupying a hall.
+func _find_dining_set_room_cell() -> Vector2i:
+	var best_cell := Vector2i(-1, -1)
+	var best_openings := -1
+	for y in range(1, MAP_HEIGHT - 1):
+		for x in range(1, MAP_WIDTH - 1):
+			var cell := Vector2i(x, y)
+			var occupied := false
+			for state in player_states:
+				if cell == state.get("grid_position", Vector2i(-99, -99)):
+					occupied = true
+					break
+			if occupied:
+				continue
+			var openings := 0
+			for direction in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+				if _can_player_cross_edge(cell, direction):
+					openings += 1
+			if openings > best_openings:
+				best_cell = cell
+				best_openings = openings
+				if openings == 4:
+					return best_cell
+	return best_cell if best_openings >= 3 else Vector2i(-1, -1)
+
+
+func _spawn_semantic_dining_set(room_cell: Vector2i) -> void:
+	var center := Vector2(room_cell) + Vector2(0.5, 0.5)
+	var pieces: Array[Dictionary] = [
+		{"id": "chair_semantic_table_dining", "position": center, "side_length": 0.33, "depth": 0.25, "height": 0.13},
+		{"id": "chair_semantic_stool_dining_near", "position": center + Vector2(0.0, 0.22), "side_length": 0.33, "depth": 0.10, "height": 0.10},
+		{"id": "chair_semantic_bench_dining_opposite", "position": center - Vector2(0.0, 0.22), "side_length": 0.33, "depth": 0.10, "height": 0.10},
+	]
+	for piece in pieces:
+		piece["low_resolution_vector"] = true
+		piece["typical_spawn"] = true
+		piece["dining_set_spawn"] = true
+		# Furniture must catch normal standing shots despite its intentionally
+		# low visual proportions in the shared semantic viewport.
+		piece["projectile_height"] = 1.0
+		semantic_lod_floor_footprints.append(piece)
+		_register_semantic_gameplay_prop(piece)
 
 
 # _reset_combat_round: Re-arms the shared clock whenever a new map/coin layout begins.
@@ -4882,7 +4941,7 @@ func _update_combat_view() -> void:
 			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18):
 				continue                                                                                 # Skip hit poses outside the camera fan.
 			var projection := _opponent_projection_from_current_camera(target_world, true)           # Keep hit characters immediately after their cell's facing walls.
-			var scale_value := float(projection["actor_height"]) / _sprite_body_height_to_foot(opponent_sprite) # Match regular opponent scale.
+			var scale_value := float(projection["actor_height"]) / _standard_actor_body_height() # Match the universal character scale used by regular opponent rendering.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
@@ -5146,37 +5205,50 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	used["%s_shadow" % key] = true
 
 
-# enable_calibration_primitive_gallery: Adds a temporary, non-colliding row of
-# cropped Blender sprites in front of player one.  The test scene calls this;
+# enable_calibration_primitive_gallery: Adds the two semantic GPU props to the
+# open authoring room just ahead of player one. The test scene calls this;
 # normal rounds never do, so it cannot change gameplay or ordinary prop art.
 func enable_calibration_primitive_gallery() -> void:
 	if calibration_sprite_gallery_enabled:
 		return
-	# The authoring scene is now a deliberately small A/B test: the rendered
-	# Blender model carried by MeshInstance2D, and the GPU cage pixel barrel.
-	# Both are visual-only, so they leave a clear path through the room.
-	# The review player spawns at the south-west corner facing into the room.
-	# Keep both comparison props in the first forward camera fan, rather than
-	# several cells diagonally away where an empty opening can hide the test.
-	var gallery_row_y := 4.45
-	var meshinstance_position := Vector2(0.78, gallery_row_y)
-	var crate_position := Vector2(1.32, gallery_row_y)
-	# Keep the known-good CPU Bresenham crate beside a GPU-only fragment-raster
-	# crate. They share the exact same cage, style resource, world dimensions,
-	# and camera inputs; only one-pixel effect ownership differs.
-	var fragment_raster_crate_position := Vector2(1.70, gallery_row_y)
-	var gpu_lattice_barrel_position := Vector2(1.86, gallery_row_y)
+	# The review player spawns in the south-west corner facing north. Put the
+	# pair less than one cell ahead, side-by-side, so the first view is an
+	# immediately readable crate-versus-barrel comparison in the large open room.
+	var gallery_row_y := 4.65
+	var fragment_raster_crate_position := Vector2(0.40, gallery_row_y)
+	var gpu_lattice_barrel_position := Vector2(0.72, gallery_row_y)
+	# Imported directly from the Western Pack source. Its padded rectangular
+	# footprint is derived from the chair mesh's four horizontal extrema, rather
+	# than hand-authored collision geometry.
+	var semantic_chair_position := Vector2(1.10, gallery_row_y)
+	var semantic_chair_edges_position := Vector2(1.38, gallery_row_y)
+	# Reuse the authored table and bench styles as one compact dining set. Both
+	# benches share the stool resource; the table remains wider and taller.
+	var dining_set_center := Vector2(1.82, gallery_row_y)
+	var semantic_table_position := dining_set_center
+	var semantic_stool_position := dining_set_center + Vector2(0.0, 0.22)
+	var semantic_bench_opposite_position := dining_set_center - Vector2(0.0, 0.22)
 	calibration_sprite_gallery.clear()
 	semantic_lod_floor_footprints.clear()
-	# The authoring scene returns to one live crate. The five forced stages were a
-	# temporary concept-art comparison; the real prop must be evaluated while its
-	# own distance LOD and camera-facing rules change continuously.
-	# The companion is a crate built from only the eight corners of a cube.
-	# A literal cube: all three physical dimensions deliberately share the one
-	# barrel-width value. Detail comes later; silhouette and floor contact first.
+	# The crate uses the fragment-selected GPU raster path; the adjacent barrel
+	# uses its static GPU lattice. Both remain visual-only authoring fixtures.
 	var crate_cube_side := gpu_lattice_barrel_radius * 2.0
-	semantic_lod_floor_footprints.append({"id": "crate_gpu_cage", "position": crate_position, "side_length": crate_cube_side, "depth": crate_cube_side, "height": crate_cube_side, "low_resolution_vector": true, "gallery_preview": true})
 	semantic_lod_floor_footprints.append({"id": "crate_gpu_fragment_raster", "position": fragment_raster_crate_position, "side_length": crate_cube_side, "depth": crate_cube_side, "height": crate_cube_side, "low_resolution_vector": true, "gallery_preview": true})
+	semantic_lod_floor_footprints.append({"id": "barrel_gpu_lattice_instanced", "position": gpu_lattice_barrel_position, "side_length": crate_cube_side, "depth": crate_cube_side, "height": gpu_lattice_barrel_height, "low_resolution_vector": true, "gallery_preview": true})
+	# The source chair is proportionally tall. Keep its physical scale at 35% of
+	# the previous crate-comparison placeholder, so it reads as furniture rather
+	# than a wall-sized foreground prop in this near-camera authoring bay.
+	semantic_lod_floor_footprints.append({"id": "chair_semantic_imported", "position": semantic_chair_position, "side_length": 0.12872, "depth": 0.14108, "height": 0.26483, "low_resolution_vector": true, "gallery_preview": true})
+	semantic_lod_floor_footprints.append({"id": "chair_semantic_edges", "position": semantic_chair_edges_position, "side_length": 0.12872, "depth": 0.14108, "height": 0.26483, "low_resolution_vector": true, "gallery_preview": true})
+	# This starts from only a world anchor and a stretchable X/Y footprint; the
+	# stool script infers four post boxes and one seat box from those values.
+	# The existing stool becomes the near bench; the opposite bench deliberately
+	# loads the same stool style resource so their authoring stays linked.
+	semantic_lod_floor_footprints.append({"id": "chair_semantic_stool", "position": semantic_stool_position, "side_length": 0.33, "depth": 0.10, "height": 0.10, "low_resolution_vector": true, "gallery_preview": true})
+	semantic_lod_floor_footprints.append({"id": "chair_semantic_bench_opposite", "position": semantic_bench_opposite_position, "side_length": 0.33, "depth": 0.10, "height": 0.10, "low_resolution_vector": true, "gallery_preview": true})
+	# The table is the same long dimension as the benches, but keeps its wider,
+	# taller independent table style.
+	semantic_lod_floor_footprints.append({"id": "chair_semantic_table", "position": semantic_table_position, "side_length": 0.33, "depth": 0.25, "height": 0.13, "low_resolution_vector": true, "gallery_preview": true})
 	calibration_sprite_gallery_enabled = true
 	if calibration_semantic_stress_props_enabled:
 		_setup_semantic_stress_props()
@@ -5224,7 +5296,7 @@ func _register_semantic_gameplay_prop(footprint: Dictionary) -> void:
 	var is_barrel := key.begins_with("barrel_")
 	var width := float(footprint["side_length"])
 	var depth := float(footprint.get("depth", width))
-	var prop := {"id": next_combat_visual_id, "position": footprint["position"], "hits": 0, "footprint_key": key, "projectile_height": float(footprint["height"]) / 0.36}
+	var prop := {"id": next_combat_visual_id, "position": footprint["position"], "hits": 0, "footprint_key": key, "projectile_height": float(footprint.get("projectile_height", float(footprint["height"]) / 0.36))}
 	if is_barrel:
 		prop["projectile_radius"] = width * 0.6
 		prop["collision_radius"] = width * 0.6
@@ -5273,7 +5345,7 @@ func _semantic_lod_floor_outline(key: String) -> Node2D:
 	if node == null or not is_instance_valid(node):
 		if semantic_lod_outline_creation_disabled:
 			return null
-		var outline_script: Script = SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT if key.begins_with("barrel_authored_vector_source") else (SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT if key.begins_with("barrel_vector_world_prototype") else (SEMANTIC_GPU_CAGE_CRATE_SCRIPT if key.begins_with("crate_gpu_") else (SEMANTIC_GPU_LATTICE_BARREL_SCRIPT if key.begins_with("barrel_gpu_lattice_instanced") else (SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT if key.begins_with("barrel_meshinstance2d_3d_source") else (SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT if key.begins_with("barrel_projected_canvas") else (SEMANTIC_GPU_BARREL_SCRIPT if key.begins_with("barrel_ground_gpu_ray_experiment") else (SEMANTIC_LOD_CYLINDER_SCRIPT if key == "semantic_cylinder_test" else SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT)))))))
+		var outline_script: Script = SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT if key.begins_with("barrel_authored_vector_source") else (SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT if key.begins_with("barrel_vector_world_prototype") else (SEMANTIC_STOOL_SCRIPT if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table") else (SEMANTIC_IMPORTED_CHAIR_EDGES_SCRIPT if key.begins_with("chair_semantic_edges") else (SEMANTIC_IMPORTED_CHAIR_SCRIPT if key.begins_with("chair_semantic_imported") else (SEMANTIC_GPU_CAGE_CRATE_SCRIPT if key.begins_with("crate_gpu_") else (SEMANTIC_GPU_LATTICE_BARREL_SCRIPT if key.begins_with("barrel_gpu_lattice_instanced") else (SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT if key.begins_with("barrel_meshinstance2d_3d_source") else (SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT if key.begins_with("barrel_projected_canvas") else (SEMANTIC_GPU_BARREL_SCRIPT if key.begins_with("barrel_ground_gpu_ray_experiment") else (SEMANTIC_LOD_CYLINDER_SCRIPT if key == "semantic_cylinder_test" else SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT))))))))))
 		if not outline_script.can_instantiate():
 			semantic_lod_outline_creation_disabled = true
 			push_error("Semantic LOD outline script cannot be instantiated; disabling outline creation for this run. Check earlier script errors.")
@@ -5288,7 +5360,9 @@ func _semantic_lod_floor_outline(key: String) -> Node2D:
 		# Keep the purpose-built semantic props readable in Remote.  The generic
 		# outline prefix is useful for experiments, but it obscures the actual
 		# crate authoring target behind a needlessly long generated name.
-		node.name = "CrateGpuFragmentRaster" if key == "crate_gpu_fragment_raster" else ("CrateGpuCage" if key.begins_with("crate_gpu_cage") else "SemanticLodFloorOutline_%s" % key)
+		node.name = "SemanticBenchNear" if key.begins_with("chair_semantic_stool") else ("SemanticBenchOpposite" if key.begins_with("chair_semantic_bench") else ("SemanticTable" if key.begins_with("chair_semantic_table") else ("SemanticImportedChairEdges" if key.begins_with("chair_semantic_edges") else ("SemanticImportedChair" if key.begins_with("chair_semantic_imported") else ("CrateGpuFragmentRaster" if key.begins_with("crate_gpu_fragment_raster") else ("CrateGpuCage" if key.begins_with("crate_gpu_cage") else "SemanticLodFloorOutline_%s" % key))))))
+		if key.begins_with("chair_semantic_table"):
+			node.set("style_path", "res://resources/semantic_table_style.tres")
 		node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var layer: Node2D = view.get("combat_layer", null)
 		if layer != null:
@@ -5503,7 +5577,7 @@ func _migrate_live_room_barrels_to_gpu_cage() -> void:
 		# This marker belongs only to ordinary spawned room props. It is a safer
 		# discriminator than a historical renderer ID, and excludes the center
 		# samples as well as every flat-faced crate.
-		if not bool(footprint.get("typical_spawn", false)) or bool(footprint.get("flat_faces", false)):
+		if not bool(footprint.get("typical_spawn", false)) or bool(footprint.get("dining_set_spawn", false)) or bool(footprint.get("flat_faces", false)) or String(footprint.get("id", "")).begins_with("crate_"):
 			continue
 		var old_id := String(footprint.get("id", ""))
 		if old_id.begins_with(GPU_CAGE_PREFIX):
@@ -5559,7 +5633,7 @@ func _render_live_semantic_floor_footprints() -> void:
 			if crate_outline == null:
 				continue
 			crate_outline.set("authoring_lod_stage", int(footprint.get("authoring_lod_stage", -1)))
-			crate_outline.set("line_raster_backend", 1 if key == "crate_gpu_fragment_raster" else 0)
+			crate_outline.set("line_raster_backend", 1 if key.begins_with("crate_gpu_fragment_raster") else 0)
 			crate_outline.z_index = _world_actor_draw_layer(center)
 			var crate_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(_world_item_footprint("crate", center))
 			crate_outline.visible = crate_visible
@@ -5653,6 +5727,36 @@ func _render_live_semantic_floor_footprints() -> void:
 			if complete:
 				var mesh_camera_origin := _runtime_camera_origin_for_visibility()
 				outline.visible = bool(outline.call("set_barrel", projected_corners, mesh_camera_origin, _view_forward_vector(), _view_right_vector(), center))
+			continue
+		if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table"):
+			var dining_footprint := _dining_furniture_footprint(footprint)
+			var dining_radius := Vector2(float(dining_footprint["half_width"]), float(dining_footprint["half_depth"])).length()
+			var dining_visible := complete and _world_actor_overlaps_current_camera_fan(center, dining_radius) and _world_footprint_has_visible_camera_span(dining_footprint) and not _dining_footprint_is_fully_behind_nearer_prop(key, dining_footprint)
+			outline.visible = dining_visible
+			if dining_visible:
+				var stool_forward := _view_forward_vector().normalized()
+				var stool_right := _view_right_vector().normalized()
+				var stool_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+				if stool_renderer == null:
+					stool_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
+				var stool_offset: Vector2 = stool_renderer.call("_overscan_projection_offset") if stool_renderer != null and stool_renderer.has_method("_overscan_projection_offset") else Vector2.ZERO
+				var stool_origin: Vector2 = stool_renderer.call("_runtime_camera_origin", stool_forward, stool_right) if stool_renderer != null and stool_renderer.has_method("_runtime_camera_origin") else _runtime_camera_origin_for_visibility()
+				outline.call("set_stool", center, stool_origin, stool_forward, stool_right, stool_offset)
+				outline.visible = true
+			continue
+		if key.begins_with("chair_semantic_imported") or key.begins_with("chair_semantic_edges"):
+			if complete:
+				# Same shared logical-camera contract as the GPU cage crate. The GLB
+				# supplies model-space triangles and hard edges; it is never rendered.
+				var chair_forward := _view_forward_vector().normalized()
+				var chair_right := _view_right_vector().normalized()
+				var chair_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+				if chair_renderer == null:
+					chair_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
+				var chair_offset: Vector2 = chair_renderer.call("_overscan_projection_offset") if chair_renderer != null and chair_renderer.has_method("_overscan_projection_offset") else Vector2.ZERO
+				var chair_origin: Vector2 = chair_renderer.call("_runtime_camera_origin", chair_forward, chair_right) if chair_renderer != null and chair_renderer.has_method("_runtime_camera_origin") else _runtime_camera_origin_for_visibility()
+				outline.call("set_chair", center, float(footprint.get("side_length", 0.0)), float(footprint.get("depth", 0.0)), height, chair_origin, chair_forward, chair_right, chair_offset)
+				outline.visible = true
 			continue
 		if key.begins_with("barrel_vector_world_prototype"):
 			if complete:
@@ -6048,6 +6152,11 @@ func _calibration_sprite_view_for_primitive(primitive_name: String) -> String:
 # painter-order case. A future rectangle/capsule descriptor can provide its
 # support points through this same call site.
 func _world_footprint_has_visible_camera_span(footprint: Dictionary) -> bool:
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+		for corner in _rectangle_footprint_corners(footprint):
+			if _world_point_has_clear_camera_line(corner):
+				return true
+		return false
 	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) != OcclusionFootprintShape.CIRCLE:
 		return _world_point_has_clear_camera_line(Vector2(footprint.get("position", Vector2.ZERO)))
 	var center := Vector2(footprint.get("position", Vector2.ZERO))
@@ -6080,6 +6189,54 @@ func _world_footprint_has_visible_camera_span(footprint: Dictionary) -> bool:
 		if hit_b >= 0.0:
 			return false
 	return true
+
+
+func _rectangle_footprint_corners(footprint: Dictionary) -> Array[Vector2]:
+	var center := Vector2(footprint.get("position", Vector2.ZERO))
+	var half_width := float(footprint.get("half_width", 0.0))
+	var half_depth := float(footprint.get("half_depth", 0.0))
+	return [center + Vector2(-half_width, -half_depth), center + Vector2(half_width, -half_depth), center + Vector2(half_width, half_depth), center + Vector2(-half_width, half_depth)]
+
+
+# _dining_footprint_is_fully_behind_nearer_prop: A whole SubViewport prop has
+# one Canvas layer, so a fully enclosed far bench must yield to the nearer
+# dining footprint rather than paint through the table. Partial cone overlap is
+# deliberately left to normal painter ordering, preserving visible side ends.
+func _dining_footprint_is_fully_behind_nearer_prop(target_key: String, target: Dictionary) -> bool:
+	var target_cone := _rectangle_camera_depth_cone(target)
+	if target_cone.is_empty():
+		return false
+	for candidate in semantic_lod_floor_footprints:
+		var candidate_key := String(candidate.get("id", ""))
+		if candidate_key == target_key or not (candidate_key.begins_with("chair_semantic_stool") or candidate_key.begins_with("chair_semantic_bench") or candidate_key.begins_with("chair_semantic_table")):
+			continue
+		var blocker_cone := _rectangle_camera_depth_cone(_dining_furniture_footprint(candidate))
+		if blocker_cone.is_empty():
+			continue
+		if float(blocker_cone["far_depth"]) < float(target_cone["near_depth"]) - 0.002 and float(target_cone["min_slope"]) >= float(blocker_cone["min_slope"]) - 0.002 and float(target_cone["max_slope"]) <= float(blocker_cone["max_slope"]) + 0.002:
+			return true
+	return false
+
+
+func _rectangle_camera_depth_cone(footprint: Dictionary) -> Dictionary:
+	var origin := _runtime_camera_origin_for_visibility()
+	var forward := _view_forward_vector().normalized()
+	var right := _view_right_vector().normalized()
+	var near_depth := INF
+	var far_depth := -INF
+	var min_slope := INF
+	var max_slope := -INF
+	for corner in _rectangle_footprint_corners(footprint):
+		var relative := corner - origin
+		var depth := relative.dot(forward)
+		if depth <= 0.01:
+			return {}
+		near_depth = minf(near_depth, depth)
+		far_depth = maxf(far_depth, depth)
+		var slope := relative.dot(right) / depth
+		min_slope = minf(min_slope, slope)
+		max_slope = maxf(max_slope, slope)
+	return {"near_depth": near_depth, "far_depth": far_depth, "min_slope": min_slope, "max_slope": max_slope}
 
 
 # Kept solely as the barrel regression-test entry point. Runtime props use the
@@ -7825,6 +7982,13 @@ func _world_item_footprint(kind: String, position: Vector2) -> Dictionary:
 	return {"shape": OcclusionFootprintShape.CIRCLE, "kind": kind, "position": position, "radius": radius}
 
 
+# _dining_furniture_footprint: The authored dining props are rectangle-based,
+# not circles. This descriptor is the shared collision/occlusion shape used by
+# the camera fan, wall-span checks, diagnostics, and dining-set depth cones.
+func _dining_furniture_footprint(footprint: Dictionary) -> Dictionary:
+	return {"shape": OcclusionFootprintShape.RECTANGLE, "kind": "dining_furniture", "position": Vector2(footprint.get("position", Vector2.ZERO)), "half_width": float(footprint.get("side_length", 0.0)) * 0.5, "half_depth": float(footprint.get("depth", 0.0)) * 0.5}
+
+
 # _resolve_world_item_placement: Push a floor item out of physical wall edges.
 # This is placement clearance, not player collision: pickups remain collectible.
 func _resolve_world_item_placement(footprint: Dictionary) -> Vector2:
@@ -7855,7 +8019,10 @@ func _add_debug_world_footprints() -> void:
 		return
 	for footprint in _world_occlusion_footprints():
 		var center_world := Vector2(footprint["position"])
-		_add_debug_footprint_circle(center_world, float(footprint["radius"]), Color(0.30, 1.0, 0.38, 0.95), 2.0)
+		if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+			_add_debug_footprint_rectangle(center_world, float(footprint.get("half_width", 0.0)), float(footprint.get("half_depth", 0.0)), Color(0.30, 1.0, 0.38, 0.95), 2.0)
+		else:
+			_add_debug_footprint_circle(center_world, float(footprint["radius"]), Color(0.30, 1.0, 0.38, 0.95), 2.0)
 
 
 func _add_debug_footprint_circle(center_world: Vector2, radius: float, color: Color, width: float) -> void:
@@ -7866,6 +8033,12 @@ func _add_debug_footprint_circle(center_world: Vector2, radius: float, color: Co
 		if index > 0:
 			_add_debug_line(previous, point, color, width)
 		previous = point
+
+
+func _add_debug_footprint_rectangle(center_world: Vector2, half_width: float, half_depth: float, color: Color, width: float) -> void:
+	var corners := [center_world + Vector2(-half_width, -half_depth), center_world + Vector2(half_width, -half_depth), center_world + Vector2(half_width, half_depth), center_world + Vector2(-half_width, half_depth)]
+	for index in corners.size():
+		_add_debug_line(_debug_map_world_position(corners[index]), _debug_map_world_position(corners[(index + 1) % corners.size()]), color, width)
 
 
 # _world_occlusion_footprints: Returns every current floor object as the shared
@@ -7882,6 +8055,10 @@ func _world_occlusion_footprints() -> Array[Dictionary]:
 		result.append(_world_item_footprint("gun", Vector2(gun.get("position", Vector2.ZERO))))
 	if not machine_gun_pickup.is_empty():
 		result.append(_world_item_footprint("gun", Vector2(machine_gun_pickup.get("position", Vector2.ZERO))))
+	for footprint in semantic_lod_floor_footprints:
+		var key := String(footprint.get("id", ""))
+		if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table"):
+			result.append(_dining_furniture_footprint(footprint))
 	return result
 
 
@@ -11110,7 +11287,7 @@ func _position_player() -> void:                                                
 		var continuous_projection_scale := 1.0 if use_continuous_world_projection_for_near_actors else near_self_scale_multiplier # Option 1 must not apply an actor-only scale multiplier that bullets and smoke cannot share.
 		var projected_height := float(truth_projection.get("continuous_actor_height", truth_projection.get("actor_height", near_actor_height_pixels))) * continuous_projection_scale # Start from the literal world-projected height used by the point-effect camera path.
 		var truth_height := projected_height if use_continuous_world_projection_for_near_actors or experimental_forward_cell_play_space else minf(projected_height, near_body_height_cap_pixels) # Remove the actor-only near size cap in Option 1 so the cowboy and raised effects share one camera scale.
-		var truth_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") or String(player_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(player_sprite)
+		var truth_source_height := _standard_actor_body_height()                                 # Scale every authored character clip from one standing reference, never from its individual frame or animation bounds.
 		var truth_scale := truth_height / truth_source_height
 		var truth_screen_x := float(truth_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5))   # Keep the actual projected world X; do not pin the player to a screen edge.
 		var truth_feet_y := float(truth_projection.get("feet_y", VIEWPORT_SIZE.y))              # Let the elevated-camera projection continue beneath the player instead of holding their feet at the bottom.
@@ -11126,7 +11303,7 @@ func _position_player() -> void:                                                
 			var diagonal_projection: Variant = diagonal_renderer.call("runtime_project_world_point_for_current_pose", _current_player_world_position(), 0.36, true)
 			if diagonal_projection is Dictionary and bool(diagonal_projection.get("visible", false)):
 				var diagonal_height := float(diagonal_projection.get("actor_height", near_actor_height_pixels))
-				var diagonal_source_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") or String(player_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(player_sprite)
+				var diagonal_source_height := _standard_actor_body_height()                          # Retain one camera-distance scale across every authored clip in this alternate projector too.
 				var diagonal_scale := diagonal_height / diagonal_source_height
 				player_sprite.scale = Vector2.ONE * diagonal_scale
 				player_sprite.position = Vector2(float(diagonal_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5)), _sprite_center_y_for_feet(player_sprite, float(diagonal_projection.get("feet_y", VIEWPORT_SIZE.y)), diagonal_scale))
@@ -11137,7 +11314,7 @@ func _position_player() -> void:                                                
 	var projection := _near_cell_motion_projection(display_local_position)                    # Project the real near-cell local motion into the fixed wireframe's own deliberately extended rear envelope.
 	var screen_x := float(projection["screen_x"])                                             # Keep the body on the envelope's continuous side trajectory, including only the desired rear-corner exit.
 	var actor_height := float(projection["actor_height"])                                    # Preserve the existing live-tunable near body size without changing the world camera.
-	var source_body_height := _standard_actor_body_height() if String(player_sprite.animation).begins_with("Death") or String(player_sprite.animation).begins_with("Idle") or String(player_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(player_sprite) # Keep crouching, Death and Idle at the standing scale.
+	var source_body_height := _standard_actor_body_height()                                   # Keep run, idle, crouch, and death art on one shared perspective scale.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the visible body span, not transparent frame padding, to the measured study.
 	var screen_y := _sprite_center_y_for_feet(player_sprite, float(projection["feet_y"]), sprite_scale) # Register the art foot/shadow anchor to the calibrated self-view feet line.
 	player_sprite.scale = Vector2.ONE * sprite_scale                                           # Update player sprite rendering or animation state.
@@ -11217,7 +11394,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
 	var actor_height := float(projection.get("continuous_actor_height", projection["actor_height"])) if use_continuous_world_projection_for_near_actors else float(projection["actor_height"]) # Option 1 uses the continuous world scale rather than an actor-only near LOD cap.
-	var source_body_height := _standard_actor_body_height() if String(opponent_sprite.animation).begins_with("Death") or String(opponent_sprite.animation).begins_with("Idle") or String(opponent_sprite.animation).begins_with("Crouch") else _sprite_body_height_to_foot(opponent_sprite) # Keep crouching, Death and Idle at the standing scale in every camera.
+	var source_body_height := _standard_actor_body_height()                                   # Keep every remote animation on the same shared perspective scale as its local counterpart.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
 	var actor_half_width := _opponent_camera_side_margin_from_projection(projection, sprite_scale) # Convert the projected sprite half-width into camera-space fan overlap.
@@ -11657,7 +11834,7 @@ func _side_limits_for_depth(_local_depth: float) -> Vector2:                    
 # _player_sprite_scale_for_depth: Returns the character scale used by both projection and movement bounds.
 func _player_sprite_scale_for_depth(depth: float) -> float:                                # Declare this function.
 	var projection := _self_actor_projection_at_local_depth(depth)                              # Sample the same self-body projection used by the renderer.
-	return float(projection["actor_height"]) / _sprite_body_height_to_foot(player_sprite)      # Return the scale needed to match the visible body height.
+	return float(projection["actor_height"]) / _standard_actor_body_height()                 # Return the one universal character scale for this projected depth.
 
 
 
@@ -11705,17 +11882,6 @@ func _current_player_texture_height() -> float:                                 
 
 
 
-# _sprite_body_height_to_foot: Returns the visible source-pixel height from the body top to the foot anchor.
-func _sprite_body_height_to_foot(sprite: AnimatedSprite2D) -> float:                       # Declare this function.
-	if sprite == null or sprite.sprite_frames == null:                                        # Handle missing sprite resources defensively.
-		return 41.0                                                                              # Return a conservative visible-body fallback for the known idle frame.
-	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)       # Read the current frame texture from this sprite.
-	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
-		return 41.0                                                                              # Return a conservative visible-body fallback for the known idle frame.
-	return _texture_body_height_to_foot(texture)                                               # Measure or fetch the visible body span for this texture.
-
-
-
 # _standard_actor_body_height: Uses the idle body span as a stable perspective reference for special sheets such as Death.
 func _standard_actor_body_height() -> float:
 	var texture := load(PLAYER_IDLE_TEXTURE) as Texture2D                                      # Ask Godot's resource cache for the ordinary standing sprite.
@@ -11745,15 +11911,39 @@ func _sprite_texture_width(sprite: AnimatedSprite2D) -> float:                  
 
 
 
-# _sprite_foot_anchor_y: Returns the source-pixel y row that should sit on the projected floor/feet point.
+# _sprite_foot_anchor_y: Returns the authored clip's stable source-pixel floor row.
 func _sprite_foot_anchor_y(sprite: AnimatedSprite2D) -> float:                              # Declare this function.
 	if sprite == null or sprite.sprite_frames == null:                                        # Handle missing sprite resources defensively.
 		return 45.0                                                                              # Return a near-bottom fallback for the known idle frame.
-	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)       # Read the current frame texture from this sprite.
-	if texture == null:                                                                        # Handle animations that have not selected a visible frame yet.
-		return 45.0                                                                              # Return a near-bottom fallback for the known idle frame.
-	return _texture_foot_anchor_y(texture)                                                    # Measure or fetch the real foot/shadow anchor for this texture.
+	return _animation_foot_anchor_y(sprite)                                                   # Preserve authored airborne frames instead of lowering each one to the floor.
 
+
+# _animation_cache_key: Keeps the per-clip measurements independent for each mutable team SpriteFrames copy.
+func _animation_cache_key(sprite: AnimatedSprite2D) -> String:
+	return "%s:%s" % [str(sprite.sprite_frames.get_instance_id()), String(sprite.animation)]
+
+
+# _animation_foot_anchor_y: Uses the most common foot/shadow row in a clip as its one projected floor anchor.
+func _animation_foot_anchor_y(sprite: AnimatedSprite2D) -> float:
+	var cache_key := _animation_cache_key(sprite)
+	if animation_foot_anchor_cache.has(cache_key):
+		return float(animation_foot_anchor_cache[cache_key])
+	var row_counts: Dictionary = {}
+	var chosen_row := 45.0
+	var chosen_count := 0
+	var frame_count := sprite.sprite_frames.get_frame_count(sprite.animation)
+	for frame_index in frame_count:
+		var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, frame_index)
+		if texture == null:
+			continue
+		var row := _texture_foot_anchor_y(texture)
+		var count := int(row_counts.get(row, 0)) + 1
+		row_counts[row] = count
+		if count > chosen_count:
+			chosen_row = row
+			chosen_count = count
+	animation_foot_anchor_cache[cache_key] = chosen_row
+	return chosen_row
 
 
 # _texture_foot_anchor_y: Finds the bottom visible character/shadow row and anchors one pixel above it.

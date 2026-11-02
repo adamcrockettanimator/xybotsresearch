@@ -1,5 +1,5 @@
 @tool
-extends RefCounted
+extends "res://addons/godot_ai/handlers/command_handler.gd"
 
 const ErrorCodes := preload("res://addons/godot_ai/utils/error_codes.gd")
 
@@ -199,6 +199,62 @@ func set_text(params: Dictionary) -> Dictionary:
 			"text": text_value,
 			"old_text": old_value,
 			"node_type": node_type,
+			"undoable": true,
+		}
+	}
+
+
+# ============================================================================
+# set_richtext — RichTextLabel text (BBcode-aware)
+# ============================================================================
+
+## Set a RichTextLabel's text in one undo action. `bbcode` (default true)
+## toggles BBcode parsing before the text is written, so "[color=red]HP[/color]"
+## renders as markup rather than literal characters.
+func set_richtext(params: Dictionary) -> Dictionary:
+	var node_path: String = params.get("path", "")
+	if node_path.is_empty():
+		return ErrorCodes.make(ErrorCodes.MISSING_REQUIRED_PARAM, "Missing required param: path")
+
+	if not params.has("text"):
+		return ErrorCodes.make(ErrorCodes.MISSING_REQUIRED_PARAM, "Missing required param: text")
+	var text_value: Variant = params["text"]
+	if typeof(text_value) != TYPE_STRING:
+		return ErrorCodes.make(ErrorCodes.WRONG_TYPE, "text must be a string")
+
+	var resolved := McpNodeValidator.resolve_or_error(node_path, "node_path")
+	if resolved.has("error"):
+		return resolved
+	var node: Node = resolved.node
+	if not node is RichTextLabel:
+		return ErrorCodes.make(
+			ErrorCodes.WRONG_TYPE,
+			"Node %s is not a RichTextLabel (got %s)" % [node_path, node.get_class()]
+		)
+	var label := node as RichTextLabel
+
+	if params.has("bbcode") and typeof(params["bbcode"]) != TYPE_BOOL:
+		## Strict: a stringified "false" would coerce to true and silently
+		## render markup as literal text (or the reverse).
+		return ErrorCodes.make(ErrorCodes.WRONG_TYPE, "bbcode must be a boolean")
+	var bbcode: bool = params.get("bbcode", true)
+	var old_text: String = label.text
+	var old_bbcode: bool = label.bbcode_enabled
+
+	_undo_redo.create_action("MCP: Set rich text on %s" % node.name)
+	## bbcode_enabled first: RichTextLabel parses `text` as BBcode only when
+	## the flag is already set.
+	_undo_redo.add_do_property(node, "bbcode_enabled", bbcode)
+	_undo_redo.add_do_property(node, "text", text_value)
+	_undo_redo.add_undo_property(node, "text", old_text)
+	_undo_redo.add_undo_property(node, "bbcode_enabled", old_bbcode)
+	_undo_redo.commit_action()
+
+	return {
+		"data": {
+			"path": McpScenePath.from_node(node, resolved.scene_root),
+			"bbcode": bbcode,
+			"length": (text_value as String).length(),
 			"undoable": true,
 		}
 	}
@@ -459,27 +515,19 @@ func _apply_property(node: Node, prop: String, value: Variant) -> Variant:
 static func _coerce_for_type(value: Variant, prop_type: int) -> Dictionary:
 	match prop_type:
 		TYPE_COLOR:
-			if value is Color:
-				return {"ok": true, "value": value}
-			if value is String:
-				var a := Color.from_string(value, Color(0, 0, 0, 0))
-				var b := Color.from_string(value, Color(1, 1, 1, 1))
-				if a == b:
-					return {"ok": true, "value": a}
-				return {"ok": false}
-			if value is Dictionary and value.has("r") and value.has("g") and value.has("b"):
-				return {
-					"ok": true,
-					"value": Color(float(value.r), float(value.g), float(value.b), float(value.get("a", 1.0))),
-				}
+			## Canonical parser (#714): adds [r,g,b(,a)] array support and
+			## strict key/component checking, same shapes everywhere.
+			var parsed_color = McpJsonValues.parse_color(value)
+			if parsed_color != null:
+				return {"ok": true, "value": parsed_color}
 			return {"ok": false}
 		TYPE_VECTOR2:
-			if value is Vector2:
-				return {"ok": true, "value": value}
-			if value is Dictionary and value.has("x") and value.has("y"):
-				return {"ok": true, "value": Vector2(float(value.x), float(value.y))}
-			if value is Array and value.size() == 2:
-				return {"ok": true, "value": Vector2(float(value[0]), float(value[1]))}
+			## Same canonical parser as TYPE_COLOR (CodeRabbit review):
+			## keeping the inline copy here would re-introduce exactly the
+			## permissive-vs-strict drift this PR removes elsewhere.
+			var parsed_v2 = McpJsonValues.parse_vector2(value)
+			if parsed_v2 != null:
+				return {"ok": true, "value": parsed_v2}
 			return {"ok": false}
 		TYPE_VECTOR2I:
 			if value is Vector2i:
