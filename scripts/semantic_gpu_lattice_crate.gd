@@ -152,6 +152,9 @@ class CrateLogicalRasterOverlay extends Node2D:
 @export_range(0.15, 16.0, 0.05) var detail_hidden_distance := 4.5
 @export_range(0.10, 12.0, 0.05) var diagonal_full_distance := 2.5
 @export_range(0.15, 16.0, 0.05) var diagonal_hidden_distance := 5.0
+## Distance fade for the diagonal brace highlight, independent of the brace.
+@export_range(0.10, 12.0, 0.05) var diagonal_highlight_full_distance := 1.5
+@export_range(0.15, 16.0, 0.05) var diagonal_highlight_hidden_distance := 3.0
 @export_range(0.5, 3.0, 0.25) var edge_highlight_width_logical_pixels := 1.0
 ## 0 hides the lid arms at their corner; 1 reveals them to the far frame edge.
 @export_range(0.0, 1.0, 0.01) var edge_highlight_end_fade := 0.30
@@ -159,7 +162,7 @@ class CrateLogicalRasterOverlay extends Node2D:
 @export_range(0.02, 0.75, 0.01) var edge_highlight_angle_fade := 0.28
 @export_range(0.10, 12.0, 0.05) var edge_highlight_full_distance := 1.5
 @export_range(0.15, 16.0, 0.05) var edge_highlight_hidden_distance := 3.0
-## Side-inset and brace highlights only appear within this close camera range.
+## Side-inset highlights only appear within this close camera range.
 @export_range(0.10, 4.0, 0.05) var inset_side_highlight_full_distance := 0.60
 @export_range(0.15, 6.0, 0.05) var inset_side_highlight_hidden_distance := 1.20
 ## Suppress detailed inset paint on a face approaching its silhouette.
@@ -212,7 +215,7 @@ func _ready() -> void:
 			piece.name = ["North", "East", "South", "West", "Lid"][face] + ["_BasePlanes", "_FrameStrips", "_InsetBoards", "_SlatStrips", "_DiagonalBrace", "_FragmentRasterCarrier"][layer]
 			piece.mesh = _make_face_lattice_mesh(face, material)
 			piece.material = material
-			piece.z_index = layer + 1
+			piece.z_index = 7 if layer == 4 else layer + 1
 			root.add_child(piece)
 			materials.append(material)
 	var shadow_material := ShaderMaterial.new()
@@ -317,6 +320,8 @@ func _style_values_from_inspector() -> Dictionary:
 		"floor_shadow_opacity": floor_shadow_opacity, "detail_full_distance": detail_full_distance,
 		"detail_hidden_distance": detail_hidden_distance, "diagonal_full_distance": diagonal_full_distance,
 		"diagonal_hidden_distance": diagonal_hidden_distance,
+		"diagonal_highlight_full_distance": diagonal_highlight_full_distance,
+		"diagonal_highlight_hidden_distance": diagonal_highlight_hidden_distance,
 		"edge_highlight_width_logical_pixels": edge_highlight_width_logical_pixels,
 		"edge_highlight_end_fade": edge_highlight_end_fade,
 		"edge_highlight_angle_fade": edge_highlight_angle_fade,
@@ -338,6 +343,8 @@ func set_crate(center: Vector2, width: float, depth: float, height: float, camer
 	if logical_raster_overlay != null:
 		# GPU mode retains one deterministic final overlay: the three-segment
 		# front-edge Y. It is intentionally above every face carrier.
+		# CPU panel strokes also sit beneath the diagonal; the GPU-only Y stays on top.
+		logical_raster_overlay.z_index = 10 if use_fragment_raster else 6
 		logical_raster_overlay.visible = not use_fragment_raster or edge_highlight_enabled
 		if use_fragment_raster:
 			logical_raster_overlay.set_strokes([])
@@ -768,6 +775,8 @@ func _settings_with_defaults() -> Dictionary:
 		"inset_shadow_strength": inset_shadow_strength, "floor_shadow_opacity": floor_shadow_opacity,
 		"detail_full_distance": detail_full_distance, "detail_hidden_distance": detail_hidden_distance,
 		"diagonal_full_distance": diagonal_full_distance, "diagonal_hidden_distance": diagonal_hidden_distance,
+		"diagonal_highlight_full_distance": diagonal_highlight_full_distance,
+		"diagonal_highlight_hidden_distance": diagonal_highlight_hidden_distance,
 		"edge_highlight_width_logical_pixels": edge_highlight_width_logical_pixels,
 		"edge_highlight_end_fade": edge_highlight_end_fade,
 		"edge_highlight_angle_fade": edge_highlight_angle_fade,

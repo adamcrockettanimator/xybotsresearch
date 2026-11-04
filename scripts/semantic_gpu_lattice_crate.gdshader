@@ -95,6 +95,8 @@ uniform float detail_full_distance = 2.0;
 uniform float detail_hidden_distance = 4.5;
 uniform float diagonal_full_distance = 2.5;
 uniform float diagonal_hidden_distance = 5.0;
+uniform float diagonal_highlight_full_distance = 1.5;
+uniform float diagonal_highlight_hidden_distance = 3.0;
 uniform float minimum_face_ratio = 0.10;
 
 varying vec3 local_corner;
@@ -282,8 +284,8 @@ float edge_highlight_strength() {
 	return mask * angle * fade_between(edge_highlight_full_distance, edge_highlight_hidden_distance);
 }
 
-// Final GPU-only paint pass. It deliberately runs after slats and braces so
-// semantic lighting owns every pixel where an authored effect crosses a seam.
+// GPU panel-effects pass, above slats and beneath the diagonal brace.
+// Panel lighting owns its seam pixels without painting over the brace.
 // Each candidate logical cell evaluates its own segment membership; no CPU
 // Bresenham cells or freehand Canvas strokes are involved on this path.
 vec4 fragment_raster_effect_colour() {
@@ -375,7 +377,9 @@ void fragment() {
 			if (effect_colour.a <= 0.001) discard;
 			COLOR = effect_colour;
 		} else {
-			if (!inside) discard;
+			// The brace owns its rasterized endpoints; continuous panel UV clipping
+			// would drop its boundary cells as the projected panel moves.
+			if (!inside && surface_layer != 4) discard;
 			vec3 panel_tone = (lid ? panel_top_color.rgb : (abs(normal_for_face().x) > 0.5 ? panel_color.rgb : panel_dark_color.rgb)) * side_vertical_light;
 			vec3 panel = mix(axis_tone, panel_tone, 0.65);
 			// All panel details use this 0..1 space, never the cube-face UVs.
@@ -451,23 +455,25 @@ void fragment() {
 				COLOR = vec4(slat_color.rgb * side_vertical_light, detail_alpha);
 			} else if (surface_layer == 4) {
 				if (authoring_lod_stage >= 0 && authoring_lod_stage < 1) discard;
-				if (!diagonal_enabled || lid || camera_distance >= diagonal_hidden_distance) discard;
+				if (!diagonal_enabled || !panel_enabled || panel_alpha <= 0.0 || camera_distance > panel_max_distance || lid || camera_distance >= diagonal_hidden_distance) discard;
 				// Rasterize directly in the 160x120 logical grid. The brace is a
 				// deliberately wide structural mask; its lighting remains a one-pixel
 				// raster stroke on only the camera-facing edge.
 				vec2 pixel = logical_screen_pixel();
-				vec2 delta = diagonal_end_pixel - diagonal_start_pixel;
+				vec2 brace_start = floor(diagonal_start_pixel) + vec2(0.5);
+				vec2 brace_end = floor(diagonal_end_pixel) + vec2(0.5);
+				vec2 delta = brace_end - brace_start;
 				if (max(abs(delta.x), abs(delta.y)) < 0.001) discard;
 				float line_coordinate;
 				float pixel_coordinate;
 				float line_t;
 				if (abs(delta.x) >= abs(delta.y)) {
-					line_t = (pixel.x - diagonal_start_pixel.x) / delta.x;
-					line_coordinate = diagonal_start_pixel.y + line_t * delta.y;
+					line_t = (pixel.x - brace_start.x) / delta.x;
+					line_coordinate = brace_start.y + line_t * delta.y;
 					pixel_coordinate = pixel.y;
 				} else {
-					line_t = (pixel.y - diagonal_start_pixel.y) / delta.y;
-					line_coordinate = diagonal_start_pixel.x + line_t * delta.x;
+					line_t = (pixel.y - brace_start.y) / delta.y;
+					line_coordinate = brace_start.x + line_t * delta.x;
 					pixel_coordinate = pixel.x;
 				}
 				float signed_distance = pixel_coordinate - line_coordinate;
@@ -486,7 +492,7 @@ void fragment() {
 				// Classify the brace's edge with a perpendicular line normal. A simple
 				// screen-Y offset swaps perceived top/bottom whenever the diagonal slope
 				// reverses; the normal stays attached to the physical support.
-				vec2 closest_point = diagonal_start_pixel + line_t * delta;
+				vec2 closest_point = brace_start + line_t * delta;
 				vec2 line_normal = normalize(vec2(-delta.y, delta.x));
 				float normal_side = dot(pixel - closest_point, line_normal);
 				float top_sign = line_normal.y < 0.0 ? 1.0 : -1.0;
@@ -494,7 +500,8 @@ void fragment() {
 				float upper_edge = step(edge_threshold, top_sign * normal_side);
 				float lower_edge = step(edge_threshold, -top_sign * normal_side);
 				if (brace_width >= 2.0 && panel_is_left < 0.5 && upper_edge > 0.5) {
-					brace_paint = mix(brace_paint, edge_highlight_color.rgb, directional_light);
+					float highlight_fade = authoring_lod_stage >= 1 ? 1.0 : fade_between(diagonal_highlight_full_distance, diagonal_highlight_hidden_distance);
+					brace_paint = mix(brace_paint, edge_highlight_color.rgb, directional_light * highlight_fade);
 				} else if (brace_width >= 2.0 && panel_is_left > 0.5 && lower_edge > 0.5) {
 					brace_paint = mix(brace_paint, inset_shadow_color.rgb, directional_light);
 				}

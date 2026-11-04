@@ -182,6 +182,7 @@ const ACTION_TURN_RIGHT := "xybots_turn_right"                                  
 const ACTION_REGENERATE_MAP := "xybots_regenerate_map"                                      # Name the explicit input action for rerolling the debug maze at runtime.
 const ACTION_TOGGLE_SLOT_GRID_DEBUG := "xybots_toggle_slot_grid_debug"                       # Name the explicit input action for toggling the blue slot-grid audit overlay.
 const ACTION_TOGGLE_DEBUG_MENU := "xybots_toggle_debug_menu"                                 # Name the explicit input action for opening the grouped debug-overlay menu.
+const ACTION_TOGGLE_BOT_TRACE := "xybots_toggle_bot_trace"                                   # Name the F4 toggle for the opt-in NPC decision trace.
 const ACTION_P2_MOVE_LEFT := "xybots_p2_move_left"                                          # Name the second-player input action for moving camera-left inside the current tile.
 const ACTION_P2_MOVE_RIGHT := "xybots_p2_move_right"                                        # Name the second-player input action for moving camera-right inside the current tile.
 const ACTION_P2_MOVE_FORWARD := "xybots_p2_move_forward"                                    # Name the second-player input action for moving toward the camera-facing edge.
@@ -203,11 +204,13 @@ const DUAL_WIELD_FIRE_INTERVAL := PISTOL_FIRE_INTERVAL * 0.5                    
 const DUAL_WIELD_AMMO := 12                                                                   # Give every dual-wield pickup the requested twelve alternating pistol rounds.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const DEFAULT_COMBAT_ROUND_SECONDS := 101.60                                                  # Match the Godot importer waveform's 101.60 s end of audible song content, excluding the MP3 container tail.
-const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt"]
-const PLAYER_TEAMS := [0, 1, 0, 1] # Team 1 occupies the top row; Team 2 the bottom row.
+const MAX_CLEAR_MAP_GREENSHIRTS := 16
+const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt", "Greenshirt 4", "Greenshirt 5", "Greenshirt 6", "Greenshirt 7", "Greenshirt 8", "Greenshirt 9", "Greenshirt 10", "Greenshirt 11", "Greenshirt 12", "Greenshirt 13", "Greenshirt 14", "Greenshirt 15", "Greenshirt 16"]
+const PLAYER_TEAMS := [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] # Bart is the human lawman; every NPC is an opposing greenshirt.
 const TEAM_ONE_COLOR := Color(0.58, 0.24, 0.86, 1.0) # Lawmen: purple tint applied over the grayscale Cowboy sprite.
 const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0) # Outlaws: green tint applied over the grayscale Cowboy sprite.
 const MUSIC_STREAM := preload("res://assets/Audio/Music/Ecstacy of Gold.mp3")
+const CLEAR_MAP_INTRO_LOOP_SECONDS := 5.10
 const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
 const COIN_PICKUP_STREAM := preload("res://assets/Audio/SFX/Coin.mp3")
 const HEART_PICKUP_STREAM := preload("res://assets/Audio/SFX/pluck.mp3")
@@ -218,6 +221,15 @@ const PLAYER_CAPSULE_RADIUS := 0.10                                             
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const BARREL_HIT_POINTS := 3
 const BARREL_PROJECTILE_RADIUS := 0.08                                                     # Approximate the visible barrel width, which is narrower than its 32-pixel canvas.
+const BOT_PERSONAL_SPACE := 0.72                                                            # Keep opponents from collapsing into the same visible combat pose.
+const BOT_STRAFE_RANGE := 2.25                                                              # Inside this range, keep aim on the enemy and fight laterally instead of marching straight at them.
+const BOT_PROP_AVOIDANCE_PADDING := 0.32                                                    # Begin steering around a barrel well before the capsule reaches its physical collision ring.
+const BOT_PROGRESS_DISTANCE := 0.018                                                        # Require this much real-world travel before clearing a bot's stuck timer.
+const BOT_STUCK_SECONDS := 0.45                                                             # Switch to an alternate escape vector before an obstructed bot visibly vibrates.
+const BOT_UNSTICK_SECONDS := 0.65                                                           # Keep the deliberate escape maneuver long enough to clear a prop or actor cluster.
+const BOT_MOVE_ALIGNMENT := 0.90                                                            # Begin a committed run within 26 degrees of intent; waiting for near-perfect yaw made bots spin at corners.
+const BOT_COMBAT_MEMORY_SECONDS := 1.35                                                      # Keep an encounter coherent when a body briefly crosses a wall-corner visibility edge.
+const BOT_WALL_AVOIDANCE_PADDING := 0.24                                                     # Begin turning away before the capsule reaches a solid wall and starts wall-sliding.
 enum OcclusionFootprintShape { CIRCLE, RECTANGLE, CAPSULE }                                # Floor props start as circles; later furniture can opt into authored rectangle/capsule bounds without replacing the renderer contract.
 @export var barrel_footprint_radius := 0.09                                                 # One authoritative circle: wall-clearance and camera-depth footprint for a barrel.
 @export_group("Vector Barrel Prototype")
@@ -342,8 +354,14 @@ const HEART_SPRITE_FRAMES_4: SpriteFrames = preload("res://assets/Items/Heart/He
 const HEART_SPRITE_FRAMES_3: SpriteFrames = preload("res://assets/Items/Heart/Heart_Sprites_3x3.tres") # Use the authored three-pixel heart silhouette at the furthest visible depth.
 const HEART_MAP_SPAWN_CHANCE := 0.20                                                          # Replace roughly one fifth of round-start coin cells with health pickups for testing.
 const HEART_DROP_CHANCE := 0.45                                                               # Make kill drops frequent enough to exercise health recovery during playtests.
+const GREENSHIRT_GUN_DROP_CHANCE := 0.07                                                     # Match the established rare barrel-gun drop rate.
 const GUN_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Gun/Gun.tres")          # Use the user-authored eight-frame rotating gun resource for the world powerup.
 const GUN_HUD_TEXTURE := preload("res://assets/Items/Gun/gun_01.png")                        # Keep the held-powerup HUD indicator as the requested fixed front frame.
+const WANTED_POSTER_TEXTURES: Array[Texture2D] = [preload("res://assets/UI/WantedPosters/WantedPoster_01.png"), preload("res://assets/UI/WantedPosters/WantedPoster_02.png"), preload("res://assets/UI/WantedPosters/WantedPoster_03.png"), preload("res://assets/UI/WantedPosters/WantedPoster_04.png"), preload("res://assets/UI/WantedPosters/WantedPoster_05.png"), preload("res://assets/UI/WantedPosters/WantedPoster_06.png"), preload("res://assets/UI/WantedPosters/WantedPoster_07.png"), preload("res://assets/UI/WantedPosters/WantedPoster_08.png")]
+const WANTED_BLOOD_TEXTURES: Array[Texture2D] = [preload("res://assets/UI/WantedPosters/bloodSplatter_01.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_02.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_03.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_04.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_05.png")]
+const CLEAR_MAP_VICTORY_STREAM := preload("res://assets/Audio/Music/Victory.wav")
+const CLEAR_MAP_LOSS_STREAM := preload("res://assets/Audio/Music/GameOver.ogg")
+const CLEAR_MAP_RESULT_FADE_SECONDS := 1.0
 const GUN_HUD_SIZE := Vector2(10.0, 10.0)                                                     # Render the 20x20 source at exactly half size to match the health meter's compact presentation.
 const XBOX_STICK_DEADZONE := 0.22                                                            # Ignore small Xbox-stick drift around its physical center.
 const XBOX_TURN_THRESHOLD := 0.62                                                            # Require a deliberate right-stick push before issuing one turn input.
@@ -358,6 +376,8 @@ const DEBUG_VIEW_CONE_DEPTH := 5.5                                              
 const DEBUG_VIEW_CONE_HALF_WIDTH := 2.25                                                     # Match the top-down cone width from the Wall_Grid reference image.
 const DEFAULT_CAMERA_REAR_OFFSET := 0.46                                                     # Preserve the authored rear-camera placement as the live tuning reset value.
 const NEAR_VIEW_TUNING_CONFIG_PATH := "user://near_view_tuning.cfg"                         # Persist deliberately saved F3 near-view values outside the project and reload them on the next launch.
+const BOT_TRACE_INTERVAL_SECONDS := 0.25                                                     # Record stable NPC decisions at a readable cadence without flooding the trace file.
+const BOT_TRACE_ROTATE_SECONDS := 300.0                                                       # Keep one concise five-minute diagnostic chunk rather than an unbounded match log.
 const LOCAL_TILE_WORLD_HALF_EXTENT := 0.5                                                    # Convert one normalized in-tile offset into one full square half-width in world-grid units.
 const DEFAULT_SELF_MIN_ACTOR_SCALE_VIEW_DEPTH := 0.78                                        # Preserve the authored protected self-scale depth as a live tuning reset value.
 const DEFAULT_LOCAL_FEET_FLOOR_MARGIN_PIXELS := 7.0                                          # Preserve the authored lateral feet safety margin as a live tuning reset value.
@@ -837,6 +857,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_camera_cutaway_debug := false                                               # Show the camera-to-player presentation rays and walls selected for local cutaway fading.
 @export var show_fan_draw_order_debug := false                                               # Show the exact solid fan, clipped wall spans, and final above/below-player layer decision.
 @export var show_world_footprints_debug := false                                             # Show physical placement circles and camera-visible footprint cones for every floor-world item.
+@export var show_bot_navigation_debug := false                                               # Draw every NPC's current route, goal, and perception decision on the compact minimap.
 @export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
 @export var show_barrel_lod_visualizer := false                                              # Keep the gallery readable; labels remain available from the F3 diagnostic toggle.
 @export var pause_round_timer_for_debug := false                                             # Normal matches start with the shared countdown running.
@@ -855,7 +876,8 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var use_continuous_world_projection_for_near_actors := true                          # Option 1: place near-field cowboys with the same unclamped continuous world camera used by bullets, smoke, pickups, and impacts; disable only to compare the legacy cowboy-only envelope.
 @export var continuous_third_person_camera := true                                           # Experimental branch: replace cell-step camera motion with one continuously moving world camera.
 @export_range(0.25, 6.0, 0.05) var continuous_camera_turn_radians_per_second := 2.4         # Traditional right-stick yaw speed for the continuous third-person experiment.
-@export var bots_enabled := false                                                            # Keep unclaimed roster slots stationary while controller ownership is being verified.
+@export var bots_enabled := true                                                             # Let vacant lobby slots participate as active NPC opponents in normal matches.
+@export var single_player_combat_view := true                                                # Simulate all four actors, but render only Bart's camera during solo bot play.
 @export_range(0.0, 48.0, 1.0) var near_rear_exit_pixels := 24.0                             # Let the body feet travel this far below the authored near floor edge at the south boundary, creating a natural partial exit.
 @export_range(0.0, 48.0, 1.0) var near_rear_side_exit_pixels := 22.0                        # Flare the south-west/south-east screen limits by this amount so each rear corner can partially leave the frame.
 @export_range(0.50, 1.0, 0.01) var side_transition_trigger_offset := 0.90                    # Start an open lateral crossing at this normalized physical offset; 0.90 is the accepted current tuning.
@@ -978,11 +1000,16 @@ var was_right_turn_pressed := false                                             
 var was_regenerate_map_pressed := false                                                      # Track previous-frame map-regenerate input so it fires once per key press.
 var was_slot_grid_debug_pressed := false                                                     # Track previous-frame slot-grid toggle input so it fires once per key press.
 var was_debug_menu_pressed := false                                                          # Track previous-frame debug-menu input so it opens or closes once per key press.
+var was_bot_trace_pressed := false                                                           # Track F4 so one press starts or stops exactly one trace.
 var player_two_joined := false                                                               # Legacy compatibility mirror for Player 2.
 var player_joined := [false, false, false, false]
 var player_bots := [false, false, false, false]                                             # Keep bot ownership separate from normal player join/render participation.
 var player_device_ids := [-1, -1, -1, -1]                                                   # Freeze each human's Godot device id when the lobby launches the match.
 var bot_inputs: Dictionary = {}                                                              # Store one small virtual input bundle for the bot currently being simulated.
+var bot_brains: Dictionary = {}                                                              # Retain each NPC's combat state, route waypoint, and progress watchdog between frames.
+@export var bot_decision_trace_enabled := true                                               # Record AI decisions automatically during bot matches; F4 remains an explicit on/off switch.
+var bot_decision_trace_path := ""                                                           # Save the current capture under user:// and print its absolute path when tracing starts.
+var bot_decision_trace_started_seconds := 0.0                                                # Rotate long unattended captures into manageable five-minute files.
 var match_started := false
 var match_paused := false
 var scoreboard_visible := false
@@ -1003,8 +1030,11 @@ var held_keycodes := {}                                                         
 var active_player_index := 0                                                                 # Track which local player is currently bound into the legacy single-player renderer state.
 var player_states: Array[Dictionary] = []                                                    # Store per-player movement, facing, transition, and debug state.
 var player_views: Array[Dictionary] = []                                                     # Store per-player playfield, map, wall, and sprite node references.
+var actor_sprite_views: Array[AnimatedSprite2D] = []                                         # Keep one hidden, authored animation source per world actor, including bots that do not own a visible camera.
 var coordinate_renderers: Array[Node] = []                                                    # Store one optional Blender-coordinate compositor for each local player view.
 var active_projectiles: Array[Dictionary] = []                                                # Store shared-world pistol shots until they hit a wall, player, or lifetime limit.
+var bot_heard_shot_serial := 0                                                                # Incremented once per gunshot; NPC investigation consumes each event once.
+var bot_last_heard_shot_position := Vector2.ZERO                                              # Shared-world origin of the latest audible shot.
 var active_projectile_trails: Array[Dictionary] = []                                          # Store stationary shared-world bullet particles independently of the moving hit simulation.
 var active_wall_debris: Array[Dictionary] = []                                                # Store shared-world square splinters through their arc, one bounce, and fade.
 var active_wall_bullet_holes: Array[Dictionary] = []                                          # Store short-lived black one-pixel wall strike decals independently of moving debris.
@@ -1061,6 +1091,28 @@ var combat_round_time_remaining := DEFAULT_COMBAT_ROUND_SECONDS                 
 var combat_round_complete := false                                                            # Freeze score changes after the clock reaches zero while allowing post-round movement and shooting.
 var combat_round_result := ""                                                                 # Store the final winner/draw announcement exactly once.
 var team_round_wins := [0, 0]                                                                 # Retain Lawmen/Outlaws round wins across replayed rounds in this game session.
+@export var clear_the_map_mode := true                                                        # Solo mode: Bart clears a finite greenshirt roster instead of playing timed deathmatch.
+var clear_map_round := 1                                                                      # Escalates the number of active greenshirts each successful round, within the current four-cowboy roster.
+var clear_map_poster_start := 0                                                               # Preserve the intro's poster choices through the result screen.
+var clear_map_wins := 0                                                                       # Replace the team scoreboard with Bart's completed-map tally.
+var clear_map_reward: Dictionary = {}                                                        # Persist the earned next-round item bundle until Start begins that round.
+var clear_map_carried_inventory: Dictionary = {}                                              # Keep a winning Bart's earned coins, health, and weapon between maps.
+var clear_map_banner_timer := 3.0                                                            # Hold the opening objective splash briefly without blocking play.
+var clear_map_waiting_to_start := true                                                       # Posters are a separate ready screen; combat/music wait for an explicit Start.
+var clear_map_intro_music_active := false                                                    # Manually loop only the opening music phrase while the ready screen is up.
+var clear_map_tally_loot: Dictionary = {}                                                    # One barrel-style reward roll per killed greenshirt, keyed by slot.
+var clear_map_killer_index := -1
+var clear_map_finish_pending := false                                                        # Hold the terminal result behind its one-second audiovisual fade.
+var clear_map_finish_victory := false
+var clear_map_finish_timer := 0.0
+var clear_map_result_fade: ColorRect
+var wanted_tally_overlay: ColorRect
+var wanted_tally_title: Label
+var wanted_tally_prompt: Label
+var wanted_tally_posters: Dictionary = {}
+var wanted_tally_queue: Array[Dictionary] = []
+var wanted_tally_timer := 0.0
+var wanted_tally_terminal := false
 var combat_round_timer_label: Label                                                           # Show the running round clock in the upper-right without covering either player view.
 var combat_round_result_label: Label                                                          # Show the frozen winner announcement only after the timer expires.
 var combat_round_timer_labels: Array[Label] = []                                              # Keep one top-center match clock in each player's native window.
@@ -1077,6 +1129,7 @@ const MATCH_MINIMAP_SIZE := 66.0                                                
 const MATCH_MINIMAP_MARGIN := 5.0                                                              # Leave a small safe inset from the upper-right screen edge.
 var pixel_hud_font: FontFile                                                                   # Share the bundled High Noon pixel font across every gameplay readout.
 var music_player: AudioStreamPlayer
+var clear_map_result_player: AudioStreamPlayer
 var gunshot_player: AudioStreamPlayer
 var coin_pickup_player: AudioStreamPlayer
 var heart_pickup_player: AudioStreamPlayer
@@ -1132,11 +1185,18 @@ func _ready() -> void:                                                          
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
 	_apply_session_roster()                                                                    # Convert title-menu vacancies into active bot combatants before views and HUDs are built.
+	if clear_the_map_mode:
+		match_started = false                                                                     # Keep the ready-screen posters from masking a live match.
+	if bots_enabled and bot_decision_trace_enabled:
+		_start_bot_decision_trace()                                                               # Every F5 bot match gets a fresh trace without requiring an F4 press.
 	if music_enabled and match_started and music_player != null:
 		music_player.play()                                                                      # The lobby starts the match immediately, without going through the late-join music trigger.
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
 	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
+	_setup_wanted_tally_overlay()
+	if clear_the_map_mode:
+		_begin_wanted_tally(false)
 	_setup_deathmatch_overlays()
 	_load_near_view_tuning()                                                                   # Restore only the user's deliberately saved F3 near-view values before building controls and first rendering the views.
 	_setup_debug_menu()                                                                        # Create the shared on-screen menu for toggling diagnostic overlays.
@@ -1153,6 +1213,8 @@ func _setup_shared_audio() -> void:
 	if music_player.stream is AudioStreamMP3:
 		music_player.stream.loop = false                                                         # One round uses one song; do not restart it under the final standings.
 	add_child(music_player)
+	clear_map_result_player = AudioStreamPlayer.new()
+	add_child(clear_map_result_player)
 	gunshot_player = AudioStreamPlayer.new()
 	gunshot_player.stream = GUNSHOT_STREAM
 	add_child(gunshot_player)
@@ -1304,6 +1366,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "camera_cutaway", "Camera Cutaway Rays")                  # Show the exact widened camera-to-player fan that selects walls for local fading.
 	_add_debug_menu_check(content, "fan_draw_order", "Fan Draw Order")                       # Show which visible wall segments the continuous silhouette fan puts above or below the local player.
 	_add_debug_menu_check(content, "world_footprints", "World Footprints")                   # Compare physical wall-clearance circles to camera-visible footprint cones.
+	_add_debug_menu_check(content, "bot_navigation", "Bot Navigation")                       # Show persistent bot routes and current perception/action.
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "barrel_lod_visualizer", "Barrel LOD Labels")             # Keep the currently selected static barrel LOD readable while moving through depth bands.
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
@@ -1705,6 +1768,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_fan_draw_order_debug                                                       # Return whether the local player-versus-wall ordering diagnostic is visible.
 		"world_footprints":
 			return show_world_footprints_debug
+		"bot_navigation":
+			return show_bot_navigation_debug
 		"muzzle_anchors":
 			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
 		"barrel_lod_visualizer":
@@ -1783,6 +1848,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 				show_top_down_source_overlay = true                                                  # The segment/fan relationship is meaningful only alongside the physical wall map.
 		"world_footprints":
 			show_world_footprints_debug = enabled
+		"bot_navigation":
+			show_bot_navigation_debug = enabled
 			if enabled:
 				show_top_down_source_overlay = true
 		"muzzle_anchors":
@@ -1914,6 +1981,22 @@ func _setup_local_multiplayer() -> void:                                        
 		player_views.append(_create_single_window_player_view(player_index))
 	player_states = _make_start_player_states()                                                 # Create initial player-state records for both local players.
 	_setup_all_view_opponent_sprites()
+	if single_player_combat_view:
+		# Retain lightweight private sprites for NPC animation/state processing, but
+		# hide every non-human camera and HUD. The player-one view renders all three
+		# opponents through its own opponent-sprite set.
+		# F4 still prints the trace path to the Godot output.  Keep the legacy
+		# status label hidden here because it belongs inside the scaled playfield
+		# and would cover the single full-size camera with debug text.
+		status_label.visible = false
+		for player_index in range(1, player_views.size()):
+			var bot_view: Dictionary = player_views[player_index]
+			var bot_viewport: Node2D = bot_view.get("maze_viewport", null)
+			var bot_hud: CanvasLayer = bot_view.get("hud_layer", null)
+			if bot_viewport != null:
+				bot_viewport.visible = false
+			if bot_hud != null:
+				bot_hud.visible = false
 	_bind_player_context(0)                                                                     # Bind player one back into the legacy globals after setup.
 
 
@@ -1940,16 +2023,21 @@ func _create_single_window_player_view(player_index: int) -> Dictionary:
 
 
 func _setup_all_view_opponent_sprites() -> void:
+	_ensure_actor_sprite_views()
 	for viewer_index in range(player_views.size()):
 		var view := player_views[viewer_index]
 		var sprites := {}
+		var content: Node2D = view.get("maze_content", null)
+		if content != null:
+			for child in content.get_children():
+				if child is AnimatedSprite2D and child.has_meta("player_index"):
+					sprites[int(child.get_meta("player_index"))] = child
 		var retained: AnimatedSprite2D = view.get("opponent_sprite", null)
 		var retained_target := 1 if viewer_index == 0 else 0
-		if retained != null:
+		if retained != null and not sprites.has(retained_target):
 			retained.set_meta("player_index", retained_target)
 			sprites[retained_target] = retained
-		var content: Node2D = view.get("maze_content", null)
-		for target_index in range(4):
+		for target_index in range(player_states.size()):
 			if target_index == viewer_index or sprites.has(target_index):
 				continue
 			var sprite := _create_character_sprite("OpponentP%d" % (target_index + 1), PLAYER_TEAMS[target_index])
@@ -1959,6 +2047,20 @@ func _setup_all_view_opponent_sprites() -> void:
 			sprites[target_index] = sprite
 		view["opponent_sprites"] = sprites
 		player_views[viewer_index] = view
+
+
+# _ensure_actor_sprite_views: Camera rendering and simulation have different
+# lifetimes.  Every roster member nevertheless needs the same authored PNG
+# frames and muzzle-anchor data, even when it has no private camera/HUD.
+func _ensure_actor_sprite_views() -> void:
+	while actor_sprite_views.size() < player_states.size():
+		var actor_index := actor_sprite_views.size()
+		var actor_sprite := _create_character_sprite("ActorSpriteP%d" % (actor_index + 1), PLAYER_TEAMS[actor_index])
+		actor_sprite.set_meta("player_index", actor_index)
+		actor_sprite.set_meta("team_index", PLAYER_TEAMS[actor_index])
+		actor_sprite.visible = false
+		add_child(actor_sprite)
+		actor_sprite_views.append(actor_sprite)
 
 
 # _activate_player_two_window: Opens two ordinary OS windows that players can drag and resize onto any monitor.
@@ -1984,12 +2086,29 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 			_make_audit_player_state(0, AUDIT_P1_CELL, AUDIT_P1_FACING, AUDIT_P1_TURN_45_DIRECTION, AUDIT_P1_LOCAL_POSITION), # Start player one on the NE guide panel state.
 			_make_audit_player_state(1, AUDIT_P2_CELL, AUDIT_P2_FACING, AUDIT_P2_TURN_45_DIRECTION, AUDIT_P2_LOCAL_POSITION), # Start player two on the north guide panel state.
 		]                                                                                         # Close the audit state list.
-	return [                                                                                    # Return the normal two-player gameplay state list.
-		_make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0),                                    # Start player one in the southwest corner facing north.
-		_make_player_state(1, Vector2i(MAP_WIDTH - 1, 0), 2),                                     # Start player two in the northeast corner facing south.
-		_make_player_state(2, Vector2i(MAP_WIDTH - 1, MAP_HEIGHT - 1), 0),
-		_make_player_state(3, Vector2i(0, 0), 2),
-	]                                                                                           # Close the normal state list.
+	var states: Array[Dictionary] = [_make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0)]
+	for player_index in range(1, player_joined.size()):
+		states.append(_make_player_state(player_index, _greenshirt_spawn_cell(player_index), 2 if _greenshirt_spawn_cell(player_index).y == 0 else 0))
+	return states
+
+
+func _greenshirt_spawn_cell(player_index: int) -> Vector2i:
+	var cells := [Vector2i(MAP_WIDTH - 1, 0), Vector2i(MAP_WIDTH - 1, MAP_HEIGHT - 1), Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, MAP_HEIGHT - 1), Vector2i(0, 1), Vector2i(MAP_WIDTH - 1, 1), Vector2i(1, MAP_HEIGHT - 1), Vector2i(2, 0), Vector2i(0, 2), Vector2i(MAP_WIDTH - 1, 2), Vector2i(1, 1), Vector2i(2, 2), Vector2i(1, 2), Vector2i(2, 1), Vector2i(0, MAP_HEIGHT - 1)]
+	return cells[posmod(player_index - 1, cells.size())]
+
+
+func _ensure_clear_map_roster_capacity(greenshirt_count: int) -> void:
+	var required_size := mini(greenshirt_count, MAX_CLEAR_MAP_GREENSHIRTS) + 1
+	while player_joined.size() < required_size:
+		var player_index := player_joined.size()
+		player_joined.append(false)
+		player_bots.append(false)
+		player_device_ids.append(-1)
+		was_shop_heart_pressed.append(false)
+		was_shop_gun_pressed.append(false)
+		if player_states.size() < required_size:
+			player_states.append(_make_player_state(player_index, _greenshirt_spawn_cell(player_index), 2 if _greenshirt_spawn_cell(player_index).y == 0 else 0))
+	_setup_all_view_opponent_sprites()
 
 
 # _apply_session_roster: Makes title-menu players human-controlled and fills every remaining combat slot with a bot.
@@ -2018,6 +2137,18 @@ func _apply_session_roster() -> void:
 	var has_human_selection := false
 	for player_index in range(4):
 		has_human_selection = has_human_selection or bool(roster_slots[player_index])
+	if clear_the_map_mode and single_player_combat_view:
+		# Every win adds one genuine bot slot. The visible player camera owns an
+		# opponent sprite for each of them, while off-camera bots remain simulation-only.
+		var greenshirt_count := mini(clear_map_round, MAX_CLEAR_MAP_GREENSHIRTS)
+		_ensure_clear_map_roster_capacity(greenshirt_count)
+		for player_index in range(player_joined.size()):
+			player_bots[player_index] = player_index > 0 and player_index <= greenshirt_count
+			player_device_ids[player_index] = -1
+			player_joined[player_index] = player_index == 0 or player_bots[player_index]
+		player_two_joined = false
+		match_started = true
+		return
 	for player_index in range(mini(4, player_joined.size())):
 		var human := bool(roster_slots[player_index])
 		# Running main.tscn directly from the editor skips the title-menu handoff.
@@ -2043,12 +2174,14 @@ func _is_bot_controlled_slot(player_index: int) -> bool:
 	return player_index >= 0 and player_index < player_bots.size() and player_bots[player_index] and not _is_human_controlled_slot(player_index)
 
 
-# _update_bot_input: A deliberately simple hunter: face the closest enemy, advance when aligned, and fire only down a clear corridor.
-func _update_bot_input(player_index: int) -> void:
+# _update_bot_input: Builds an NPC's route, combat state, and progress watchdog.
+func _update_bot_input(player_index: int, delta: float) -> void:
 	bot_inputs.erase(player_index)
 	if not bots_enabled:
+		bot_brains.erase(player_index)
 		return
 	if not _is_bot_controlled_slot(player_index) or player_index >= player_states.size():
+		bot_brains.erase(player_index)
 		return
 	var state: Dictionary = player_states[player_index]
 	var origin := _player_state_world_position(state)
@@ -2064,54 +2197,557 @@ func _update_bot_input(player_index: int) -> void:
 	if target_index < 0:
 		return
 	var target_vector := _player_state_world_position(player_states[target_index]) - origin
-	var navigation_vector := _bot_navigation_direction(state, target_vector)
-	var virtual_input := {"left": false, "right": false, "forward": false, "fire": false}
+	var navigation_vector := _bot_navigation_direction(state, player_states[target_index], target_vector)
+	var brain := _update_bot_brain(player_index, state, origin, target_index, target_vector, target_distance, navigation_vector, delta)
+	# Steering and locomotion are intentionally separate. In the continuous
+	# camera mode, sharing left/right made a bot strafe into a wall while trying
+	# to rotate toward its path, producing the edge vibration seen in play.
+	var virtual_input := {"turn_left": false, "turn_right": false, "move_left": false, "move_right": false, "move_forward": false, "move_backward": false, "fire": false}
 	if continuous_third_person_camera:
 		var free_forward := _view_forward_vector_for_state(state).normalized()
-		var free_target_direction := navigation_vector.normalized()
-		var alignment := free_forward.dot(free_target_direction)
-		if alignment > 0.985:
-			virtual_input["forward"] = true
-			virtual_input["fire"] = free_forward.dot(target_vector.normalized()) > 0.96 and _nearest_projectile_wall_distance(origin, free_forward, target_distance) >= target_distance
-		elif free_forward.cross(free_target_direction) > 0.0:
-			virtual_input["right"] = true
+		var free_right := Vector2(-free_forward.y, free_forward.x)
+		var has_line_of_sight := bool(brain.get("has_line_of_sight", false))
+		var move_direction: Vector2 = brain.get("move_direction", navigation_vector)
+		# Never turn the body toward a target that the combat system itself says is
+		# behind a wall.  Until a real firing lane exists, face and follow the next
+		# BFS route step through the hallway. An UNSTICK maneuver must instead face
+		# its own frozen escape vector; aiming at the route while strafing elsewhere
+		# caused the visible left/right spin without a committed step.
+		var aim_direction := target_vector.normalized() if has_line_of_sight and target_vector.length_squared() > 0.00000001 else move_direction.normalized()
+		var alignment := free_forward.dot(aim_direction)
+		# AI locomotion is world-directed, not a player input tutorial. Keep moving
+		# while rotating into the chosen route/escape vector; otherwise a 90-degree
+		# corner can repeatedly consume the entire unstick window as turn-only input.
+		_bot_apply_continuous_move_input(virtual_input, move_direction, free_forward, free_right)
+		if alignment > BOT_MOVE_ALIGNMENT:
+			virtual_input["fire"] = has_line_of_sight and target_vector.length_squared() > 0.00000001 and free_forward.dot(target_vector.normalized()) > 0.96
+		elif free_forward.cross(aim_direction) > 0.0:
+			virtual_input["turn_right"] = true
 		else:
-			virtual_input["left"] = true
+			virtual_input["turn_left"] = true
+		_trace_bot_decision(player_index, origin, target_vector, brain, virtual_input)
 		bot_inputs[player_index] = virtual_input
 		return
 	var wanted_facing := 1 if absf(navigation_vector.x) > absf(navigation_vector.y) and navigation_vector.x > 0.0 else 3 if absf(navigation_vector.x) > absf(navigation_vector.y) else 2 if navigation_vector.y > 0.0 else 0
 	var facing := int(state.get("facing", 0))
 	var turn := (wanted_facing - facing + 4) % 4
 	if turn == 1:
-		virtual_input["right"] = true
+		virtual_input["turn_right"] = true
 	elif turn == 3:
-		virtual_input["left"] = true
+		virtual_input["turn_left"] = true
 	elif turn == 2:
-		virtual_input["right"] = true
+		virtual_input["turn_right"] = true
 	else:
-		virtual_input["forward"] = true
+		virtual_input["move_forward"] = true
 		var forward := _view_forward_vector_for_state(state).normalized()
 		var target_direction := target_vector.normalized()
-		var wall_distance := _nearest_projectile_wall_distance(origin, forward, target_distance)
-		virtual_input["fire"] = forward.dot(target_direction) > 0.96 and wall_distance >= target_distance
+		virtual_input["fire"] = bool(brain.get("has_line_of_sight", false)) and forward.dot(target_direction) > 0.96
+	_trace_bot_decision(player_index, origin, target_vector, brain, virtual_input)
 	bot_inputs[player_index] = virtual_input
 
 
-# _bot_navigation_direction: Take the open neighboring cell whose direction most closely reduces distance to the target.
-# This greedy maze step naturally turns around in dead ends instead of repeatedly pressing into a wall.
-func _bot_navigation_direction(state: Dictionary, target_vector: Vector2) -> Vector2:
-	var cell: Vector2i = state.get("grid_position", Vector2i(-1, -1))
-	var desired := target_vector.normalized()
-	var best_direction := desired
+# _toggle_bot_decision_trace: Open a fresh JSONL capture so every test run is
+# self-contained and easy to attach or inspect after a bad encounter.
+func _toggle_bot_decision_trace() -> void:
+	if bot_decision_trace_enabled:
+		bot_decision_trace_enabled = false
+		show_bot_navigation_debug = false
+		print("Bot decision trace stopped: %s" % ProjectSettings.globalize_path(bot_decision_trace_path))
+		return
+	bot_decision_trace_enabled = true
+	show_bot_navigation_debug = true
+	_start_bot_decision_trace()
+
+
+# _start_bot_decision_trace: Starts or rotates one compact JSONL decision file.
+func _start_bot_decision_trace() -> void:
+	bot_decision_trace_path = "user://bot_decision_trace_%d_%d.jsonl" % [Time.get_unix_time_from_system(), Time.get_ticks_msec()]
+	var trace_file := FileAccess.open(bot_decision_trace_path, FileAccess.WRITE)
+	if trace_file == null:
+		bot_decision_trace_enabled = false
+		push_error("Could not open bot decision trace: %s" % ProjectSettings.globalize_path(bot_decision_trace_path))
+		return
+	bot_decision_trace_started_seconds = float(Time.get_ticks_msec()) * 0.001
+	trace_file.store_line(JSON.stringify({"event": "trace_started", "time_ms": Time.get_ticks_msec()}))
+	trace_file.close()
+	print("Bot decision trace started (F4 stops it): %s" % ProjectSettings.globalize_path(bot_decision_trace_path))
+
+
+# _trace_bot_decision: Append a compact record when an NPC changes intent or
+# after a short stable interval. JSON Lines is intentionally easy to search,
+# diff, or hand back to this chat without parsing engine logs.
+func _trace_bot_decision(player_index: int, origin: Vector2, target_vector: Vector2, brain: Dictionary, virtual_input: Dictionary) -> void:
+	if not bot_decision_trace_enabled or bot_decision_trace_path.is_empty():
+		return
+	var now_seconds := float(Time.get_ticks_msec()) * 0.001
+	if now_seconds - bot_decision_trace_started_seconds >= BOT_TRACE_ROTATE_SECONDS:
+		_start_bot_decision_trace()
+	var state_name := String(brain.get("state", "IDLE"))
+	var target_index := int(brain.get("target_index", -1))
+	var desired: Vector2 = brain.get("move_direction", Vector2.ZERO)
+	var has_line_of_sight := bool(brain.get("has_line_of_sight", false))
+	var input_signature := "%s|%d|%s|%.2f,%.2f|%s" % [state_name, target_index, has_line_of_sight, desired.x, desired.y, JSON.stringify(virtual_input)]
+	var previous: Dictionary = bot_brains.get(player_index, {})
+	var last_signature := String(previous.get("trace_signature", ""))
+	var last_time := float(previous.get("trace_time", -INF))
+	if input_signature == last_signature and now_seconds - last_time < BOT_TRACE_INTERVAL_SECONDS:
+		return
+	var trace_file := FileAccess.open(bot_decision_trace_path, FileAccess.READ_WRITE)
+	if trace_file == null:
+		return
+	trace_file.seek_end()
+	trace_file.store_line(JSON.stringify({
+		"time_ms": Time.get_ticks_msec(), "bot": player_index, "name": PLAYER_NAMES[player_index],
+		"state": state_name, "target": target_index, "target_name": PLAYER_NAMES[target_index] if target_index >= 0 and target_index < PLAYER_NAMES.size() else "", "has_line_of_sight": has_line_of_sight,
+		"position": [origin.x, origin.y], "target_vector": [target_vector.x, target_vector.y],
+		"goal_cell": [Vector2i(brain.get("goal_cell", Vector2i(-1, -1))).x, Vector2i(brain.get("goal_cell", Vector2i(-1, -1))).y],
+		"route": brain.get("route", []), "route_index": int(brain.get("route_index", 0)),
+		"waypoint": [Vector2(brain.get("waypoint", origin)).x, Vector2(brain.get("waypoint", origin)).y],
+		"desired": [desired.x, desired.y], "stuck_seconds": float(brain.get("stuck_time", 0.0)),
+		"unstick_seconds": float(brain.get("unstick_time", 0.0)), "input": virtual_input
+	}))
+	trace_file.close()
+	previous["trace_signature"] = input_signature
+	previous["trace_time"] = now_seconds
+	bot_brains[player_index] = previous
+
+
+# _update_bot_brain: Selects a deliberate state and notices when the actual
+# capsule stopped advancing, even if the route remains mathematically valid.
+func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, target_index: int, target_vector: Vector2, target_distance: float, navigation_vector: Vector2, delta: float) -> Dictionary:
+	var brain: Dictionary = bot_brains.get(player_index, {})
+	var last_position: Vector2 = brain.get("last_position", origin)
+	var previous_direction: Vector2 = brain.get("move_direction", navigation_vector)
+	var made_progress := origin.distance_to(last_position) >= BOT_PROGRESS_DISTANCE
+	var stuck_time := 0.0 if made_progress or previous_direction.length_squared() <= 0.00000001 else float(brain.get("stuck_time", 0.0)) + delta
+	var unstick_time := maxf(0.0, float(brain.get("unstick_time", 0.0)) - delta)
+	var unstick_attempt := int(brain.get("unstick_attempt", 0))
+	var escape_direction: Vector2 = brain.get("unstick_direction", Vector2.ZERO)
+	var patrol_cell: Vector2i = brain.get("patrol_cell", Vector2i(-1, -1))
+	var patrol_step := int(brain.get("patrol_step", 0))
+	var combat_memory := maxf(0.0, float(brain.get("combat_memory", 0.0)) - delta)
+	var was_in_combat := combat_memory > 0.0
+	var combat_goal: Vector2i = brain.get("combat_goal_cell", Vector2i(-1, -1))
+	if stuck_time >= BOT_STUCK_SECONDS:
+		unstick_time = BOT_UNSTICK_SECONDS
+		stuck_time = 0.0
+		unstick_attempt += 1
+		escape_direction = _bot_unstick_direction(player_index, state, origin, navigation_vector, unstick_attempt)
+	# Use the exact authoritative combat LOS test—not the looser navigation ray—
+	# so bots cannot adopt a firing/strafe posture through a wall corner.
+	var clear_shot := target_vector.length_squared() > 0.00000001 and _projectile_owner_has_clear_path_to_player(player_index, target_index, false)
+	if clear_shot:
+		combat_memory = BOT_COMBAT_MEMORY_SECONDS
+	var current_cell := Vector2i(floori(origin.x), floori(origin.y))
+	var goal_cell: Vector2i = brain.get("goal_cell", Vector2i(-1, -1))
+	var route: Array = brain.get("route", [])
+	var route_index := int(brain.get("route_index", 0))
+	var detour_point: Vector2 = brain.get("detour_point", Vector2.INF)
+	var detour_route_index := int(brain.get("detour_route_index", -1))
+	var state_name := "PATROL"
+	# Choose a goal only when a state transition requires it.  Everything after
+	# this point follows the saved cell route; no local steering may rewrite it.
+	if clear_shot:
+		brain["last_seen_cell"] = Vector2i(floori(origin.x + target_vector.x), floori(origin.y + target_vector.y))
+		if not was_in_combat or not _is_open_cell(combat_goal):
+			combat_goal = current_cell if target_distance < BOT_STRAFE_RANGE else Vector2i(floori(origin.x + target_vector.x), floori(origin.y + target_vector.y))
+		if target_distance < BOT_STRAFE_RANGE:
+			state_name = "HOLD_FIRE"
+			goal_cell = combat_goal
+		else:
+			state_name = "SEEK_FIRING_LANE"
+			goal_cell = combat_goal
+	elif int(brain.get("heard_shot_serial", 0)) != bot_heard_shot_serial:
+		# One shot interrupts patrol once.  Investigate a legal neighbouring cell
+		# pointing toward the sound, never the unseen shooter's exact position.
+		state_name = "INVESTIGATE"
+		goal_cell = _bot_hearing_goal(player_index, current_cell, bot_last_heard_shot_position - origin)
+		brain["heard_shot_serial"] = bot_heard_shot_serial
+	elif combat_memory > 0.0:
+		state_name = "SEARCH"
+		goal_cell = combat_goal if _is_open_cell(combat_goal) else brain.get("last_seen_cell", current_cell)
+	else:
+		state_name = "PATROL"
+		if not _is_open_cell(goal_cell) or route.is_empty() or route_index >= route.size():
+			patrol_step += 1
+			patrol_cell = _bot_next_patrol_goal(player_index, current_cell, patrol_cell, patrol_step)
+			goal_cell = patrol_cell
+	if goal_cell != Vector2i(brain.get("goal_cell", Vector2i(-1, -1))) or route.is_empty():
+		route = _bot_cell_route(current_cell, goal_cell)
+		# Route[0] is the current cell.  Reacquire its exact centre before taking
+		# the next edge; starting at index 1 was still a diagonal corner-cut.
+		route_index = 0
+	while route_index < route.size() and origin.distance_to(_bot_route_waypoint(route, route_index)) <= 0.09:
+		route_index += 1
+	var desired := Vector2.ZERO
+	if route_index < route.size():
+		var next_center := _bot_route_waypoint(route, route_index)
+		if detour_route_index == route_index and detour_point.is_finite() and origin.distance_to(detour_point) > 0.09:
+			desired = (detour_point - origin).normalized()
+		else:
+			detour_point = _bot_prop_detour_waypoint(origin, next_center)
+			detour_route_index = route_index if detour_point.is_finite() else -1
+			var travel_target := detour_point if detour_point.is_finite() else next_center
+			desired = (travel_target - origin).normalized()
+	if unstick_time > 0.0:
+		# A blocked route gets replanned; it never receives an unbounded arbitrary
+		# world vector that can cross several cells and invalidate the route.
+		state_name = "REPLAN"
+		route = _bot_cell_route(current_cell, goal_cell)
+		route_index = 0
+		unstick_time = 0.0
+	# An escape direction is selected from legal cell exits and is already
+	# barrel-adjusted when the attempt begins. Re-steering it around nearby
+	# actors every frame changed the turn target mid-attempt, producing the
+	# corner spin captured in the trace. Let it finish or fail as one decision.
+	# Deliberately do not apply reactive wall/player steering here.  It can only
+	# change a legal BFS route into an illegal diagonal and was the source of the
+	# observed corner vibration.  Blocked-route recovery is a discrete replan.
+	# Retain trace metadata and the committed escape choice across frames. Replacing
+	# this dictionary wholesale erased that history every tick, obscuring a stable
+	# decision as a stream of fresh turn-only actions.
+	brain["state"] = state_name
+	brain["target_index"] = target_index
+	brain["has_line_of_sight"] = clear_shot
+	brain["waypoint"] = origin + desired * 0.45
+	brain["move_direction"] = desired
+	brain["last_position"] = origin
+	brain["stuck_time"] = stuck_time
+	brain["unstick_time"] = unstick_time
+	brain["unstick_attempt"] = unstick_attempt
+	brain["unstick_direction"] = escape_direction
+	brain["patrol_cell"] = patrol_cell
+	brain["patrol_step"] = patrol_step
+	brain["combat_memory"] = combat_memory
+	brain["goal_cell"] = goal_cell
+	brain["route"] = route
+	brain["route_index"] = route_index
+	brain["detour_point"] = detour_point
+	brain["detour_route_index"] = detour_route_index
+	brain["combat_goal_cell"] = combat_goal
+	bot_brains[player_index] = brain
+	return brain
+
+
+# _bot_route_waypoint: A dining set may occupy a cell without closing its maze
+# edges. For a through-route, never command the NPC to stand at that blocked
+# cell centre; aim at the following route centre and let the local rectangular
+# obstacle sweep choose a side of the furniture.
+func _bot_route_waypoint(route: Array, route_index: int) -> Vector2:
+	var cell := Vector2i(route[route_index])
+	if not _bot_cell_is_clear(cell) and route_index + 1 < route.size():
+		return Vector2(route[route_index + 1]) + Vector2(0.5, 0.5)
+	return Vector2(cell) + Vector2(0.5, 0.5)
+
+
+# _bot_next_patrol_goal: Selects a distant destination from the complete
+# connected maze, rather than the next neighboring cell. This gives each
+# unseen NPC a real hallway route and prevents the two-cell pendulum that read
+# as waiting in place on the minimap.
+func _bot_next_patrol_goal(player_index: int, cell: Vector2i, previous: Vector2i, step: int) -> Vector2i:
+	var candidates: Array[Vector2i] = []
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var candidate := Vector2i(x, y)
+			if candidate == cell or candidate == previous:
+				continue
+			if not _is_open_cell(candidate) or _bot_goal_is_reserved(player_index, candidate) or not _bot_cell_is_clear(candidate):
+				continue
+			var route := _bot_cell_route(cell, candidate)
+			if route.size() < 2 or route.size() > 3:
+				continue
+			candidates.append(candidate)
+	if candidates.is_empty():
+		return cell
+	return candidates[posmod(player_index * 5 + step * 7, candidates.size())]
+
+
+func _bot_goal_is_reserved(player_index: int, candidate: Vector2i) -> bool:
+	for other_index in bot_brains:
+		if int(other_index) == player_index:
+			continue
+		var other: Dictionary = bot_brains[other_index]
+		if String(other.get("state", "PATROL")) != "HOLD_FIRE" and Vector2i(other.get("goal_cell", Vector2i(-1, -1))) == candidate:
+			return true
+	return false
+
+
+func _bot_cell_is_clear(cell: Vector2i) -> bool:
+	var center := Vector2(cell) + Vector2(0.5, 0.5)
+	for barrel in world_barrels:
+		if bool(barrel.get("skip_character_collision", false)):
+			continue
+		var radius := float(barrel.get("collision_radius", BARREL_COLLISION_RADIUS))
+		if barrel.has("half_extents"):
+			var box_center: Vector2 = barrel.get("position", Vector2.ZERO)
+			var half_extents: Vector2 = barrel["half_extents"]
+			var closest := box_center + (center - box_center).clamp(-half_extents, half_extents)
+			if center.distance_to(closest) < PLAYER_CAPSULE_RADIUS + 0.06:
+				return false
+			continue
+		if center.distance_to(Vector2(barrel.get("position", Vector2.ZERO))) < radius + PLAYER_CAPSULE_RADIUS + 0.08:
+			return false
+	return true
+
+
+# _bot_prop_detour_waypoint: Keep BFS cell topology intact, but route a capsule
+# around a prop footprint inside a cell.  A table is not a wall: the bot picks
+# one stable tangent point and completes it before continuing its cell route.
+func _bot_prop_detour_waypoint(origin: Vector2, target: Vector2) -> Vector2:
+	var travel := target - origin
+	if travel.length_squared() <= 0.000001:
+		return Vector2.INF
+	var hit := _barrel_sweep_hit(origin, travel)
+	if hit.is_empty():
+		return Vector2.INF
+	var center := Vector2(hit.get("center", Vector2.ZERO))
+	var radius := PLAYER_CAPSULE_RADIUS + 0.12
+	for barrel in world_barrels:
+		if bool(barrel.get("skip_character_collision", false)):
+			continue
+		if Vector2(barrel.get("position", Vector2.ZERO)).distance_to(center) > 0.02:
+			continue
+		if barrel.has("half_extents"):
+			radius = Vector2(barrel["half_extents"]).length() + PLAYER_CAPSULE_RADIUS + 0.10
+		else:
+			radius = float(barrel.get("collision_radius", BARREL_COLLISION_RADIUS)) + PLAYER_CAPSULE_RADIUS + 0.10
+		break
+	var forward := travel.normalized()
+	var side := Vector2(-forward.y, forward.x)
+	for sign in [1.0, -1.0]:
+		var candidate: Vector2 = center + side * radius * sign
+		if _barrel_sweep_hit(origin, candidate - origin).is_empty() and _barrel_sweep_hit(candidate, target - candidate).is_empty():
+			return candidate
+	return Vector2.INF
+
+
+func _bot_hearing_goal(player_index: int, cell: Vector2i, shot_vector: Vector2) -> Vector2i:
+	var best := cell
 	var best_score := -INF
 	for direction in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
 		if not _can_cross_edge(cell, direction):
 			continue
-		var score := Vector2(direction).normalized().dot(desired)
+		var candidate: Vector2i = cell + direction
+		if _bot_goal_is_reserved(player_index, candidate) or not _bot_cell_is_clear(candidate):
+			continue
+		var score := Vector2(direction).dot(shot_vector.normalized())
 		if score > best_score:
 			best_score = score
-			best_direction = Vector2(direction)
-	return best_direction
+			best = candidate
+	return best
+
+
+func _bot_strafe_direction(player_index: int, target_vector: Vector2, target_distance: float) -> Vector2:
+	var target_direction := target_vector.normalized()
+	var range_fraction := (target_distance - BOT_PERSONAL_SPACE) / maxf(BOT_STRAFE_RANGE - BOT_PERSONAL_SPACE, 0.01)
+	return (_bot_orbit_direction(player_index, target_direction) + target_direction * clampf(range_fraction - 0.35, -0.35, 0.28)).normalized()
+
+
+# _bot_cell_center_direction: Combat uses a discrete, collision-safe anchor
+# rather than a perpetual continuous circle in a one-cell-wide hallway.
+func _bot_cell_center_direction(state: Dictionary, origin: Vector2) -> Vector2:
+	var cell: Vector2i = state.get("grid_position", Vector2i(floori(origin.x), floori(origin.y)))
+	if not _is_open_cell(cell):
+		return Vector2.ZERO
+	var offset := Vector2(cell) + Vector2(0.5, 0.5) - origin
+	return offset.normalized() if offset.length() > 0.08 else Vector2.ZERO
+
+
+func _bot_retreat_direction(player_index: int, target_vector: Vector2) -> Vector2:
+	var target_direction := target_vector.normalized()
+	return (-target_direction + _bot_orbit_direction(player_index, target_direction) * 0.65).normalized()
+
+
+func _bot_unstick_direction(player_index: int, state: Dictionary, origin: Vector2, navigation_vector: Vector2, attempt: int) -> Vector2:
+	var route := navigation_vector.normalized()
+	if route.length_squared() <= 0.00000001:
+		route = Vector2.RIGHT
+	var cell: Vector2i = state.get("grid_position", Vector2i(-1, -1))
+	var legal_directions: Array[Vector2] = []
+	for direction in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+		if _can_cross_edge(cell, direction):
+			legal_directions.append(Vector2(direction))
+	if legal_directions.is_empty():
+		return _bot_avoid_world_barrels(origin, route)
+	# Cycle through actual open exits on successive failed attempts. Sorting by
+	# route alignment preserves purposeful pursuit before trying a side or backtrack.
+	legal_directions.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.dot(route) > b.dot(route))
+	var selected := legal_directions[posmod(attempt - 1 + player_index, legal_directions.size())]
+	return _bot_avoid_world_barrels(origin, selected.normalized())
+
+
+func _bot_avoid_other_players(player_index: int, origin: Vector2, desired: Vector2) -> Vector2:
+	var adjusted := desired
+	for other_index in range(player_states.size()):
+		if other_index == player_index or other_index >= player_joined.size() or not player_joined[other_index] or bool(player_states[other_index].get("is_dying", false)):
+			continue
+		var offset := origin - _player_state_world_position(player_states[other_index])
+		var distance := offset.length()
+		if distance >= BOT_PERSONAL_SPACE:
+			continue
+		var away := offset.normalized() if distance > 0.0001 else _bot_orbit_direction(player_index, desired.normalized())
+		adjusted += away * (1.6 * (1.0 - distance / BOT_PERSONAL_SPACE))
+	return adjusted.normalized() if adjusted.length_squared() > 0.00000001 else Vector2.ZERO
+
+
+# _bot_continuous_move_direction: Pursue an unreachable target by maze route,
+# but switch to a lateral fighting stance when an enemy is visible and nearby.
+# Props add a local escape vector so a planned cell route does not grind against
+# a barrel collision ring indefinitely.
+func _bot_continuous_move_direction(player_index: int, origin: Vector2, target_vector: Vector2, target_distance: float, navigation_vector: Vector2) -> Vector2:
+	var desired := navigation_vector.normalized()
+	if target_vector.length_squared() > 0.00000001:
+		var target_direction := target_vector.normalized()
+		var clear_shot := _nearest_projectile_wall_distance(origin, target_direction, target_distance) >= target_distance
+		if clear_shot and target_distance < BOT_PERSONAL_SPACE:
+			# Back away and bias sideways so two enemies do not lock into one another.
+			desired = (-target_direction + _bot_orbit_direction(player_index, target_direction) * 0.55).normalized()
+		elif clear_shot and target_distance < BOT_STRAFE_RANGE:
+			# Stay in a readable firing lane while moving laterally around the target.
+			var range_error := (target_distance - BOT_PERSONAL_SPACE) / maxf(BOT_STRAFE_RANGE - BOT_PERSONAL_SPACE, 0.01)
+			desired = (_bot_orbit_direction(player_index, target_direction) + target_direction * clampf(range_error - 0.35, -0.28, 0.32)).normalized()
+	return _bot_avoid_world_barrels(origin, desired)
+
+
+# _bot_orbit_direction: Give alternating slots opposite combat circles so they
+# do not mirror one another into the same narrow lane.
+func _bot_orbit_direction(player_index: int, target_direction: Vector2) -> Vector2:
+	var sign := 1.0 if player_index % 2 == 0 else -1.0
+	return Vector2(-target_direction.y, target_direction.x) * sign
+
+
+# _bot_avoid_world_walls: Turn a combat/patrol vector back into the current
+# legal floor before the capsule is pressed onto a solid edge. The collision
+# solver remains authoritative, but this keeps tactical strafes from becoming
+# a visually static wall-slide.
+func _bot_avoid_world_walls(origin: Vector2, desired: Vector2) -> Vector2:
+	if desired.length_squared() <= 0.00000001:
+		return Vector2.ZERO
+	var cell := Vector2i(floori(origin.x), floori(origin.y))
+	if not _is_open_cell(cell):
+		return desired.normalized()
+	var local := origin - Vector2(cell)
+	var adjusted := desired
+	var wall_checks := [
+		{"direction": Vector2i(-1, 0), "distance": local.x, "inward": Vector2.RIGHT},
+		{"direction": Vector2i(1, 0), "distance": 1.0 - local.x, "inward": Vector2.LEFT},
+		{"direction": Vector2i(0, -1), "distance": local.y, "inward": Vector2.DOWN},
+		{"direction": Vector2i(0, 1), "distance": 1.0 - local.y, "inward": Vector2.UP},
+	]
+	for check in wall_checks:
+		var direction: Vector2i = check["direction"]
+		var distance := float(check["distance"])
+		if not _can_cross_edge(cell, direction) and distance < BOT_WALL_AVOIDANCE_PADDING:
+			var weight := 1.0 - distance / BOT_WALL_AVOIDANCE_PADDING
+			adjusted += Vector2(check["inward"]) * (2.2 * weight)
+	return adjusted.normalized() if adjusted.length_squared() > 0.00000001 else desired.normalized()
+
+
+# _bot_avoid_world_barrels: Add a short-range repulsion from each actual prop
+# collision footprint. A small tangent term lets the bot choose a side rather
+# than repeatedly advancing into the same barrel.
+func _bot_avoid_world_barrels(origin: Vector2, desired: Vector2) -> Vector2:
+	var adjusted := desired
+	for barrel in world_barrels:
+		if bool(barrel.get("skip_character_collision", false)):
+			continue
+		var center: Vector2 = barrel.get("position", Vector2.ZERO)
+		var offset := origin - center
+		var distance := offset.length()
+		var collision_radius := float(barrel.get("collision_radius", BARREL_COLLISION_RADIUS))
+		if barrel.has("half_extents"):
+			var half_extents: Vector2 = barrel["half_extents"]
+			var closest := center + offset.clamp(-half_extents, half_extents)
+			offset = origin - closest
+			distance = offset.length()
+			collision_radius = 0.0
+		var avoidance_radius := PLAYER_CAPSULE_RADIUS + collision_radius + BOT_PROP_AVOIDANCE_PADDING
+		if distance >= avoidance_radius:
+			continue
+		var away := offset.normalized() if distance > 0.0001 else -desired
+		var weight := 1.0 - distance / avoidance_radius
+		var tangent := Vector2(-away.y, away.x)
+		if tangent.dot(desired) < 0.0:
+			tangent = -tangent
+		adjusted += away * (1.8 * weight) + tangent * (0.65 * weight)
+	return adjusted.normalized() if adjusted.length_squared() > 0.00000001 else Vector2.ZERO
+
+
+# _bot_apply_continuous_move_input: Convert a desired world-space movement
+# vector into the independent local forward/strafe controls used by the player.
+func _bot_apply_continuous_move_input(virtual_input: Dictionary, move_direction: Vector2, forward: Vector2, right: Vector2) -> void:
+	if move_direction.length_squared() <= 0.00000001:
+		return
+	var local_right := right.dot(move_direction)
+	var local_forward := forward.dot(move_direction)
+	virtual_input["move_right"] = local_right > 0.20
+	virtual_input["move_left"] = local_right < -0.20
+	virtual_input["move_forward"] = local_forward > 0.20
+	virtual_input["move_backward"] = local_forward < -0.20
+
+
+# _bot_navigation_direction: Return the first step of the shortest legal maze route to the target.
+# A breadth-first search is preferable to choosing the locally closest neighbor: a wall can
+# require initially moving away from the target, and this still guarantees arrival on the
+# small, unweighted combat grid.
+func _bot_navigation_direction(state: Dictionary, target_state: Dictionary, target_vector: Vector2) -> Vector2:
+	var start_cell: Vector2i = state.get("grid_position", Vector2i(-1, -1))
+	var target_cell: Vector2i = target_state.get("grid_position", Vector2i(-1, -1))
+	var desired := target_vector.normalized()
+	if not _is_open_cell(start_cell) or not _is_open_cell(target_cell):
+		return desired
+	if start_cell == target_cell:
+		return desired
+	var frontier: Array[Vector2i] = [start_cell]
+	var next_index := 0
+	var came_from: Dictionary = {start_cell: start_cell}
+	var directions: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	while next_index < frontier.size() and not came_from.has(target_cell):
+		var current: Vector2i = frontier[next_index]
+		next_index += 1
+		for direction in directions:
+			var next_cell := current + direction
+			if came_from.has(next_cell) or not _can_cross_edge(current, direction):
+				continue
+			came_from[next_cell] = current
+			frontier.append(next_cell)
+	if not came_from.has(target_cell):
+		return desired
+	var first_step := target_cell
+	while came_from[first_step] != start_cell:
+		first_step = came_from[first_step]
+	return Vector2(first_step - start_cell)
+
+
+# _bot_cell_route: The authoritative navigation product.  Unlike the legacy
+# first-step helper, it retains every cell so movement can commit to centres.
+func _bot_cell_route(start_cell: Vector2i, goal_cell: Vector2i) -> Array:
+	var route: Array = []
+	if not _is_open_cell(start_cell) or not _is_open_cell(goal_cell):
+		return route
+	var frontier: Array[Vector2i] = [start_cell]
+	var next_index := 0
+	var came_from: Dictionary = {start_cell: start_cell}
+	var directions: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	while next_index < frontier.size() and not came_from.has(goal_cell):
+		var current := frontier[next_index]
+		next_index += 1
+		for direction in directions:
+			var next_cell := current + direction
+			if came_from.has(next_cell) or not _can_cross_edge(current, direction):
+				continue
+			came_from[next_cell] = current
+			frontier.append(next_cell)
+	if not came_from.has(goal_cell):
+		return route
+	var reverse_route: Array = [goal_cell]
+	var cursor := goal_cell
+	while cursor != start_cell:
+		cursor = came_from[cursor]
+		reverse_route.append(cursor)
+	for index in range(reverse_route.size() - 1, -1, -1):
+		route.append(reverse_route[index])
+	return route
 
 
 
@@ -2229,6 +2865,8 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 # _setup_all_player_renderers: Creates separate environment and map overlays for every local player view.
 func _setup_all_player_renderers() -> void:                                                # Declare this function.
 	for player_index in range(player_views.size()):                                           # Visit each local player's view bundle.
+		if single_player_combat_view and player_index > 0:
+			continue
 		_bind_player_context(player_index)                                                       # Bind this player's view and state before creating renderer nodes.
 		slot_nodes = {}                                                                           # Give this player a separate legacy slot-node dictionary.
 		straight_wall_nodes = {}                                                                  # Give this player a separate straight-wall-node dictionary.
@@ -2388,6 +3026,7 @@ func _find_dining_set_room_cell() -> Vector2i:
 
 func _spawn_semantic_dining_set(room_cell: Vector2i) -> void:
 	var center := Vector2(room_cell) + Vector2(0.5, 0.5)
+	var dining_set_id := "dining_set_%d_%d" % [room_cell.x, room_cell.y]
 	var pieces: Array[Dictionary] = [
 		{"id": "chair_semantic_table_dining", "position": center, "side_length": 0.33, "depth": 0.25, "height": 0.13},
 		{"id": "chair_semantic_stool_dining_near", "position": center + Vector2(0.0, 0.22), "side_length": 0.33, "depth": 0.10, "height": 0.10},
@@ -2397,22 +3036,178 @@ func _spawn_semantic_dining_set(room_cell: Vector2i) -> void:
 		piece["low_resolution_vector"] = true
 		piece["typical_spawn"] = true
 		piece["dining_set_spawn"] = true
+		piece["dining_set_id"] = dining_set_id
 		# Furniture must catch normal standing shots despite its intentionally
 		# low visual proportions in the shared semantic viewport.
 		piece["projectile_height"] = 1.0
 		semantic_lod_floor_footprints.append(piece)
 		_register_semantic_gameplay_prop(piece)
+	# The table and its benches look like one piece of furniture to locomotion.
+	# Keep shots/destruction attached to the individual visible pieces, but give
+	# character movement one clean rectangle to go around rather than three
+	# overlapping contacts that can trap a capsule between them.
+	_refresh_dining_navigation_footprint(dining_set_id)
 
 
 # _reset_combat_round: Re-arms the shared clock whenever a new map/coin layout begins.
 func _reset_combat_round() -> void:
+	clear_map_killer_index = -1
 	combat_round_time_remaining = maxf(combat_round_duration_seconds, 0.0)                  # Treat zero as an intentional infinite-time test round.
 	combat_round_complete = false                                                            # Allow score collection again on the new round.
 	combat_round_result = ""                                                                 # Hide the previous winner message until this round actually ends.
+	clear_map_banner_timer = 3.0 if clear_the_map_mode else 0.0
+	clear_map_finish_pending = false
+
+
+func _start_clear_map_round() -> void:
+	clear_map_waiting_to_start = false
+	clear_map_intro_music_active = false
+	clear_map_banner_timer = 0.0
+	match_started = true
+	if wanted_tally_overlay != null:
+		wanted_tally_overlay.visible = false
+	if music_enabled and music_player != null:
+		music_player.stop()
+		music_player.volume_db = 0.0
+		music_player.play(CLEAR_MAP_INTRO_LOOP_SECONDS)
+
+
+func _start_clear_map_intro_music() -> void:
+	if not music_enabled or music_player == null:
+		return
+	clear_map_intro_music_active = true
+	music_player.stop()
+	music_player.volume_db = 0.0
+	music_player.play(0.0)
+
+
+func _advance_clear_map_intro_music() -> void:
+	if not clear_map_intro_music_active or music_player == null:
+		return
+	if not clear_map_waiting_to_start:
+		clear_map_intro_music_active = false
+		return
+	if not music_player.playing or music_player.get_playback_position() >= CLEAR_MAP_INTRO_LOOP_SECONDS:
+		music_player.play(0.0)
+
+
+func _roll_clear_map_reward() -> Dictionary:
+	var reward := {"coins": 0, "hearts": 0, "guns": 0}
+	var roll := randf()
+	if roll < GREENSHIRT_GUN_DROP_CHANCE:
+		reward["guns"] = 1
+	elif roll < GREENSHIRT_GUN_DROP_CHANCE + 0.28:
+		reward["hearts"] = 1
+	else:
+		reward["coins"] = 1 + randi() % 3
+	return reward
+
+
+func _finish_clear_map(victory: bool) -> void:
+	if combat_round_complete or clear_map_finish_pending:
+		return
+	# Keep the final hit readable before replacing the playfield with the result cards.
+	# The same one-second curve fades the music down and the scene to black.
+	combat_round_complete = true
+	clear_map_finish_pending = true
+	clear_map_finish_victory = victory
+	clear_map_finish_timer = 0.0
+	if clear_map_result_fade != null:
+		clear_map_result_fade.color = Color(0.0, 0.0, 0.0, 0.0)
+		clear_map_result_fade.visible = true
+
+
+func _advance_clear_map_finish(delta: float) -> void:
+	if not clear_map_finish_pending:
+		return
+	clear_map_finish_timer = minf(clear_map_finish_timer + delta, CLEAR_MAP_RESULT_FADE_SECONDS)
+	var fade_amount := clear_map_finish_timer / CLEAR_MAP_RESULT_FADE_SECONDS
+	if clear_map_result_fade != null:
+		clear_map_result_fade.color = Color(0.0, 0.0, 0.0, fade_amount)
+	if music_player != null:
+		music_player.volume_db = linear_to_db(maxf(1.0 - fade_amount, 0.0001))
+	if clear_map_finish_timer < CLEAR_MAP_RESULT_FADE_SECONDS:
+		return
+	if music_player != null:
+		music_player.stop()
+		music_player.volume_db = 0.0
+	clear_map_finish_pending = false
+	var victory := clear_map_finish_victory
+	combat_round_result = "YOU WIN!" if victory else "YOU LOSE"
+	if victory:
+		_capture_clear_map_inventory()
+		clear_map_wins += 1
+		clear_map_reward = _clear_map_tally_reward_total()
+		clear_map_round += 1
+	else:
+		# A death is a clean campaign restart: no earned stock or prior wins survive.
+		clear_map_round = 1
+		clear_map_wins = 0
+		clear_map_reward = {}
+		clear_map_carried_inventory.clear()
+	_begin_wanted_tally(true)
+	if clear_map_result_player != null:
+		clear_map_result_player.stream = CLEAR_MAP_VICTORY_STREAM if victory else CLEAR_MAP_LOSS_STREAM
+		clear_map_result_player.play()
+
+
+func _all_greenshirts_defeated() -> bool:
+	for player_index in range(1, player_states.size()):
+		if player_index < player_joined.size() and player_joined[player_index] and not bool(player_states[player_index].get("is_dying", false)):
+			return false
+	return true
+
+
+func _clear_map_tally_reward_total() -> Dictionary:
+	var total := {"coins": 0, "hearts": 0, "guns": 0}
+	for reward_value in clear_map_tally_loot.values():
+		var reward: Dictionary = reward_value
+		for key in total:
+			total[key] = int(total[key]) + int(reward.get(key, 0))
+	return total
+
+
+func _apply_clear_map_reward() -> void:
+	if player_states.is_empty():
+		return
+	if clear_map_reward.is_empty():
+		clear_map_tally_loot.clear()
+		return
+	var bart := player_states[0]
+	bart["coins"] = int(bart.get("coins", 0)) + int(clear_map_reward.get("coins", 0))
+	bart["health"] = mini(PLAYER_MAX_HEALTH, int(bart.get("health", PLAYER_MAX_HEALTH)) + int(clear_map_reward.get("hearts", 0)))
+	if int(clear_map_reward.get("guns", 0)) > 0:
+		bart["machine_gun_ammo"] = maxi(int(bart.get("machine_gun_ammo", 0)), DUAL_WIELD_AMMO)
+	player_states[0] = bart
+	clear_map_reward = {}
+	clear_map_tally_loot.clear()
+
+
+func _capture_clear_map_inventory() -> void:
+	if player_states.is_empty():
+		return
+	var bart: Dictionary = player_states[0]
+	clear_map_carried_inventory = {
+		"coins": int(bart.get("coins", 0)),
+		"health": int(bart.get("health", PLAYER_STARTING_HEALTH)),
+		"machine_gun_ammo": int(bart.get("machine_gun_ammo", 0)),
+	}
+
+
+func _restore_clear_map_inventory() -> void:
+	if clear_map_carried_inventory.is_empty() or player_states.is_empty():
+		return
+	var bart: Dictionary = player_states[0]
+	bart["coins"] = int(clear_map_carried_inventory.get("coins", 0))
+	bart["health"] = clampi(int(clear_map_carried_inventory.get("health", PLAYER_STARTING_HEALTH)), 1, PLAYER_MAX_HEALTH)
+	bart["machine_gun_ammo"] = int(clear_map_carried_inventory.get("machine_gun_ammo", 0))
+	player_states[0] = bart
 
 
 # _advance_combat_round: Runs the shared round timer and freezes only objective scoring when time expires.
 func _advance_combat_round(delta: float) -> void:
+	if clear_the_map_mode:
+		return
 	if not match_started or combat_round_complete or combat_round_duration_seconds <= 0.0:    # Do not start the clock until the first player joins.
 		return
 	if pause_round_timer_for_debug:                                                            # Keep an explicitly paused diagnostic session from silently ending the active round while all gameplay remains live.
@@ -2469,7 +3264,7 @@ func _collect_combat_pickups(delta: float) -> void:
 				var state := player_states[player_index]
 				if bool(state.get("is_dying", false)):
 					continue
-				if player_index == 1 and not player_two_joined:
+				if player_index == 1 and not player_two_joined and not _is_bot_controlled_slot(player_index):
 					continue
 				if _player_can_collect_pickup(state, coin_position):
 					collected_by = player_index
@@ -2581,6 +3376,29 @@ func _drop_coins_for_defeat(player_index: int) -> void:
 		position.x = clampf(position.x, 0.08, float(MAP_WIDTH) - 0.08)                          # Keep dropped coins inside the playable map boundary.
 		position.y = clampf(position.y, 0.08, float(MAP_HEIGHT) - 0.08)
 		world_coins.append({"id": next_combat_visual_id, "position": position, "value": 1})
+		next_combat_visual_id += 1
+
+
+# _drop_greenshirt_loot: A greenshirt leaves every coin it collected, plus the
+# same occasional heart/gun rarity used by barrel loot. Unlike deathmatch this
+# is not a score tax: the map-clear player can recover the enemy's full haul.
+func _drop_greenshirt_loot(player_index: int) -> void:
+	var state := player_states[player_index]
+	var origin := _player_state_world_position(state)
+	var coins := int(state.get("coins", 0))
+	state["coins"] = 0
+	player_states[player_index] = state
+	for coin_index in range(coins):
+		var angle := TAU * float(coin_index) / float(maxi(coins, 1))
+		world_coins.append({"id": next_combat_visual_id, "position": origin + Vector2(cos(angle), sin(angle)) * 0.10, "value": 1})
+		next_combat_visual_id += 1
+	var reward := _roll_barrel_loot_reward()
+	clear_map_tally_loot[player_index] = reward
+	for heart_index in range(int(reward["hearts"])):
+		world_hearts.append({"id": next_combat_visual_id, "position": origin})
+		next_combat_visual_id += 1
+	for gun_index in range(int(reward["guns"])):
+		world_barrel_guns.append({"id": next_combat_visual_id, "position": origin, "ammo": DUAL_WIELD_AMMO})
 		next_combat_visual_id += 1
 
 
@@ -2788,6 +3606,190 @@ func _setup_combat_hud() -> void:
 
 
 # _update_combat_hud: Positions the simple player health hatches inside each split-screen camera.
+func _setup_wanted_tally_overlay() -> void:
+	clear_map_result_fade = ColorRect.new()
+	clear_map_result_fade.name = "ClearMapResultFade"
+	clear_map_result_fade.color = Color(0.0, 0.0, 0.0, 0.0)
+	clear_map_result_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	clear_map_result_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clear_map_result_fade.visible = false
+	clear_map_result_fade.z_index = 19
+	end_round_canvas.add_child(clear_map_result_fade)
+	wanted_tally_overlay = ColorRect.new()
+	wanted_tally_overlay.name = "WantedPosterTally"
+	wanted_tally_overlay.color = Color.BLACK
+	wanted_tally_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	wanted_tally_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wanted_tally_overlay.visible = false
+	wanted_tally_overlay.z_index = 20
+	end_round_canvas.add_child(wanted_tally_overlay)
+	wanted_tally_title = Label.new()
+	wanted_tally_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wanted_tally_title.add_theme_font_override("font", pixel_hud_font)
+	wanted_tally_title.add_theme_font_size_override("font_size", 20)
+	wanted_tally_title.add_theme_color_override("font_color", Color(0.96, 0.82, 0.30, 1.0))
+	wanted_tally_title.add_theme_color_override("font_shadow_color", Color.BLACK)
+	wanted_tally_title.add_theme_constant_override("shadow_offset_x", 2)
+	wanted_tally_title.add_theme_constant_override("shadow_offset_y", 2)
+	wanted_tally_title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	wanted_tally_title.offset_top = 24.0
+	wanted_tally_title.offset_bottom = 80.0
+	wanted_tally_overlay.add_child(wanted_tally_title)
+	wanted_tally_prompt = Label.new()
+	wanted_tally_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wanted_tally_prompt.add_theme_font_override("font", pixel_hud_font)
+	wanted_tally_prompt.add_theme_font_size_override("font_size", 10)
+	wanted_tally_prompt.add_theme_color_override("font_color", Color(0.96, 0.82, 0.30, 1.0))
+	wanted_tally_prompt.add_theme_color_override("font_shadow_color", Color.BLACK)
+	wanted_tally_prompt.add_theme_constant_override("shadow_offset_x", 2)
+	wanted_tally_prompt.add_theme_constant_override("shadow_offset_y", 2)
+	wanted_tally_prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	wanted_tally_prompt.offset_top = -34.0
+	wanted_tally_prompt.offset_bottom = -10.0
+	wanted_tally_prompt.visible = false
+	wanted_tally_overlay.add_child(wanted_tally_prompt)
+
+
+func _begin_wanted_tally(terminal: bool) -> void:
+	if wanted_tally_overlay == null:
+		return
+	if not terminal:
+		var prior_rounds := maxi(clear_map_round - 1, 0)
+		var growing_rounds := mini(prior_rounds, MAX_CLEAR_MAP_GREENSHIRTS)
+		var previous_posters := (growing_rounds * (growing_rounds + 1) >> 1) + maxi(prior_rounds - growing_rounds, 0) * MAX_CLEAR_MAP_GREENSHIRTS
+		clear_map_poster_start = posmod(previous_posters, WANTED_POSTER_TEXTURES.size())
+	for child in wanted_tally_overlay.get_children():
+		if child != wanted_tally_title and child != wanted_tally_prompt:
+			child.queue_free()
+	wanted_tally_posters.clear()
+	wanted_tally_queue.clear()
+	wanted_tally_terminal = terminal
+	wanted_tally_timer = 0.45
+	wanted_tally_overlay.visible = true
+	wanted_tally_prompt.visible = not terminal and clear_map_waiting_to_start
+	if wanted_tally_prompt.visible:
+		wanted_tally_prompt.text = "PRESS START TO BEGIN"
+		_start_clear_map_intro_music()
+	wanted_tally_title.text = "KILL ALL THE GREENSHIRTS!" if not terminal else ("YOU WIN!" if combat_round_result == "YOU WIN!" else "YOU LOSE")
+	var green_slots: Array[int] = []
+	for player_index in range(1, player_joined.size()):
+		if player_joined[player_index]:
+			green_slots.append(player_index)
+	var row_width := float(green_slots.size()) * 108.0
+	for row_index in range(green_slots.size()):
+		var player_index := green_slots[row_index]
+		var card := Control.new()
+		card.set_anchors_preset(Control.PRESET_CENTER)
+		card.size = Vector2(87.0, 178.0)
+		card.position = Vector2(float(row_index) * 108.0 - row_width * 0.5 + 10.5, -26.0)
+		# The pre-round briefing introduces wanted posters one at a time.  Result
+		# screens instead open on the complete board so the player can immediately
+		# see the whole roster before the kill tally starts.
+		card.visible = terminal
+		wanted_tally_overlay.add_child(card)
+		var poster := TextureRect.new()
+		poster.texture = WANTED_POSTER_TEXTURES[posmod(clear_map_poster_start + row_index, WANTED_POSTER_TEXTURES.size())]
+		poster.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		poster.size = Vector2(87.0, 132.0)
+		poster.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		card.add_child(poster)
+		var blood := TextureRect.new()
+		blood.texture = WANTED_BLOOD_TEXTURES[posmod(player_index - 1, WANTED_BLOOD_TEXTURES.size())]
+		blood.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		blood.size = Vector2(60.0, 60.0)
+		blood.position = Vector2(14.0, 34.0)
+		blood.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		blood.visible = false
+		poster.add_child(blood)
+		var loot := Control.new()
+		loot.position = Vector2(0.0, 138.0)
+		loot.size = Vector2(87.0, 30.0)
+		card.add_child(loot)
+		var killer_label := Label.new()
+		killer_label.text = "KILLED YOU"
+		killer_label.position = Vector2(0.0, 138.0)
+		killer_label.size = Vector2(87.0, 24.0)
+		killer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		killer_label.add_theme_font_override("font", pixel_hud_font)
+		killer_label.add_theme_font_size_override("font_size", 10)
+		killer_label.add_theme_color_override("font_color", Color(0.96, 0.82, 0.30, 1.0))
+		killer_label.visible = terminal and combat_round_result == "YOU LOSE" and player_index == clear_map_killer_index
+		card.add_child(killer_label)
+		wanted_tally_posters[player_index] = {"card": card, "blood": blood, "loot": loot, "killer_label": killer_label, "last_kind": "", "last_x": 0.0, "next_x": 0.0}
+		if not terminal:
+			wanted_tally_queue.append({"kind": "poster", "player_index": player_index})
+	if terminal:
+		for player_index in green_slots:
+			if not clear_map_tally_loot.has(player_index):
+				continue
+			wanted_tally_queue.append({"kind": "blood", "player_index": player_index})
+			if combat_round_result == "YOU WIN!":
+				var reward: Dictionary = clear_map_tally_loot[player_index]
+				for kind in ["coin", "heart", "gun"]:
+					for count in range(int(reward.get(kind + "s", 0))):
+						wanted_tally_queue.append({"kind": kind, "player_index": player_index})
+
+
+func _advance_wanted_tally(delta: float) -> void:
+	if wanted_tally_overlay == null or not wanted_tally_overlay.visible:
+		return
+	wanted_tally_timer -= delta
+	if wanted_tally_timer > 0.0:
+		return
+	if wanted_tally_queue.is_empty():
+		if not wanted_tally_terminal:
+			if clear_map_waiting_to_start:
+				return
+			if clear_map_banner_timer <= 0.0:
+				wanted_tally_overlay.visible = false
+			return
+		wanted_tally_title.text = ("YOU WIN!\nROUNDS WON: %d" % clear_map_wins) if combat_round_result == "YOU WIN!" else "YOU LOSE"
+		wanted_tally_prompt.text = "PRESS START FOR NEXT ROUND" if combat_round_result == "YOU WIN!" else "PRESS START TO TRY AGAIN"
+		wanted_tally_prompt.visible = true
+		return
+	var event: Dictionary = wanted_tally_queue.pop_front()
+	var record: Dictionary = wanted_tally_posters.get(int(event["player_index"]), {})
+	if String(event["kind"]) == "poster":
+		var card: Control = record.get("card", null)
+		if card != null:
+			card.visible = true
+		if gunshot_player != null:
+			gunshot_player.pitch_scale = 1.0
+			gunshot_player.play()
+		wanted_tally_timer = 0.48
+		return
+	if String(event["kind"]) == "blood":
+		var blood: TextureRect = record.get("blood", null)
+		if blood != null:
+			blood.visible = true
+		if gunshot_player != null:
+			gunshot_player.pitch_scale = 1.0
+			gunshot_player.play()
+		wanted_tally_timer = 0.65
+		return
+	var loot: Control = record.get("loot", null)
+	if loot == null:
+		return
+	var icon := TextureRect.new()
+	var kind := String(event["kind"])
+	icon.texture = _coin_hud_texture() if kind == "coin" else (_heart_animation_texture(0.0, 0) if kind == "heart" else GUN_HUD_TEXTURE)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.size = Vector2(18.0, 18.0)
+	var previous_kind := String(record.get("last_kind", ""))
+	var icon_x := float(record.get("next_x", 0.0))
+	if previous_kind == kind:
+		icon_x = float(record.get("last_x", 0.0)) + 13.5 # 25% overlap for a grouped reward type.
+	icon.position = Vector2(icon_x, 0.0)
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	loot.add_child(icon)
+	record["last_kind"] = kind
+	record["last_x"] = icon_x
+	record["next_x"] = maxf(float(record.get("next_x", 0.0)), icon_x + 18.0)
+	wanted_tally_posters[int(event["player_index"])] = record
+	_play_pickup_sound(coin_pickup_player if kind == "coin" else (heart_pickup_player if kind == "heart" else machine_gun_pickup_player))
+	wanted_tally_timer = 0.32
+
+
 func _make_scoreboard_label() -> RichTextLabel:
 	var board := RichTextLabel.new()
 	board.bbcode_enabled = true
@@ -2831,6 +3833,19 @@ func _team_scoreboard_rows(team_name: String, team_score: int, team_deaths: int,
 
 
 func _final_scoreboard_text() -> String:
+	if clear_the_map_mode:
+		var lines := ["[font_size=28][color=#b31973]%s[/color][/font_size]" % combat_round_result, "", "ROUNDS WON: %d" % clear_map_wins, ""]
+		if combat_round_result == "YOU WIN!":
+			lines.append("REWARD")
+			if int(clear_map_reward.get("coins", 0)) > 0:
+				lines.append("COIN x %d" % int(clear_map_reward["coins"]))
+			if int(clear_map_reward.get("hearts", 0)) > 0:
+				lines.append("HEART x %d" % int(clear_map_reward["hearts"]))
+			if int(clear_map_reward.get("guns", 0)) > 0:
+				lines.append("GUN x %d" % int(clear_map_reward["guns"]))
+			lines.append("")
+		lines.append("PRESS START TO TRY AGAIN" if combat_round_result == "YOU LOSE" else "PRESS START FOR NEXT ROUND")
+		return "\n".join(lines)
 	var lawmen: Array[Dictionary] = []
 	var outlaws: Array[Dictionary] = []
 	var lawmen_kills := 0
@@ -2891,7 +3906,8 @@ func _update_combat_hud() -> void:
 			if _is_human_controlled_slot(player_index):
 				var device_id := _xbox_joypad_id_for_player(player_index)
 				input_source = "PAD %d" % device_id if device_id >= 0 else "NO PAD"
-			name_label.text = "%s:%d [%s]" % [PLAYER_NAMES[player_index], int(state.get("kills", 0)), input_source]
+			name_label.text = "ROUNDS WON:%d" % clear_map_wins if clear_the_map_mode and player_index == 0 else "%s:%d [%s]" % [PLAYER_NAMES[player_index], int(state.get("kills", 0)), input_source]
+			name_label.visible = not (clear_the_map_mode and single_player_combat_view)
 			var team_one_score := 0
 			var team_two_score := 0
 			for score_index in range(player_states.size()):
@@ -2900,9 +3916,10 @@ func _update_combat_hud() -> void:
 			var team_label := team_score_labels[player_index]
 			team_label.position = viewport_node.position + Vector2(3.0, 12.0) * viewport_node.scale
 			team_label.scale = viewport_node.scale
-			team_label.text = "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
+			team_label.text = "[color=#f2df47]KILL ALL THE GREENSHIRTS[/color]" if clear_the_map_mode and player_index == 0 else "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
+			team_label.visible = not (clear_the_map_mode and single_player_combat_view)
 			var board := scoreboard_labels[player_index]
-			var board_visible := scoreboard_player_index == player_index
+			var board_visible := not clear_the_map_mode and scoreboard_player_index == player_index
 			board.position = viewport_node.position + Vector2(2.0, 28.0) * viewport_node.scale
 			board.scale = viewport_node.scale
 			board.visible = board_visible
@@ -2986,20 +4003,26 @@ func _update_combat_hud() -> void:
 				if timer_view != null:
 					timer_label.position = timer_view.position + Vector2((VIEWPORT_SIZE.x * timer_view.scale.x - timer_label.size.x * timer_view.scale.x) * 0.5, 3.0)
 					timer_label.scale = timer_view.scale
-				if pause_round_timer_for_debug:
+				if clear_the_map_mode:
+					timer_label.visible = false
+					timer_label.text = ""
+				elif pause_round_timer_for_debug:
 					timer_label.text = "PAUSE"                                                      # Make the separately requested timer pause visible in every player's own HUD.
 				elif combat_round_duration_seconds <= 0.0:
 					timer_label.text = "∞"
 				else:
 					var displayed_seconds := maxi(0, ceili(combat_round_time_remaining))
 					timer_label.text = "%d:%02d" % [displayed_seconds / 60, displayed_seconds % 60]
+					timer_label.visible = true
 		if player_index < combat_round_result_labels.size():                                     # Show the same frozen result on both independent player displays.
 			var result_label := combat_round_result_labels[player_index]
 			if is_instance_valid(result_label):
 				result_label.position = Vector2((window_size.x - result_label.size.x) * 0.5, (window_size.y - result_label.size.y) * 0.5) # Center the end-of-round message in the play screen.
-				result_label.visible = false                                                          # The shared full-screen board owns the final result presentation.
+				result_label.visible = clear_the_map_mode and clear_map_banner_timer > 0.0 and not combat_round_complete
+				if result_label.visible:
+					result_label.text = "KILL ALL THE\nGREENSHIRTS!"
 	if end_round_overlay != null and end_round_scoreboard != null:
-		end_round_overlay.visible = not combat_round_result.is_empty()
+		end_round_overlay.visible = not clear_the_map_mode and not combat_round_result.is_empty()
 		if end_round_overlay.visible:
 			end_round_scoreboard.text = _final_scoreboard_text()
 
@@ -3029,12 +4052,18 @@ func _process_combat(delta: float) -> void:
 	for player_index in range(player_states.size()):                                            # Cool each active player and read their fire control.
 		var state := player_states[player_index]                                                   # Work from the saved shared state.
 		if bool(state.get("is_dying", false)):                                                   # Keep a defeated player frozen, untargetable, and unable to fire.
-			player_states[player_index] = _advance_combat_death_state(state, delta)                 # Advance fall -> countdown -> reverse-respawn once per shared frame.
+			if clear_the_map_mode:
+				# A cleared-map run has no respawns. Preserve the death fall at its
+				# final frame so the body remains a readable result of the encounter.
+				state["death_timer"] = float(state.get("death_timer", 0.0)) + delta
+				player_states[player_index] = state
+			else:
+				player_states[player_index] = _advance_combat_death_state(state, delta)                 # Advance fall -> countdown -> reverse-respawn once per shared frame.
 			continue                                                                                   # Do not process weapon cooldowns or input while this body is unavailable.
 		state["fire_cooldown"] = maxf(float(state.get("fire_cooldown", 0.0)) - delta, 0.0)       # Let the deliberate pistol cadence recover.
 		state["hit_timer"] = maxf(float(state.get("hit_timer", 0.0)) - delta, 0.0)               # Let the temporary hit art expire.
 		player_states[player_index] = state                                                       # Save timing before potentially firing.
-		if player_index == 1 and not player_two_joined:                                           # Do not let an unjoined P2 ghost fire.
+		if player_index == 1 and not player_two_joined and not _is_bot_controlled_slot(player_index): # Do not let an unjoined human P2 ghost fire; greenshirts remain active.
 			continue                                                                                   # Wait until a person joins P2.
 		if float(state["fire_cooldown"]) <= 0.0 and _is_player_fire_pressed_for(player_index):  # Spawn one shot only when the pistol is ready.
 			_spawn_pistol_shot(player_index)                                                         # Create a shot using the player's actual current world heading.
@@ -3247,17 +4276,20 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var dual_wield_barrel_sign := 0.0                                                           # Retain the chosen muzzle side so the local screen-space effect can avoid applying a second offset to the right pistol.
 	var muzzle_hand: StringName = &"right"                                                     # Normal single-pistol animations use their right/default authored muzzle.
 	var body_origin := _player_state_world_position(state)                                      # Keep the simulation rooted at the player's actual collision center, never beyond a wall.
+	# A locally rendered player already owns the exact perspective-relative clip
+	# the player sees, including crouch/strafe poses.  Remote/virtual actors use
+	# the canonical source below because they do not own that private view.
+	var firing_sprite: AnimatedSprite2D = player_views[player_index].get("player_sprite", null) if player_index >= 0 and player_index < player_views.size() else _sync_actor_sprite_view(player_index)
 	if dual_wield_rounds > 0:
 		var muzzle_side := Vector2(-direction.y, direction.x)                                     # Build a horizontal perpendicular so the two pistols fire from opposite sides of the body.
 		var barrel_sign := -1.0 if dual_wield_rounds % 2 == 0 else 1.0                           # Alternate left and right muzzle origins deterministically across all twelve remaining-round values.
 		dual_wield_barrel_sign = barrel_sign                                                       # Carry this exact side through to the screen-space shot effect.
-		var firing_sprite: AnimatedSprite2D = player_views[player_index].get("player_sprite", null)
 		var dual_crouch_art := firing_sprite != null and (String(firing_sprite.animation).begins_with("CrouchWalkDualRight") or String(firing_sprite.animation).begins_with("CrouchWalkDualLeft") or String(firing_sprite.animation).begins_with("CrouchWalkDual") or String(firing_sprite.animation).begins_with("CrouchIdleDual"))
 		muzzle_hand = &"left" if barrel_sign < 0.0 and (not crouched or dual_crouch_art) else &"right" # Single-pistol crouch poses still use their one visible gun.
 		var muzzle_side_distance := 0.12 if barrel_sign < 0.0 else 0.04                           # Match the authored pose: the right pistol sits much nearer the body center than the left pistol.
 		body_origin += muzzle_side * muzzle_side_distance * barrel_sign                           # Offset only the visible/simulated muzzle; the player's collision center remains unchanged.
 	var authored_muzzle := _world_muzzle_anchor(player_index, _player_state_world_position(state), direction, muzzle_hand) # Resolve the selected pixel once into the shared map, never into one camera's screen space.
-	if _character_has_muzzle_anchor(player_views[player_index].get("player_sprite", null), muzzle_hand):
+	if _character_has_muzzle_anchor(firing_sprite, muzzle_hand):
 		body_origin = authored_muzzle.get("position", body_origin)                                # Authored anchor replaces the heuristic left/right body offset when available.
 	var muzzle_height := float(authored_muzzle.get("height", 0.72))                            # Carry the PNG vertical location as real raised-effect height for every camera.
 	var projectile_height := maxf(muzzle_height - CROUCH_PROJECTILE_HEIGHT_OFFSET, 0.0) if crouched else muzzle_height # Aim down from the authored muzzle over the existing body-to-projectile launch distance.
@@ -3287,6 +4319,9 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	shot["crouched"] = crouched
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
+	if _is_human_controlled_slot(player_index):
+		bot_heard_shot_serial += 1
+		bot_last_heard_shot_position = body_origin
 	if show_muzzle_anchor_debug:
 		muzzle_anchor_debug_markers.append({"id": int(shot["id"]), "owner": player_index, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "muzzle_hand": muzzle_hand, "timer": MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS}) # Snapshot the spawned shared muzzle so both camera comparisons remain visible after the shot itself is gone.
 	if gunshot_player != null:
@@ -3452,6 +4487,8 @@ func _nearest_projectile_barrel_hit(origin: Vector2, direction: Vector2, maximum
 	var nearest_distance := maximum_distance + 1.0
 	var nearest_id := -1
 	for barrel in world_barrels:
+		if bool(barrel.get("movement_only", false)):
+			continue
 		var prop_height := float(barrel.get("projectile_height", BARREL_PROJECTILE_HEIGHT + BARREL_PROJECTILE_TOP_MARGIN))
 		if height > prop_height:
 			continue
@@ -3484,6 +4521,9 @@ func _damage_barrel(barrel_id: int, direction: Vector2, impact_position: Vector2
 				var outline: Variant = semantic_lod_floor_outline_nodes.get("%d:%s" % [view_index, footprint_key])
 				if is_instance_valid(outline):
 					outline.visible = false
+			var dining_set_id := String(barrel.get("dining_set_id", ""))
+			if not dining_set_id.is_empty():
+				_refresh_dining_navigation_footprint(dining_set_id)
 		for hole_index in range(active_wall_bullet_holes.size() - 1, -1, -1):
 			if int(active_wall_bullet_holes[hole_index].get("barrel_id", -1)) == barrel_id:
 				active_wall_bullet_holes.remove_at(hole_index)
@@ -3496,12 +4536,10 @@ func _damage_barrel(barrel_id: int, direction: Vector2, impact_position: Vector2
 func _drop_barrel_loot(position: Vector2) -> void:
 	if randf() < 0.03:
 		return
-	var coin_roll := randf()
-	var coin_count := 0 if coin_roll < 0.14 else (1 if coin_roll < 0.51 else (2 if coin_roll < 0.81 else 3))
-	var heart_count := 1 if randf() < 0.28 else 0
-	var gun_count := 1 if randf() < 0.07 else 0
-	if coin_count + heart_count + gun_count == 0:
-		coin_count = 1
+	var reward := _roll_barrel_loot_reward()
+	var coin_count := int(reward["coins"])
+	var heart_count := int(reward["hearts"])
+	var gun_count := int(reward["guns"])
 	var kinds: Array[String] = []
 	for index in range(coin_count):
 		kinds.append("coin")
@@ -3526,6 +4564,16 @@ func _drop_barrel_loot(position: Vector2) -> void:
 				item["footprint_kind"] = "gun"
 				world_barrel_guns.append(item)
 		next_combat_visual_id += 1
+
+
+func _roll_barrel_loot_reward() -> Dictionary:
+	var coin_roll := randf()
+	var coins := 0 if coin_roll < 0.14 else (1 if coin_roll < 0.51 else (2 if coin_roll < 0.81 else 3))
+	var hearts := 1 if randf() < 0.28 else 0
+	var guns := 1 if randf() < GREENSHIRT_GUN_DROP_CHANCE else 0
+	if coins + hearts + guns == 0:
+		coins = 1
+	return {"coins": coins, "hearts": hearts, "guns": guns}
 
 
 # Coins, hearts and guns use the same short arc and one bounce in the shared maze.
@@ -3777,10 +4825,10 @@ func _projectile_owner_has_clear_path_to_player(owner_index: int, target_index: 
 	var target_world := _player_state_world_position(player_states[target_index])              # Do not replace a visible corner-to-corner shot with a different cell-centre ray.
 	var path := target_world - owner_world                                                      # Build the top-down segment joining the two actual collision bodies.
 	var path_distance := path.length()                                                          # Preserve its real world length for the cell-edge trace.
-	if path_distance <= PROJECTILE_PLAYER_RADIUS:                                               # Bodies already overlapping cannot have a wall between their collision centers.
+	if path_distance <= 0.000001:                                                               # Only coincident centers have no finite wall path.
 		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  OVERLAP  ALLOWED" % [owner_index + 1, owner_cell, target_index + 1, target_cell]) # Record the exceptional close-contact case.
 		return true                                                                                # Keep close-quarter combat responsive.
-	var target_contact_distance := maxf(path_distance - PROJECTILE_PLAYER_RADIUS, 0.0)          # Stop at the target's near collision surface so a wall beyond the visible body cannot reject the hit.
+	var target_contact_distance := path_distance                                               # Include the target center so a wall cannot lie inside its hit circle.
 	var wall_distance := _nearest_projectile_wall_distance(owner_world, path / path_distance, target_contact_distance) # Reuse the identical finite wall-segment test already used by the projectile's body collision.
 	if wall_distance <= target_contact_distance + PROJECTILE_WALL_EPSILON:                     # A crossed movement edge blocks the real body-to-body route.
 		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  TRACE %.3f/%.3f  WALL  BLOCKED" % [owner_index + 1, owner_cell, target_index + 1, target_cell, wall_distance, path_distance]) # Show whether the topological trace itself found a wall.
@@ -3969,20 +5017,26 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 	player_states[player_index] = state                                                        # Save the immediate hit result.
 	_add_camera_blood_for_damage(player_index)                                                  # Add one health-loss worth of lower-screen close blood to only the injured player's camera.
 	if int(state["health"]) <= 0:                                                             # Begin an explicit fall, three-second count, and reverse-animation respawn.
+		if clear_the_map_mode and player_index == 0:
+			clear_map_killer_index = owner_index if owner_index > 0 and owner_index < player_states.size() else -1
 		state["deaths"] = int(state.get("deaths", 0)) + 1
 		player_states[player_index] = state
 		if owner_index >= 0 and owner_index < player_states.size() and PLAYER_TEAMS[owner_index] != PLAYER_TEAMS[player_index]:
 			var owner := player_states[owner_index]
 			owner["kills"] = int(owner.get("kills", 0)) + 1
 			player_states[owner_index] = owner
-			_maybe_drop_heart_for_kill(player_index)                                                # A kill can leave a rare one-health recovery item at the defeat location.
+			if not clear_the_map_mode:
+				_maybe_drop_heart_for_kill(player_index)                                                # A kill can leave a rare one-health recovery item at the defeat location.
 		_begin_combat_death(player_index)                                                          # Choose a safe corner now while preserving the fallen body at its old location.
 	return true                                                                                 # Let the caller render blood only when this exact call changed the target's health.
 
 
 # _begin_combat_death: Stores a safe respawn destination while leaving the defeated body visible at its old location.
 func _begin_combat_death(player_index: int) -> void:
-	_drop_coins_for_defeat(player_index)                                                        # Transfer a small random share of this player's score into collectable world coins.
+	if clear_the_map_mode and player_index > 0:
+		_drop_greenshirt_loot(player_index)
+	else:
+		_drop_coins_for_defeat(player_index)                                                        # Transfer a small random share of this player's score into collectable world coins.
 	_drop_machine_gun_for_defeat(player_index)                                                  # Return an equipped machine gun to this exact defeat point with its remaining rounds.
 	var state := player_states[player_index]                                                    # Preserve this player's visible position until the countdown completes.
 	var respawn := _combat_respawn_destination(player_index)                                   # Select a far corner from the other living player.
@@ -3995,6 +5049,11 @@ func _begin_combat_death(player_index: int) -> void:
 	state["fire_cooldown"] = 0.0                                                              # Ensure no held trigger survives into the respawn moment.
 	state["hit_timer"] = 0.0                                                                  # Let the explicit Death frames replace the one-frame hit reaction.
 	player_states[player_index] = state                                                        # Save the staged sequence.
+	if clear_the_map_mode:
+		if player_index == 0:
+			_finish_clear_map(false)
+		elif _all_greenshirts_defeated():
+			_finish_clear_map(true)
 
 
 # _combat_respawn_destination: Finds a free map cell with the greatest path distance from living enemies.
@@ -4283,11 +5342,43 @@ func _character_has_muzzle_anchor(character: AnimatedSprite2D, muzzle_hand: Stri
 	return character != null and character.sprite_frames != null and _muzzle_anchor_for_animation(character.animation, muzzle_hand) is Vector2i
 
 
+# _actor_sprite_for_world_player: Returns the per-actor authored sprite source
+# used by simulation.  It deliberately does not depend on the number of local
+# camera views, so an eight-player network match and a one-camera bot match
+# resolve the same gun art and muzzle anchors.
+func _actor_sprite_for_world_player(player_index: int) -> AnimatedSprite2D:
+	if player_index < 0 or player_index >= player_states.size():
+		return null
+	_ensure_actor_sprite_views()
+	return actor_sprite_views[player_index] if player_index < actor_sprite_views.size() else null
+
+
+# _sync_actor_sprite_view: Keep the invisible authored source on the exact
+# run/aim clip represented by the world state.  Visible camera sprites still
+# choose their own perspective-relative clips; this source is solely the
+# authoritative art/anchor reference for world simulation.
+func _sync_actor_sprite_view(player_index: int) -> AnimatedSprite2D:
+	var sprite := _actor_sprite_for_world_player(player_index)
+	if sprite == null or sprite.sprite_frames == null:
+		return sprite
+	var state: Dictionary = player_states[player_index]
+	var run_direction := String(state.get("world_run_dir", DIR_N))
+	var aim_direction := String(state.get("world_aim_dir", run_direction))
+	var moving := bool(state.get("character_is_moving", false))
+	var animation := _best_opponent_animation_for(run_direction, aim_direction, sprite.sprite_frames) if moving else _idle_animation_for(aim_direction, sprite.sprite_frames)
+	if bool(state.get("character_is_crouching", false)) and sprite.sprite_frames.has_animation(&"CrouchWalkN"):
+		animation = _crouch_walk_animation_for(run_direction, aim_direction, moving, sprite.sprite_frames, int(state.get("machine_gun_ammo", 0)) > 0)
+	if animation != &"" and (sprite.animation != animation or not sprite.is_playing()):
+		sprite.play(animation)
+	return sprite
+
+
 # _world_muzzle_anchor: Converts one authored PNG pixel into the one shared world muzzle point used by collision and every camera.
 func _world_muzzle_anchor(owner: int, body_position: Vector2, direction: Vector2, muzzle_hand: StringName) -> Dictionary:
-	if owner < 0 or owner >= player_views.size():
-		return {"position": body_position, "height": 0.72}
-	var sprite: AnimatedSprite2D = player_views[owner].get("player_sprite", null)
+	# Preserve the locally rendered sprite for players that own a view: its clip
+	# is the visible camera-relative crouch/strafe pose.  Extra roster members
+	# use their per-actor authored source rather than indexing a missing view.
+	var sprite: AnimatedSprite2D = player_views[owner].get("player_sprite", null) if owner >= 0 and owner < player_views.size() else _sync_actor_sprite_view(owner)
 	if not _character_has_muzzle_anchor(sprite, muzzle_hand):
 		return {"position": body_position, "height": 0.72}
 	var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
@@ -4648,7 +5739,7 @@ func _update_combat_view() -> void:
 		muzzle_debug_layer.scale = view_node.scale                                                # Match the exact integer player-view enlargement so the cross stays on its intended source pixel.
 	combat_vfx_render_profile = {"muzzle_smoke_us": 0, "trails_us": 0, "trail_smoke_us": 0, "projectile_hot_us": 0, "wall_dust_us": 0, "blood_us": 0, "debris_us": 0} # Reset this camera's small profiling payload before rendering its current effect passes.
 	for barrel in world_barrels:                                                                # Draw every static prop through this view's live wall/floor projection.
-		if barrel.has("footprint_key"):
+		if barrel.has("footprint_key") or bool(barrel.get("dining_navigation_proxy", false)):
 			continue
 		var barrel_position: Vector2 = barrel.get("position", Vector2.ZERO)
 		_render_world_barrel("barrel_%d" % int(barrel.get("id", -1)), barrel_position, used, barrel_lod_labels_used, bool(barrel.get("semantic_preview", false)))
@@ -4940,8 +6031,8 @@ func _update_combat_view() -> void:
 			var target_world := _player_state_world_position(state)                                  # Project the opposing hit body into this view.
 			if not _world_actor_overlaps_current_camera_fan(target_world, 0.18):
 				continue                                                                                 # Skip hit poses outside the camera fan.
-			var projection := _opponent_projection_from_current_camera(target_world, true)           # Keep hit characters immediately after their cell's facing walls.
-			var scale_value := float(projection["actor_height"]) / _standard_actor_body_height() # Match the universal character scale used by regular opponent rendering.
+			var projection := _opponent_projection_from_current_camera(target_world, true, true)     # Use the same unprotected world projection as ordinary opponents.
+			var scale_value := float(projection.get("continuous_actor_height", projection["actor_height"])) / _standard_actor_body_height() # Match universal world perspective.
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
@@ -5144,7 +6235,7 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * (lift_fraction + extra_height)) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
 	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, world_view_depth, not (use_authored_coin_lod or use_authored_heart_lod)) # Keep non-LOD pickups on the shader grid while authored coin and heart LODs remain unmodified.
-	sprite.z_index = int(projection["z_index"]) + 1                                           # Draw on the walkable floor but below combat impact flashes.
+	sprite.z_index = _world_footprint_draw_layer(_world_item_footprint(footprint_kind, world_position))
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
 
@@ -5165,7 +6256,7 @@ func _render_world_barrel(key: String, world_position: Vector2, used: Dictionary
 	var lod_index := _barrel_lod_index_for_view_depth(world_view_depth)
 	var art_height := _barrel_art_height_for_view_depth(world_view_depth)
 	var sprite_scale := barrel_scale * BARREL_REFERENCE_ART_HEIGHT / art_height                   # Compensate for the active source canvas without enlarging the barrel in the world.
-	var draw_layer := _world_actor_draw_layer(world_position)
+	var draw_layer := _world_footprint_draw_layer(_world_item_footprint("barrel", world_position))
 	var sprite := _combat_sprite(key)
 	sprite.texture = _semantic_barrel_texture_for_current_camera(lod_index) if semantic_preview else _barrel_texture_for_current_camera(world_view_depth) # Keep the semantic comparison recipe independent from the authored PNG sequence.
 	sprite.scale = Vector2.ONE * sprite_scale
@@ -5302,7 +6393,41 @@ func _register_semantic_gameplay_prop(footprint: Dictionary) -> void:
 		prop["collision_radius"] = width * 0.6
 	else:
 		prop["half_extents"] = Vector2(width, depth) * 0.5
+	if footprint.has("dining_set_id"):
+		prop["dining_set_id"] = String(footprint["dining_set_id"])
+		prop["skip_character_collision"] = true
 	world_barrels.append(prop)
+	next_combat_visual_id += 1
+
+
+# Rebuild the shared walk-around box while the table survives. Once it is gone,
+# the remaining benches use their own character collision and leave a passage.
+func _refresh_dining_navigation_footprint(dining_set_id: String) -> void:
+	for index in range(world_barrels.size() - 1, -1, -1):
+		if bool(world_barrels[index].get("dining_navigation_proxy", false)) and String(world_barrels[index].get("dining_set_id", "")) == dining_set_id:
+			world_barrels.remove_at(index)
+	var has_piece := false
+	var has_table := false
+	var minimum := Vector2(INF, INF)
+	var maximum := Vector2(-INF, -INF)
+	for footprint in semantic_lod_floor_footprints:
+		if String(footprint.get("dining_set_id", "")) != dining_set_id or bool(footprint.get("destroyed", false)):
+			continue
+		if String(footprint.get("id", "")).begins_with("chair_semantic_table"):
+			has_table = true
+		var position: Vector2 = footprint.get("position", Vector2.ZERO)
+		var half_size := Vector2(float(footprint.get("side_length", 0.0)), float(footprint.get("depth", 0.0))) * 0.5
+		minimum = minimum.min(position - half_size)
+		maximum = maximum.max(position + half_size)
+		has_piece = true
+	for prop in world_barrels:
+		if String(prop.get("dining_set_id", "")) == dining_set_id and prop.has("footprint_key"):
+			prop["skip_character_collision"] = has_table
+	if not has_piece:
+		return
+	if not has_table:
+		return
+	world_barrels.append({"id": next_combat_visual_id, "position": (minimum + maximum) * 0.5, "half_extents": (maximum - minimum) * 0.5, "dining_set_id": dining_set_id, "dining_navigation_proxy": true, "movement_only": true})
 	next_combat_visual_id += 1
 
 
@@ -5476,7 +6601,7 @@ func _render_projected_canvas_barrel(outline: Node2D, barrel_id: String, center:
 	# The room adopts the smooth Canvas barrel. Keep the stepped three-colour
 	# treatment confined to its explicit gallery sample for comparison.
 	var body_style := "authored_vector" if barrel_id.begins_with("barrel_projected_canvas_authored_vector") else ("three_colour_steps" if barrel_id.ends_with("three_colour_dither") else "smooth")
-	outline.call("set_projected_barrel", barrel_id, body_silhouette, body_panels, top_ring, lid_inset, lower_hoop, upper_hoop, floor_shadow, staves, lid_seams, camera_distance, _world_actor_draw_layer(center), body_style)
+	outline.call("set_projected_barrel", barrel_id, body_silhouette, body_panels, top_ring, lid_inset, lower_hoop, upper_hoop, floor_shadow, staves, lid_seams, camera_distance, _world_footprint_draw_layer({"shape": OcclusionFootprintShape.CIRCLE, "position": center, "radius": radius}), body_style)
 	return true
 
 
@@ -5634,8 +6759,9 @@ func _render_live_semantic_floor_footprints() -> void:
 				continue
 			crate_outline.set("authoring_lod_stage", int(footprint.get("authoring_lod_stage", -1)))
 			crate_outline.set("line_raster_backend", 1 if key.begins_with("crate_gpu_fragment_raster") else 0)
-			crate_outline.z_index = _world_actor_draw_layer(center)
-			var crate_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(_world_item_footprint("crate", center))
+			var crate_footprint := {"shape": OcclusionFootprintShape.RECTANGLE, "position": center, "half_width": half_side, "half_depth": half_depth}
+			crate_outline.z_index = _world_footprint_draw_layer(crate_footprint)
+			var crate_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(crate_footprint)
 			crate_outline.visible = crate_visible
 			if crate_visible:
 				var crate_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
@@ -5658,7 +6784,7 @@ func _render_live_semantic_floor_footprints() -> void:
 			var lattice_outline := _semantic_lod_floor_outline(key)
 			if lattice_outline == null:
 				continue
-			lattice_outline.z_index = _world_actor_draw_layer(center)
+			lattice_outline.z_index = _world_footprint_draw_layer({"shape": OcclusionFootprintShape.CIRCLE, "position": center, "radius": half_side})
 			var lattice_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", center))
 			lattice_outline.visible = lattice_visible
 			if lattice_visible:
@@ -5715,7 +6841,7 @@ func _render_live_semantic_floor_footprints() -> void:
 		# its authored ground position the same back-to-front Canvas layer as a
 		# world prop: farther cells paint first and nearer cells/actors paint over
 		# it.  This intentionally updates with the live camera heading.
-		outline.z_index = _world_actor_draw_layer(center)
+		outline.z_index = _world_footprint_draw_layer({"shape": OcclusionFootprintShape.RECTANGLE, "position": center, "half_width": half_side, "half_depth": half_depth})
 		outline.visible = complete
 		if key.begins_with("barrel_authored_vector_source"):
 			if complete:
@@ -5730,6 +6856,7 @@ func _render_live_semantic_floor_footprints() -> void:
 			continue
 		if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table"):
 			var dining_footprint := _dining_furniture_footprint(footprint)
+			outline.z_index = _world_footprint_draw_layer(dining_footprint)
 			var dining_radius := Vector2(float(dining_footprint["half_width"]), float(dining_footprint["half_depth"])).length()
 			var dining_visible := complete and _world_actor_overlaps_current_camera_fan(center, dining_radius) and _world_footprint_has_visible_camera_span(dining_footprint) and not _dining_footprint_is_fully_behind_nearer_prop(key, dining_footprint)
 			outline.visible = dining_visible
@@ -5979,7 +7106,7 @@ func _render_semantic_cylinder(key: String, center: Vector2, radius: float, heig
 	var outline := _semantic_lod_floor_outline(key)
 	if outline == null:
 		return
-	outline.z_index = _world_actor_draw_layer(center)
+	outline.z_index = _world_footprint_draw_layer({"shape": OcclusionFootprintShape.CIRCLE, "position": center, "radius": radius})
 	var coordinate_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
 	if coordinate_renderer == null or not coordinate_renderer.has_method("runtime_project_world_point_for_current_pose"):
 		outline.visible = false
@@ -6144,19 +7271,17 @@ func _calibration_sprite_view_for_primitive(primitive_name: String) -> String:
 	return String(headings[index])
 
 
-# _world_footprint_has_visible_camera_span: Tests a circular floor item's two
-# true camera tangents. A *single continuous wall segment* which reaches both
-# tangents before the circle blocks every ray in the filled cone between them;
-# that is a geometry proof, not a center check or a sparse sample set. More
-# complicated partial overlaps stay drawable and remain the renderer's normal
-# painter-order case. A future rectangle/capsule descriptor can provide its
-# support points through this same call site.
+# _world_footprint_has_visible_camera_span: Tests the angular intervals in the
+# camera-to-footprint cone against the combined physical wall segments. Partial
+# visibility stays drawable and uses normal painter ordering.
 func _world_footprint_has_visible_camera_span(footprint: Dictionary) -> bool:
 	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
-		for corner in _rectangle_footprint_corners(footprint):
-			if _world_point_has_clear_camera_line(corner):
-				return true
-		return false
+		var rectangle_origin := _runtime_camera_origin_for_visibility()
+		var rectangle_center := Vector2(footprint.get("position", Vector2.ZERO))
+		var relative_origin := rectangle_origin - rectangle_center
+		if absf(relative_origin.x) <= float(footprint.get("half_width", 0.0)) and absf(relative_origin.y) <= float(footprint.get("half_depth", 0.0)):
+			return true
+		return _footprint_cone_has_clear_interval(footprint, rectangle_origin, (rectangle_center - rectangle_origin).normalized(), _rectangle_footprint_corners(footprint))
 	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) != OcclusionFootprintShape.CIRCLE:
 		return _world_point_has_clear_camera_line(Vector2(footprint.get("position", Vector2.ZERO)))
 	var center := Vector2(footprint.get("position", Vector2.ZERO))
@@ -6169,26 +7294,47 @@ func _world_footprint_has_visible_camera_span(footprint: Dictionary) -> bool:
 	var distance := sqrt(distance_squared)
 	var direction := to_center / distance
 	var perpendicular := Vector2(-direction.y, direction.x)
-	var tangent_base := origin + direction * (radius * radius / distance)
+	var tangent_base := center - direction * (radius * radius / distance)
 	var tangent_offset := perpendicular * (radius * sqrt(maxf(distance_squared - radius * radius, 0.0)) / distance)
 	var tangent_a := tangent_base - tangent_offset
 	var tangent_b := tangent_base + tangent_offset
-	var tangent_a_distance := tangent_a.distance_to(origin)
-	var tangent_b_distance := tangent_b.distance_to(origin)
-	# Preserve the local third-person cutaway exception: if either cone edge is
-	# clear after its renderer-owned hidden-face decision, the prop is exposed.
-	if _world_point_has_clear_camera_line(tangent_a) or _world_point_has_clear_camera_line(tangent_b):
-		return true
+	return _footprint_cone_has_clear_interval(footprint, origin, direction, [tangent_a, tangent_b])
+
+
+# Wall endpoints partition the footprint's angular span into intervals with
+# stable wall coverage. Test each interval against all physical edges, including
+# offscreen edges, through the renderer's existing cutaway-aware ray check.
+func _footprint_cone_has_clear_interval(footprint: Dictionary, origin: Vector2, direction: Vector2, supports: Array) -> bool:
+	var angles: Array[float] = []
+	for point in supports:
+		var relative := Vector2(point) - origin
+		angles.append(atan2(direction.cross(relative), direction.dot(relative)))
+	angles.sort()
+	var minimum: float = angles.front()
+	var maximum: float = angles.back()
 	for edge in _all_physical_wall_edges():
-		var edge_a := Vector2(edge["a"])
-		var edge_b := Vector2(edge["b"])
-		var hit_a := _ray_segment_hit_distance_limited(origin, (tangent_a - origin).normalized(), edge_a, edge_b, tangent_a_distance - 0.001)
-		if hit_a < 0.0:
+		for endpoint in [edge["a"], edge["b"]]:
+			var relative := Vector2(endpoint) - origin
+			var angle := atan2(direction.cross(relative), direction.dot(relative))
+			if angle > minimum and angle < maximum:
+				angles.append(angle)
+	angles.sort()
+	for index in range(angles.size() - 1):
+		if angles[index + 1] - angles[index] <= 0.000001:
 			continue
-		var hit_b := _ray_segment_hit_distance_limited(origin, (tangent_b - origin).normalized(), edge_a, edge_b, tangent_b_distance - 0.001)
-		if hit_b >= 0.0:
-			return false
-	return true
+		var ray := direction.rotated((angles[index] + angles[index + 1]) * 0.5)
+		var distance := -1.0
+		if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.CIRCLE:
+			distance = _ray_circle_hit_distance(origin, ray, Vector2(footprint["position"]), float(footprint["radius"]))
+		else:
+			var corners := _rectangle_footprint_corners(footprint)
+			for side in range(corners.size()):
+				var hit := _ray_segment_hit_distance_limited(origin, ray, corners[side], corners[(side + 1) % corners.size()], 10000.0)
+				if hit >= 0.0 and (distance < 0.0 or hit < distance):
+					distance = hit
+		if distance >= 0.0 and _world_point_has_clear_camera_line(origin + ray * distance):
+			return true
+	return false
 
 
 func _rectangle_footprint_corners(footprint: Dictionary) -> Array[Vector2]:
@@ -6493,7 +7639,10 @@ func _movement_speed_multiplier(is_crouching: bool) -> float:
 
 # _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
-	character_is_crouching = _is_player_crouch_pressed_for(active_player_index)
+	# NPCs do not yet own a deliberate cover/crouch behavior. Keep their stance
+	# explicitly standing until that state machine exists; no controller trigger,
+	# residual animation state, or visual diagnostic may make them crouch.
+	character_is_crouching = false if _is_bot_controlled_slot(active_player_index) else _is_player_crouch_pressed_for(active_player_index)
 	_ensure_forward_cell_experiment_position()                                                 # Keep this opt-in experiment's real capsule in the cell ahead before reading input or rendering a new pose.
 	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)): # Let the explicit death sequence own the body and camera while down.
 		character_is_moving = false                                                               # Prevent normal locomotion from competing with the authored Death frames.
@@ -6569,6 +7718,96 @@ func _process_player_context(delta: float) -> void:                             
 		world_run_dir = _direction_string_for_world_vector(_view_forward_vector())                # Use the visible camera direction as the idle body fallback.
 		world_aim_dir = _direction_string_for_world_vector(_view_forward_vector())                # Store the visible camera aim direction in shared-world space.
 		_play_idle_animation()                                                                    # Play the new forward-facing idle loop while this player is not moving.
+
+
+
+# _process_bot_world_context: Moves an NPC's capsule directly through the same
+# collision solver as every player. Bot decisions are world-space grid routes;
+# translating them through a private camera's turn/strafe buttons created the
+# observed in-place dance at corners and prevented reliable patrols.
+func _process_bot_world_context(delta: float) -> void:
+	character_is_crouching = false
+	if active_player_index >= player_states.size() or bool(player_states[active_player_index].get("is_dying", false)):
+		character_is_moving = false
+		_play_idle_animation()
+		return
+	var brain: Dictionary = bot_brains.get(active_player_index, {})
+	var desired: Vector2 = brain.get("move_direction", Vector2.ZERO)
+	# Direct NPC locomotion bypasses the virtual camera turn controls.  Apply the
+	# combat aim to this real camera/body pose as well, otherwise a bot can enter
+	# HOLD_FIRE with a clear shot but only fire when its old travel heading happens
+	# to point at the target.
+	if bool(brain.get("has_line_of_sight", false)):
+		var target_index := int(brain.get("target_index", -1))
+		if target_index >= 0 and target_index < player_states.size():
+			var aim_vector := _player_state_world_position(player_states[target_index]) - player_world_position
+			if aim_vector.length_squared() > 0.00000001:
+				world_aim_dir = _direction_string_for_world_vector(aim_vector)
+				continuous_camera_yaw = Vector2.UP.angle_to(aim_vector.normalized())
+	if desired.length_squared() <= 0.00000001:
+		character_is_moving = false
+		_play_idle_animation()
+		return
+	desired = desired.normalized()
+	var origin := player_world_position
+	# Human movement converts its local half-tile controls through
+	# LOCAL_TILE_WORLD_HALF_EXTENT. Match that world speed exactly; the old bot
+	# path omitted the factor and made greenshirts run twice as fast as Bart.
+	var moved := _move_world_with_wall_slide(origin, desired * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta, "east", "west", "south", "north")
+	var actual_delta := moved - origin
+	if actual_delta.length_squared() > 0.00000001:
+		_set_player_world_position_for_current_view(moved)
+		world_run_dir = _direction_string_for_world_vector(actual_delta)
+		world_aim_dir = world_run_dir
+		# Visual aim follows the actual travel vector during patrol. A visible
+		# target can still override it on the next combat decision.
+		continuous_camera_yaw = Vector2.UP.angle_to(actual_delta.normalized())
+		character_is_moving = true
+		_play_best_animation(true)
+	else:
+		character_is_moving = false
+		_play_idle_animation()
+
+
+func _process_virtual_bot_world_context(player_index: int, delta: float) -> void:
+	# Extra greenshirts have no private camera/HUD. Keep their authoritative
+	# movement state in world space; the human camera renders them as opponents.
+	if player_index < 0 or player_index >= player_states.size():
+		return
+	var state: Dictionary = player_states[player_index]
+	if bool(state.get("is_dying", false)):
+		state["character_is_moving"] = false
+		player_states[player_index] = state
+		_sync_actor_sprite_view(player_index)
+		return
+	var origin := _player_state_world_position(state)
+	var brain: Dictionary = bot_brains.get(player_index, {})
+	var desired: Vector2 = brain.get("move_direction", Vector2.ZERO)
+	if bool(brain.get("has_line_of_sight", false)):
+		var target_index := int(brain.get("target_index", -1))
+		if target_index >= 0 and target_index < player_states.size():
+			var aim_vector := _player_state_world_position(player_states[target_index]) - origin
+			if aim_vector.length_squared() > 0.00000001:
+				state["world_aim_dir"] = _direction_string_for_world_vector(aim_vector)
+				state["continuous_camera_yaw"] = Vector2.UP.angle_to(aim_vector.normalized())
+	if desired.length_squared() <= 0.00000001:
+		state["character_is_moving"] = false
+		player_states[player_index] = state
+		_sync_actor_sprite_view(player_index)
+		return
+	var moved := _move_world_with_wall_slide(origin, desired.normalized() * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta, "east", "west", "south", "north")
+	var actual_delta := moved - origin
+	state["character_is_moving"] = actual_delta.length_squared() > 0.00000001
+	if bool(state["character_is_moving"]):
+		state["world_position"] = moved
+		state["grid_position"] = Vector2i(floori(moved.x), floori(moved.y))
+		state["local_floor_position"] = HOME_LOCAL_FLOOR_POSITION
+		state["world_run_dir"] = _direction_string_for_world_vector(actual_delta)
+		if not bool(brain.get("has_line_of_sight", false)):
+			state["world_aim_dir"] = state["world_run_dir"]
+			state["continuous_camera_yaw"] = Vector2.UP.angle_to(actual_delta.normalized())
+	player_states[player_index] = state
+	_sync_actor_sprite_view(player_index)
 
 
 
@@ -6689,6 +7928,8 @@ func _render_bound_player_context() -> void:                                    
 # _render_all_player_views: Redraws every local player view after setup or a map reset.
 func _render_all_player_views() -> void:                                                   # Declare this function.
 	for player_index in range(player_states.size()):                                          # Visit each local player.
+		if single_player_combat_view and player_index > 0:
+			continue
 		if player_index >= player_joined.size() or not player_joined[player_index]:
 			continue # Unjoined slots show a join overlay; their world views need no redraw.
 		_bind_player_context(player_index)                                                       # Bind that player's view and state.
@@ -6760,14 +8001,28 @@ func _process(delta: float) -> void:                                            
 		if player_joypad >= 0 and Input.is_joy_button_pressed(player_joypad, JOY_BUTTON_START):
 			scoreboard_player_index = player_index
 	scoreboard_visible = scoreboard_player_index >= 0
-	_update_scoreboard_shop_input()
+	if not clear_map_waiting_to_start:
+		_update_scoreboard_shop_input()
 	if match_paused:
 		_update_combat_hud()
 		return
 	var next_round_pressed := _read_next_round()                                               # Latch the global replay key even while the round remains active.
+	if clear_the_map_mode and not clear_map_waiting_to_start and clear_map_banner_timer > 0.0 and not combat_round_complete:
+		clear_map_banner_timer = maxf(clear_map_banner_timer - delta, 0.0)
+	_advance_clear_map_intro_music()
+	_advance_clear_map_finish(delta)
+	_advance_wanted_tally(delta)
+	if clear_the_map_mode and clear_map_waiting_to_start:
+		if next_round_pressed:
+			_start_clear_map_round()
+		_update_combat_hud()
+		return
 	if _read_toggle_debug_menu():                                                              # Check for a one-shot request to open or close the debug menu.
 		_toggle_debug_menu()                                                                     # Change panel visibility without changing any diagnostic state.
 		return                                                                                   # Keep the menu hotkey from also advancing gameplay this frame.
+	if _read_toggle_bot_trace():
+		_toggle_bot_decision_trace()
+		_update_status()
 	if _read_toggle_slot_grid_debug():                                                         # Check for a one-shot request to toggle the blue slot-grid audit overlay.
 		show_slot_grid_debug = not show_slot_grid_debug                                           # Flip the diagnostic overlay visibility for every local viewport.
 		_render_all_player_views()                                                                # Redraw immediately so the overlay appears or disappears without waiting for movement.
@@ -6777,18 +8032,27 @@ func _process(delta: float) -> void:                                            
 	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
-	if combat_round_complete and next_round_pressed:                                           # Let either local player restart only after the result was frozen.
+	if combat_round_complete and not clear_map_finish_pending and next_round_pressed:           # Do not let a held Start key skip the final-kill fade/result cue.
 		_regenerate_runtime_map(true)                                                             # Start a fresh scored round and restart its one-shot music track.
 		return                                                                                    # Keep the replay key from also moving a player this frame.
 	_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
 	_update_all_join_states()
 	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
+		if player_index >= player_views.size() and _is_bot_controlled_slot(player_index):
+			_update_bot_input(player_index, delta)
+			_process_virtual_bot_world_context(player_index, delta)
+			continue
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
-		_update_bot_input(player_index)                                                          # Supply virtual controls only for title-menu bot slots.
-		_process_player_context(delta)                                                           # Run one player's input, movement, turn, and animation logic.
+		_update_bot_input(player_index, delta)                                                   # Supply virtual controls only for title-menu bot slots.
+		if _is_bot_controlled_slot(player_index) and continuous_third_person_camera:
+			_process_bot_world_context(delta)                                                       # NPCs navigate in shared world space, never through a camera-turn input gate.
+		else:
+			_process_player_context(delta)                                                           # Run one human player's input, movement, turn, and animation logic.
 		_save_player_context(player_index)                                                       # Store this player's updated state before binding the next player.
 	_process_combat(delta)                                                                     # Advance shared pistol shots and resolve wall/player impacts after both actors moved.
 	for player_index in range(player_states.size()):                                          # Then render every local view against the completed shared player state.
+		if single_player_combat_view and player_index > 0:
+			continue
 		if player_index >= player_joined.size() or not player_joined[player_index]:
 			continue # Joining happens above, so a newly joined view renders this same frame.
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
@@ -7609,7 +8873,7 @@ func _layout_debug_menu_panels(viewport_size: Vector2) -> void:
 func _layout_viewport() -> void:                                                            # Declare this function.
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
 	_layout_debug_menu_panels(viewport_size)
-	if player_views.size() >= 4 and not TEMP_GRID_AUDIT:
+	if player_views.size() >= 4 and not TEMP_GRID_AUDIT and not single_player_combat_view:
 		# Reserve side gutters only while the F3 panels are open. Normal play uses
 		# the complete window for the four 160x120 camera crops.
 		var side_reserve := DEBUG_MENU_COLUMN_WIDTH + DEBUG_MENU_SIDE_MARGIN * 2.0 if debug_menu_open else 0.0
@@ -7668,6 +8932,21 @@ func _layout_viewport() -> void:                                                
 			audit_camera.scale = Vector2.ONE * audit_scale                                             # Match the source-grid scaling.
 			audit_camera.position = audit_origin + Vector2(0.0, (DEBUG_MAP_PANEL_SIZE.y - VIEWPORT_SIZE.y) * 0.5 * audit_scale) # Align the camera at the map's vertical center.
 		return                                                                                    # Skip the normal two-player, two-row layout.
+	if single_player_combat_view and not player_views.is_empty():
+		var solo_view: Dictionary = player_views[0]
+		var solo_camera: Node2D = solo_view.get("maze_viewport", null)
+		var solo_scale := maxf(1.0, floorf(minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)))
+		if solo_camera != null:
+			solo_camera.scale = Vector2.ONE * solo_scale
+			solo_camera.position = (viewport_size - VIEWPORT_SIZE * solo_scale) * 0.5
+		var solo_map: Node2D = solo_view.get("debug_map_overlay", null)
+		if solo_map != null:
+			solo_map.visible = false
+		var solo_minimap: Node2D = solo_view.get("match_minimap_overlay", null)
+		if solo_minimap != null and solo_camera != null:
+			var solo_bounds := Rect2(solo_camera.position, VIEWPORT_SIZE * solo_scale)
+			solo_minimap.position = solo_bounds.position + Vector2(solo_bounds.size.x - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+		return
 	if player_views.size() > 1 and player_windows.size() > 1:                                  # Give each local player a full camera in its own native window.
 		for player_index in range(player_views.size()):                                           # Position the player camera and minimalist map on that player's own display.
 			var view: Dictionary = player_views[player_index]
@@ -7802,6 +9081,29 @@ func _update_match_minimap_overlay() -> void:
 		arrow.color = color                                                                       # Apply the player's identifying color.
 		match_minimap_dynamic_layer.add_child(arrow)                                              # Draw it over the white wall network.
 	_add_match_minimap_camera_cutaway_debug()                                                  # Overlay only the local camera fan when its F3 diagnostic is enabled.
+	_add_match_minimap_bot_navigation_debug()                                                   # Keep bot route decisions visible without covering gameplay.
+
+
+func _add_match_minimap_bot_navigation_debug() -> void:
+	if not show_bot_navigation_debug:
+		return
+	var colours := [Color(0.0, 0.95, 1.0, 0.9), Color(1.0, 0.42, 0.88, 0.9), Color(1.0, 0.78, 0.12, 0.9)]
+	for player_index in range(player_states.size()):
+		if not _is_bot_controlled_slot(player_index):
+			continue
+		var brain: Dictionary = bot_brains.get(player_index, {})
+		var route: Array = brain.get("route", [])
+		var colour: Color = colours[posmod(player_index - 1, colours.size())]
+		var previous := _match_minimap_point(_player_state_world_position(player_states[player_index]))
+		for cell_value in route:
+			var point := _match_minimap_point(Vector2(Vector2i(cell_value)) + Vector2(0.5, 0.5))
+			_add_match_minimap_line(match_minimap_dynamic_layer, previous, point, colour, 1.0)
+			previous = point
+		var route_index := int(brain.get("route_index", 0))
+		if route_index < route.size():
+			var next_point := _match_minimap_point(Vector2(Vector2i(route[route_index])) + Vector2(0.5, 0.5))
+			_add_match_minimap_line(match_minimap_dynamic_layer, next_point + Vector2(-2.0, 0.0), next_point + Vector2(2.0, 0.0), Color.YELLOW, 1.0)
+			_add_match_minimap_line(match_minimap_dynamic_layer, next_point + Vector2(0.0, -2.0), next_point + Vector2(0.0, 2.0), Color.YELLOW, 1.0)
 
 
 
@@ -7915,6 +9217,7 @@ func _update_debug_map_overlay() -> void:                                       
 	_add_debug_camera_cutaway_rays()                                                            # Draw the exact presentation fan that selects walls for local cutaway fading.
 	_add_debug_fan_draw_order()                                                                 # Draw the exact fan contact spans and final local player wall layers when requested.
 	_add_debug_world_footprints()                                                               # Draw physical and visual item circles from the same descriptors used by placement and occlusion.
+	_add_debug_bot_navigation()                                                                  # Draw each bot's live route and perception decision.
 	_add_debug_other_player_view_cones()                                                        # Draw each other joined player's camera cone on this shared source-of-truth map.
 	_add_debug_all_wall_slot_numbers()                                                         # Draw the independent blue slot-number audit on every local slot candidate.
 	_add_debug_raycast_rays()                                                                   # Draw sampled raycast lines and first-hit points so visibility can be inspected.
@@ -8023,6 +9326,43 @@ func _add_debug_world_footprints() -> void:
 			_add_debug_footprint_rectangle(center_world, float(footprint.get("half_width", 0.0)), float(footprint.get("half_depth", 0.0)), Color(0.30, 1.0, 0.38, 0.95), 2.0)
 		else:
 			_add_debug_footprint_circle(center_world, float(footprint["radius"]), Color(0.30, 1.0, 0.38, 0.95), 2.0)
+
+
+# _add_debug_bot_navigation: Exposes the actual persistent decision record,
+# rather than inferring intent from a screenshot.  Cyan segments are the saved
+# BFS route, yellow is the active next centre, green/red report LOS, and the
+# label gives the mode and route progress.
+func _add_debug_bot_navigation() -> void:
+	if not show_bot_navigation_debug:
+		return
+	var colors := [Color(0.25, 1.0, 0.38, 0.95), Color(0.20, 0.75, 1.0, 0.95), Color(1.0, 0.45, 0.92, 0.95)]
+	for player_index in range(player_states.size()):
+		if not _is_bot_controlled_slot(player_index):
+			continue
+		var brain: Dictionary = bot_brains.get(player_index, {})
+		var route: Array = brain.get("route", [])
+		var route_index := int(brain.get("route_index", 0))
+		var position := _player_state_world_position(player_states[player_index])
+		var color: Color = colors[posmod(player_index - 1, colors.size())]
+		var previous_map := _debug_map_world_position(position)
+		for cell_value in route:
+			var route_map := _debug_map_cell_center(Vector2i(cell_value))
+			_add_debug_line(previous_map, route_map, color, 1.5)
+			previous_map = route_map
+		if route_index < route.size():
+			var next_map := _debug_map_cell_center(Vector2i(route[route_index]))
+			_add_debug_player_marker(next_map, Color(1.0, 0.92, 0.12, 0.98))
+		var goal: Vector2i = brain.get("goal_cell", Vector2i(-1, -1))
+		if _is_open_cell(goal):
+			_add_debug_player_marker(_debug_map_cell_center(goal), Color(1.0, 0.35, 0.12, 0.98))
+		var sight := bool(brain.get("has_line_of_sight", false))
+		var label := Label.new()
+		label.text = "%s %s %d/%d %s" % [PLAYER_NAMES[player_index], String(brain.get("state", "IDLE")), route_index, route.size(), "LOS" if sight else "blind"]
+		label.position = _debug_map_world_position(position) + Vector2(4.0, -13.0)
+		label.add_theme_font_override("font", pixel_hud_font)
+		label.add_theme_font_size_override("font_size", 8)
+		label.add_theme_color_override("font_color", Color(0.35, 1.0, 0.42, 1.0) if sight else Color(1.0, 0.84, 0.18, 1.0))
+		_debug_map_draw_parent().add_child(label)
 
 
 func _add_debug_footprint_circle(center_world: Vector2, radius: float, color: Color, width: float) -> void:
@@ -10519,6 +11859,7 @@ func _ensure_input_actions() -> void:                                           
 	_ensure_key_action(ACTION_REGENERATE_MAP, [KEY_R])                                        # Bind R to runtime maze regeneration.
 	_ensure_key_action(ACTION_TOGGLE_SLOT_GRID_DEBUG, [KEY_F2])                               # Bind F2 to the blue slot-grid audit overlay toggle.
 	_ensure_key_action(ACTION_TOGGLE_DEBUG_MENU, [KEY_F3])                                    # Bind F3 to the grouped debug-overlay menu toggle.
+	_ensure_key_action(ACTION_TOGGLE_BOT_TRACE, [KEY_F4])                                     # Bind F4 to the opt-in bot decision trace.
 	_ensure_key_action(ACTION_FIRE, [KEY_F])                                                   # Bind F to player one's pistol for keyboard testing.
 	_ensure_key_action(ACTION_P2_MOVE_LEFT, [KEY_KP_4])                                       # Bind numpad 4 to player-two local strafe-left movement.
 	_ensure_key_action(ACTION_P2_MOVE_RIGHT, [KEY_KP_6])                                      # Bind numpad 6 to player-two local strafe-right movement.
@@ -10617,7 +11958,7 @@ func _xbox_right_stick_turn() -> int:                                           
 
 # _is_player_move_left_pressed: Returns whether the currently bound player is holding local-left movement.
 func _is_player_move_left_pressed() -> bool:                                                # Declare this function.
-	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("left", false))
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("move_left", false))
 	if active_player_index == 1: return _is_key_down(KEY_J)
 	if active_player_index == 2: return _is_key_down(KEY_LEFT)
 	if active_player_index == 3: return _is_key_down(KEY_KP_4)
@@ -10629,7 +11970,7 @@ func _is_player_move_left_pressed() -> bool:                                    
 
 # _is_player_move_right_pressed: Returns whether the currently bound player is holding local-right movement.
 func _is_player_move_right_pressed() -> bool:                                               # Declare this function.
-	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("right", false))
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("move_right", false))
 	if active_player_index == 1: return _is_key_down(KEY_L)
 	if active_player_index == 2: return _is_key_down(KEY_RIGHT)
 	if active_player_index == 3: return _is_key_down(KEY_KP_6)
@@ -10641,7 +11982,7 @@ func _is_player_move_right_pressed() -> bool:                                   
 
 # _is_player_move_forward_pressed: Returns whether the currently bound player is holding local-forward movement.
 func _is_player_move_forward_pressed() -> bool:                                             # Declare this function.
-	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("forward", false))
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("move_forward", false))
 	if active_player_index == 1: return _is_key_down(KEY_I)
 	if active_player_index == 2: return _is_key_down(KEY_UP)
 	if active_player_index == 3: return _is_key_down(KEY_KP_8)
@@ -10653,7 +11994,7 @@ func _is_player_move_forward_pressed() -> bool:                                 
 
 # _is_player_move_backward_pressed: Returns whether the currently bound player is holding local-backward movement.
 func _is_player_move_backward_pressed() -> bool:                                            # Declare this function.
-	if _is_bot_controlled_slot(active_player_index): return false
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("move_backward", false))
 	if active_player_index == 1: return _is_key_down(KEY_K)
 	if active_player_index == 2: return _is_key_down(KEY_DOWN)
 	if active_player_index == 3: return _is_key_down(KEY_KP_5)
@@ -10665,7 +12006,7 @@ func _is_player_move_backward_pressed() -> bool:                                
 
 # _is_player_turn_left_pressed: Returns whether the currently bound player is pressing a left-turn key.
 func _is_player_turn_left_pressed() -> bool:                                                # Declare this function.
-	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("left", false))
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("turn_left", false))
 	if active_player_index == 1: return _is_key_down(KEY_U)
 	if active_player_index == 2: return _is_key_down(KEY_COMMA)
 	if active_player_index == 3: return _is_key_down(KEY_KP_7)
@@ -10677,7 +12018,7 @@ func _is_player_turn_left_pressed() -> bool:                                    
 
 # _is_player_turn_right_pressed: Returns whether the currently bound player is pressing a right-turn key.
 func _is_player_turn_right_pressed() -> bool:                                               # Declare this function.
-	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("right", false))
+	if _is_bot_controlled_slot(active_player_index): return bool(bot_inputs.get(active_player_index, {}).get("turn_right", false))
 	if active_player_index == 1: return _is_key_down(KEY_O)
 	if active_player_index == 2: return _is_key_down(KEY_PERIOD)
 	if active_player_index == 3: return _is_key_down(KEY_KP_9)
@@ -10740,6 +12081,15 @@ func _read_toggle_debug_menu() -> bool:
 	var debug_menu_just_pressed := debug_menu_pressed and not was_debug_menu_pressed           # Detect the first frame of the menu hotkey press.
 	was_debug_menu_pressed = debug_menu_pressed                                                # Store current menu key state for next frame.
 	return debug_menu_just_pressed                                                            # Return whether the debug panel should open or close this frame.
+
+
+
+# _read_toggle_bot_trace: F4 starts a fresh decision capture or stops the current one.
+func _read_toggle_bot_trace() -> bool:
+	var trace_pressed := Input.is_action_pressed(ACTION_TOGGLE_BOT_TRACE) or _is_key_down(KEY_F4)
+	var trace_just_pressed := trace_pressed and not was_bot_trace_pressed
+	was_bot_trace_pressed = trace_pressed
+	return trace_just_pressed
 
 
 
@@ -10953,6 +12303,8 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 	var hit_center := Vector2.ZERO
 	var hit_normal := Vector2.ZERO
 	for barrel in world_barrels:
+		if bool(barrel.get("skip_character_collision", false)):
+			continue
 		var barrel_center: Vector2 = barrel.get("position", Vector2.ZERO)
 		if barrel.has("half_extents"):
 			var half_extents := Vector2(barrel["half_extents"]) + Vector2.ONE * PLAYER_CAPSULE_RADIUS
@@ -11393,7 +12745,9 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	var projection := _near_cell_motion_projection(_near_cell_local_position_for_world(target_world)) if target_in_viewer_near_cell else _opponent_projection_from_current_camera(target_world, true, use_continuous_world_projection_for_near_actors) # Option 1 selects the unclamped effect projector for same-cell opponents, matching bullets and smoke exactly.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
 	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
-	var actor_height := float(projection.get("continuous_actor_height", projection["actor_height"])) if use_continuous_world_projection_for_near_actors else float(projection["actor_height"]) # Option 1 uses the continuous world scale rather than an actor-only near LOD cap.
+	# NPCs use the same continuous world-perspective height as props and effects;
+	# never apply the retired protected-near actor scale band.
+	var actor_height := float(projection.get("continuous_actor_height", projection["actor_height"]))
 	var source_body_height := _standard_actor_body_height()                                   # Keep every remote animation on the same shared perspective scale as its local counterpart.
 	var sprite_scale := actor_height / source_body_height                                        # Scale the opponent by visible body span so animation frame padding cannot change size.
 	var screen_y := _sprite_center_y_for_feet(opponent_sprite, feet_y, sprite_scale)            # Register the opponent art foot/shadow anchor to the projected feet line.
@@ -11404,7 +12758,11 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	if not _projected_sprite_overlaps_viewport(screen_x, screen_y, opponent_sprite, sprite_scale): # Let viewport clipping handle partial bodies but skip fully offscreen sprites.
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
-	var character_layer := _world_actor_draw_layer(target_world)                               # Share the exact same cell layer and within-cell camera-depth tie-breaker as the local player.
+	var opponent_footprint := {"shape": OcclusionFootprintShape.CIRCLE, "position": target_world, "radius": PLAYER_CAPSULE_RADIUS}
+	if not _world_footprint_has_visible_camera_span(opponent_footprint):
+		opponent_sprite.visible = false
+		return
+	var character_layer := _world_footprint_draw_layer(opponent_footprint)
 	opponent_sprite.scale = Vector2.ONE * sprite_scale                                         # Apply the opponent sprite scale.
 	opponent_sprite.position = Vector2(screen_x, screen_y)                                     # Apply the opponent sprite position.
 	_apply_runtime_world_sprite_style(opponent_sprite, sprite_scale, int(other_state.get("player_index", 0)), float(projection.get("view_depth", 0.0)), true, true) # Match opponents to the same depth-driven grid and selective costume treatment.
@@ -11698,6 +13056,53 @@ func _world_actor_draw_layer(world_position: Vector2) -> int:
 	var camera_side_amount := clampf(0.5 - within_cell_depth, 0.0, 1.0)                        # Map the cell's far edge to zero and its camera-side edge to one without ever subtracting from the wall-safe layer.
 	var within_cell_layer := roundi(camera_side_amount * SAME_CELL_ACTOR_SORT_SPAN)            # Give the camera-side body a later positive sublayer so it draws over a farther body in the same cell.
 	return cell_layer + within_cell_layer                                                       # Never let same-cell sorting move a body behind its own walls; other cells remain separated by the larger world-depth spacing.
+
+
+# Keep wall layers intact; place each object before every drawn wall that
+# intersects the continuous camera-to-footprint cone.
+func _world_footprint_draw_layer(footprint: Dictionary) -> int:
+	var center := Vector2(footprint.get("position", Vector2.ZERO))
+	var layer := _world_actor_draw_layer(center)
+	if active_player_index < 0 or active_player_index >= coordinate_renderers.size():
+		return layer
+	var renderer: Node = coordinate_renderers[active_player_index]
+	if not is_instance_valid(renderer) or not renderer.has_method("_segment_contact_points_in_cutaway_fan"):
+		return layer
+	var origin := _runtime_camera_origin_for_visibility()
+	var offset := center - origin
+	var distance := offset.length()
+	if distance <= 0.00001:
+		return layer
+	var direction := offset / distance
+	var supports: Array[Vector2] = []
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+		supports = _rectangle_footprint_corners(footprint)
+	else:
+		var radius := float(footprint.get("radius", 0.0))
+		if radius <= 0.0 or distance <= radius:
+			return layer
+		var base := center - direction * (radius * radius / distance)
+		var perpendicular := Vector2(-direction.y, direction.x)
+		var tangent_offset := perpendicular * (radius * sqrt(distance * distance - radius * radius) / distance)
+		supports = [base - tangent_offset, base + tangent_offset]
+	var left := supports[0]
+	var right := supports[0]
+	var left_angle := INF
+	var right_angle := -INF
+	for point in supports:
+		var relative := point - origin
+		var angle := atan2(direction.cross(relative), direction.dot(relative))
+		if angle < left_angle:
+			left_angle = angle
+			left = point
+		if angle > right_angle:
+			right_angle = angle
+			right = point
+	for entry in renderer.last_wall_entries:
+		var contacts: Array = renderer.call("_segment_contact_points_in_cutaway_fan", Vector2(entry["world_a"]), Vector2(entry["world_b"]), origin, left, right)
+		if not contacts.is_empty():
+			layer = mini(layer, int(entry.get("wall_draw_layer", layer + 1)) - 1)
+	return layer
 
 
 # _opponent_camera_side_margin_from_projection: Converts projected sprite width into camera-space fan overlap.
@@ -12985,6 +14390,9 @@ func _build_fixed_reference_maze_wall_edges() -> void:                          
 
 # _regenerate_runtime_map: Rerolls the 4x4 thin-wall maze during play and redraws every dependent view.
 func _regenerate_runtime_map(restart_round_music := false) -> void:                         # Declare this function.
+	if clear_the_map_mode:
+		clear_map_waiting_to_start = true
+		match_started = false
 	held_keycodes.clear()                                                                      # Clear held-key fallback state so the reset starts from neutral input.
 	active_projectiles.clear()                                                                 # Remove shots that belonged to the old maze topology.
 	muzzle_anchor_debug_markers.clear()                                                        # Remove only temporary muzzle comparisons tied to discarded combat events.
@@ -12999,6 +14407,10 @@ func _regenerate_runtime_map(restart_round_music := false) -> void:             
 	active_wall_impact_smokes.clear()                                                          # Remove wall-contact GunSmoke clouds that belonged to the old maze topology.
 	active_muzzle_smoke_particles.clear()                                                       # Remove procedural barrel smoke that belonged to the old maze topology.
 	active_blood_splatters.clear()                                                              # Remove character-hit blood particles that belonged to the old maze topology.
+	if clear_map_result_fade != null:
+		clear_map_result_fade.visible = false
+	if clear_map_result_player != null:
+		clear_map_result_player.stop()
 	was_regenerate_map_pressed = true                                                          # Keep the regenerate key from firing again until released.
 	_mark_debug_map_static_layers_dirty()                                                      # Make every local map rebuild its retained maze walls after the topology changes.
 	if BARREL_LOD_REVIEW_LEVEL:
@@ -13019,9 +14431,15 @@ func _regenerate_runtime_map(restart_round_music := false) -> void:             
 		_update_status()                                                                          # Refresh the one-player status text.
 		return                                                                                    # Skip the normal two-player random-maze reset.
 	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
+	if clear_the_map_mode and single_player_combat_view:
+		_apply_session_roster()                                                                  # Activate this round's finite 1→2→3 greenshirt roster before recreating bodies.
 	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset all four local players into their team spawn corners on the new shared map.
+	if clear_the_map_mode:
+		_restore_clear_map_inventory()
+		_apply_clear_map_reward()
+		_begin_wanted_tally(false)
 	_reset_combat_collectibles()                                                               # Replace every objective coin and the contested gun for the newly generated maze.
-	if restart_round_music and music_enabled and music_player != null:
+	if restart_round_music and not clear_map_waiting_to_start and music_enabled and music_player != null:
 		music_player.stop()
 		music_player.play()                                                                      # Replay only when Start begins a new round, never for an in-round R reroll.
 	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.
@@ -13044,6 +14462,7 @@ func _mark_debug_map_static_layers_dirty() -> void:
 # _reset_player_states_after_map: Reinitializes all local players after the shared thin-wall map changes.
 func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:                    # Declare this function.
 	player_states = _make_start_player_states()                                                # Restore Bart, Jed, Hank, and Wyatt so keyboard-only players remain simulated after a replay.
+	bot_brains.clear()                                                                          # Old maze routes and goals are invalid after every new clear-map round.
 	for player_index in range(player_views.size()):                                           # Reset the visible animation latch for every player view.
 		_bind_player_context(player_index)                                                       # Bind this player's state and sprite.
 		_play_best_animation(false)                                                               # Return this player to idle.
@@ -13242,11 +14661,15 @@ func _update_status() -> void:                                                  
 			phase_text = "strafe %d%s" % [int(state.get("strafe_step", 0)), " manual" if manual_strafe_step_enabled else ""] # Identify whether the visible frame waits for a fresh lateral input.
 		elif bool(state.get("is_transitioning", false)):                                        # Show captured phase progress when this player is transitioning.
 			phase_text = "%s phase %d" % [String(state.get("active_sequence_name", "idle")), int(state.get("phase_index", 0)) + 1] # Format the transition status.
-		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s" % [player_index + 1, phase_text, state_facing_name, state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else ""]) # Add this player status line.
+		var bot_debug := ""
+		if _is_bot_controlled_slot(player_index):
+			var brain: Dictionary = bot_brains.get(player_index, {})
+			bot_debug = " Bot %s -> P%d" % [String(brain.get("state", "IDLE")), int(brain.get("target_index", -1)) + 1]
+		lines.append("P%d %s Facing %s Cell %d,%d Local %.2f,%.2f Anim %s Walls %s%s%s" % [player_index + 1, phase_text, state_facing_name, state_cell.x, state_cell.y, state_local.x, state_local.y, state_animation, _visible_wall_ids_text_for_state(state), (" Blocked " + String(state.get("last_blocked_direction", ""))) if not String(state.get("last_blocked_direction", "")).is_empty() else "", bot_debug]) # Add this player status line.
 	var player_two_line := lines[1] if lines.size() > 1 else "P2 missing"                    # Preserve the second state line when both local players exist.
 	if not player_two_joined:                                                                  # Explain exactly how a second person enters the match before the later AI fallback milestone.
 		player_two_line = "P2 waiting — controller 2: Start, stick, or RT; keyboard: numpad / 0." # Keep the unjoined player readable without allowing accidental movement.
-	status_label.text = "%s\n%s\nP1: controller 1 / WASD + Q/E / RT or F fire. P2: controller 2 / numpad / RT or 0 fire. R rerolls map. F2 slot grid. F3 %s debug menu." % [lines[0] if lines.size() > 0 else "P1 missing", player_two_line, "closes" if debug_menu_open else "opens"] # Update the on-screen debug status label.
+	status_label.text = "%s\n%s\nP1: controller 1 / WASD + Q/E / RT or F fire. P2: controller 2 / numpad / RT or 0 fire. R rerolls map. F2 slot grid. F3 %s debug menu. F4 bot trace %s." % [lines[0] if lines.size() > 0 else "P1 missing", player_two_line, "closes" if debug_menu_open else "opens", "ON" if bot_decision_trace_enabled else "off"] # Update the on-screen debug status label.
 
 
 

@@ -26,10 +26,7 @@ class TestController extends "res://scripts/xybots_character_controller.gd":
 	func _world_point_has_clear_camera_line(_target_world: Vector2) -> bool:
 		if not force_barrel_line_samples:
 			return true
-		for sample in clear_barrel_samples:
-			if _target_world.is_equal_approx(sample):
-				return true
-		return false
+		return not clear_barrel_samples.is_empty()
 
 	func _world_actor_draw_layer(_world_position: Vector2) -> int:
 		return 0
@@ -74,8 +71,10 @@ func _initialize() -> void:
 	var probe_distance := occlusion_probe.length()
 	var probe_direction := occlusion_probe / probe_distance
 	var probe_perpendicular := Vector2(-probe_direction.y, probe_direction.x)
-	var probe_base := probe_direction * (probe_radius * probe_radius / probe_distance)
+	var probe_base := occlusion_probe - probe_direction * (probe_radius * probe_radius / probe_distance)
 	var probe_offset := probe_perpendicular * (probe_radius * sqrt(probe_distance * probe_distance - probe_radius * probe_radius) / probe_distance)
+	game.physical_wall_edges_cache = [{"a": probe_direction * 2.0 - probe_perpendicular, "b": probe_direction * 2.0 + probe_perpendicular}]
+	game.physical_wall_edges_cache_dirty = false
 	game.force_barrel_line_samples = true
 	game.clear_barrel_samples = [probe_base + probe_offset]
 	if not game._world_barrel_has_visible_camera_span(occlusion_probe):

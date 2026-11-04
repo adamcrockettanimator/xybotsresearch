@@ -15,13 +15,18 @@ func _run() -> void:
 	assert(not game.BARREL_LOD_REVIEW_LEVEL)
 	assert(game.semantic_typical_props_enabled)
 	assert(game.single_player_sandbox_mode)
-	assert(game.world_barrels.size() == 11)
+	# The three visible dining pieces share one invisible movement proxy so
+	# characters navigate around the whole table-and-benches footprint.
+	assert(game.world_barrels.size() == 12)
 	assert(game.semantic_lod_floor_footprints.size() == 11)
 	var gpu_cage_barrels := 0
 	var fragment_raster_crates := 0
 	var dining_pieces := 0
 	var dining_target: Dictionary = {}
 	for prop in game.world_barrels:
+		if bool(prop.get("dining_navigation_proxy", false)):
+			assert(prop.has("half_extents"))
+			continue
 		var key := String(prop["footprint_key"])
 		if key.contains("_dining"):
 			assert(prop.has("half_extents"))
@@ -42,14 +47,14 @@ func _run() -> void:
 	var position: Vector2 = target["position"]
 	for i in 3:
 		game._damage_barrel(int(target["id"]), Vector2.RIGHT, position, 0.5)
-	assert(game.world_barrels.size() == 10)
+	assert(game.world_barrels.size() == 11)
 	var destroyed := false
 	for footprint in game.semantic_lod_floor_footprints:
 		if footprint["id"] == key:
 			destroyed = bool(footprint.get("destroyed", false))
 	assert(destroyed)
 	game._reset_world_barrels()
-	assert(game.world_barrels.size() == 11)
+	assert(game.world_barrels.size() == 12)
 	assert(game.semantic_lod_floor_footprints.size() == 11)
 	print("Typical maze semantic props: 4 GPU cage barrels, 4 fragment-raster crates, and a destructible three-piece dining set passed")
 	scene.queue_free()

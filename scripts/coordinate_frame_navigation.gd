@@ -19,7 +19,12 @@ func _attach_coordinate_renderers(game: Node) -> void:
 	if not game.has_method("register_coordinate_renderer"):
 		push_error("Coordinate-frame navigation requires the Xybots controller renderer hook.")
 		return
-	for player_index in range(game.player_views.size()):
+	# Solo bot matches intentionally have one constructed world renderer.  The
+	# hidden bot views retain actors for simulation, but do not own environment
+	# layers; attaching a compositor to them therefore bound all four wall stacks
+	# to Bart's one visible camera and left stale surfaces onscreen.
+	var renderer_count: int = 1 if bool(game.single_player_combat_view) else game.player_views.size()
+	for player_index in range(renderer_count):
 		var renderer := RUNTIME_RENDERER.new()
 		renderer.name = "CoordinateFrameRuntimeRendererP%d" % (player_index + 1)
 		renderer.target_player_index = player_index

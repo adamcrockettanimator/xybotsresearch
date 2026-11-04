@@ -44,12 +44,15 @@ extends Resource
 @export_range(0.15, 16.0, 0.05) var detail_hidden_distance := 4.5
 @export_range(0.10, 12.0, 0.05) var diagonal_full_distance := 2.5
 @export_range(0.15, 16.0, 0.05) var diagonal_hidden_distance := 5.0
+## Distance fade for the diagonal brace highlight, independent of the brace.
+@export_range(0.10, 12.0, 0.05) var diagonal_highlight_full_distance := 1.5
+@export_range(0.15, 16.0, 0.05) var diagonal_highlight_hidden_distance := 3.0
 @export_range(0.5, 3.0, 0.25) var edge_highlight_width_logical_pixels := 1.0
 @export_range(0.0, 1.0, 0.01) var edge_highlight_end_fade := 0.30
 @export_range(0.02, 0.75, 0.01) var edge_highlight_angle_fade := 0.28
 @export_range(0.10, 12.0, 0.05) var edge_highlight_full_distance := 1.5
 @export_range(0.15, 16.0, 0.05) var edge_highlight_hidden_distance := 3.0
-## Side-inset and brace highlights only appear within this close camera range.
+## Side-inset highlights only appear within this close camera range.
 @export_range(0.10, 4.0, 0.05) var inset_side_highlight_full_distance := 0.60
 @export_range(0.15, 6.0, 0.05) var inset_side_highlight_hidden_distance := 1.20
 @export_range(0.0, 1.0, 0.01) var minimum_face_ratio := 0.10
