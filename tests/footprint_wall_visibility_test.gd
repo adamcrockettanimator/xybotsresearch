@@ -35,7 +35,7 @@ func _initialize() -> void:
 	assert(game._world_footprint_draw_layer(circle) == 79, "both joined walls must paint after the object")
 	renderer.last_wall_entries.clear()
 	renderer.last_wall_entries.append({"world_a": Vector2(1, 2), "world_b": Vector2(2, 2), "wall_draw_layer": 100})
-	assert(game._world_footprint_draw_layer(circle) == 200, "wall outside cone must not change object layer")
+	assert(game._world_footprint_draw_layer(circle) == game._world_footprint_near_draw_layer(circle), "wall outside cone must not change object layer")
 	renderer.free()
 	game._build_empty_grid_audit_wall_edges()
 	game._set_wall_between(Vector2i(1, 1), Vector2i.RIGHT, true)

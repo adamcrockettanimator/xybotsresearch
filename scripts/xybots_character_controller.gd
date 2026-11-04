@@ -6858,7 +6858,7 @@ func _render_live_semantic_floor_footprints() -> void:
 			var dining_footprint := _dining_furniture_footprint(footprint)
 			outline.z_index = _world_footprint_draw_layer(dining_footprint)
 			var dining_radius := Vector2(float(dining_footprint["half_width"]), float(dining_footprint["half_depth"])).length()
-			var dining_visible := complete and _world_actor_overlaps_current_camera_fan(center, dining_radius) and _world_footprint_has_visible_camera_span(dining_footprint) and not _dining_footprint_is_fully_behind_nearer_prop(key, dining_footprint)
+			var dining_visible := complete and _world_actor_overlaps_current_camera_fan(center, dining_radius) and _world_footprint_has_visible_camera_span(dining_footprint)
 			outline.visible = dining_visible
 			if dining_visible:
 				var stool_forward := _view_forward_vector().normalized()
@@ -7342,47 +7342,6 @@ func _rectangle_footprint_corners(footprint: Dictionary) -> Array[Vector2]:
 	var half_width := float(footprint.get("half_width", 0.0))
 	var half_depth := float(footprint.get("half_depth", 0.0))
 	return [center + Vector2(-half_width, -half_depth), center + Vector2(half_width, -half_depth), center + Vector2(half_width, half_depth), center + Vector2(-half_width, half_depth)]
-
-
-# _dining_footprint_is_fully_behind_nearer_prop: A whole SubViewport prop has
-# one Canvas layer, so a fully enclosed far bench must yield to the nearer
-# dining footprint rather than paint through the table. Partial cone overlap is
-# deliberately left to normal painter ordering, preserving visible side ends.
-func _dining_footprint_is_fully_behind_nearer_prop(target_key: String, target: Dictionary) -> bool:
-	var target_cone := _rectangle_camera_depth_cone(target)
-	if target_cone.is_empty():
-		return false
-	for candidate in semantic_lod_floor_footprints:
-		var candidate_key := String(candidate.get("id", ""))
-		if candidate_key == target_key or not (candidate_key.begins_with("chair_semantic_stool") or candidate_key.begins_with("chair_semantic_bench") or candidate_key.begins_with("chair_semantic_table")):
-			continue
-		var blocker_cone := _rectangle_camera_depth_cone(_dining_furniture_footprint(candidate))
-		if blocker_cone.is_empty():
-			continue
-		if float(blocker_cone["far_depth"]) < float(target_cone["near_depth"]) - 0.002 and float(target_cone["min_slope"]) >= float(blocker_cone["min_slope"]) - 0.002 and float(target_cone["max_slope"]) <= float(blocker_cone["max_slope"]) + 0.002:
-			return true
-	return false
-
-
-func _rectangle_camera_depth_cone(footprint: Dictionary) -> Dictionary:
-	var origin := _runtime_camera_origin_for_visibility()
-	var forward := _view_forward_vector().normalized()
-	var right := _view_right_vector().normalized()
-	var near_depth := INF
-	var far_depth := -INF
-	var min_slope := INF
-	var max_slope := -INF
-	for corner in _rectangle_footprint_corners(footprint):
-		var relative := corner - origin
-		var depth := relative.dot(forward)
-		if depth <= 0.01:
-			return {}
-		near_depth = minf(near_depth, depth)
-		far_depth = maxf(far_depth, depth)
-		var slope := relative.dot(right) / depth
-		min_slope = minf(min_slope, slope)
-		max_slope = maxf(max_slope, slope)
-	return {"near_depth": near_depth, "far_depth": far_depth, "min_slope": min_slope, "max_slope": max_slope}
 
 
 # Kept solely as the barrel regression-test entry point. Runtime props use the
@@ -9287,7 +9246,7 @@ func _world_item_footprint(kind: String, position: Vector2) -> Dictionary:
 
 # _dining_furniture_footprint: The authored dining props are rectangle-based,
 # not circles. This descriptor is the shared collision/occlusion shape used by
-# the camera fan, wall-span checks, diagnostics, and dining-set depth cones.
+# the camera fan, wall-span checks, and diagnostics.
 func _dining_furniture_footprint(footprint: Dictionary) -> Dictionary:
 	return {"shape": OcclusionFootprintShape.RECTANGLE, "kind": "dining_furniture", "position": Vector2(footprint.get("position", Vector2.ZERO)), "half_width": float(footprint.get("side_length", 0.0)) * 0.5, "half_depth": float(footprint.get("depth", 0.0)) * 0.5}
 
@@ -13058,11 +13017,28 @@ func _world_actor_draw_layer(world_position: Vector2) -> int:
 	return cell_layer + within_cell_layer                                                       # Never let same-cell sorting move a body behind its own walls; other cells remain separated by the larger world-depth spacing.
 
 
+# Use the camera-facing extent within the object's own cell. This is a
+# whole-object painter approximation: it cannot sort individual surfaces when
+# footprints overlap, but a small pickup inside a larger prop paints first.
+func _world_footprint_near_draw_layer(footprint: Dictionary) -> int:
+	var center := Vector2(footprint.get("position", Vector2.ZERO))
+	var forward := _view_forward_vector().normalized()
+	var extent := float(footprint.get("radius", 0.0))
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+		extent = absf(forward.x) * float(footprint.get("half_width", 0.0)) + absf(forward.y) * float(footprint.get("half_depth", 0.0))
+	var cell := _world_cell_for_draw_depth(center, _runtime_camera_origin_for_visibility())
+	var cell_center := Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5)
+	var depth := (center - cell_center).dot(forward)
+	var center_offset := roundi(clampf(0.5 - depth, 0.0, 1.0) * SAME_CELL_ACTOR_SORT_SPAN)
+	var near_offset := roundi(clampf(0.5 - depth + maxf(extent, 0.0), 0.0, 1.0) * SAME_CELL_ACTOR_SORT_SPAN)
+	return _world_actor_draw_layer(center) + near_offset - center_offset
+
+
 # Keep wall layers intact; place each object before every drawn wall that
 # intersects the continuous camera-to-footprint cone.
 func _world_footprint_draw_layer(footprint: Dictionary) -> int:
 	var center := Vector2(footprint.get("position", Vector2.ZERO))
-	var layer := _world_actor_draw_layer(center)
+	var layer := _world_footprint_near_draw_layer(footprint)
 	if active_player_index < 0 or active_player_index >= coordinate_renderers.size():
 		return layer
 	var renderer: Node = coordinate_renderers[active_player_index]
