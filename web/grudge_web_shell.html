@@ -170,6 +170,9 @@ const engine = new Engine(GODOT_CONFIG);
 			// Godot worker controls this page before navigating a second time.
 			setStatusNotice('Preparing Grudge County...');
 			setStatusMode('notice');
+			// Browser worker setup has no measurable percentage; show activity.
+			statusProgress.removeAttribute('value');
+			statusProgress.style.display = 'block';
 			const reloadKey = 'grudge-isolation-reloaded';
 			if (sessionStorage.getItem(reloadKey)) {
 				sessionStorage.removeItem(reloadKey);
