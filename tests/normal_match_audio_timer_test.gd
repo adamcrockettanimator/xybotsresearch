@@ -24,6 +24,7 @@ func _run() -> void:
 		elif String(footprint["id"]).contains("_dining"):
 			dining_count += 1
 	assert(barrel_count == 4 and crate_count == 4 and dining_count == 3)
+	assert(game.wanted_tally_title.text == "ROUND 1:\nKILL ALL THE GREENSHIRTS!")
 	assert(game.music_enabled and game.music_player.playing and game.clear_map_intro_music_active)
 	assert(not game.pause_round_timer_for_debug)
 	var before: float = game.combat_round_time_remaining
@@ -38,12 +39,14 @@ func _run() -> void:
 	game._start_clear_map_round()
 	assert(game.match_started and not game.clear_map_waiting_to_start and not game.clear_map_intro_music_active)
 	assert(game.music_player.playing and not game.wanted_tally_overlay.visible)
-	assert(game.music_player.get_playback_position() >= game.CLEAR_MAP_INTRO_LOOP_SECONDS - 0.01)
-	# A final kill uses a one-second audiovisual fade before exposing victory cards.
+	assert(root.get_node("GrudgeMusic").current_mode == "menu")
+	# A final kill holds the full death fall and two frames before the one-second fade.
 	game.clear_map_tally_loot[1] = {"coins": 2, "hearts": 1, "guns": 0}
 	game.player_states[0]["coins"] = 7
 	game._finish_clear_map(true)
 	assert(game.clear_map_finish_pending)
+	game._advance_clear_map_finish(float(game.DEATH_FALL_SECONDS) + 2.0 / 60.0)
+	assert(is_zero_approx(game.clear_map_result_fade.color.a))
 	game._advance_clear_map_finish(0.5)
 	assert(game.clear_map_result_fade.visible)
 	assert(is_equal_approx(game.clear_map_result_fade.color.a, 0.5))
@@ -52,7 +55,7 @@ func _run() -> void:
 	assert(game.combat_round_result == "YOU WIN!")
 	assert(game.clear_map_carried_inventory["coins"] == 7)
 	assert(game.clear_map_reward["coins"] == 2 and game.clear_map_reward["hearts"] == 1)
-	assert(game.clear_map_result_player.playing)
+	assert(root.get_node("GrudgeMusic").playing and root.get_node("GrudgeMusic").current_mode == "win")
 	# The roster grows with the round number instead of stopping at the original
 	# three hidden player slots; round five has five independently simulated bots.
 	game.clear_map_round = 5

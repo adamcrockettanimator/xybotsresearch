@@ -361,8 +361,9 @@ func _initialize() -> void:
 	if target_player_index < 0 or target_player_index >= controller.player_views.size():
 		push_error("Coordinate-frame renderer was attached before player %d exists." % target_player_index)
 		return
-	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true) # Enable per-viewport CPU/GPU render timings for the automatic runtime CSV; this is separate from the editor-only Profiler capture.
-	if target_player_index == 0:
+	if not (OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false))):
+		RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+	if target_player_index == 0 and not (OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false))):
 		_reset_profile_log()
 	show_quad_outlines = false
 	show_projection_points = false
@@ -605,6 +606,8 @@ func _reset_profile_log() -> void:
 
 # _profile_record_frame: Adds one renderer frame to a one-second rolling sample.
 func _profile_record_frame(total_us: int) -> void:
+	if OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false)):
+		return
 	var now_us := Time.get_ticks_usec()
 	if profile_window_start_us == 0:
 		profile_window_start_us = now_us
@@ -679,6 +682,8 @@ func _profile_record_frame(total_us: int) -> void:
 
 # _append_profile_sample: Writes averages and spikes so quiet and moving poses are both diagnosable.
 func _append_profile_sample(elapsed_seconds: float) -> void:
+	if OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false)):
+		return
 	if profile_sample_count <= 0:
 		return
 	var divisor := float(profile_sample_count) * 1000.0
@@ -691,6 +696,8 @@ func _append_profile_sample(elapsed_seconds: float) -> void:
 	file.close()
 
 func _input(event: InputEvent) -> void:
+	if OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false)):
+		return
 	# The two local compositors receive the same input event.  Player one owns the
 	# shared diagnostic controls so a single press cannot toggle each layer twice.
 	if target_player_index != 0:

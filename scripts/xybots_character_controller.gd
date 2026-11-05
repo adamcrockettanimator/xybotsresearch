@@ -6,6 +6,8 @@
 
 extends Node2D                                                                              # Use Node2D as the root script type for the prototype scene.
 
+const MusicAccess = preload("res://scripts/music_access.gd")
+
 const DIR_N := "N"                                                                          # Name the north-facing animation/map direction.
 const DIR_NE := "NE"                                                                        # Name the northeast-facing local run animation direction.
 const DIR_E := "E"                                                                          # Name the east-facing animation/map direction.
@@ -209,7 +211,7 @@ const PLAYER_NAMES := ["Bart", "Jed", "Hank", "Wyatt", "Greenshirt 4", "Greenshi
 const PLAYER_TEAMS := [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] # Bart is the human lawman; every NPC is an opposing greenshirt.
 const TEAM_ONE_COLOR := Color(0.58, 0.24, 0.86, 1.0) # Lawmen: purple tint applied over the grayscale Cowboy sprite.
 const TEAM_TWO_COLOR := Color(0.18, 0.82, 0.30, 1.0) # Outlaws: green tint applied over the grayscale Cowboy sprite.
-const MUSIC_STREAM := preload("res://assets/Audio/Music/Ecstacy of Gold.mp3")
+
 const CLEAR_MAP_INTRO_LOOP_SECONDS := 5.10
 const GUNSHOT_STREAM := preload("res://assets/Audio/SFX/the_loud_report_of_a_#3-1787343658193.mp3")
 const COIN_PICKUP_STREAM := preload("res://assets/Audio/SFX/Coin.mp3")
@@ -221,6 +223,9 @@ const PLAYER_CAPSULE_RADIUS := 0.10                                             
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const BARREL_HIT_POINTS := 3
 const BARREL_PROJECTILE_RADIUS := 0.08                                                     # Approximate the visible barrel width, which is narrower than its 32-pixel canvas.
+const BOT_SIGHT_RANGE := 4.0 # Enemies cannot acquire or shoot targets in the darkest distance bands.
+const BOT_SHOT_SPREAD_DEGREES := 4.0 # Independent horizontal aim error per shot; misses become more likely at distance.
+const RESPAWN_MIN_ENEMY_DISTANCE := 3.0 # Keep returning players away from nearby enemies, even through walls.
 const BOT_PERSONAL_SPACE := 0.72                                                            # Keep opponents from collapsing into the same visible combat pose.
 const BOT_STRAFE_RANGE := 2.25                                                              # Inside this range, keep aim on the enemy and fight laterally instead of marching straight at them.
 const BOT_PROP_AVOIDANCE_PADDING := 0.32                                                    # Begin steering around a barrel well before the capsule reaches its physical collision ring.
@@ -1046,8 +1051,8 @@ var combat_respawn_blackouts: Array[ColorRect] = []                             
 var combat_respawn_labels: Array[Label] = []                                                  # Store one readable death/countdown label for each local view.
 var combat_coin_labels: Array[Label] = []                                                     # Store one per-player score readout inside the lower-right of each view.
 var combat_coin_icons: Array[TextureRect] = []                                                # Store one authored coin icon beside each score readout.
-var combat_ammo_labels: Array[Label] = []                                                     # Store the temporary rapid-fire ammo counter for each local view.
-var combat_ammo_icons: Array[TextureRect] = []                                                # Store the fixed gun icon only while its player is armed.
+var combat_ammo_icons: Array[TextureRect] = []                                                # Primary cylinder for each local view.
+var combat_ammo_second_icons: Array[TextureRect] = []                                         # Right-hand cylinder while dual wielding.
 var combat_camera_blood_layers: Array[Node2D] = []                                            # Store one screen-space blood-decal layer per player camera.
 var combat_camera_blood_droplets: Array = []                                                  # Store each player's accumulated close-screen blood blob nodes in pickup-removable order.
 var combat_player_blood_decals: Array = []                                                    # Store each player's world-body blood decal descriptions, rendered in every camera that sees that character.
@@ -1128,7 +1133,41 @@ var match_minimap_dynamic_layer: Node2D                                         
 const MATCH_MINIMAP_SIZE := 66.0                                                               # Four-player HUD needs a compact half-size map.
 const MATCH_MINIMAP_MARGIN := 5.0                                                              # Leave a small safe inset from the upper-right screen edge.
 var pixel_hud_font: FontFile                                                                   # Share the bundled High Noon pixel font across every gameplay readout.
+const BOT_BARK_ROOT := "res://assets/Audio/SFX/NPC Barks/"
+const EFFORT_GRUNT_ROOT := "res://assets/Audio/SFX/Effort Grunts/"
+const EFFORT_HIT_SAMPLES := [1, 2, 3, 25, 22]
+const EFFORT_DEATH_SAMPLES := [34, 29, 26, 27]
+const EFFORT_VICTORY_SAMPLES := [4, 5, 37, 38, 32, 16, 17, 14, 13, 11]
+const BOT_BARKS := {
+	"hearing": ["01. Huh_.wav", "02. What_.wav", "04. What's That_.wav", "05. Who's There_.wav", "07. Shh... Listen.wav", "12. I Think Someone's Here.wav", "18. Who Goes There_.wav", "20. I Heard Something....wav", "21. Hey, What Was That_.wav"],
+	"search": ["06. Show Yourself.wav", "08. We Know You're Out There.wav", "10. I'm Gonna Find You.wav", "17. Cat and Mouse.wav", "19. Stop Hiding and Come Out!.wav", "22. I'm On To You.wav"],
+	"combat": ["03. Hey!.wav", "09. Get Outta Here.wav", "13. Intruder.wav", "14. He's Here.wav", "16. You Wanna Play This Game_.wav", "23. You're Not Leaving Here Alive.wav", "24. Hey, What are You Doing_.wav"],
+	"victory": ["11. You're Dead.wav"],
+}
+const BOT_BARK_GLOBAL_GAP := 4.0
+const BOT_BARK_PERSONAL_GAP := 9.0
+var bot_bark_player: AudioStreamPlayer
+var bot_bark_reverb_player: AudioStreamPlayer
+var bot_bark_panner: AudioEffectPanner
+var bot_bark_speaker := -1
+var bot_bark_last_global := -INF
+var bot_bark_last_by_bot: Dictionary = {}
+var bot_bark_last_line: Dictionary = {}
+const BOT_DAMAGE_ROOT := "res://assets/Audio/SFX/NPC Damage/"
+const BOT_DAMAGE_SAMPLE_COUNT := 22
+var bot_damage_channels: Dictionary = {}
+var bot_damage_last_sample: Dictionary = {}
+
+const FOOTSTEP_ROOT := "res://assets/Audio/SFX/Footsteps/"
+const FOOTSTEP_RUN_SPEED := 0.55
+const FOOTSTEP_WALK_HEARING_RANGE := 2.5
+const FOOTSTEP_RUN_HEARING_RANGE := 4.0
+var footstep_tracks: Dictionary = {}
+var footstep_last_samples: Dictionary = {}
+var footstep_audio_channels: Dictionary = {}
+
 var music_player: AudioStreamPlayer
+var music_combat_remaining := 0.0
 var clear_map_result_player: AudioStreamPlayer
 var gunshot_player: AudioStreamPlayer
 var coin_pickup_player: AudioStreamPlayer
@@ -1160,6 +1199,9 @@ const SLOT_GRAPH_TUNER_PATH := "res://slot_graph_tuner.json"                    
 
 # _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
 func _ready() -> void:                                                                      # Declare this function.
+	if _public_build():
+		show_top_down_source_overlay = false
+		bot_decision_trace_enabled = false
 	_ensure_input_actions()                                                                    # Register local input actions before the first input polling frame.
 	pixel_hud_font = preload("res://assets/Fonts/High Noon.woff")
 	pixel_hud_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE                            # Render hard pixel edges instead of soft vector-font smoothing.
@@ -1185,12 +1227,13 @@ func _ready() -> void:                                                          
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
 	_apply_session_roster()                                                                    # Convert title-menu vacancies into active bot combatants before views and HUDs are built.
+	_separate_starting_bots()
 	if clear_the_map_mode:
 		match_started = false                                                                     # Keep the ready-screen posters from masking a live match.
 	if bots_enabled and bot_decision_trace_enabled:
 		_start_bot_decision_trace()                                                               # Every F5 bot match gets a fresh trace without requiring an F4 press.
 	if music_enabled and match_started and music_player != null:
-		music_player.play()                                                                      # The lobby starts the match immediately, without going through the late-join music trigger.
+		music_player.call("set_music_mode", "menu")
 	_setup_all_player_renderers()                                                              # Create an independent wall renderer and top-down map for each local player.
 	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
@@ -1208,11 +1251,35 @@ func _ready() -> void:                                                          
 
 
 func _setup_shared_audio() -> void:
-	music_player = AudioStreamPlayer.new()
-	music_player.stream = MUSIC_STREAM
-	if music_player.stream is AudioStreamMP3:
-		music_player.stream.loop = false                                                         # One round uses one song; do not restart it under the final standings.
-	add_child(music_player)
+	# Voice-only buses leave the music and effects mix untouched. The reverb
+	# sends through the same panner so both layers follow the speaker.
+	var voice_bus := AudioServer.get_bus_index("NPC Voice")
+	if voice_bus < 0:
+		AudioServer.add_bus()
+		voice_bus = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(voice_bus, "NPC Voice")
+		AudioServer.set_bus_send(voice_bus, "Master")
+		AudioServer.add_bus_effect(voice_bus, AudioEffectPanner.new())
+	bot_bark_panner = AudioServer.get_bus_effect(voice_bus, 0) as AudioEffectPanner
+	var reverb_bus := AudioServer.get_bus_index("NPC Voice Reverb")
+	if reverb_bus < 0:
+		AudioServer.add_bus()
+		reverb_bus = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(reverb_bus, "NPC Voice Reverb")
+		AudioServer.set_bus_send(reverb_bus, "NPC Voice")
+		var effect := AudioEffectReverb.new()
+		effect.dry = 0.0
+		effect.wet = 1.0
+		effect.room_size = 0.55
+		effect.damping = 0.6
+		AudioServer.add_bus_effect(reverb_bus, effect)
+	bot_bark_player = AudioStreamPlayer.new()
+	bot_bark_player.bus = "NPC Voice"
+	add_child(bot_bark_player)
+	bot_bark_reverb_player = AudioStreamPlayer.new()
+	bot_bark_reverb_player.bus = "NPC Voice Reverb"
+	add_child(bot_bark_reverb_player)
+	music_player = MusicAccess.get_player(get_tree())
 	clear_map_result_player = AudioStreamPlayer.new()
 	add_child(clear_map_result_player)
 	gunshot_player = AudioStreamPlayer.new()
@@ -1228,6 +1295,269 @@ func _setup_shared_audio() -> void:
 	machine_gun_pickup_player = AudioStreamPlayer.new()
 	machine_gun_pickup_player.stream = MACHINE_GUN_PICKUP_STREAM
 	add_child(machine_gun_pickup_player)
+
+
+# One shared voice channel prevents overlapping chatter in larger bot matches.
+# A kill line has priority so it is not lost behind a recent investigation bark.
+func _request_bot_bark(player_index: int, category: String) -> bool:
+	if bot_bark_player == null or not _is_bot_controlled_slot(player_index) or player_index >= player_states.size() or not BOT_BARKS.has(category):
+		return false
+	var now := float(Time.get_ticks_msec()) * 0.001
+	var victory := category == "victory"
+	if not victory and (bot_bark_player.playing or now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP or now - float(bot_bark_last_by_bot.get(player_index, -INF)) < BOT_BARK_PERSONAL_GAP):
+		return false
+	var options: Array = BOT_BARKS[category].duplicate()
+	if victory:
+		for sample in EFFORT_VICTORY_SAMPLES:
+			options.append(EFFORT_GRUNT_ROOT + "%02d. Effort Grunt (Male).wav" % sample)
+	var choice := randi_range(0, options.size() - 1)
+	var last := String(bot_bark_last_line.get(player_index, ""))
+	if options.size() > 1 and String(options[choice]) == last:
+		choice = (choice + 1 + randi_range(0, options.size() - 2)) % options.size()
+	var filename := String(options[choice])
+	var stream := load(filename if filename.begins_with("res://") else BOT_BARK_ROOT + filename) as AudioStream
+	if stream == null:
+		return false
+	bot_bark_speaker = player_index
+	if not _update_bot_bark_spatial():
+		bot_bark_speaker = -1
+		return false
+	bot_bark_player.stop()
+	bot_bark_reverb_player.stop()
+	bot_bark_player.stream = stream
+	bot_bark_reverb_player.stream = stream
+	bot_bark_player.play()
+	bot_bark_reverb_player.play()
+	bot_bark_last_global = now
+	bot_bark_last_by_bot[player_index] = now
+	bot_bark_last_line[player_index] = filename
+	return true
+
+
+# Keep the shared voice spatialized as the listener or speaker moves during it.
+func _update_bot_bark_spatial() -> bool:
+	if bot_bark_speaker < 0 or bot_bark_speaker >= player_states.size() or bot_bark_player == null or bot_bark_reverb_player == null:
+		return false
+	var distance := INF
+	var closest_listener := -1
+	var speaker := _player_state_world_position(player_states[bot_bark_speaker])
+	for listener in range(player_states.size()):
+		if listener < player_joined.size() and player_joined[listener] and _is_human_controlled_slot(listener):
+			var listener_distance := speaker.distance_to(_player_state_world_position(player_states[listener]))
+			if listener_distance < distance:
+				distance = listener_distance
+				closest_listener = listener
+	if closest_listener < 0:
+		return false
+	var listener_state: Dictionary = player_states[closest_listener]
+	var relative := speaker - _player_state_world_position(listener_state)
+	var listener_forward := _view_forward_vector_for_state(listener_state).normalized()
+	var listener_right := Vector2(-listener_forward.y, listener_forward.x)
+	if bot_bark_panner != null:
+		bot_bark_panner.pan = clampf(listener_right.dot(relative.normalized()), -0.85, 0.85) if relative.length_squared() > 0.0001 else 0.0
+	bot_bark_player.volume_db = -4.0 - minf(distance, 8.0) * 1.5
+	bot_bark_reverb_player.volume_db = bot_bark_player.volume_db + lerpf(-25.0, -10.0, clampf(distance / 8.0, 0.0, 1.0))
+	return true
+
+
+func _play_bot_damage_grunt(player_index: int, lethal := false) -> bool:
+	if player_index < 0 or player_index >= player_states.size():
+		return false
+	var speaker := _player_state_world_position(player_states[player_index])
+	var nearest := INF
+	var listener := -1
+	for candidate in range(player_states.size()):
+		if candidate >= player_joined.size() or not player_joined[candidate] or not _is_human_controlled_slot(candidate):
+			continue
+		var distance := speaker.distance_to(_player_state_world_position(player_states[candidate]))
+		if distance < nearest:
+			nearest = distance
+			listener = candidate
+	if listener < 0:
+		return false
+	var options: Array[String] = []
+	if lethal:
+		for sample in EFFORT_DEATH_SAMPLES:
+			options.append(EFFORT_GRUNT_ROOT + "%02d. Effort Grunt (Male).wav" % sample)
+	else:
+		for sample in EFFORT_HIT_SAMPLES:
+			options.append(EFFORT_GRUNT_ROOT + "%02d. Effort Grunt (Male).wav" % sample)
+		if _is_bot_controlled_slot(player_index):
+			for sample in range(1, BOT_DAMAGE_SAMPLE_COUNT + 1):
+				options.append(BOT_DAMAGE_ROOT + "%02d. Damage Grunt (Male).wav" % sample)
+	var choice := randi_range(0, options.size() - 1)
+	if options.size() > 1 and options[choice] == String(bot_damage_last_sample.get(player_index, "")):
+		choice = (choice + 1 + randi_range(0, options.size() - 2)) % options.size()
+	var sample := options[choice]
+	var stream := load(sample) as AudioStream
+	if stream == null:
+		return false
+	if not bot_damage_channels.has(player_index):
+		var bus_name := "NPC Damage %d" % player_index
+		var bus := AudioServer.get_bus_index(bus_name)
+		if bus < 0:
+			AudioServer.add_bus()
+			bus = AudioServer.bus_count - 1
+			AudioServer.set_bus_name(bus, bus_name)
+			AudioServer.set_bus_send(bus, "Master")
+			AudioServer.add_bus_effect(bus, AudioEffectPanner.new())
+		var voice := AudioStreamPlayer.new()
+		voice.bus = bus_name
+		add_child(voice)
+		bot_damage_channels[player_index] = {"player": voice, "panner": AudioServer.get_bus_effect(bus, 0)}
+	var channel: Dictionary = bot_damage_channels[player_index]
+	var voice: AudioStreamPlayer = channel["player"]
+	var panner: AudioEffectPanner = channel["panner"]
+	var listener_state: Dictionary = player_states[listener]
+	var relative := speaker - _player_state_world_position(listener_state)
+	var forward := _view_forward_vector_for_state(listener_state).normalized()
+	var right := Vector2(-forward.y, forward.x)
+	panner.pan = clampf(right.dot(relative.normalized()), -0.85, 0.85) if relative.length_squared() > 0.0001 else 0.0
+	voice.stream = stream
+	voice.volume_db = -4.0 - minf(nearest, 8.0) * 1.5
+	voice.play()
+	bot_damage_last_sample[player_index] = sample
+	return true
+
+
+# Each actor owns one voice and stereo panner, allowing simultaneous steps.
+func _footstep_channel(player_index: int) -> Dictionary:
+	if footstep_audio_channels.has(player_index):
+		return footstep_audio_channels[player_index]
+	var bus_name := "Actor Footsteps %d" % player_index
+	var bus := AudioServer.get_bus_index(bus_name)
+	if bus < 0:
+		AudioServer.add_bus()
+		bus = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(bus, bus_name)
+		AudioServer.set_bus_send(bus, "Master")
+		AudioServer.add_bus_effect(bus, AudioEffectPanner.new())
+	var player := AudioStreamPlayer.new()
+	player.bus = bus_name
+	add_child(player)
+	var channel := {"player": player, "panner": AudioServer.get_bus_effect(bus, 0)}
+	footstep_audio_channels[player_index] = channel
+	return channel
+
+
+func _play_wood_actor_sound(player_index: int, kind: String) -> bool:
+	if player_index < 0 or player_index >= player_states.size() or kind not in ["Walk", "Run", "Sneak", "Drop"]:
+		return false
+	var previous := int(footstep_last_samples.get("%d:%s" % [player_index, kind], 0))
+	var sample := randi_range(1, 6)
+	if sample == previous:
+		sample = sample % 6 + 1
+	var path := FOOTSTEP_ROOT + "%s/Wood/WASD Sound Wood %s %02d.wav" % [kind, kind, sample]
+	var stream := load(path) as AudioStream
+	if stream == null:
+		return false
+	var speaker := _player_state_world_position(player_states[player_index])
+	var nearest := INF
+	var listener := -1
+	for candidate in range(player_states.size()):
+		if candidate >= player_joined.size() or not player_joined[candidate] or not _is_human_controlled_slot(candidate):
+			continue
+		var distance := speaker.distance_to(_player_state_world_position(player_states[candidate]))
+		if distance < nearest:
+			nearest = distance
+			listener = candidate
+	if listener < 0:
+		return false
+	var channel := _footstep_channel(player_index)
+	var player: AudioStreamPlayer = channel["player"]
+	var panner: AudioEffectPanner = channel["panner"]
+	var listener_state: Dictionary = player_states[listener]
+	var relative := speaker - _player_state_world_position(listener_state)
+	var forward := _view_forward_vector_for_state(listener_state).normalized()
+	var right := Vector2(-forward.y, forward.x)
+	panner.pan = clampf(right.dot(relative.normalized()), -0.85, 0.85) if relative.length_squared() > 0.0001 else 0.0
+	player.stream = stream
+	player.volume_db = (-7.0 if kind == "Sneak" else -4.0) - minf(nearest, 8.0) * 2.0
+	player.play()
+	footstep_last_samples["%d:%s" % [player_index, kind]] = sample
+	return true
+
+
+# A step is an audible snapshot, not a live tracker. Gunfire and current combat
+# take priority, and a crouched step never creates an AI hearing event.
+func _notify_bots_of_footstep(source_index: int, kind: String, position: Vector2) -> void:
+	if kind not in ["Walk", "Run"] or not _is_human_controlled_slot(source_index):
+		return
+	var hearing_range := FOOTSTEP_RUN_HEARING_RANGE if kind == "Run" else FOOTSTEP_WALK_HEARING_RANGE
+	for bot_index in range(player_states.size()):
+		if bot_index >= player_joined.size() or not player_joined[bot_index] or not _is_bot_controlled_slot(bot_index) or bool(player_states[bot_index].get("is_dying", false)):
+			continue
+		if _player_state_world_position(player_states[bot_index]).distance_to(position) > hearing_range:
+			continue
+		var brain: Dictionary = bot_brains.get(bot_index, {})
+		if bool(brain.get("has_line_of_sight", false)) or float(brain.get("combat_memory", 0.0)) > 0.0 or String(brain.get("investigation_kind", "")) == "shot" or int(brain.get("heard_shot_serial", 0)) != bot_heard_shot_serial:
+			continue
+		brain["footstep_pending"] = position
+		bot_brains[bot_index] = brain
+
+
+# The six-frame run and crouch-walk cycles plant alternating feet on
+# source frames 3 and 6 (zero-based 2 and 5).
+func _player_footstep_frame_crossed(track: Dictionary, sprite: AnimatedSprite2D) -> bool:
+	if sprite == null or sprite.sprite_frames == null or not sprite.is_playing():
+		track.erase("animation")
+		return false
+	var animation := sprite.animation
+	var frame_count := sprite.sprite_frames.get_frame_count(animation)
+	if frame_count != 6 or not (String(animation).begins_with("Run") or String(animation).begins_with("DualRun") or String(animation).begins_with("CrouchWalk")):
+		track.erase("animation")
+		return false
+	var frame := sprite.frame
+	var backwards := sprite.get_playing_speed() < 0.0
+	var previous := int(track.get("frame", frame))
+	var same_cycle: bool = track.get("animation", &"") == animation and bool(track.get("backwards", backwards)) == backwards
+	track["animation"] = animation
+	track["frame"] = frame
+	track["backwards"] = backwards
+	if not same_cycle or frame == previous:
+		return false
+	var cursor := previous
+	while cursor != frame:
+		cursor = posmod(cursor + (-1 if backwards else 1), frame_count)
+		if cursor == 2 or cursor == 5:
+			return true
+	return false
+
+
+func _update_actor_footsteps(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	for player_index in range(player_states.size()):
+		if player_index >= player_joined.size() or not player_joined[player_index]:
+			continue
+		var state: Dictionary = player_states[player_index]
+		var position := _player_state_world_position(state)
+		var track: Dictionary = footstep_tracks.get(player_index, {})
+		var last: Vector2 = track.get("position", position)
+		var distance := position.distance_to(last)
+		track["position"] = position
+		var is_bot := _is_bot_controlled_slot(player_index)
+		var foot_down := false
+		if not is_bot:
+			var sprite: AnimatedSprite2D = null
+			if player_index < player_views.size():
+				sprite = player_views[player_index].get("player_sprite", null)
+			foot_down = _player_footstep_frame_crossed(track, sprite)
+		if bool(state.get("is_dying", false)) or distance > 1.0:
+			track["distance"] = 0.0
+			track.erase("animation")
+		elif distance > 0.00001:
+			var speed := distance / delta
+			var kind := "Sneak" if bool(state.get("character_is_crouching", false)) else "Run" if speed >= FOOTSTEP_RUN_SPEED else "Walk"
+			if is_bot:
+				var stride := 0.25 if kind == "Sneak" else 0.40 if kind == "Run" else 0.30
+				var accumulated := float(track.get("distance", 0.0)) + distance
+				foot_down = accumulated >= stride
+				track["distance"] = fmod(accumulated, stride) if foot_down else accumulated
+			if foot_down:
+				_play_wood_actor_sound(player_index, kind)
+				_notify_bots_of_footstep(player_index, kind, position)
+		footstep_tracks[player_index] = track
 
 
 # _play_pickup_sound: Plays a shared one-shot item cue without duplicating it across local viewports.
@@ -1295,21 +1625,30 @@ func _setup_deathmatch_overlays() -> void:
 	options_overlay.visible = false
 	canvas_layer.add_child(options_overlay)
 	options_label = Label.new()
-	options_label.text = "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:42\n\nSELECT / ESC: CLOSE"
+	options_label.text = "PAUSED\n\nWASD: MOVE / STRAFE\nMOUSE: LOOK    LEFT CLICK: FIRE\nSHIFT: CROUCH    R: RELOAD\nQ: BUY HEART    E: BUY GUN\n\nESC: RESUME    M: MAIN MENU" if _public_build() else "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:42\n\nSELECT / ESC: CLOSE"
 	options_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	options_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	options_label.add_theme_font_override("font", pixel_hud_font)
-	options_label.add_theme_font_size_override("font_size", 18)
+	options_label.add_theme_font_size_override("font_size", 14 if _public_build() else 18)
 	options_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	options_overlay.add_child(options_label)
 
 
+func _public_build() -> bool:
+	return OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false))
+
+
 # _input: Records keyboard press and release events so movement does not depend only on raw polling.
 func _input(event: InputEvent) -> void:                                                     # Declare this function.
-	if event is InputEventKey and event.pressed and event.ctrl_pressed and event.keycode == KEY_Z: # Reserve standard Ctrl+Z for graph tuning undo.
+	if _public_build():
+		if event is InputEventMouseMotion and not player_states.is_empty() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not match_paused and not clear_map_waiting_to_start:
+			player_states[0]["continuous_camera_yaw"] = wrapf(float(player_states[0].get("continuous_camera_yaw", 0.0)) + event.relative.x * 0.003, -PI, PI)
+		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not match_paused:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if not _public_build() and event is InputEventKey and event.pressed and event.ctrl_pressed and event.keycode == KEY_Z: # Reserve standard Ctrl+Z for graph tuning undo.
 		if _slot_graph_tuner_undo_last_edit():                                                   # Undo only when an edit snapshot exists.
 			return                                                                                # Keep Ctrl+Z from reaching unrelated input handling.
-	if _handle_slot_graph_tuner_input(event):                                                  # Let the visible graph consume endpoint drags before gameplay input.
+	if not _public_build() and _handle_slot_graph_tuner_input(event):                                                  # Let the visible graph consume endpoint drags before gameplay input.
 		return                                                                                    # Prevent a graph drag from also driving the player.
 	if event is InputEventKey and not event.echo:                                             # Only handle real keyboard press/release events once.
 		held_keycodes[int(event.keycode)] = event.pressed                                       # Store whether this logical key is currently held.
@@ -1867,8 +2206,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 		"music":
 			music_enabled = enabled
 			if music_player != null:
-				if music_enabled and match_started:
-					music_player.play()
+				if music_enabled:
+					music_player.call("set_music_mode", "combat" if music_combat_remaining > 0.0 and not (clear_the_map_mode and clear_map_waiting_to_start) else "menu")
 				else:
 					music_player.stop()
 		"walk_through_walls":
@@ -2163,6 +2502,21 @@ func _apply_session_roster() -> void:
 	match_started = true
 
 
+# Keep fixed round-start bot positions from putting an enemy on top of a human.
+func _separate_starting_bots() -> void:
+	for player_index in range(player_states.size()):
+		if player_index >= player_joined.size() or not player_joined[player_index] or not _is_bot_controlled_slot(player_index):
+			continue
+		var state: Dictionary = player_states[player_index]
+		if _respawn_cell_is_safe(player_index, state["grid_position"]):
+			continue
+		var destination := _combat_respawn_destination(player_index)
+		if destination.is_empty():
+			continue
+		var replacement := _make_player_state(player_index, destination["cell"], destination["facing"])
+		player_states[player_index] = replacement
+
+
 # _is_human_controlled_slot: Uses the immutable match-start roster, not a live
 # autoload that may be recreated as Godot replaces the title scene.
 func _is_human_controlled_slot(player_index: int) -> bool:
@@ -2202,29 +2556,33 @@ func _update_bot_input(player_index: int, delta: float) -> void:
 	# Steering and locomotion are intentionally separate. In the continuous
 	# camera mode, sharing left/right made a bot strafe into a wall while trying
 	# to rotate toward its path, producing the edge vibration seen in play.
-	var virtual_input := {"turn_left": false, "turn_right": false, "move_left": false, "move_right": false, "move_forward": false, "move_backward": false, "fire": false}
+	var virtual_input := {"turn_left": false, "turn_right": false, "move_left": false, "move_right": false, "move_forward": false, "move_backward": false, "fire": false, "crouch": bool(brain.get("crouch", false))}
 	if continuous_third_person_camera:
 		var free_forward := _view_forward_vector_for_state(state).normalized()
 		var free_right := Vector2(-free_forward.y, free_forward.x)
 		var has_line_of_sight := bool(brain.get("has_line_of_sight", false))
 		var move_direction: Vector2 = brain.get("move_direction", navigation_vector)
-		# Never turn the body toward a target that the combat system itself says is
-		# behind a wall.  Until a real firing lane exists, face and follow the next
-		# BFS route step through the hallway. An UNSTICK maneuver must instead face
-		# its own frozen escape vector; aiming at the route while strafing elsewhere
-		# caused the visible left/right spin without a committed step.
-		var aim_direction := target_vector.normalized() if has_line_of_sight and target_vector.length_squared() > 0.00000001 else move_direction.normalized()
+		# Face a visible opponent while moving. For a brief occlusion, use only
+		# the last observed position; otherwise face the committed route.
+		var remembered_aim: Vector2 = brain.get("last_seen_position", origin) - origin
+		var aim_direction := target_vector.normalized() if has_line_of_sight else remembered_aim.normalized() if String(brain.get("state", "")) == "LOOK_LAST_SEEN" else move_direction.normalized()
 		var alignment := free_forward.dot(aim_direction)
 		# AI locomotion is world-directed, not a player input tutorial. Keep moving
 		# while rotating into the chosen route/escape vector; otherwise a 90-degree
 		# corner can repeatedly consume the entire unstick window as turn-only input.
-		_bot_apply_continuous_move_input(virtual_input, move_direction, free_forward, free_right)
-		if alignment > BOT_MOVE_ALIGNMENT:
+		var turning_to_path := not has_line_of_sight and String(brain.get("state", "")) != "LOOK_LAST_SEEN" and move_direction.length_squared() > 0.00000001 and free_forward.dot(move_direction.normalized()) < -0.25
+		brain["turning_to_path"] = turning_to_path
+		if not turning_to_path:
+			_bot_apply_continuous_move_input(virtual_input, move_direction, free_forward, free_right)
+		if aim_direction.length_squared() <= 0.00000001:
+			pass
+		elif alignment > BOT_MOVE_ALIGNMENT:
 			virtual_input["fire"] = has_line_of_sight and target_vector.length_squared() > 0.00000001 and free_forward.dot(target_vector.normalized()) > 0.96
 		elif free_forward.cross(aim_direction) > 0.0:
 			virtual_input["turn_right"] = true
 		else:
 			virtual_input["turn_left"] = true
+		virtual_input["fire"] = bool(virtual_input["fire"]) and bool(brain.get("allow_fire", true))
 		_trace_bot_decision(player_index, origin, target_vector, brain, virtual_input)
 		bot_inputs[player_index] = virtual_input
 		return
@@ -2242,6 +2600,7 @@ func _update_bot_input(player_index: int, delta: float) -> void:
 		var forward := _view_forward_vector_for_state(state).normalized()
 		var target_direction := target_vector.normalized()
 		virtual_input["fire"] = bool(brain.get("has_line_of_sight", false)) and forward.dot(target_direction) > 0.96
+	virtual_input["fire"] = bool(virtual_input["fire"]) and bool(brain.get("allow_fire", true))
 	_trace_bot_decision(player_index, origin, target_vector, brain, virtual_input)
 	bot_inputs[player_index] = virtual_input
 
@@ -2316,17 +2675,21 @@ func _trace_bot_decision(player_index: int, origin: Vector2, target_vector: Vect
 # capsule stopped advancing, even if the route remains mathematically valid.
 func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, target_index: int, target_vector: Vector2, target_distance: float, navigation_vector: Vector2, delta: float) -> Dictionary:
 	var brain: Dictionary = bot_brains.get(player_index, {})
-	var last_position: Vector2 = brain.get("last_position", origin)
+	var last_position: Vector2 = brain.get("progress_anchor", origin)
 	var previous_direction: Vector2 = brain.get("move_direction", navigation_vector)
 	var made_progress := origin.distance_to(last_position) >= BOT_PROGRESS_DISTANCE
-	var stuck_time := 0.0 if made_progress or previous_direction.length_squared() <= 0.00000001 else float(brain.get("stuck_time", 0.0)) + delta
+	var stuck_time := 0.0 if made_progress or bool(brain.get("turning_to_path", false)) or previous_direction.length_squared() <= 0.00000001 else float(brain.get("stuck_time", 0.0)) + delta
 	var unstick_time := maxf(0.0, float(brain.get("unstick_time", 0.0)) - delta)
 	var unstick_attempt := int(brain.get("unstick_attempt", 0))
 	var escape_direction: Vector2 = brain.get("unstick_direction", Vector2.ZERO)
 	var patrol_cell: Vector2i = brain.get("patrol_cell", Vector2i(-1, -1))
 	var patrol_step := int(brain.get("patrol_step", 0))
 	var combat_memory := maxf(0.0, float(brain.get("combat_memory", 0.0)) - delta)
-	var was_in_combat := combat_memory > 0.0
+	if int(brain.get("last_seen_target", target_index)) != target_index:
+		combat_memory = 0.0
+	var had_contact := combat_memory > 0.0
+	var previous_state := String(brain.get("state", ""))
+	var lost_sight_time := float(brain.get("lost_sight_time", 0.0)) + delta
 	var combat_goal: Vector2i = brain.get("combat_goal_cell", Vector2i(-1, -1))
 	if stuck_time >= BOT_STUCK_SECONDS:
 		unstick_time = BOT_UNSTICK_SECONDS
@@ -2335,48 +2698,105 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 		escape_direction = _bot_unstick_direction(player_index, state, origin, navigation_vector, unstick_attempt)
 	# Use the exact authoritative combat LOS test—not the looser navigation ray—
 	# so bots cannot adopt a firing/strafe posture through a wall corner.
-	var clear_shot := target_vector.length_squared() > 0.00000001 and _projectile_owner_has_clear_path_to_player(player_index, target_index, false)
+	var clear_shot := target_vector.length_squared() > 0.00000001 and target_distance <= BOT_SIGHT_RANGE and _projectile_owner_has_clear_path_to_player(player_index, target_index, false)
 	if clear_shot:
+		if not had_contact:
+			_request_bot_bark(player_index, "combat")
 		combat_memory = BOT_COMBAT_MEMORY_SECONDS
+		lost_sight_time = 0.0
+		brain["last_seen_position"] = origin + target_vector
+		brain["last_seen_target"] = target_index
+	brain["lost_sight_time"] = lost_sight_time
 	var current_cell := Vector2i(floori(origin.x), floori(origin.y))
+	var visited: Dictionary = brain.get("visited_cells", {})
+	visited[current_cell] = float(Time.get_ticks_msec()) * 0.001
+	brain["visited_cells"] = visited
 	var goal_cell: Vector2i = brain.get("goal_cell", Vector2i(-1, -1))
 	var route: Array = brain.get("route", [])
 	var route_index := int(brain.get("route_index", 0))
 	var detour_point: Vector2 = brain.get("detour_point", Vector2.INF)
 	var detour_route_index := int(brain.get("detour_route_index", -1))
-	var state_name := "PATROL"
+	var state_name := "SEARCH"
+	var cleared: Dictionary = brain.get("cleared_cells", {})
+	var now := float(Time.get_ticks_msec()) * 0.001
+	# Remember only cells actually in the bot's forward view and not behind a wall.
+	# Old observations expire, so a player can later return to a searched area.
+	var forward := _view_forward_vector_for_state(state).normalized()
+	if now >= float(brain.get("next_search_scan", 0.0)):
+		brain["next_search_scan"] = now + 0.5
+		for y in range(MAP_HEIGHT):
+			for x in range(MAP_WIDTH):
+				var seen_cell := Vector2i(x, y)
+				if not _is_open_cell(seen_cell):
+					continue
+				var sight := Vector2(seen_cell) + Vector2(0.5, 0.5) - origin
+				if sight.length() < 0.6 or (sight.length() <= 5.0 and forward.dot(sight.normalized()) >= 0.7 and _nearest_projectile_topology_clear(origin, sight)):
+					cleared[seen_cell] = now
+	brain["cleared_cells"] = cleared
 	# Choose a goal only when a state transition requires it.  Everything after
 	# this point follows the saved cell route; no local steering may rewrite it.
 	if clear_shot:
-		brain["last_seen_cell"] = Vector2i(floori(origin.x + target_vector.x), floori(origin.y + target_vector.y))
-		if not was_in_combat or not _is_open_cell(combat_goal):
-			combat_goal = current_cell if target_distance < BOT_STRAFE_RANGE else Vector2i(floori(origin.x + target_vector.x), floori(origin.y + target_vector.y))
-		if target_distance < BOT_STRAFE_RANGE:
-			state_name = "HOLD_FIRE"
-			goal_cell = combat_goal
-		else:
-			state_name = "SEEK_FIRING_LANE"
-			goal_cell = combat_goal
-	elif int(brain.get("heard_shot_serial", 0)) != bot_heard_shot_serial:
-		# One shot interrupts patrol once.  Investigate a legal neighbouring cell
-		# pointing toward the sound, never the unseen shooter's exact position.
-		state_name = "INVESTIGATE"
-		goal_cell = _bot_hearing_goal(player_index, current_cell, bot_last_heard_shot_position - origin)
+		# A shot heard during direct contact is already accounted for; do not
+		# interrupt the combat route with a stale sound after sight is lost.
 		brain["heard_shot_serial"] = bot_heard_shot_serial
-	elif combat_memory > 0.0:
+		brain["investigate_cell"] = Vector2i(-1, -1)
+		brain["investigation_kind"] = ""
+		brain.erase("footstep_pending")
+		brain["last_seen_cell"] = Vector2i(floori(origin.x + target_vector.x), floori(origin.y + target_vector.y))
+		# A visible opponent is the long-term destination at every combat range.
+		# Switching to adjacent strafing cells near a distance threshold caused a
+		# two-cell loop that could keep the bot from ever facing or reaching them.
+		state_name = "MOVE_FIRE" if target_distance < BOT_STRAFE_RANGE else "SEEK_FIRING_LANE"
+		combat_goal = brain["last_seen_cell"]
+		goal_cell = combat_goal
+	elif int(brain.get("heard_shot_serial", 0)) != bot_heard_shot_serial:
+		# A sound is a snapshot, not live knowledge of the shooter's position.
+		brain["heard_shot_serial"] = bot_heard_shot_serial
+		brain.erase("footstep_pending")
+		brain["investigation_kind"] = "shot"
+		if previous_state != "INVESTIGATE":
+			_request_bot_bark(player_index, "hearing")
+		var sound_cell := Vector2i(floori(bot_last_heard_shot_position.x), floori(bot_last_heard_shot_position.y))
+		brain["investigate_cell"] = sound_cell if _is_open_cell(sound_cell) else current_cell
+		state_name = "INVESTIGATE"
+		goal_cell = brain["investigate_cell"]
+	elif brain.has("footstep_pending") and combat_memory <= 0.0:
+		var heard_position: Vector2 = brain["footstep_pending"]
+		brain.erase("footstep_pending")
+		brain["investigation_kind"] = "footstep"
+		var heard_cell := Vector2i(floori(heard_position.x), floori(heard_position.y))
+		brain["investigate_cell"] = heard_cell if _is_open_cell(heard_cell) else current_cell
+		state_name = "INVESTIGATE"
+		goal_cell = brain["investigate_cell"]
+		if previous_state != "INVESTIGATE":
+			_request_bot_bark(player_index, "hearing")
+	elif combat_memory > 0.0 and lost_sight_time < 0.35 and brain.has("last_seen_position"):
+		# A momentary corner occlusion should not reverse the bot's route or aim.
+		state_name = "LOOK_LAST_SEEN"
+		# Keep the committed combat route while aiming at the last sighting.
+		goal_cell = combat_goal if _is_open_cell(combat_goal) else current_cell
+	elif _is_open_cell(Vector2i(brain.get("investigate_cell", Vector2i(-1, -1)))) and current_cell != Vector2i(brain["investigate_cell"]):
+		state_name = "INVESTIGATE"
+		goal_cell = brain["investigate_cell"]
+	elif combat_memory > 0.0 and _is_open_cell(Vector2i(brain.get("last_seen_cell", Vector2i(-1, -1)))) and current_cell != Vector2i(brain["last_seen_cell"]):
 		state_name = "SEARCH"
-		goal_cell = combat_goal if _is_open_cell(combat_goal) else brain.get("last_seen_cell", current_cell)
+		goal_cell = brain["last_seen_cell"]
 	else:
-		state_name = "PATROL"
+		brain["investigate_cell"] = Vector2i(-1, -1)
+		brain["investigation_kind"] = ""
+		brain["combat_close"] = false
+		state_name = "SEARCH"
 		if not _is_open_cell(goal_cell) or route.is_empty() or route_index >= route.size():
 			patrol_step += 1
-			patrol_cell = _bot_next_patrol_goal(player_index, current_cell, patrol_cell, patrol_step)
+			patrol_cell = _bot_search_goal(player_index, current_cell, cleared, now, patrol_step, visited)
 			goal_cell = patrol_cell
 	if goal_cell != Vector2i(brain.get("goal_cell", Vector2i(-1, -1))) or route.is_empty():
 		route = _bot_cell_route(current_cell, goal_cell)
 		# Route[0] is the current cell.  Reacquire its exact centre before taking
 		# the next edge; starting at index 1 was still a diagonal corner-cut.
-		route_index = 0
+		route_index = _bot_route_start_index(origin, route)
+		detour_point = Vector2.INF
+		detour_route_index = -1
 	while route_index < route.size() and origin.distance_to(_bot_route_waypoint(route, route_index)) <= 0.09:
 		route_index += 1
 	var desired := Vector2.ZERO
@@ -2389,12 +2809,17 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 			detour_route_index = route_index if detour_point.is_finite() else -1
 			var travel_target := detour_point if detour_point.is_finite() else next_center
 			desired = (travel_target - origin).normalized()
+	if clear_shot and target_distance < BOT_PERSONAL_SPACE + 0.15:
+		desired = Vector2.ZERO
+		unstick_time = 0.0
 	if unstick_time > 0.0:
 		# A blocked route gets replanned; it never receives an unbounded arbitrary
 		# world vector that can cross several cells and invalidate the route.
 		state_name = "REPLAN"
 		route = _bot_cell_route(current_cell, goal_cell)
-		route_index = 0
+		route_index = _bot_route_start_index(origin, route)
+		detour_point = Vector2.INF
+		detour_route_index = -1
 		unstick_time = 0.0
 	# An escape direction is selected from legal cell exits and is already
 	# barrel-adjusted when the attempt begins. Re-steering it around nearby
@@ -2406,12 +2831,18 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	# Retain trace metadata and the committed escape choice across frames. Replacing
 	# this dictionary wholesale erased that history every tick, obscuring a stable
 	# decision as a stream of fresh turn-only actions.
+	_update_bot_tactics(player_index, origin, target_index, target_vector, clear_shot, delta, brain)
+	if brain.has("tactical_move"):
+		desired = brain["tactical_move"]
+		state_name = String(brain.get("tactical_state", state_name))
+	if state_name == "SEARCH" and previous_state in ["INVESTIGATE", "LOOK_LAST_SEEN"]:
+		_request_bot_bark(player_index, "search")
 	brain["state"] = state_name
 	brain["target_index"] = target_index
 	brain["has_line_of_sight"] = clear_shot
 	brain["waypoint"] = origin + desired * 0.45
 	brain["move_direction"] = desired
-	brain["last_position"] = origin
+	brain["progress_anchor"] = origin if made_progress else last_position
 	brain["stuck_time"] = stuck_time
 	brain["unstick_time"] = unstick_time
 	brain["unstick_attempt"] = unstick_attempt
@@ -2429,6 +2860,166 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	return brain
 
 
+# Tactical decisions are held for visible intervals and separated by cooldowns.
+# A low shot uses the same prop collision query as the projectile simulation.
+func _bot_low_lane_clear(origin: Vector2, target: Vector2) -> bool:
+	var path := target - origin
+	return path.length() > 0.001 and _nearest_projectile_barrel_hit(origin, path.normalized(), path.length(), 0.5).is_empty()
+
+
+func _bot_cover_point(origin: Vector2, target: Vector2) -> Vector2:
+	var best := Vector2.INF
+	var best_distance := 0.8
+	for prop in world_barrels:
+		if bool(prop.get("movement_only", false)):
+			continue
+		var center: Vector2 = prop.get("position", Vector2.ZERO)
+		var away := (center - target).normalized()
+		if away.length_squared() < 0.5:
+			continue
+		var radius := float(prop.get("collision_radius", BARREL_COLLISION_RADIUS))
+		if prop.has("half_extents"):
+			radius = Vector2(prop["half_extents"]).length()
+		var point := center + away * (radius + PLAYER_CAPSULE_RADIUS + 0.04)
+		var distance := origin.distance_to(point)
+		# Keep the approach local and avoid crossing maze edges or other obstacles.
+		if distance >= best_distance or Vector2i(point.floor()) != Vector2i(origin.floor()):
+			continue
+		if _bot_low_lane_clear(point, target):
+			continue
+		var reached := _move_world_with_wall_slide(origin, point - origin, "east", "west", "south", "north")
+		if reached.distance_to(point) > 0.04:
+			continue
+		best = point
+		best_distance = distance
+	return best
+
+
+func _bot_firing_lane_teammate_behind(player_index: int, origin: Vector2, target: Vector2) -> bool:
+	var direction := (target - origin).normalized()
+	for index in range(player_states.size()):
+		if index == player_index or not player_joined[index] or PLAYER_TEAMS[index] != PLAYER_TEAMS[player_index] or bool(player_states[index].get("is_dying", false)):
+			continue
+		var offset := _player_state_world_position(player_states[index]) - origin
+		if offset.dot(direction) < -0.35 and offset.dot(direction) > -1.8 and absf(offset.cross(direction)) < 0.18 and not bool(player_states[index].get("character_is_crouching", false)):
+			return true
+	return false
+
+
+func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, target_vector: Vector2, clear_shot: bool, delta: float, brain: Dictionary) -> void:
+	brain.erase("tactical_move")
+	brain["crouch"] = false
+	brain["allow_fire"] = true
+	var cooldown := maxf(0.0, float(brain.get("tactical_cooldown", 0.0)) - delta)
+	var timer := float(brain.get("tactical_timer", 0.0)) - delta
+	var mode := String(brain.get("tactical_mode", ""))
+	var target := origin + target_vector
+	var target_crouched := bool(player_states[target_index].get("character_is_crouching", false))
+	var low_clear := clear_shot and _bot_low_lane_clear(origin, target)
+	if int(brain.get("tactical_target", target_index)) != target_index or not clear_shot:
+		mode = ""
+		cooldown = maxf(cooldown, 1.5)
+	# Cover must remain between the actors; destruction or flanking ends the hold.
+	if mode == "cover" or mode == "cover_pop":
+		if _bot_low_lane_clear(origin, target):
+			mode = "reposition"
+			timer = 0.8
+			brain["reposition_direction"] = Vector2(-target_vector.y, target_vector.x).normalized() * (1.0 if player_index % 2 == 0 else -1.0)
+		elif timer <= 0.0:
+			if mode == "cover" and int(brain.get("cover_pops", 0)) >= 2:
+				mode = ""
+				cooldown = randf_range(4.0, 7.0)
+			elif mode == "cover":
+				mode = "cover_pop"
+				timer = randf_range(1.0, 1.6)
+				brain["cover_pops"] = int(brain.get("cover_pops", 0)) + 1
+			else:
+				mode = "cover"
+				timer = randf_range(1.5, 2.5)
+	elif mode == "approach_cover":
+		var point: Vector2 = brain.get("cover_point", Vector2.INF)
+		if not point.is_finite() or _bot_low_lane_clear(point, target) or timer <= 0.0:
+			mode = ""
+			cooldown = 3.0
+		elif origin.distance_to(point) < 0.07:
+			mode = "cover"
+			brain["cover_pops"] = 0
+			timer = randf_range(1.5, 2.5)
+		else:
+			brain["tactical_move"] = (point - origin).normalized()
+			brain["tactical_state"] = "TAKE_COVER"
+	elif mode != "" and timer <= 0.0:
+		mode = ""
+		cooldown = randf_range(3.0, 6.0)
+	if mode == "" and clear_shot and cooldown <= 0.0:
+		# A crouching opponent must be answerable, even if they never stand up.
+		if target_crouched and not low_clear:
+			mode = "reposition"
+			timer = 0.8
+			brain["reposition_direction"] = Vector2(-target_vector.y, target_vector.x).normalized() * (1.0 if player_index % 2 == 0 else -1.0)
+		elif target_crouched and low_clear:
+			mode = "low_shot"
+			timer = randf_range(1.8, 3.0)
+		else:
+			var cover := _bot_cover_point(origin, target)
+			if low_clear and _bot_firing_lane_teammate_behind(player_index, origin, target) and randf() < 0.4:
+				mode = "yield_lane"
+				timer = randf_range(1.8, 2.8)
+			elif cover.is_finite() and randf() < 0.45:
+				brain["cover_point"] = cover
+				mode = "approach_cover"
+				timer = 2.5
+			else:
+				# React only to an actual incoming standing projectile on a collision course.
+				for shot in active_projectiles:
+					if int(shot.get("owner", -1)) != target_index or bool(shot.get("crouched", false)):
+						continue
+					var toward: Vector2 = origin - Vector2(shot.get("position", origin))
+					var direction: Vector2 = shot.get("direction", Vector2.ZERO)
+					if toward.dot(direction) > 0.0 and toward.dot(direction) < 2.0 and absf(toward.cross(direction)) < 0.16 and randf() < 0.3:
+						mode = "evade"
+						timer = randf_range(1.0, 1.7)
+						break
+				if mode == "":
+					cooldown = randf_range(1.0, 2.0)
+	if mode == "cover" or mode == "cover_pop":
+		brain["tactical_move"] = Vector2.ZERO
+		brain["tactical_state"] = "COVER" if mode == "cover" else "COVER_FIRE"
+		brain["crouch"] = mode == "cover"
+		brain["allow_fire"] = mode == "cover_pop" and not target_crouched
+	elif mode == "reposition":
+		brain["tactical_move"] = brain.get("reposition_direction", Vector2.ZERO)
+		brain["tactical_state"] = "REPOSITION"
+		brain["allow_fire"] = not target_crouched
+	elif mode == "low_shot" or mode == "evade" or mode == "yield_lane":
+		brain["crouch"] = true
+		brain["tactical_move"] = Vector2.ZERO
+		brain["tactical_state"] = "LOW_FIRE" if mode == "low_shot" else "DUCK_FIRE"
+		brain["allow_fire"] = low_clear
+	if target_crouched and not bool(brain["crouch"]):
+		brain["allow_fire"] = false
+	brain["tactical_mode"] = mode
+	brain["tactical_timer"] = timer
+	brain["tactical_cooldown"] = cooldown
+	brain["tactical_target"] = target_index
+
+
+# Start with the next centre when it is directly visible from the current
+# position. Reacquiring the current centre on every replan reverses motion.
+func _bot_route_start_index(origin: Vector2, route: Array) -> int:
+	if route.size() < 2:
+		return 0
+	var first := Vector2(Vector2i(route[0])) + Vector2(0.5, 0.5)
+	var next := Vector2(Vector2i(route[1])) + Vector2(0.5, 0.5)
+	var sight := next - origin
+	# Require the actor to be aligned with the exit, leaving room at corners.
+	var direction := (next - first).normalized()
+	var lateral := absf((origin - first).cross(direction))
+	if lateral <= 0.12 and sight.length_squared() > 0.000001 and _nearest_projectile_topology_clear(origin, sight):
+		return 1
+	return 0
+
+
 # _bot_route_waypoint: A dining set may occupy a cell without closing its maze
 # edges. For a through-route, never command the NPC to stand at that blocked
 # cell centre; aim at the following route centre and let the local rectangular
@@ -2444,6 +3035,38 @@ func _bot_route_waypoint(route: Array, route_index: int) -> Vector2:
 # connected maze, rather than the next neighboring cell. This gives each
 # unseen NPC a real hallway route and prevents the two-cell pendulum that read
 # as waiting in place on the minimap.
+func _nearest_projectile_topology_clear(origin: Vector2, sight: Vector2) -> bool:
+	return _projectile_topology_wall_distance(origin, sight.normalized(), sight.length()) >= sight.length() - 0.01
+
+
+# Prefer reachable, recently unseen spaces; avoid dead ends when other routes exist.
+func _bot_search_goal(player_index: int, cell: Vector2i, cleared: Dictionary, now: float, step: int, visited: Dictionary = {}) -> Vector2i:
+	var best := cell
+	var best_score := -INF
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var candidate := Vector2i(x, y)
+			if candidate == cell or not _is_open_cell(candidate) or not _bot_cell_is_clear(candidate) or _bot_goal_is_reserved(player_index, candidate):
+				continue
+			var route := _bot_cell_route(cell, candidate)
+			if route.size() < 2:
+				continue
+			var exits := 0
+			for direction in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+				if _can_cross_edge(candidate, direction):
+					exits += 1
+			var age := minf(now - float(cleared.get(candidate, now - 30.0)), 30.0)
+			var recently_visited := visited.has(candidate) and now - float(visited[candidate]) < 45.0
+			var score := age - float(route.size()) * 0.4 - (8.0 if exits <= 1 else 0.0)
+			if recently_visited:
+				score -= 100.0
+			score += float(posmod(x * 17 + y * 31 + player_index * 13 + step * 7, 11)) * 0.05
+			if score > best_score:
+				best_score = score
+				best = candidate
+	return best
+
+
 func _bot_next_patrol_goal(player_index: int, cell: Vector2i, previous: Vector2i, step: int) -> Vector2i:
 	var candidates: Array[Vector2i] = []
 	for y in range(MAP_HEIGHT):
@@ -2849,7 +3472,12 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"coins": 0,                                                                                # Track this player's collected objective coins across deaths and respawns.
 		"kills": 0,
 		"deaths": 0,
-		"machine_gun_ammo": 0,                                                                     # Keep zero for the normal infinite-ammo pistol; positive values arm rapid fire.
+		"machine_gun_ammo": 0,                                                                     # Temporary dual-pistol rounds.
+		"pistol_ammo": 6,
+		"reload_phase": "",
+		"reload_frame": 1,
+		"reload_timer": 0.0,
+		"reload_was_pressed": false,
 		"fire_cooldown": 0.0,                                                                      # Store time remaining before this player can fire again.
 		"hit_timer": 0.0,                                                                          # Store the brief authored hit-pose duration.
 		"hit_reaction": "front",                                                                  # Store the front/left/right hit art selected by projectile direction.
@@ -3067,18 +3695,17 @@ func _start_clear_map_round() -> void:
 	if wanted_tally_overlay != null:
 		wanted_tally_overlay.visible = false
 	if music_enabled and music_player != null:
-		music_player.stop()
+		music_combat_remaining = 0.0
 		music_player.volume_db = 0.0
-		music_player.play(CLEAR_MAP_INTRO_LOOP_SECONDS)
+		music_player.call("set_music_mode", "menu")
 
 
 func _start_clear_map_intro_music() -> void:
 	if not music_enabled or music_player == null:
 		return
 	clear_map_intro_music_active = true
-	music_player.stop()
 	music_player.volume_db = 0.0
-	music_player.play(0.0)
+	music_player.call("set_music_mode", "menu")
 
 
 func _advance_clear_map_intro_music() -> void:
@@ -3087,8 +3714,34 @@ func _advance_clear_map_intro_music() -> void:
 	if not clear_map_waiting_to_start:
 		clear_map_intro_music_active = false
 		return
-	if not music_player.playing or music_player.get_playback_position() >= CLEAR_MAP_INTRO_LOOP_SECONDS:
-		music_player.play(0.0)
+
+
+
+# Only shots directed at an enemy (or actual damage) start combat music.
+func _update_adaptive_music(delta: float) -> void:
+	if not music_enabled or music_player == null or not match_started or (clear_the_map_mode and clear_map_waiting_to_start) or combat_round_complete:
+		return
+	music_combat_remaining = maxf(0.0, music_combat_remaining - delta)
+	music_player.call("set_music_mode", "combat" if music_combat_remaining > 0.0 else "menu")
+
+
+func _music_shot_threatens_enemy(owner: int, origin: Vector2, direction: Vector2, max_distance: float, height: float) -> bool:
+	if owner < 0 or owner >= player_states.size():
+		return false
+	var limit := minf(max_distance, _nearest_projectile_wall_distance(origin, direction, max_distance))
+	# A prop in the projectile path owns the shot, even if an enemy is beyond it.
+	var prop := _nearest_projectile_barrel_hit(origin, direction, limit, height)
+	if not prop.is_empty():
+		limit = minf(limit, float(prop.get("distance", limit)))
+	for target in range(player_states.size()):
+		if target == owner or target >= player_joined.size() or not player_joined[target] or PLAYER_TEAMS[target] == PLAYER_TEAMS[owner] or bool(player_states[target].get("is_dying", false)):
+			continue
+		if not _is_human_controlled_slot(owner) and not _is_human_controlled_slot(target):
+			continue
+		var contact := _ray_circle_hit_distance(origin, direction, _player_state_world_position(player_states[target]), 0.45)
+		if contact >= 0.0 and contact < limit - PROJECTILE_WALL_EPSILON:
+			return true
+	return false
 
 
 func _roll_clear_map_reward() -> Dictionary:
@@ -3107,11 +3760,11 @@ func _finish_clear_map(victory: bool) -> void:
 	if combat_round_complete or clear_map_finish_pending:
 		return
 	# Keep the final hit readable before replacing the playfield with the result cards.
-	# The same one-second curve fades the music down and the scene to black.
+	# Fade the scene to black while the music continues uninterrupted.
 	combat_round_complete = true
 	clear_map_finish_pending = true
 	clear_map_finish_victory = victory
-	clear_map_finish_timer = 0.0
+	clear_map_finish_timer = -(float(DEATH_FALL_SECONDS) + 2.0 / 60.0) if victory else 0.0
 	if clear_map_result_fade != null:
 		clear_map_result_fade.color = Color(0.0, 0.0, 0.0, 0.0)
 		clear_map_result_fade.visible = true
@@ -3121,16 +3774,11 @@ func _advance_clear_map_finish(delta: float) -> void:
 	if not clear_map_finish_pending:
 		return
 	clear_map_finish_timer = minf(clear_map_finish_timer + delta, CLEAR_MAP_RESULT_FADE_SECONDS)
-	var fade_amount := clear_map_finish_timer / CLEAR_MAP_RESULT_FADE_SECONDS
+	var fade_amount := maxf(clear_map_finish_timer, 0.0) / CLEAR_MAP_RESULT_FADE_SECONDS
 	if clear_map_result_fade != null:
 		clear_map_result_fade.color = Color(0.0, 0.0, 0.0, fade_amount)
-	if music_player != null:
-		music_player.volume_db = linear_to_db(maxf(1.0 - fade_amount, 0.0001))
 	if clear_map_finish_timer < CLEAR_MAP_RESULT_FADE_SECONDS:
 		return
-	if music_player != null:
-		music_player.stop()
-		music_player.volume_db = 0.0
 	clear_map_finish_pending = false
 	var victory := clear_map_finish_victory
 	combat_round_result = "YOU WIN!" if victory else "YOU LOSE"
@@ -3146,9 +3794,8 @@ func _advance_clear_map_finish(delta: float) -> void:
 		clear_map_reward = {}
 		clear_map_carried_inventory.clear()
 	_begin_wanted_tally(true)
-	if clear_map_result_player != null:
-		clear_map_result_player.stream = CLEAR_MAP_VICTORY_STREAM if victory else CLEAR_MAP_LOSS_STREAM
-		clear_map_result_player.play()
+	if music_enabled and music_player != null:
+		music_player.call("set_music_mode", "win" if victory else "lose", true)
 
 
 func _all_greenshirts_defeated() -> bool:
@@ -3255,11 +3902,14 @@ func _spawn_machine_gun_pickup() -> void:
 
 # _collect_combat_pickups: Resolves coins and the one machine gun after both players have moved for this frame.
 func _collect_combat_pickups(delta: float) -> void:
+	# A clear-map victory is still playable through its existing death/fade
+	# window; the final inventory is captured when that window ends.
+	var allow_pickups := not combat_round_complete or (clear_the_map_mode and clear_map_finish_pending and clear_map_finish_victory)
 	var remaining_coins: Array[Dictionary] = []                                               # Rebuild the list so collected coins disappear atomically.
 	for coin in world_coins:
 		var collected_by := -1                                                                 # Let at most one player receive this coin.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                       # Read the camera-independent world location.
-		if not combat_round_complete and not bool(coin.get("loot_airborne", false)):             # Let thrown loot land before it can be collected.
+		if allow_pickups and not bool(coin.get("loot_airborne", false)):             # Let thrown loot land before it can be collected.
 			for player_index in range(player_states.size()):                                   # Test both living local players against the shared pickup.
 				var state := player_states[player_index]
 				if bool(state.get("is_dying", false)):
@@ -3281,7 +3931,7 @@ func _collect_combat_pickups(delta: float) -> void:
 	for heart in world_hearts:
 		var collected_by := -1
 		var heart_position: Vector2 = heart.get("position", Vector2.ZERO)
-		if not combat_round_complete and not bool(heart.get("loot_airborne", false)):
+		if allow_pickups and not bool(heart.get("loot_airborne", false)):
 			for player_index in range(player_states.size()):
 				if player_index >= player_joined.size() or not player_joined[player_index]:
 					continue
@@ -3437,8 +4087,8 @@ func _setup_combat_hud() -> void:
 	combat_respawn_labels.clear()                                                               # Rebuild the corresponding readable death/countdown labels.
 	combat_coin_labels.clear()                                                                  # Rebuild the score labels with the other view-specific combat UI.
 	combat_coin_icons.clear()                                                                   # Rebuild the score icons with the other view-specific combat UI.
-	combat_ammo_labels.clear()                                                                  # Rebuild the machine-gun readouts with the other view-specific combat UI.
-	combat_ammo_icons.clear()                                                                   # Rebuild the matching gun icons with the other view-specific combat UI.
+	combat_ammo_icons.clear()
+	combat_ammo_second_icons.clear()
 	combat_camera_blood_layers.clear()                                                          # Rebuild one close-screen blood layer per local player camera.
 	combat_camera_blood_droplets.clear()                                                        # Reset all accumulated blood references for the new HUD set.
 	combat_player_blood_decals.clear()                                                          # Reset all per-character blood-decal descriptions for the new combat round.
@@ -3521,31 +4171,19 @@ func _setup_combat_hud() -> void:
 		coin_label.z_index = 200                                                                # Draw with the other combat UI.
 		hud_layer.add_child(coin_label)                                                         # Add the numeric score beside its icon.
 		combat_coin_labels.append(coin_label)                                                   # Retain it for per-frame text and placement.
-		var ammo_icon := TextureRect.new()                                                       # Create the temporary pickup icon for the bottom-center ammo counter.
-		ammo_icon.name = "CombatAmmoIconP%d" % (player_index + 1)                              # Keep the temporary readout identifiable in the scene tree.
-		ammo_icon.texture = GUN_HUD_TEXTURE                                                      # Keep the HUD's held-gun indicator fixed on gun_01.png.
-		ammo_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Prevent interpolation so the gun's pixels stay as hard-edged as the heart meter.
-		ammo_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE                                  # Use the explicit authored source-pixel rectangle.
-		ammo_icon.size = GUN_HUD_SIZE                                                             # Draw the requested HUD frame at half its authored size.
-		ammo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE                                    # Never interfere with the debug menu.
-		ammo_icon.z_index = 200                                                                 # Draw with other HUD controls.
-		ammo_icon.visible = false                                                               # Hide until this player has the temporary weapon.
-		hud_layer.add_child(ammo_icon)                                                          # Add it to this player's UI layer.
-		combat_ammo_icons.append(ammo_icon)                                                     # Retain it for per-frame display.
-		var ammo_label := Label.new()                                                            # Create the temporary rapid-fire round counter.
-		ammo_label.name = "CombatAmmoP%d" % (player_index + 1)                                  # Keep the temporary UI identifiable in the scene tree.
-		ammo_label.add_theme_font_override("font", pixel_hud_font)                             # Keep ammunition digits deliberately aliased.
-		ammo_label.add_theme_font_size_override("font_size", 5)
-		ammo_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Render the ammo counter as crisply as its adjacent gun icon.
-		ammo_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.72, 1.0))        # Use a pale brass color that reads as ammunition.
-		ammo_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep counter readable over every floor texture.
-		ammo_label.add_theme_constant_override("shadow_offset_x", 1)                           # Use a small one-pixel outline-like shadow.
-		ammo_label.add_theme_constant_override("shadow_offset_y", 1)                           # Use a small one-pixel outline-like shadow.
-		ammo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE                                   # Never interfere with the debug menu.
-		ammo_label.z_index = 200                                                                # Draw with the other combat UI.
-		ammo_label.visible = false                                                              # Hide for the normal infinite-ammo pistol.
-		hud_layer.add_child(ammo_label)                                                         # Add the counter beside the gun icon.
-		combat_ammo_labels.append(ammo_label)                                                   # Retain it for per-frame text and placement.
+		for cylinder_index in range(2):
+			var ammo_icon := TextureRect.new()
+			ammo_icon.name = "CombatCylinder%dP%d" % [cylinder_index + 1, player_index + 1]
+			ammo_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			ammo_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ammo_icon.size = Vector2(9, 9)
+			ammo_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ammo_icon.z_index = 200
+			hud_layer.add_child(ammo_icon)
+			if cylinder_index == 0:
+				combat_ammo_icons.append(ammo_icon)
+			else:
+				combat_ammo_second_icons.append(ammo_icon)
 	combat_round_timer_labels.clear()                                                          # Rebuild one centered clock for each native player window.
 	combat_round_result_labels.clear()                                                         # Rebuild one centered result prompt for each native player window.
 	for player_index in range(player_views.size()):
@@ -3664,24 +4302,35 @@ func _begin_wanted_tally(terminal: bool) -> void:
 	wanted_tally_posters.clear()
 	wanted_tally_queue.clear()
 	wanted_tally_terminal = terminal
-	wanted_tally_timer = 0.45
+	wanted_tally_timer = 0.12 if terminal else 0.45
 	wanted_tally_overlay.visible = true
 	wanted_tally_prompt.visible = not terminal and clear_map_waiting_to_start
 	if wanted_tally_prompt.visible:
-		wanted_tally_prompt.text = "PRESS START TO BEGIN"
+		wanted_tally_prompt.text = "PRESS SPACE TO BEGIN" if _public_build() else "PRESS START TO BEGIN"
 		_start_clear_map_intro_music()
-	wanted_tally_title.text = "KILL ALL THE GREENSHIRTS!" if not terminal else ("YOU WIN!" if combat_round_result == "YOU WIN!" else "YOU LOSE")
+	wanted_tally_title.text = "ROUND %d:\nKILL ALL THE GREENSHIRTS!" % clear_map_round if not terminal else ("YOU WIN!" if combat_round_result == "YOU WIN!" else "YOU LOSE")
 	var green_slots: Array[int] = []
 	for player_index in range(1, player_joined.size()):
 		if player_joined[player_index]:
 			green_slots.append(player_index)
-	var row_width := float(green_slots.size()) * 108.0
+	# The 29x44 artwork was authored against a 160x120 frame. The main
+	# canvas is 960x720, so 6 canvas pixels correspond to one artwork pixel.
+	var compact := green_slots.size() > 8
+	var columns := 8 if compact else 4
+	var card_scale := 1.0 if compact else 2.0
+	var column_pitch := 108.0 if compact else 90.0 * card_scale
+	var row_pitch := 174.0 if compact else 145.0 * card_scale
+	var row_count := ceili(float(green_slots.size()) / float(columns))
 	for row_index in range(green_slots.size()):
 		var player_index := green_slots[row_index]
 		var card := Control.new()
 		card.set_anchors_preset(Control.PRESET_CENTER)
-		card.size = Vector2(87.0, 178.0)
-		card.position = Vector2(float(row_index) * 108.0 - row_width * 0.5 + 10.5, -26.0)
+		card.size = Vector2(87.0, 145.0)
+		card.scale = Vector2.ONE * card_scale
+		var column := row_index % columns
+		var row := row_index / columns
+		var items_in_row := mini(columns, green_slots.size() - row * columns)
+		card.position = Vector2((float(column) - float(items_in_row - 1) * 0.5) * column_pitch - 43.5 * card_scale, (float(row) - float(row_count - 1) * 0.5) * row_pitch - 72.5 * card_scale)
 		# The pre-round briefing introduces wanted posters one at a time.  Result
 		# screens instead open on the complete board so the player can immediately
 		# see the whole roster before the kill tally starts.
@@ -3702,20 +4351,20 @@ func _begin_wanted_tally(terminal: bool) -> void:
 		blood.visible = false
 		poster.add_child(blood)
 		var loot := Control.new()
-		loot.position = Vector2(0.0, 138.0)
+		loot.position = Vector2(0.0, 134.0)
 		loot.size = Vector2(87.0, 30.0)
 		card.add_child(loot)
 		var killer_label := Label.new()
 		killer_label.text = "KILLED YOU"
-		killer_label.position = Vector2(0.0, 138.0)
+		killer_label.position = Vector2(0.0, 134.0)
 		killer_label.size = Vector2(87.0, 24.0)
 		killer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		killer_label.add_theme_font_override("font", pixel_hud_font)
-		killer_label.add_theme_font_size_override("font_size", 10)
+		killer_label.add_theme_font_size_override("font_size", 5 if not compact else 10)
 		killer_label.add_theme_color_override("font_color", Color(0.96, 0.82, 0.30, 1.0))
 		killer_label.visible = terminal and combat_round_result == "YOU LOSE" and player_index == clear_map_killer_index
 		card.add_child(killer_label)
-		wanted_tally_posters[player_index] = {"card": card, "blood": blood, "loot": loot, "killer_label": killer_label, "last_kind": "", "last_x": 0.0, "next_x": 0.0}
+		wanted_tally_posters[player_index] = {"card": card, "blood": blood, "loot": loot, "killer_label": killer_label, "last_kind": "", "last_x": 0.0, "next_x": 0.0, "icon_size": 8.0 if not compact else 16.0, "icon_y": 0.0}
 		if not terminal:
 			wanted_tally_queue.append({"kind": "poster", "player_index": player_index})
 	if terminal:
@@ -3744,7 +4393,7 @@ func _advance_wanted_tally(delta: float) -> void:
 				wanted_tally_overlay.visible = false
 			return
 		wanted_tally_title.text = ("YOU WIN!\nROUNDS WON: %d" % clear_map_wins) if combat_round_result == "YOU WIN!" else "YOU LOSE"
-		wanted_tally_prompt.text = "PRESS START FOR NEXT ROUND" if combat_round_result == "YOU WIN!" else "PRESS START TO TRY AGAIN"
+		wanted_tally_prompt.text = "PRESS SPACE TO CONTINUE" if _public_build() else ("PRESS START FOR NEXT ROUND" if combat_round_result == "YOU WIN!" else "PRESS START TO TRY AGAIN")
 		wanted_tally_prompt.visible = true
 		return
 	var event: Dictionary = wanted_tally_queue.pop_front()
@@ -3765,29 +4414,37 @@ func _advance_wanted_tally(delta: float) -> void:
 		if gunshot_player != null:
 			gunshot_player.pitch_scale = 1.0
 			gunshot_player.play()
-		wanted_tally_timer = 0.65
+		wanted_tally_timer = 0.12
 		return
 	var loot: Control = record.get("loot", null)
 	if loot == null:
 		return
 	var icon := TextureRect.new()
 	var kind := String(event["kind"])
-	icon.texture = _coin_hud_texture() if kind == "coin" else (_heart_animation_texture(0.0, 0) if kind == "heart" else GUN_HUD_TEXTURE)
+	icon.texture = _coin_animation_texture(0.0, 2) if kind == "coin" else (_heart_animation_texture(0.0, 0) if kind == "heart" else GUN_HUD_TEXTURE)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.size = Vector2(18.0, 18.0)
+	var icon_size := float(record.get("icon_size", 18.0))
+	icon.size = Vector2.ONE * icon_size
 	var previous_kind := String(record.get("last_kind", ""))
 	var icon_x := float(record.get("next_x", 0.0))
 	if previous_kind == kind:
-		icon_x = float(record.get("last_x", 0.0)) + 13.5 # 25% overlap for a grouped reward type.
-	icon.position = Vector2(icon_x, 0.0)
+		icon_x = float(record.get("last_x", 0.0)) + icon_size * (0.625 if kind == "coin" else 0.5) # Coins overlap by three of their eight source pixels.
+	elif not previous_kind.is_empty():
+		icon_x += icon_size * 0.5 # Separate different reward types.
+	var icon_y := float(record.get("icon_y", 0.0))
+	if icon_x + icon_size > loot.size.x:
+		icon_x = 0.0
+		icon_y += icon_size
+	icon.position = Vector2(icon_x, icon_y)
 	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	loot.add_child(icon)
 	record["last_kind"] = kind
 	record["last_x"] = icon_x
-	record["next_x"] = maxf(float(record.get("next_x", 0.0)), icon_x + 18.0)
+	record["next_x"] = icon_x + icon_size
+	record["icon_y"] = icon_y
 	wanted_tally_posters[int(event["player_index"])] = record
 	_play_pickup_sound(coin_pickup_player if kind == "coin" else (heart_pickup_player if kind == "heart" else machine_gun_pickup_player))
-	wanted_tally_timer = 0.32
+	wanted_tally_timer = 0.12
 
 
 func _make_scoreboard_label() -> RichTextLabel:
@@ -3931,7 +4588,7 @@ func _update_combat_hud() -> void:
 				var coins := int(state.get("coins", 0))
 				var heart_color := "#ffffff" if coins >= 5 else "#5c5c5c"
 				var gun_color := "#ffffff" if coins >= 10 else "#5c5c5c"
-				shop.text = "[color=%s]A:[img=5x5]res://assets/Items/Heart/heart.png[/img][/color] [color=%s]B:[img=5x5]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, gun_color] # Keep the controller cues compact while reusing the crisp heart and gun HUD art.
+				shop.text = "[color=%s]%s:[img=5x5]res://assets/Items/Heart/heart.png[/img][/color] [color=%s]%s:[img=5x5]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q" if _public_build() else "A", gun_color, "E" if _public_build() else "B"] # Keep the controller cues compact while reusing the crisp heart and gun HUD art.
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -3963,18 +4620,28 @@ func _update_combat_hud() -> void:
 				coin_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 24.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
 				coin_label.scale = viewport_node.scale
 				coin_label.text = str(int(state.get("coins", 0)))
-		if viewport_node != null and player_index < combat_ammo_icons.size() and player_index < combat_ammo_labels.size(): # Position the pickup counter at the lower center only while armed.
-			var ammo_icon := combat_ammo_icons[player_index]
-			var ammo_label := combat_ammo_labels[player_index]
-			var rounds := int(state.get("machine_gun_ammo", 0))
-			if is_instance_valid(ammo_icon) and is_instance_valid(ammo_label):
-				ammo_label.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - 54.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - 11.0) * viewport_node.scale.y)
-				ammo_label.scale = viewport_node.scale
-				ammo_icon.position = viewport_node.position + Vector2((VIEWPORT_SIZE.x - GUN_HUD_SIZE.x - 55.0) * viewport_node.scale.x, (VIEWPORT_SIZE.y - GUN_HUD_SIZE.y - 2.0) * viewport_node.scale.y) # Put the half-size gun one logical pixel left of the ammo count and two pixels above the viewport edge.
-				ammo_icon.scale = viewport_node.scale
-				ammo_label.text = str(rounds)
-				ammo_icon.visible = rounds > 0
-				ammo_label.visible = rounds > 0
+		if viewport_node != null and player_index < combat_ammo_icons.size() and player_index < combat_ammo_second_icons.size():
+			var first := combat_ammo_icons[player_index]
+			var second := combat_ammo_second_icons[player_index]
+			var dual_rounds := int(state.get("machine_gun_ammo", 0))
+			var dual_visible := dual_rounds > 0 or float(state.get("ammo_dual_finish_timer", 0.0)) > 0.0
+			var first_frame: int
+			if dual_visible:
+				first_frame = _ammo_display_frame(int(dual_rounds / 2), float(state.get("ammo_left_timer", 0.0)), int(state.get("ammo_left_before", 0)))
+			else:
+				first_frame = _ammo_display_frame(int(state.get("pistol_ammo", 6)), float(state.get("ammo_single_timer", 0.0)), int(state.get("ammo_single_before", 0)))
+				if float(state.get("ammo_single_timer", 0.0)) <= 0.0 and not String(state.get("reload_phase", "")).is_empty():
+					first_frame = int(state.get("reload_frame", 1))
+			first.position = viewport_node.position + Vector2(VIEWPORT_SIZE.x - 65.0, VIEWPORT_SIZE.y - 11.0) * viewport_node.scale
+			first.scale = viewport_node.scale
+			first.texture = load("res://assets/UI/Reload/reload%d.png" % first_frame)
+			first.visible = true
+			second.visible = dual_visible
+			if dual_visible:
+				var second_frame := _ammo_display_frame(int((dual_rounds + 1) / 2), float(state.get("ammo_right_timer", 0.0)), int(state.get("ammo_right_before", 0)))
+				second.position = first.position + Vector2(10.0 * viewport_node.scale.x, 0.0)
+				second.scale = viewport_node.scale
+				second.texture = load("res://assets/UI/Reload/reload%d.png" % second_frame)
 		var dying := bool(state.get("is_dying", false))                                           # Read whether this player is in the staged death sequence.
 		var death_phase := String(state.get("death_phase", ""))                                  # Read the visible death stage once for both blackout and label.
 		if player_index < combat_respawn_blackouts.size():                                        # Position this local player's camera-sized blackout panel.
@@ -4030,12 +4697,16 @@ func _update_combat_hud() -> void:
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
 func _is_player_crouch_pressed_for(player_index: int) -> bool:
 	var joypad_id := _xbox_joypad_id_for_player(player_index)
-	return joypad_id >= 0 and Input.get_joy_axis(joypad_id, JOY_AXIS_TRIGGER_LEFT) >= 0.45
+	return (player_index == 0 and _is_key_down(KEY_SHIFT)) or (joypad_id >= 0 and Input.get_joy_axis(joypad_id, JOY_AXIS_TRIGGER_LEFT) >= 0.45)
 
 
 func _is_player_fire_pressed_for(player_index: int) -> bool:
 	if _is_bot_controlled_slot(player_index):
 		return bool(bot_inputs.get(player_index, {}).get("fire", false))
+	if player_index < 0 or player_index >= 4:
+		return false
+	if player_index == 0 and _public_build() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		return true
 	var keyboard_fire: int = int([KEY_F, KEY_P, KEY_SLASH, KEY_KP_0][player_index])
 	if _is_key_down(keyboard_fire):
 		return true
@@ -4046,12 +4717,114 @@ func _is_player_fire_pressed_for(player_index: int) -> bool:
 	return joypad_id >= 0 and Input.get_joy_axis(joypad_id, JOY_AXIS_TRIGGER_RIGHT) >= 0.45    # Use RT as the requested controller fire control.
 
 
+# The two rotation frames play backward immediately after a shot, then settle
+# on the frame representing the remaining number of loaded chambers.
+const AMMO_SHOT_ANIMATION_SECONDS := 0.12
+
+func _ammo_display_frame(rounds: int, shot_timer: float, rounds_before: int) -> int:
+	if shot_timer > 0.0 and rounds_before > 1:
+		var previous_frame := 3 * clampi(rounds_before, 1, 6) - 1
+		return previous_frame - (1 if shot_timer > AMMO_SHOT_ANIMATION_SECONDS * 0.5 else 2)
+	return 1 if rounds <= 0 else 3 * clampi(rounds, 1, 6) - 1
+
+
+# Each bullet frame is followed by two rotation frames before the next bullet.
+func _reload_sound(kind: String) -> void:
+	if not is_inside_tree():
+		return
+	var counts := {"Turn": 5, "Close": 3}
+	var suffix := "Revolver" if kind != "Turn" else ""
+	var path := "res://assets/Audio/SFX/Reloading and Weapons SFX/Revolver/%s%s%d.wav" % [kind, suffix, randi_range(1, int(counts[kind]))]
+	var stream := load(path) as AudioStream
+	if stream == null:
+		return
+	var voice := AudioStreamPlayer.new()
+	voice.stream = stream
+	add_child(voice)
+	voice.finished.connect(voice.queue_free)
+	voice.play()
+
+
+func _start_pistol_reload(state: Dictionary) -> void:
+	if int(state.get("machine_gun_ammo", 0)) > 0 or int(state.get("pistol_ammo", 6)) >= 6 or not String(state.get("reload_phase", "")).is_empty():
+		return
+	var rounds := int(state.get("pistol_ammo", 6))
+	state["reload_frame"] = 1 if rounds == 0 else 3 * rounds - 1
+	state["reload_phase"] = "open"
+	state["reload_timer"] = 0.20
+
+
+func _advance_pistol_reload(state: Dictionary, delta: float) -> void:
+	if String(state.get("reload_phase", "")).is_empty():
+		return
+	if int(state.get("machine_gun_ammo", 0)) > 0:
+		state["reload_phase"] = ""
+		return
+	state["reload_timer"] = float(state.get("reload_timer", 0.0)) - delta
+	while float(state["reload_timer"]) <= 0.0 and not String(state["reload_phase"]).is_empty():
+		var phase := String(state["reload_phase"])
+		if phase == "open" and int(state.get("pistol_ammo", 0)) > 0:
+			state["reload_frame"] = int(state["reload_frame"]) + 1
+			state["reload_phase"] = "turn"
+			state["reload_timer"] += 0.08
+			_reload_sound("Turn")
+		elif phase == "open" or phase == "turn_end":
+			state["pistol_ammo"] = int(state.get("pistol_ammo", 0)) + 1
+			state["reload_frame"] = 3 * int(state["pistol_ammo"]) - 1
+			state["reload_phase"] = "bullet"
+			state["reload_timer"] += 0.18
+			_reload_sound("Close")
+		elif phase == "bullet":
+			if int(state["pistol_ammo"]) >= 6:
+				state["reload_phase"] = "close"
+				state["reload_timer"] += 0.22
+			else:
+				state["reload_frame"] = int(state["reload_frame"]) + 1
+				state["reload_phase"] = "turn"
+				state["reload_timer"] += 0.08
+				_reload_sound("Turn")
+		elif phase == "turn":
+			state["reload_frame"] = int(state["reload_frame"]) + 1
+			state["reload_phase"] = "turn_end"
+			state["reload_timer"] += 0.08
+		else:
+			state["reload_phase"] = ""
+
+
+func _update_reload_indicators() -> void:
+	if active_player_index >= player_views.size():
+		return
+	var view: Dictionary = player_views[active_player_index]
+	var opponents: Dictionary = view.get("opponent_sprites", {})
+	for actor in range(player_states.size()):
+		var body: AnimatedSprite2D = player_sprite if actor == active_player_index else opponents.get(actor, null)
+		if not is_instance_valid(body):
+			continue
+		var indicator := body.get_node_or_null("ReloadIndicator") as Sprite2D
+		if indicator == null:
+			indicator = Sprite2D.new()
+			indicator.name = "ReloadIndicator"
+			indicator.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			indicator.z_index = 20
+			body.add_child(indicator)
+		var state: Dictionary = player_states[actor]
+		indicator.visible = not String(state.get("reload_phase", "")).is_empty() and not bool(state.get("is_dying", false))
+		if indicator.visible:
+			indicator.texture = load("res://assets/UI/Reload/reload%d.png" % int(state.get("reload_frame", 1)))
+			indicator.position = Vector2(0, -_sprite_texture_height(body) * 0.5 - 7)
+
+
 # _process_combat: Advances shared-world projectiles after movement and resolves all hits deterministically.
 func _process_combat(delta: float) -> void:
 	_advance_combat_round(delta)                                                               # Advance the one shared match clock before any pickup collection can change its score.
 	for player_index in range(player_states.size()):                                            # Cool each active player and read their fire control.
+		if player_index >= player_joined.size() or not player_joined[player_index]:
+			continue
 		var state := player_states[player_index]                                                   # Work from the saved shared state.
 		if bool(state.get("is_dying", false)):                                                   # Keep a defeated player frozen, untargetable, and unable to fire.
+			if String(state.get("death_phase", "")) == "fall" and not bool(state.get("death_ground_sound_played", false)) and float(state.get("death_timer", 0.0)) + delta >= DEATH_FALL_SECONDS:
+				_play_wood_actor_sound(player_index, "Drop")
+				state["death_ground_sound_played"] = true
 			if clear_the_map_mode:
 				# A cleared-map run has no respawns. Preserve the death fall at its
 				# final frame so the body remains a readable result of the encounter.
@@ -4060,12 +4833,21 @@ func _process_combat(delta: float) -> void:
 			else:
 				player_states[player_index] = _advance_combat_death_state(state, delta)                 # Advance fall -> countdown -> reverse-respawn once per shared frame.
 			continue                                                                                   # Do not process weapon cooldowns or input while this body is unavailable.
+		for timer_key in ["ammo_single_timer", "ammo_left_timer", "ammo_right_timer", "ammo_dual_finish_timer"]:
+			state[timer_key] = maxf(float(state.get(timer_key, 0.0)) - delta, 0.0)
+		var joypad_id := _xbox_joypad_id_for_player(player_index)
+		var reload_pressed := (joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_X)) or (player_index == 0 and _is_key_down(KEY_R))
+		var keyboard_map_shortcut := player_index == 0 and _is_key_down(KEY_R) and _is_key_down(KEY_CTRL)
+		if reload_pressed and not keyboard_map_shortcut and not bool(state.get("reload_was_pressed", false)):
+			_start_pistol_reload(state)
+		state["reload_was_pressed"] = reload_pressed
+		_advance_pistol_reload(state, delta)
 		state["fire_cooldown"] = maxf(float(state.get("fire_cooldown", 0.0)) - delta, 0.0)       # Let the deliberate pistol cadence recover.
 		state["hit_timer"] = maxf(float(state.get("hit_timer", 0.0)) - delta, 0.0)               # Let the temporary hit art expire.
 		player_states[player_index] = state                                                       # Save timing before potentially firing.
 		if player_index == 1 and not player_two_joined and not _is_bot_controlled_slot(player_index): # Do not let an unjoined human P2 ghost fire; greenshirts remain active.
 			continue                                                                                   # Wait until a person joins P2.
-		if float(state["fire_cooldown"]) <= 0.0 and _is_player_fire_pressed_for(player_index):  # Spawn one shot only when the pistol is ready.
+		if String(state.get("reload_phase", "")).is_empty() and float(state["fire_cooldown"]) <= 0.0 and _is_player_fire_pressed_for(player_index):  # Spawn one shot only when the pistol is ready.
 			_spawn_pistol_shot(player_index)                                                         # Create a shot using the player's actual current world heading.
 	_advance_barrel_loot(delta)                                                               # Move thrown loot in shared world space before testing pickup contact.
 	_collect_combat_pickups(delta)                                                              # Pick up coins and the contested gun after all players have finished moving.
@@ -4302,7 +5084,11 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var muzzle_distance := minf(desired_muzzle_distance, maxf(muzzle_wall_distance - PROJECTILE_WALL_EPSILON, 0.0)) # Clamp the muzzle just in front of a wall instead of spawning a shot on its far side.
 	var origin := body_origin + direction * muzzle_distance                                      # Start the projectile at the safe, wall-bounded muzzle point.
 	var smoke_origin := body_origin + direction * minf(muzzle_distance, .2)                    # Anchor smoke halfway down the gameplay muzzle segment so it reads at the visible raised barrel rather than in front of the projectile.
+	if _is_bot_controlled_slot(player_index):
+		direction = direction.rotated(deg_to_rad(randf_range(-BOT_SHOT_SPREAD_DEGREES, BOT_SHOT_SPREAD_DEGREES)))
 	var maximum_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME                               # Determine a stable visual end point for the complete projectile lifetime.
+	if _music_shot_threatens_enemy(player_index, origin, direction, maximum_distance, projectile_height):
+		music_combat_remaining = 8.0
 	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
 	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance, crouched) # Predict only players this shot can actually strike.
 	var barrel_hit := _nearest_projectile_barrel_hit(origin, direction, maximum_distance, projectile_height) if crouched else {}
@@ -4328,13 +5114,24 @@ func _spawn_pistol_shot(player_index: int) -> void:
 		gunshot_player.pitch_scale = randf_range(0.78, 1.22)
 		gunshot_player.play()
 	if dual_wield_rounds > 0:                                                                   # Consume one alternating pistol round only while the dual-wield pickup remains armed.
+		var hand := "left" if dual_wield_rounds % 2 == 0 else "right"
+		state["ammo_%s_before" % hand] = int(dual_wield_rounds / 2) if hand == "left" else int((dual_wield_rounds + 1) / 2)
+		state["ammo_%s_timer" % hand] = AMMO_SHOT_ANIMATION_SECONDS
 		var remaining_rounds := dual_wield_rounds - 1                                             # Spend one round while retaining the exact amount for a later dropped pickup.
 		state["machine_gun_ammo"] = remaining_rounds
 		state["fire_cooldown"] = DUAL_WIELD_FIRE_INTERVAL                                        # Apply the requested twice-normal cadence while alternating the two pistol muzzle origins.
 		if remaining_rounds <= 0:
 			machine_gun_respawn_timer = MACHINE_GUN_RESPAWN_SECONDS                                # Respawn a fresh contested gun only after the current magazine is exhausted.
+			state["pistol_ammo"] = 0
+			state["ammo_dual_finish_timer"] = AMMO_SHOT_ANIMATION_SECONDS
+			_start_pistol_reload(state)
 	else:
-		state["fire_cooldown"] = PISTOL_FIRE_INTERVAL                                            # Keep the regular pistol infinite-ammo and deliberately slower.
+		state["fire_cooldown"] = PISTOL_FIRE_INTERVAL
+		state["ammo_single_before"] = int(state.get("pistol_ammo", 6))
+		state["ammo_single_timer"] = AMMO_SHOT_ANIMATION_SECONDS
+		state["pistol_ammo"] = maxi(int(state.get("pistol_ammo", 6)) - 1, 0)
+		if int(state["pistol_ammo"]) == 0:
+			_start_pistol_reload(state)
 	player_states[player_index] = state                                                        # Save the armed cooldown.
 
 
@@ -4900,7 +5697,7 @@ func _camera_blood_blob_texture(variant: int) -> ImageTexture:
 	return texture                                                                              # Return the one-to-nine-pixel irregular blood shape.
 
 
-# _add_camera_blood_for_damage: Builds close red GUI splatters on only the injured player's view, favoring the lower screen.
+# _add_camera_blood_for_damage: Builds a heart-dependent border of close red GUI splatters.
 func _add_camera_blood_for_damage(player_index: int) -> void:
 	if player_index < 0 or player_index >= combat_camera_blood_layers.size() or player_index >= combat_camera_blood_droplets.size():
 		return                                                                                    # Avoid UI work before the per-player HUD has been created.
@@ -4908,11 +5705,17 @@ func _add_camera_blood_for_damage(player_index: int) -> void:
 	if not is_instance_valid(layer):
 		return                                                                                    # Safely ignore an editor-reloaded or released HUD layer.
 	var droplets: Array = combat_camera_blood_droplets[player_index]                           # Preserve existing injuries so additional hits visibly build up the overlay.
-	for drop_index in range(CAMERA_BLOOD_DROPS_PER_HEALTH):
+	var health := int(player_states[player_index].get("health", PLAYER_STARTING_HEALTH))
+	var maximum_drops := maxi(PLAYER_STARTING_HEALTH - health, 0) * CAMERA_BLOOD_DROPS_PER_HEALTH
+	for drop_index in range(mini(CAMERA_BLOOD_DROPS_PER_HEALTH, maxi(maximum_drops - droplets.size(), 0))):
 		var droplet := Sprite2D.new()                                                             # Use a native Sprite2D inside the HUD canvas for a literal close-screen pixel blob.
 		droplet.texture = _camera_blood_blob_texture(randi() % CAMERA_BLOOD_SHAPE_VARIANTS)      # Pick an irregular opaque mark rather than a circle or repeated decal.
 		droplet.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                                # Preserve its hand-pixel silhouette at the enlarged player-view scale.
-		droplet.position = Vector2(randf_range(4.0, VIEWPORT_SIZE.x - 4.0), randf_range(VIEWPORT_SIZE.y * 0.56, VIEWPORT_SIZE.y - 5.0)).round() # Bias close blood toward the lower camera while retaining a broad natural spread.
+		var edge := randi() % 4
+		if edge < 2:
+			droplet.position = Vector2(randf_range(0.0, VIEWPORT_SIZE.x * 0.16) if edge == 0 else randf_range(VIEWPORT_SIZE.x * 0.84, VIEWPORT_SIZE.x), randf_range(0.0, VIEWPORT_SIZE.y)).round()
+		else:
+			droplet.position = Vector2(randf_range(0.0, VIEWPORT_SIZE.x), randf_range(0.0, VIEWPORT_SIZE.y * 0.16) if edge == 2 else randf_range(VIEWPORT_SIZE.y * 0.84, VIEWPORT_SIZE.y)).round()
 		droplet.self_modulate = Color(0.66, 0.012, 0.012, randf_range(0.58, 0.92))               # Keep every close drop visibly red, with modest opacity variety from fresh to thin blood.
 		layer.add_child(droplet)                                                                   # Draw above the player's world but beneath compact HUD information.
 		droplets.append(droplet)                                                                   # Retain the newest decal so a recovered heart can remove the exact matching amount.
@@ -5013,9 +5816,12 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 	var side_dot := incoming.dot(target_right)                                                  # Sign chooses left versus right side.
 	state["hit_reaction"] = "front" if front_dot > absf(side_dot) else ("right" if side_dot > 0.0 else "left") # Pick the requested one-frame reaction pose.
 	state["hit_timer"] = HIT_REACTION_DURATION                                                 # Hold that pose long enough to read.
+	if owner_index >= 0 and owner_index < player_states.size() and PLAYER_TEAMS[owner_index] != PLAYER_TEAMS[player_index] and (_is_human_controlled_slot(owner_index) or _is_human_controlled_slot(player_index)):
+		music_combat_remaining = 8.0
 	state["health"] = maxi(int(state.get("health", PLAYER_MAX_HEALTH)) - 1, 0)                # Remove one hatch.
 	player_states[player_index] = state                                                        # Save the immediate hit result.
-	_add_camera_blood_for_damage(player_index)                                                  # Add one health-loss worth of lower-screen close blood to only the injured player's camera.
+	_play_bot_damage_grunt(player_index, int(state["health"]) <= 0)                             # Lethal hits use the dedicated death voices.
+	_add_camera_blood_for_damage(player_index)                                                  # Add heart-dependent blood around this player's camera edges.
 	if int(state["health"]) <= 0:                                                             # Begin an explicit fall, three-second count, and reverse-animation respawn.
 		if clear_the_map_mode and player_index == 0:
 			clear_map_killer_index = owner_index if owner_index > 0 and owner_index < player_states.size() else -1
@@ -5025,6 +5831,8 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 			var owner := player_states[owner_index]
 			owner["kills"] = int(owner.get("kills", 0)) + 1
 			player_states[owner_index] = owner
+			if _is_bot_controlled_slot(owner_index) and _is_human_controlled_slot(player_index):
+				_request_bot_bark(owner_index, "victory")
 			if not clear_the_map_mode:
 				_maybe_drop_heart_for_kill(player_index)                                                # A kill can leave a rare one-health recovery item at the defeat location.
 		_begin_combat_death(player_index)                                                          # Choose a safe corner now while preserving the fallen body at its old location.
@@ -5041,12 +5849,17 @@ func _begin_combat_death(player_index: int) -> void:
 	var state := player_states[player_index]                                                    # Preserve this player's visible position until the countdown completes.
 	var respawn := _combat_respawn_destination(player_index)                                   # Select a far corner from the other living player.
 	state["is_dying"] = true                                                                   # Freeze input, shooting, and further damage immediately.
+	state["death_ground_sound_played"] = false
 	state["death_phase"] = "fall"                                                            # Start the authored Death frames from first to last.
 	state["death_timer"] = 0.0                                                                # Begin the fall animation at frame zero.
-	state["death_respawn_cell"] = respawn["cell"]                                            # Remember the future map cell without moving there yet.
-	state["death_respawn_facing"] = respawn["facing"]                                       # Remember its inward-facing camera direction.
+	state["death_respawn_cell"] = respawn.get("cell", state.get("grid_position", Vector2i.ZERO))                                            # Remember the future map cell without moving there yet.
+	state["death_respawn_facing"] = respawn.get("facing", 0)                                       # Remember its inward-facing camera direction.
 	state["character_is_moving"] = false                                                      # Stop normal locomotion before the death pose takes over.
 	state["fire_cooldown"] = 0.0                                                              # Ensure no held trigger survives into the respawn moment.
+	state["reload_phase"] = ""
+	state["pistol_ammo"] = 6
+	for timer_key in ["ammo_single_timer", "ammo_left_timer", "ammo_right_timer", "ammo_dual_finish_timer"]:
+		state[timer_key] = 0.0
 	state["hit_timer"] = 0.0                                                                  # Let the explicit Death frames replace the one-frame hit reaction.
 	player_states[player_index] = state                                                        # Save the staged sequence.
 	if clear_the_map_mode:
@@ -5063,6 +5876,8 @@ func _combat_respawn_destination(player_index: int) -> Dictionary:
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
 			var candidate := Vector2i(x, y)
+			if not _is_open_cell(candidate) or not _respawn_cell_is_safe(player_index, candidate):
+				continue
 			var occupied := false
 			var nearest_enemy_distance := MAP_WIDTH * MAP_HEIGHT + 1
 			var has_living_enemy := false
@@ -5087,9 +5902,32 @@ func _combat_respawn_destination(player_index: int) -> Dictionary:
 				best_cells = [candidate]
 			elif safety == best_safety:
 				best_cells.append(candidate)
-	var chosen := best_cells[randi() % best_cells.size()] if not best_cells.is_empty() else Vector2i(0, MAP_HEIGHT - 1)
+	if best_cells.is_empty():
+		return {}
+	var chosen := best_cells[randi() % best_cells.size()]
 	var respawn_facing := 0 if chosen.y == MAP_HEIGHT - 1 else 2
 	return {"cell": chosen, "facing": respawn_facing}
+
+
+func _respawn_cell_is_safe(player_index: int, candidate: Vector2i) -> bool:
+	var position := Vector2(candidate) + Vector2(0.5, 0.5)
+	for other_index in range(player_states.size()):
+		if other_index == player_index or other_index >= player_joined.size() or not player_joined[other_index]:
+			continue
+		var other: Dictionary = player_states[other_index]
+		if bool(other.get("is_dying", false)):
+			continue
+		var other_position := _player_state_world_position(other)
+		var distance := position.distance_to(other_position)
+		if distance < PLAYER_CAPSULE_RADIUS * 2.0:
+			return false
+		if PLAYER_TEAMS[other_index] == PLAYER_TEAMS[player_index]:
+			continue
+		if distance < RESPAWN_MIN_ENEMY_DISTANCE:
+			return false
+		if distance <= BOT_SIGHT_RANGE and _nearest_projectile_topology_clear(other_position, position - other_position):
+			return false
+	return true
 
 
 func _maze_cell_path_distance(from_cell: Vector2i, target_cell: Vector2i) -> int:
@@ -5125,6 +5963,10 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 		timer = 0.0                                                                                # Start the reverse animation on its fully fallen pose.
 		_clear_killing_shot_blood(int(state.get("player_index", 0)))                             # Remove the fatal wall and floor spray as this character actually leaves the old death location.
 		var fresh_respawn := _combat_respawn_destination(int(state.get("player_index", 0)))     # Re-evaluate just before re-entry so enemies cannot camp the cell chosen at death time.
+		if fresh_respawn.is_empty():
+			state["death_phase"] = "countdown"
+			state["death_timer"] = DEATH_COUNTDOWN_SECONDS
+			return state
 		state["death_respawn_cell"] = fresh_respawn["cell"]
 		state["death_respawn_facing"] = fresh_respawn["facing"]
 		state["grid_position"] = state.get("death_respawn_cell", state.get("grid_position", Vector2i.ZERO)) # Move only after the countdown is complete.
@@ -5146,6 +5988,10 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 		state["world_run_dir"] = _direction_string_for_facing(int(state["facing"]))            # Face the restored actor consistently in other players' views.
 		state["world_aim_dir"] = _direction_string_for_facing(int(state["facing"]))            # Face the restored actor consistently in other players' views.
 	elif phase == "respawn" and timer >= DEATH_RESPAWN_SECONDS:                               # Finish the reverse Death animation.
+		if not _respawn_cell_is_safe(int(state.get("player_index", 0)), state["grid_position"]):
+			state["death_phase"] = "countdown"
+			state["death_timer"] = DEATH_COUNTDOWN_SECONDS
+			return state
 		state["is_dying"] = false                                                                # Return player control and vulnerability only after the body is visibly back.
 		state["death_phase"] = ""                                                               # Clear the staged-respawn marker.
 		state["death_timer"] = 0.0                                                               # Reset timer for the next defeat.
@@ -5728,6 +6574,7 @@ func _hide_unused_muzzle_anchor_debug_sprites(used_keys: Dictionary) -> void:
 
 # _update_combat_view: Projects shots, impact flashes, and temporary hit sprites through the same camera model as opponents.
 func _update_combat_view() -> void:
+	_update_reload_indicators()
 	var used: Dictionary = {}                                                                   # Track which cached sprites are active in this camera this frame.
 	var barrel_lod_labels_used: Dictionary = {}                                                 # Keep each visual-only LOD label synchronized with its barrel's visibility.
 	var muzzle_debug_used: Dictionary = {}                                                      # Track the temporary topmost cross pixels separately from depth-sorted combat VFX.
@@ -7685,7 +8532,7 @@ func _process_player_context(delta: float) -> void:                             
 # translating them through a private camera's turn/strafe buttons created the
 # observed in-place dance at corners and prevented reliable patrols.
 func _process_bot_world_context(delta: float) -> void:
-	character_is_crouching = false
+	character_is_crouching = bool(bot_inputs.get(active_player_index, {}).get("crouch", false))
 	if active_player_index >= player_states.size() or bool(player_states[active_player_index].get("is_dying", false)):
 		character_is_moving = false
 		_play_idle_animation()
@@ -7712,15 +8559,16 @@ func _process_bot_world_context(delta: float) -> void:
 	# Human movement converts its local half-tile controls through
 	# LOCAL_TILE_WORLD_HALF_EXTENT. Match that world speed exactly; the old bot
 	# path omitted the factor and made greenshirts run twice as fast as Bart.
-	var moved := _move_world_with_wall_slide(origin, desired * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta, "east", "west", "south", "north")
+	var moved := _move_world_with_wall_slide(origin, desired * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta, "east", "west", "south", "north")
 	var actual_delta := moved - origin
 	if actual_delta.length_squared() > 0.00000001:
 		_set_player_world_position_for_current_view(moved)
 		world_run_dir = _direction_string_for_world_vector(actual_delta)
-		world_aim_dir = world_run_dir
-		# Visual aim follows the actual travel vector during patrol. A visible
-		# target can still override it on the next combat decision.
-		continuous_camera_yaw = Vector2.UP.angle_to(actual_delta.normalized())
+		# Preserve the combat aim set above; travel direction only owns the body
+		# heading when no opponent is visible.
+		if not bool(brain.get("has_line_of_sight", false)):
+			world_aim_dir = world_run_dir
+			continuous_camera_yaw = Vector2.UP.angle_to(actual_delta.normalized())
 		character_is_moving = true
 		_play_best_animation(true)
 	else:
@@ -7741,6 +8589,7 @@ func _process_virtual_bot_world_context(player_index: int, delta: float) -> void
 		return
 	var origin := _player_state_world_position(state)
 	var brain: Dictionary = bot_brains.get(player_index, {})
+	state["character_is_crouching"] = bool(bot_inputs.get(player_index, {}).get("crouch", false))
 	var desired: Vector2 = brain.get("move_direction", Vector2.ZERO)
 	if bool(brain.get("has_line_of_sight", false)):
 		var target_index := int(brain.get("target_index", -1))
@@ -7754,7 +8603,7 @@ func _process_virtual_bot_world_context(player_index: int, delta: float) -> void
 		player_states[player_index] = state
 		_sync_actor_sprite_view(player_index)
 		return
-	var moved := _move_world_with_wall_slide(origin, desired.normalized() * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * delta, "east", "west", "south", "north")
+	var moved := _move_world_with_wall_slide(origin, desired.normalized() * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(bool(state["character_is_crouching"])) * delta, "east", "west", "south", "north")
 	var actual_delta := moved - origin
 	state["character_is_moving"] = actual_delta.length_squared() > 0.00000001
 	if bool(state["character_is_moving"]):
@@ -7782,7 +8631,7 @@ func _process_continuous_third_person_input(delta: float) -> void:
 		stick_x = 0.0
 	if absf(stick_x) < XBOX_STICK_DEADZONE:
 		stick_x = 0.0
-	var key_turn := float(int(_is_player_turn_right_pressed()) - int(_is_player_turn_left_pressed()))
+	var key_turn := 0.0 if _public_build() and active_player_index == 0 else float(int(_is_player_turn_right_pressed()) - int(_is_player_turn_left_pressed()))
 	continuous_camera_yaw = wrapf(continuous_camera_yaw + (stick_x + key_turn) * continuous_camera_turn_radians_per_second * delta, -PI, PI)
 	var movement := _read_movement()
 	var forward := _view_forward_vector()
@@ -7922,8 +8771,8 @@ func _update_scoreboard_shop_input() -> void:
 		var heart_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_A)
 		var gun_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_B)
 		if player_index == 0:
-			heart_pressed = heart_pressed or _is_key_down(KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
-			gun_pressed = gun_pressed or _is_key_down(KEY_2)
+			heart_pressed = heart_pressed or _is_key_down(KEY_Q if _public_build() else KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
+			gun_pressed = gun_pressed or _is_key_down(KEY_E if _public_build() else KEY_2)
 		if player_index < player_joined.size() and player_joined[player_index] and not bool(player_states[player_index].get("is_dying", false)) and not combat_round_complete:
 			var state := player_states[player_index]
 			var coins := int(state.get("coins", 0))
@@ -7944,15 +8793,23 @@ func _update_scoreboard_shop_input() -> void:
 
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
+	if bot_bark_player != null and bot_bark_player.playing:
+		_update_bot_bark_spatial()
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
 	var options_pressed := _is_key_down(KEY_ESCAPE)
 	for device_id in Input.get_connected_joypads():
 		options_pressed = options_pressed or Input.is_joy_button_pressed(device_id, JOY_BUTTON_BACK)
 	if options_pressed and not was_options_pressed:
 		match_paused = not match_paused
+		if _public_build():
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if match_paused else Input.MOUSE_MODE_CAPTURED
 		if options_overlay != null:
 			options_overlay.visible = match_paused
 	was_options_pressed = options_pressed
+	if _public_build() and match_paused and _is_key_down(KEY_M):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		get_tree().change_scene_to_file("res://public_title.tscn")
+		return
 	# Scoreboard is informational and only appears in the view belonging to the input that requested it.
 	scoreboard_player_index = 0 if _is_key_down(KEY_TAB) else -1
 	for player_index in range(player_states.size()):
@@ -7960,16 +8817,17 @@ func _process(delta: float) -> void:                                            
 		if player_joypad >= 0 and Input.is_joy_button_pressed(player_joypad, JOY_BUTTON_START):
 			scoreboard_player_index = player_index
 	scoreboard_visible = scoreboard_player_index >= 0
-	if not clear_map_waiting_to_start:
+	if not clear_map_waiting_to_start and not match_paused:
 		_update_scoreboard_shop_input()
 	if match_paused:
 		_update_combat_hud()
 		return
 	var next_round_pressed := _read_next_round()                                               # Latch the global replay key even while the round remains active.
+	var finish_was_pending := clear_map_finish_pending
 	if clear_the_map_mode and not clear_map_waiting_to_start and clear_map_banner_timer > 0.0 and not combat_round_complete:
 		clear_map_banner_timer = maxf(clear_map_banner_timer - delta, 0.0)
 	_advance_clear_map_intro_music()
-	_advance_clear_map_finish(delta)
+	_update_adaptive_music(delta)
 	_advance_wanted_tally(delta)
 	if clear_the_map_mode and clear_map_waiting_to_start:
 		if next_round_pressed:
@@ -7992,11 +8850,13 @@ func _process(delta: float) -> void:                                            
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
 	if combat_round_complete and not clear_map_finish_pending and next_round_pressed:           # Do not let a held Start key skip the final-kill fade/result cue.
-		_regenerate_runtime_map(true)                                                             # Start a fresh scored round and restart its one-shot music track.
+		_regenerate_runtime_map(true)                                                             # Show the next wanted posters before the player starts the round.
 		return                                                                                    # Keep the replay key from also moving a player this frame.
 	_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
 	_update_all_join_states()
 	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
+		if player_index >= player_joined.size() or not player_joined[player_index]:
+			continue
 		if player_index >= player_views.size() and _is_bot_controlled_slot(player_index):
 			_update_bot_input(player_index, delta)
 			_process_virtual_bot_world_context(player_index, delta)
@@ -8008,7 +8868,12 @@ func _process(delta: float) -> void:                                            
 		else:
 			_process_player_context(delta)                                                           # Run one human player's input, movement, turn, and animation logic.
 		_save_player_context(player_index)                                                       # Store this player's updated state before binding the next player.
+	_update_actor_footsteps(delta)
 	_process_combat(delta)                                                                     # Advance shared pistol shots and resolve wall/player impacts after both actors moved.
+	# Finish the same fade frame only after movement and pickups, so the inventory
+	# snapshot includes anything reached before the screen goes fully black.
+	if finish_was_pending:
+		_advance_clear_map_finish(delta)
 	for player_index in range(player_states.size()):                                          # Then render every local view against the completed shared player state.
 		if single_player_combat_view and player_index > 0:
 			continue
@@ -10402,6 +11267,8 @@ func _load_sequence(sequence_name: String) -> Array[Texture2D]:                 
 
 # _load_png_texture: Loads a PNG by resource path through Image.load_from_file so unimported generated assets work in headless runs.
 func _load_png_texture(resource_path: String) -> Texture2D:                                 # Declare this function.
+	if OS.has_feature("web"):
+		return load(resource_path) as Texture2D
 	var image_path := ProjectSettings.globalize_path(resource_path)                            # Store mutable runtime state for assets, rendering, movement, or debug output.
 	var image := Image.load_from_file(image_path)                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
 	if image == null or image.is_empty():                                                      # Run the following block only when this condition is true.
@@ -11815,7 +12682,7 @@ func _ensure_input_actions() -> void:                                           
 	_ensure_key_action(ACTION_MOVE_BACKWARD, [KEY_S])                                         # Bind S to player-one local backward movement.
 	_ensure_key_action(ACTION_TURN_LEFT, [KEY_Q])                                             # Bind Q to player-one snapped left turns.
 	_ensure_key_action(ACTION_TURN_RIGHT, [KEY_E])                                            # Bind E to player-one snapped right turns.
-	_ensure_key_action(ACTION_REGENERATE_MAP, [KEY_R])                                        # Bind R to runtime maze regeneration.
+	# The map regeneration action is configured with Ctrl+R in project.godot.
 	_ensure_key_action(ACTION_TOGGLE_SLOT_GRID_DEBUG, [KEY_F2])                               # Bind F2 to the blue slot-grid audit overlay toggle.
 	_ensure_key_action(ACTION_TOGGLE_DEBUG_MENU, [KEY_F3])                                    # Bind F3 to the grouped debug-overlay menu toggle.
 	_ensure_key_action(ACTION_TOGGLE_BOT_TRACE, [KEY_F4])                                     # Bind F4 to the opt-in bot decision trace.
@@ -12006,7 +12873,9 @@ func _read_turn() -> int:                                                       
 
 # _read_regenerate_map: Returns true once when the runtime random-map hotkey is pressed.
 func _read_regenerate_map() -> bool:                                                        # Declare this function.
-	var regenerate_pressed := Input.is_action_pressed(ACTION_REGENERATE_MAP) or _is_key_down(KEY_R) # Read the current map-regenerate key state.
+	if _public_build():
+		return false
+	var regenerate_pressed := _is_key_down(KEY_CTRL) and (Input.is_action_pressed(ACTION_REGENERATE_MAP) or _is_key_down(KEY_R)) # Require Ctrl for map regeneration.
 	var regenerate_just_pressed := regenerate_pressed and not was_regenerate_map_pressed       # Detect the first frame of the regenerate key press.
 	was_regenerate_map_pressed = regenerate_pressed                                           # Store current regenerate state for next frame.
 	return regenerate_just_pressed                                                            # Return whether the hotkey should fire this frame.
@@ -12015,10 +12884,11 @@ func _read_regenerate_map() -> bool:                                            
 
 # _read_next_round: Returns true once for an end-of-round Start request, with X retained as a keyboard fallback.
 func _read_next_round() -> bool:
-	var replay_pressed := _is_key_down(KEY_X)                                                 # Retain X as the keyboard fallback for the explicit post-round replay prompt.
-	for player_index in range(player_states.size()):
-		var device_id := _xbox_joypad_id_for_player(player_index)
-		replay_pressed = replay_pressed or (device_id >= 0 and Input.is_joy_button_pressed(device_id, JOY_BUTTON_START))
+	var replay_pressed := _is_key_down(KEY_X) or (_public_build() and (_is_key_down(KEY_SPACE) or _is_key_down(KEY_ENTER)))                                                 # Retain X as the keyboard fallback for the explicit post-round replay prompt.
+	# Result screens accept Start from any connected controller, even if device
+	# ownership changed or a controller was connected after the lobby.
+	for device_id in Input.get_connected_joypads():
+		replay_pressed = replay_pressed or Input.is_joy_button_pressed(device_id, JOY_BUTTON_START)
 	var replay_just_pressed := replay_pressed and not was_next_round_pressed                  # Ignore a held key so a new round cannot immediately retrigger.
 	was_next_round_pressed = replay_pressed                                                    # Store the current state for the next process frame.
 	return replay_just_pressed                                                                 # Return the one-shot replay request.
@@ -12027,6 +12897,8 @@ func _read_next_round() -> bool:
 
 # _read_toggle_slot_grid_debug: Returns true once when the blue slot-grid audit hotkey is pressed.
 func _read_toggle_slot_grid_debug() -> bool:                                                # Declare this function.
+	if _public_build():
+		return false
 	var slot_grid_pressed := Input.is_action_pressed(ACTION_TOGGLE_SLOT_GRID_DEBUG) or _is_key_down(KEY_F2) # Read the current slot-grid toggle key state.
 	var slot_grid_just_pressed := slot_grid_pressed and not was_slot_grid_debug_pressed        # Detect the first frame of the slot-grid toggle key press.
 	was_slot_grid_debug_pressed = slot_grid_pressed                                           # Store current toggle state for next frame.
@@ -12036,6 +12908,8 @@ func _read_toggle_slot_grid_debug() -> bool:                                    
 
 # _read_toggle_debug_menu: Returns true once when the debug-overlay menu hotkey is pressed.
 func _read_toggle_debug_menu() -> bool:
+	if _public_build():
+		return false
 	var debug_menu_pressed := Input.is_action_pressed(ACTION_TOGGLE_DEBUG_MENU) or _is_key_down(KEY_F3) # Read the current F3 debug-menu key state.
 	var debug_menu_just_pressed := debug_menu_pressed and not was_debug_menu_pressed           # Detect the first frame of the menu hotkey press.
 	was_debug_menu_pressed = debug_menu_pressed                                                # Store current menu key state for next frame.
@@ -12045,6 +12919,8 @@ func _read_toggle_debug_menu() -> bool:
 
 # _read_toggle_bot_trace: F4 starts a fresh decision capture or stops the current one.
 func _read_toggle_bot_trace() -> bool:
+	if _public_build():
+		return false
 	var trace_pressed := Input.is_action_pressed(ACTION_TOGGLE_BOT_TRACE) or _is_key_down(KEY_F4)
 	var trace_just_pressed := trace_pressed and not was_bot_trace_pressed
 	was_bot_trace_pressed = trace_pressed
@@ -12096,7 +12972,7 @@ func _update_all_join_states() -> void:
 			player_joined[player_index] = true
 			player_two_joined = player_joined[1]
 			if not match_started and music_enabled and music_player != null:
-				music_player.play()
+				music_player.call("set_music_mode", "menu")
 			match_started = true
 
 
@@ -14383,6 +15259,8 @@ func _regenerate_runtime_map(restart_round_music := false) -> void:             
 	active_wall_impact_smokes.clear()                                                          # Remove wall-contact GunSmoke clouds that belonged to the old maze topology.
 	active_muzzle_smoke_particles.clear()                                                       # Remove procedural barrel smoke that belonged to the old maze topology.
 	active_blood_splatters.clear()                                                              # Remove character-hit blood particles that belonged to the old maze topology.
+	for player_index in range(combat_camera_blood_droplets.size()):
+		_clear_all_camera_blood(player_index)                                                     # A new map starts each player with a clean camera and body.
 	if clear_map_result_fade != null:
 		clear_map_result_fade.visible = false
 	if clear_map_result_player != null:
@@ -14409,15 +15287,16 @@ func _regenerate_runtime_map(restart_round_music := false) -> void:             
 	_build_random_maze_wall_edges()                                                            # Build a fresh connected 4x4 thin-wall maze and reset the player.
 	if clear_the_map_mode and single_player_combat_view:
 		_apply_session_roster()                                                                  # Activate this round's finite 1→2→3 greenshirt roster before recreating bodies.
+		match_started = false                                                                      # The new roster still waits on its wanted-poster screen.
 	_reset_player_states_after_map(Vector2i(0, MAP_HEIGHT - 1))                                # Reset all four local players into their team spawn corners on the new shared map.
 	if clear_the_map_mode:
 		_restore_clear_map_inventory()
 		_apply_clear_map_reward()
 		_begin_wanted_tally(false)
 	_reset_combat_collectibles()                                                               # Replace every objective coin and the contested gun for the newly generated maze.
-	if restart_round_music and not clear_map_waiting_to_start and music_enabled and music_player != null:
-		music_player.stop()
-		music_player.play()                                                                      # Replay only when Start begins a new round, never for an in-round R reroll.
+	if restart_round_music and (not clear_the_map_mode or not clear_map_waiting_to_start) and music_enabled and music_player != null:
+		music_combat_remaining = 0.0
+		music_player.call("set_music_mode", "menu")
 	_render_all_player_views()                                                                 # Redraw both screens and maps after the shared maze changes.
 	_update_status()                                                                           # Update the status text for the new map state.
 
@@ -14438,6 +15317,7 @@ func _mark_debug_map_static_layers_dirty() -> void:
 # _reset_player_states_after_map: Reinitializes all local players after the shared thin-wall map changes.
 func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:                    # Declare this function.
 	player_states = _make_start_player_states()                                                # Restore Bart, Jed, Hank, and Wyatt so keyboard-only players remain simulated after a replay.
+	_separate_starting_bots()
 	bot_brains.clear()                                                                          # Old maze routes and goals are invalid after every new clear-map round.
 	for player_index in range(player_views.size()):                                           # Reset the visible animation latch for every player view.
 		_bind_player_context(player_index)                                                       # Bind this player's state and sprite.
@@ -14645,7 +15525,7 @@ func _update_status() -> void:                                                  
 	var player_two_line := lines[1] if lines.size() > 1 else "P2 missing"                    # Preserve the second state line when both local players exist.
 	if not player_two_joined:                                                                  # Explain exactly how a second person enters the match before the later AI fallback milestone.
 		player_two_line = "P2 waiting — controller 2: Start, stick, or RT; keyboard: numpad / 0." # Keep the unjoined player readable without allowing accidental movement.
-	status_label.text = "%s\n%s\nP1: controller 1 / WASD + Q/E / RT or F fire. P2: controller 2 / numpad / RT or 0 fire. R rerolls map. F2 slot grid. F3 %s debug menu. F4 bot trace %s." % [lines[0] if lines.size() > 0 else "P1 missing", player_two_line, "closes" if debug_menu_open else "opens", "ON" if bot_decision_trace_enabled else "off"] # Update the on-screen debug status label.
+	status_label.text = "%s\n%s\nP1: controller 1 / WASD + Q/E / RT or F fire. P2: controller 2 / numpad / RT or 0 fire. R reloads. Ctrl+R rerolls map. F2 slot grid. F3 %s debug menu. F4 bot trace %s." % [lines[0] if lines.size() > 0 else "P1 missing", player_two_line, "closes" if debug_menu_open else "opens", "ON" if bot_decision_trace_enabled else "off"] # Update the on-screen debug status label.
 
 
 

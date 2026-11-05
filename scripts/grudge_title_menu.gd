@@ -1,5 +1,7 @@
 extends Control
 
+const MusicAccess = preload("res://scripts/music_access.gd")
+
 const GAME_SCENE := "res://coordinate_frame_navigation.tscn"
 const PLAYER_NAMES := ["BART", "JED", "HANK", "WYATT"]
 const MENU_INK := Color("#3b1b12")
@@ -30,6 +32,9 @@ var splatter: AnimatedSprite2D
 var masked_cowboy: AnimatedSprite2D
 
 func _ready() -> void:
+	var music := MusicAccess.get_player(get_tree())
+	if music != null:
+		music.call("set_music_mode", "menu")
 	var font: FontFile = preload("res://assets/Fonts/High Noon.woff")
 	font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	font.multichannel_signed_distance_field = false

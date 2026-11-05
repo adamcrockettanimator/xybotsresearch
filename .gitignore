@@ -5,3 +5,6 @@
 bin/
 obj/
 *.translation
+
+# Exported builds
+build/
