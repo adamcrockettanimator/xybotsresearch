@@ -25,6 +25,7 @@ curved_lines_2d/line_joint_mode=2
 [application]
 
 config/name="XybotsResearch"
+config/version="2026.11.05-feedback"
 run/main_scene="res://coordinate_frame_navigation.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"

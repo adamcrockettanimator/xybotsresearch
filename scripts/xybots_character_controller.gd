@@ -6,6 +6,8 @@
 
 extends Node2D                                                                              # Use Node2D as the root script type for the prototype scene.
 
+const FeedbackAccess = preload("res://scripts/feedback_access.gd")
+
 const MusicAccess = preload("res://scripts/music_access.gd")
 
 const DIR_N := "N"                                                                          # Name the north-facing animation/map direction.
@@ -1632,6 +1634,8 @@ func _setup_deathmatch_overlays() -> void:
 	options_label.add_theme_font_size_override("font_size", 14 if _public_build() else 18)
 	options_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	options_overlay.add_child(options_label)
+	var feedback_button := FeedbackAccess.add_button(options_overlay, pixel_hud_font, Color.WHITE)
+	feedback_button.pressed.connect(_open_feedback)
 
 
 func _public_build() -> bool:
@@ -1640,6 +1644,10 @@ func _public_build() -> bool:
 
 # _input: Records keyboard press and release events so movement does not depend only on raw polling.
 func _input(event: InputEvent) -> void:                                                     # Declare this function.
+	if _public_build() and FeedbackAccess.available() and FeedbackAccess.is_shortcut(event):
+		get_viewport().set_input_as_handled()
+		_open_feedback()
+		return
 	if _public_build():
 		if event is InputEventMouseMotion and not player_states.is_empty() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not match_paused and not clear_map_waiting_to_start:
 			player_states[0]["continuous_camera_yaw"] = wrapf(float(player_states[0].get("continuous_camera_yaw", 0.0)) + event.relative.x * 0.003, -PI, PI)
@@ -1655,6 +1663,20 @@ func _input(event: InputEvent) -> void:                                         
 		if event.physical_keycode != 0:                                                         # Preserve physical key bindings when Godot supplies them.
 			held_keycodes[int(event.physical_keycode)] = event.pressed                            # Store the physical key state as another lookup option.
 
+
+
+func _open_feedback() -> void:
+	var context := "Playing, round %d" % clear_map_round
+	if wanted_tally_overlay != null and wanted_tally_overlay.visible:
+		context = ("Results" if wanted_tally_terminal else "Round introduction") + ", round %d" % clear_map_round
+	elif match_paused:
+		context = "Paused, round %d" % clear_map_round
+	if not match_paused and not clear_map_waiting_to_start and not combat_round_complete:
+		match_paused = true
+		if options_overlay != null:
+			options_overlay.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	FeedbackAccess.open_form(context, get_viewport_rect().size)
 
 
 # _setup_debug_menu: Builds a shared on-screen menu for the current overlay diagnostics.
@@ -4286,6 +4308,9 @@ func _setup_wanted_tally_overlay() -> void:
 	wanted_tally_prompt.offset_bottom = -10.0
 	wanted_tally_prompt.visible = false
 	wanted_tally_overlay.add_child(wanted_tally_prompt)
+	if _public_build():
+		var feedback_button := FeedbackAccess.add_button(wanted_tally_overlay, pixel_hud_font, Color(0.96, 0.82, 0.30, 1.0))
+		feedback_button.pressed.connect(_open_feedback)
 
 
 func _begin_wanted_tally(terminal: bool) -> void:
@@ -4297,7 +4322,7 @@ func _begin_wanted_tally(terminal: bool) -> void:
 		var previous_posters := (growing_rounds * (growing_rounds + 1) >> 1) + maxi(prior_rounds - growing_rounds, 0) * MAX_CLEAR_MAP_GREENSHIRTS
 		clear_map_poster_start = posmod(previous_posters, WANTED_POSTER_TEXTURES.size())
 	for child in wanted_tally_overlay.get_children():
-		if child != wanted_tally_title and child != wanted_tally_prompt:
+		if child != wanted_tally_title and child != wanted_tally_prompt and child.name != "FeedbackButton":
 			child.queue_free()
 	wanted_tally_posters.clear()
 	wanted_tally_queue.clear()
@@ -12884,7 +12909,7 @@ func _read_regenerate_map() -> bool:                                            
 
 # _read_next_round: Returns true once for an end-of-round Start request, with X retained as a keyboard fallback.
 func _read_next_round() -> bool:
-	var replay_pressed := _is_key_down(KEY_X) or (_public_build() and (_is_key_down(KEY_SPACE) or _is_key_down(KEY_ENTER)))                                                 # Retain X as the keyboard fallback for the explicit post-round replay prompt.
+	var replay_pressed := _is_key_down(KEY_X) or (_public_build() and (_is_key_down(KEY_SPACE) or (not FeedbackAccess.available() and _is_key_down(KEY_ENTER))))                                                 # Retain X as the keyboard fallback for the explicit post-round replay prompt.
 	# Result screens accept Start from any connected controller, even if device
 	# ownership changed or a controller was connected after the lobby.
 	for device_id in Input.get_connected_joypads():

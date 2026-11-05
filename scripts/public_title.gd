@@ -24,6 +24,7 @@ func _ready() -> void:
 	add_child(title)
 	_splatter_decoration_setup()
 	_add_horizon_silhouette()
+	_add_feedback_button(font)
 	var start := Button.new()
 	start.text = "PRESS SPACE TO PLAY"
 	start.position = Vector2(54, 300)
@@ -63,7 +64,7 @@ func _process(_delta: float) -> void:
 			_begin_public_match(device_id)
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and (event.keycode == KEY_SPACE or event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
+	if event is InputEventKey and event.pressed and not event.echo and (event.keycode == KEY_SPACE or (not FeedbackAccess.available() and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER))):
 		get_viewport().set_input_as_handled()
 		_begin_public_match(-1)
 

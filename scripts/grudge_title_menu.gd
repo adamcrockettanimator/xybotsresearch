@@ -1,5 +1,6 @@
 extends Control
 
+const FeedbackAccess = preload("res://scripts/feedback_access.gd")
 const MusicAccess = preload("res://scripts/music_access.gd")
 
 const GAME_SCENE := "res://coordinate_frame_navigation.tscn"
@@ -86,7 +87,20 @@ func _ready() -> void:
 	vacancy_note.size = Vector2(260, 20)
 	vacancy_note.z_index = 4
 	add_child(vacancy_note)
+	_add_feedback_button(font)
 	_refresh_slots()
+
+func _add_feedback_button(font: Font) -> void:
+	var button := FeedbackAccess.add_button(self, font, MENU_INK)
+	button.pressed.connect(_open_title_feedback)
+
+func _input(event: InputEvent) -> void:
+	if FeedbackAccess.available() and FeedbackAccess.is_shortcut(event):
+		get_viewport().set_input_as_handled()
+		_open_title_feedback()
+
+func _open_title_feedback() -> void:
+	FeedbackAccess.open_form("Title screen", get_viewport_rect().size)
 
 func _make_label(font: Font, text: String, font_size: int, color: Color) -> Label:
 	var label := Label.new()
