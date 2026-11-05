@@ -2287,7 +2287,7 @@ func _setup_local_multiplayer() -> void:                                        
 	player_windows = [player_one_window]                                                         # Retain player one's host before creating the second display.
 	var player_two_window := player_one_window                                                    # All player views share one native game window.
 	player_two_window.name = "PlayerTwoWindow"                                                  # Keep the second display identifiable in the remote scene tree.
-	player_two_window.title = "XybotsResearch — Player 2"                                      # Make the second monitor unmistakable during local playtests.
+	player_two_window.title = "Grudge County" if OS.has_feature("web") else "XybotsResearch — Player 2"                                      # Make the second monitor unmistakable during local playtests.
 	player_two_window.unresizable = false                                                        # Keep the shared display resizable.
 	player_windows.append(player_two_window)                                                     # Retain the native player-two window for layout and HUD placement.
 	player_sprite.set_meta("team_index", 0)                                                    # Persist Team 1 ownership on the scene-authored player sprite.

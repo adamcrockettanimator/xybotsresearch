@@ -28,6 +28,7 @@ config/name="XybotsResearch"
 run/main_scene="res://coordinate_frame_navigation.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
+config/name.web="Grudge County"
 run/main_scene.web="res://public_title.tscn"
 
 [audio]
