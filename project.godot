@@ -39,6 +39,7 @@ general/default_playback_type.web=0
 
 GrudgeSession="*res://scripts/grudge_session.gd"
 GrudgeMusic="*res://scripts/adaptive_music.gd"
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]
 
@@ -51,7 +52,7 @@ window/mode=3
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/curved_lines_2d/plugin.cfg", "res://addons/muzzle_anchor_editor/plugin.cfg")
+enabled=PackedStringArray("res://addons/curved_lines_2d/plugin.cfg", "res://addons/godot_ai/plugin.cfg", "res://addons/muzzle_anchor_editor/plugin.cfg")
 
 [filesystem]
 
