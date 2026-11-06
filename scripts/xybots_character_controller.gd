@@ -21,18 +21,18 @@ const DIR_NW := "NW"                                                            
 const ANIMATION_DIRECTIONS: Array[String] = [DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW] # Keep clockwise names for eight-way aim/run selection.
 
 const VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
-const SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT := preload("res://scripts/semantic_lod_floor_outline.gd") # Draw semantic floor footprints from live projected world corners instead of anchoring a baked sprite.
+const SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT := "res://scripts/semantic_lod_floor_outline.gd" # Draw semantic floor footprints from live projected world corners instead of anchoring a baked sprite.
 const SEMANTIC_LOD_CYLINDER_SCRIPT := preload("res://scripts/semantic_lod_cylinder.gd")
 const SEMANTIC_GPU_BARREL_SCRIPT := preload("res://scripts/semantic_gpu_barrel.gd")
 const SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT := preload("res://scripts/semantic_projected_canvas_barrel.gd") # Draw all projected Canvas barrels through one shared logical-pixel viewport per player, without a ray-march shader.
-const SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT := preload("res://scripts/semantic_authored_vector_barrel.gd") # Render the artist's six Curved Lines objects directly as a live world prop.
+const SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT := "res://scripts/semantic_authored_vector_barrel.gd" # Render the artist's six Curved Lines objects directly as a live world prop.
 const SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT := preload("res://scripts/semantic_vector_world_barrel.gd") # Keep one clean vector-and-gradient barrel bound to real world projection for comparison.
 const SEMANTIC_GPU_LATTICE_BARREL_SCRIPT := preload("res://scripts/semantic_gpu_cage_barrel.gd") # Static 8x5 cage pieces: the GPU projects real panels, ribbons, and staves from transform/camera uniforms.
 const SEMANTIC_GPU_CAGE_CRATE_SCRIPT := preload("res://scripts/semantic_gpu_lattice_crate.gd") # Eight static cube corners; the GPU owns projection plus crate face construction.
-const SEMANTIC_IMPORTED_CHAIR_SCRIPT := preload("res://scripts/semantic_imported_chair.gd") # Authored GLB polygons/materials drive a logical-pixel semantic chair prototype.
-const SEMANTIC_IMPORTED_CHAIR_EDGES_SCRIPT := preload("res://scripts/semantic_imported_chair_edges.gd") # Blender loose-edge markup becomes the all-stroke chair comparison.
+const SEMANTIC_IMPORTED_CHAIR_SCRIPT := "res://scripts/semantic_imported_chair.gd" # Authored GLB polygons/materials drive a logical-pixel semantic chair prototype.
+const SEMANTIC_IMPORTED_CHAIR_EDGES_SCRIPT := "res://scripts/semantic_imported_chair_edges.gd" # Blender loose-edge markup becomes the all-stroke chair comparison.
 const SEMANTIC_STOOL_SCRIPT := preload("res://scripts/semantic_stool.gd") # Minimal point-footprint stool: inferred legs and seat box for semantic construction review.
-const SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT := preload("res://scripts/semantic_meshinstance2d_barrel.gd") # Render the authored 3D barrel into a MeshInstance2D-backed Canvas fixture for the semantic gallery.
+const SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT := "res://scripts/semantic_meshinstance2d_barrel.gd" # Render the authored 3D barrel into a MeshInstance2D-backed Canvas fixture for the semantic gallery.
 const SHOW_CANVAS_BARREL_LAYER_INSPECTOR := false                                            # Retire the procedural-barrel hide/isolate UI while evaluating the 3D-backed fixture.
 const SIDE_BY_SIDE_GUTTER := 8.0                                                            # Set the unscaled pixel gap between the 2D and 3D diagnostic panels.
 const PHASE_SECONDS := 0.10                                                                 # Set how long each captured transition frame is displayed.
@@ -104,40 +104,8 @@ const MUZZLE_ANCHORS: MuzzleAnchorLibrary = preload("res://assets/Characters/Cow
 const PLAYER_IDLE_TEXTURE := "res://assets/Characters/Cowboy2_Idle_8Dir/N/N_001.png"        # Use the new forward idle's first frame as the standing-size reference.
 # Numbered frames follow the clockwise camera order, starting at north.
 # LOD 00 remains the close 32px authored source set.
-const BARREL_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_000.png")
-const BARREL_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_001.png")
-const BARREL_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_002.png")
-const BARREL_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_003.png")
-const BARREL_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_004.png")
-const BARREL_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_005.png")
-const BARREL_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_006.png")
-const BARREL_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_007.png")
-const BARREL_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_008.png")
-const BARREL_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_009.png")
-const BARREL_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_010.png")
-const BARREL_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_011.png")
-const BARREL_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_012.png")
-const BARREL_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_013.png")
-const BARREL_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_014.png")
-const BARREL_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30/barrel_LOD_00_015.png")
 # LOD 01 is the user-authored 28px set. Keep it separate from LOD 00 so later
 # authored levels can be inserted without changing the directional mapping.
-const BARREL_LOD_01_TEXTURE_N: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_000.png")
-const BARREL_LOD_01_TEXTURE_NNE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_001.png")
-const BARREL_LOD_01_TEXTURE_NE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_002.png")
-const BARREL_LOD_01_TEXTURE_ENE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_003.png")
-const BARREL_LOD_01_TEXTURE_E: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_004.png")
-const BARREL_LOD_01_TEXTURE_ESE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_005.png")
-const BARREL_LOD_01_TEXTURE_SE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_006.png")
-const BARREL_LOD_01_TEXTURE_SSE: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_007.png")
-const BARREL_LOD_01_TEXTURE_S: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_008.png")
-const BARREL_LOD_01_TEXTURE_SSW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_009.png")
-const BARREL_LOD_01_TEXTURE_SW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_010.png")
-const BARREL_LOD_01_TEXTURE_WSW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_011.png")
-const BARREL_LOD_01_TEXTURE_W: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_012.png")
-const BARREL_LOD_01_TEXTURE_WNW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_013.png")
-const BARREL_LOD_01_TEXTURE_NW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_014.png")
-const BARREL_LOD_01_TEXTURE_NNW: Texture2D = preload("res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite/barrel_LOD_01_015.png")
 const BARREL_VIEW_DIRECTIONS: Array[String] = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"] # Keep the barrel-only ring ordered clockwise in 22.5-degree steps.
 const MAP_BARREL_COUNT := 8                                                                    # Keep the compact six-by-six arena dressed without filling every playable cell.
 const BARREL_ART_HEIGHT := 32.0                                                               # The LOD 00 sprite canvas height, used to anchor its bottom to the floor.
@@ -338,12 +306,7 @@ const HIT_REACTION_DURATION := 0.20                                             
 const DEATH_FALL_SECONDS := 1                                                              # Let the nine-frame death animation read clearly before the respawn countdown begins.
 const DEATH_COUNTDOWN_SECONDS := 3.0                                                         # Hold the defeated player down long enough to show 3, 2, 1.
 const DEATH_RESPAWN_SECONDS := 0.70                                                          # Play the same authored death frames backwards when the player returns.
-const GUN_SMOKE_A_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Effects/GunSmoke/GunSmoke_A.tres") # Play the first authored gunsmoke variant at a fired barrel.
-const GUN_SMOKE_B_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Effects/GunSmoke/GunSmoke_B.tres") # Play the second authored gunsmoke variant at a fired barrel.
 const GUN_SMOKE_ANIMATION: StringName = &"gunsmoke"                                         # Keep the effect animation name verified in one shared constant.
-const HIT_FRONT_TEXTURE := preload("res://assets/frames/Hit/Hit_Front.png")                 # Use the authored head-on hit pose.
-const HIT_LEFT_TEXTURE := preload("res://assets/frames/Hit/Hit_Left.png")                   # Use the authored left-side hit pose.
-const HIT_RIGHT_TEXTURE := preload("res://assets/frames/Hit/Hit_Right.png")                 # Use the authored right-side hit pose.
 const WORLD_SPRITE_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_lod.gdshader") # Apply the same coarse GPU pixel language and depth bands to every projected world sprite.
 const WORLD_SPRITE_TEAM2_LOD_SHADER := preload("res://scripts/coordinate_frame_world_sprite_team2_lod.gdshader") # Use the green-tinted Team 2 world-sprite variant.
 const WORLD_PROP_LOD_SHADER := preload("res://scripts/coordinate_frame_world_prop_lod.gdshader") # Apply neutral depth-reduced, depth-lit rendering to static map props without player team tint.
@@ -371,8 +334,6 @@ const GUN_SPRITE_FRAMES: SpriteFrames = preload("res://assets/Items/Gun/Gun.tres
 const GUN_HUD_TEXTURE := preload("res://assets/Items/Gun/gun_01.png")                        # Keep the held-powerup HUD indicator as the requested fixed front frame.
 const WANTED_POSTER_TEXTURES: Array[Texture2D] = [preload("res://assets/UI/WantedPosters/WantedPoster_01.png"), preload("res://assets/UI/WantedPosters/WantedPoster_02.png"), preload("res://assets/UI/WantedPosters/WantedPoster_03.png"), preload("res://assets/UI/WantedPosters/WantedPoster_04.png"), preload("res://assets/UI/WantedPosters/WantedPoster_05.png"), preload("res://assets/UI/WantedPosters/WantedPoster_06.png"), preload("res://assets/UI/WantedPosters/WantedPoster_07.png"), preload("res://assets/UI/WantedPosters/WantedPoster_08.png")]
 const WANTED_BLOOD_TEXTURES: Array[Texture2D] = [preload("res://assets/UI/WantedPosters/bloodSplatter_01.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_02.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_03.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_04.png"), preload("res://assets/UI/WantedPosters/bloodSplatter_05.png")]
-const CLEAR_MAP_VICTORY_STREAM := preload("res://assets/Audio/Music/Victory.wav")
-const CLEAR_MAP_LOSS_STREAM := preload("res://assets/Audio/Music/GameOver.ogg")
 const CLEAR_MAP_RESULT_FADE_SECONDS := 1.0
 const GUN_HUD_SIZE := Vector2(10.0, 10.0)                                                     # Render the 20x20 source at exactly half size to match the health meter's compact presentation.
 const XBOX_STICK_DEADZONE := 0.22                                                            # Ignore small Xbox-stick drift around its physical center.
@@ -1223,13 +1184,15 @@ func _ready() -> void:                                                          
 		_build_random_maze_wall_edges()                                                             # Build a connected 9x9 maze while preserving its closed outer boundary.
 	else:                                                                                      # Build the normal shared gameplay maze outside the temporary audit modes.
 		_build_random_maze_wall_edges()                                                            # Generate the full 9x9 connected maze used by both local players.
-	_load_phase_textures()                                                                     # Call a helper function as part of the current controller step.
-	_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
-	_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
-	_load_straight_wall_textures()                                                             # Call a helper function as part of the current controller step.
-	_load_turn_wall_textures()                                                                 # Load the 22, 45, and 66-degree turn wall overlay sprites.
-	_load_forward_wall_textures()                                                              # Load the two authored forward-transition floor and wall overlay sets.
-	_load_strafe_wall_textures()                                                               # Load the three authored side-transition floor and wall overlay sets.
+	# Captured Xybots backgrounds are only needed by the local legacy renderer.
+	if not _public_build():
+		_load_phase_textures()                                                                     # Call a helper function as part of the current controller step.
+		_load_stable_textures()                                                                    # Call a helper function as part of the current controller step.
+		_load_slot_textures()                                                                      # Call a helper function as part of the current controller step.
+		_load_straight_wall_textures()                                                             # Call a helper function as part of the current controller step.
+		_load_turn_wall_textures()                                                                 # Load the 22, 45, and 66-degree turn wall overlay sprites.
+		_load_forward_wall_textures()                                                              # Load the two authored forward-transition floor and wall overlay sets.
+		_load_strafe_wall_textures()                                                               # Load the three authored side-transition floor and wall overlay sets.
 	_setup_viewport()                                                                          # Call a helper function as part of the current controller step.
 	_setup_player_animation()                                                                  # Call a helper function as part of the current controller step.
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
@@ -7170,20 +7133,6 @@ func _heart_animation_texture(world_view_depth: float, frame_index: int) -> Text
 	return frames.get_frame_texture(&"Heart", posmod(frame_index, frame_count))               # Keep all heart LODs in phase even if a future resource has a different frame count.
 
 
-# _gun_smoke_texture: Samples the non-looping authored gunsmoke sequence from its remaining shared lifetime.
-func _gun_smoke_texture(remaining_time: float, variant: String) -> Texture2D:
-	var frames := GUN_SMOKE_B_SPRITE_FRAMES if variant == "B" else GUN_SMOKE_A_SPRITE_FRAMES  # Select the one variant assigned when the shared shot was fired.
-	var frame_count := frames.get_frame_count(GUN_SMOKE_ANIMATION)                             # Read the exact authored frame count so later edits do not require code changes.
-	if frame_count == 0:
-		return null                                                                               # Avoid an invalid lookup while the effect resource is being edited.
-	var animation_speed := frames.get_animation_speed(GUN_SMOKE_ANIMATION)                     # Honor the selected resource's playback speed.
-	if animation_speed <= 0.0:
-		return frames.get_frame_texture(GUN_SMOKE_ANIMATION, 0)                                  # Keep an intentionally paused future effect on its first valid frame.
-	var elapsed_time := maxf(GUN_SMOKE_DURATION - remaining_time, 0.0)                         # Convert the countdown stored in shared combat state into animation time.
-	var frame_index := mini(int(floorf(elapsed_time * animation_speed)), frame_count - 1)      # Hold the final smoke image until the event's duration expires.
-	return frames.get_frame_texture(GUN_SMOKE_ANIMATION, frame_index)                          # Return the corresponding authored smoke frame.
-
-
 # _gun_animation_texture: Samples the authored looping Gun animation for the in-world powerup.
 func _gun_animation_texture() -> Texture2D:
 	var frame_count := GUN_SPRITE_FRAMES.get_frame_count(&"Gun")                              # Read the actual imported resource so all eight user-authored frames participate.
@@ -7460,7 +7409,9 @@ func _semantic_lod_floor_outline(key: String) -> Node2D:
 	if node == null or not is_instance_valid(node):
 		if semantic_lod_outline_creation_disabled:
 			return null
-		var outline_script: Script = SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT if key.begins_with("barrel_authored_vector_source") else (SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT if key.begins_with("barrel_vector_world_prototype") else (SEMANTIC_STOOL_SCRIPT if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table") else (SEMANTIC_IMPORTED_CHAIR_EDGES_SCRIPT if key.begins_with("chair_semantic_edges") else (SEMANTIC_IMPORTED_CHAIR_SCRIPT if key.begins_with("chair_semantic_imported") else (SEMANTIC_GPU_CAGE_CRATE_SCRIPT if key.begins_with("crate_gpu_") else (SEMANTIC_GPU_LATTICE_BARREL_SCRIPT if key.begins_with("barrel_gpu_lattice_instanced") else (SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT if key.begins_with("barrel_meshinstance2d_3d_source") else (SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT if key.begins_with("barrel_projected_canvas") else (SEMANTIC_GPU_BARREL_SCRIPT if key.begins_with("barrel_ground_gpu_ray_experiment") else (SEMANTIC_LOD_CYLINDER_SCRIPT if key == "semantic_cylinder_test" else SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT))))))))))
+		var outline_script: Script = _load_legacy_prop_script(SEMANTIC_AUTHORED_VECTOR_BARREL_SCRIPT) if key.begins_with("barrel_authored_vector_source") else (SEMANTIC_VECTOR_WORLD_BARREL_SCRIPT if key.begins_with("barrel_vector_world_prototype") else (SEMANTIC_STOOL_SCRIPT if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table") else (_load_legacy_prop_script(SEMANTIC_IMPORTED_CHAIR_EDGES_SCRIPT) if key.begins_with("chair_semantic_edges") else (_load_legacy_prop_script(SEMANTIC_IMPORTED_CHAIR_SCRIPT) if key.begins_with("chair_semantic_imported") else (SEMANTIC_GPU_CAGE_CRATE_SCRIPT if key.begins_with("crate_gpu_") else (SEMANTIC_GPU_LATTICE_BARREL_SCRIPT if key.begins_with("barrel_gpu_lattice_instanced") else (_load_legacy_prop_script(SEMANTIC_MESHINSTANCE2D_BARREL_SCRIPT) if key.begins_with("barrel_meshinstance2d_3d_source") else (SEMANTIC_PROJECTED_CANVAS_BARREL_SCRIPT if key.begins_with("barrel_projected_canvas") else (SEMANTIC_GPU_BARREL_SCRIPT if key.begins_with("barrel_ground_gpu_ray_experiment") else (SEMANTIC_LOD_CYLINDER_SCRIPT if key == "semantic_cylinder_test" else _load_legacy_prop_script(SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT)))))))))))
+		if outline_script == null:
+			return null # Legacy-only gallery props are unavailable in public builds.
 		if not outline_script.can_instantiate():
 			semantic_lod_outline_creation_disabled = true
 			push_error("Semantic LOD outline script cannot be instantiated; disabling outline creation for this run. Check earlier script errors.")
@@ -8375,7 +8326,7 @@ func _barrel_generated_lod_texture(lod_index: int, direction_index: int) -> Text
 		barrel_generated_lod_textures[cache_key] = texture
 		return texture
 	push_error("Missing generated barrel LOD texture: %s" % source_path)
-	return BARREL_TEXTURE_N
+	return _semantic_barrel_texture_for_current_camera(lod_index)
 
 
 # _semantic_barrel_texture_for_current_camera: Produces the equivalent LOD size
@@ -8394,45 +8345,25 @@ func _semantic_barrel_texture_for_current_camera(lod_index: int) -> Texture2D:
 
 
 # _barrel_texture_for_current_camera: Maps the viewer's world-side position to the matching static barrel angle and authored LOD.
+# Legacy prop gallery scripts are loaded only when an editor comparison is requested.
+func _load_legacy_prop_script(path: String) -> Script:
+	if _public_build():
+		return null
+	return load(path) as Script
+
+
 func _barrel_texture_for_current_camera(world_view_depth := -1.0) -> Texture2D:
 	var lod_index := _barrel_lod_index_for_view_depth(world_view_depth)
-	var direction := _barrel_direction_for_world_vector(-_view_forward_vector())
+	# Public props are procedural, including the source for splinter colors.
+	if _public_build():
+		return _semantic_barrel_texture_for_current_camera(lod_index)
+	var direction_index := BARREL_VIEW_DIRECTIONS.find(_barrel_direction_for_world_vector(-_view_forward_vector()))
 	if lod_index >= 2:
-		return _barrel_generated_lod_texture(lod_index, BARREL_VIEW_DIRECTIONS.find(direction))
-	var use_lod_01 := lod_index == 1
-	match direction:
-		"NNE":
-			return BARREL_LOD_01_TEXTURE_NNE if use_lod_01 else BARREL_TEXTURE_NNE
-		"NE":
-			return BARREL_LOD_01_TEXTURE_NE if use_lod_01 else BARREL_TEXTURE_NE
-		"ENE":
-			return BARREL_LOD_01_TEXTURE_ENE if use_lod_01 else BARREL_TEXTURE_ENE
-		"E":
-			return BARREL_LOD_01_TEXTURE_E if use_lod_01 else BARREL_TEXTURE_E
-		"ESE":
-			return BARREL_LOD_01_TEXTURE_ESE if use_lod_01 else BARREL_TEXTURE_ESE
-		"SE":
-			return BARREL_LOD_01_TEXTURE_SE if use_lod_01 else BARREL_TEXTURE_SE
-		"SSE":
-			return BARREL_LOD_01_TEXTURE_SSE if use_lod_01 else BARREL_TEXTURE_SSE
-		"S":
-			return BARREL_LOD_01_TEXTURE_S if use_lod_01 else BARREL_TEXTURE_S
-		"SSW":
-			return BARREL_LOD_01_TEXTURE_SSW if use_lod_01 else BARREL_TEXTURE_SSW
-		"SW":
-			return BARREL_LOD_01_TEXTURE_SW if use_lod_01 else BARREL_TEXTURE_SW
-		"WSW":
-			return BARREL_LOD_01_TEXTURE_WSW if use_lod_01 else BARREL_TEXTURE_WSW
-		"W":
-			return BARREL_LOD_01_TEXTURE_W if use_lod_01 else BARREL_TEXTURE_W
-		"WNW":
-			return BARREL_LOD_01_TEXTURE_WNW if use_lod_01 else BARREL_TEXTURE_WNW
-		"NW":
-			return BARREL_LOD_01_TEXTURE_NW if use_lod_01 else BARREL_TEXTURE_NW
-		"NNW":
-			return BARREL_LOD_01_TEXTURE_NNW if use_lod_01 else BARREL_TEXTURE_NNW
-		_:
-			return BARREL_LOD_01_TEXTURE_N if use_lod_01 else BARREL_TEXTURE_N
+		return _barrel_generated_lod_texture(lod_index, direction_index)
+	var folder := "res://assets/Props/Barrel_16Dir/Render_2026-10-23_09-41-30" if lod_index == 0 else "res://assets/Props/Barrel_LOD_01/Render_2026-10-23_09-42-28_NoComposite"
+	var path := "%s/barrel_LOD_%02d_%03d.png" % [folder, lod_index, direction_index]
+	var texture := load(path) as Texture2D
+	return texture if texture != null else _semantic_barrel_texture_for_current_camera(lod_index)
 
 
 
@@ -11565,6 +11496,12 @@ func _load_png_texture(resource_path: String) -> Texture2D:                     
 
 # _show_stable: Displays the current non-transition view, preferring the new straight-wall renderer and falling back to older renderers.
 func _show_stable() -> void:                                                                # Declare this function.
+	if _public_build():
+		# The procedural renderer owns the environment; no captured fallback is needed.
+		if environment_layer != null:
+			environment_layer.visible = true
+		playfield.visible = false
+		return
 	if environment_layer != null and not straight_wall_textures.is_empty():                    # Run the following block only when this condition is true.
 		playfield.visible = false                                                                 # Update the captured playfield sprite display.
 		environment_layer.visible = true                                                          # Update the environment renderer container.

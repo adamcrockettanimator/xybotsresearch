@@ -372,7 +372,8 @@ func _initialize() -> void:
 	# afterwards; normal per-frame drawing is performed by the controller hook.
 	controller._bind_player_context(target_player_index)
 	master_texture = load(MASTER_WALL_PATH)
-	_preload_coordinate_templates()
+	if not (OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false))):
+		_preload_coordinate_templates()
 	controller.render_wall_art = false
 	# Start this presentation in its clean coordinate-only state.  The original
 	# F2/F3 diagnostics remain available, but should not obscure the new view.
@@ -2970,6 +2971,11 @@ func _update_diagonal_forward_animation(delta: float) -> void:
 			diagonal_transition_flip_h = false
 
 func _update_coordinate_background() -> void:
+	# Public gameplay uses procedural surfaces; coordinate guides are local diagnostics.
+	if OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false)):
+		coordinate_background.visible = false
+		coordinate_screen_overlay.visible = false
+		return
 	var frame := _coordinate_frame_for_current_pose()
 	var path := String(frame["path"])
 	var use_overscan_sheet := coordinate_overscan_test_enabled and path.ends_with("coord_n_stable.png")
