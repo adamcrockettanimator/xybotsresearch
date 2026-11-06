@@ -190,7 +190,7 @@ func _ready() -> void:
 	_load_or_create_style()
 	viewport = SubViewport.new()
 	viewport.name = "GpuCageCrateLogicalViewport_160x120"
-	viewport.size = LOGICAL_VIEW_SIZE
+	viewport.size = Vector2i(get_meta("logical_view_size", LOGICAL_VIEW_SIZE))
 	viewport.transparent_bg = true
 	viewport.disable_3d = true
 	viewport.gui_disable_input = true

@@ -412,7 +412,7 @@ func _capture_current_distance(capturing_full_distance: bool) -> void:
 func _build_static_cage() -> void:
 	viewport = SubViewport.new()
 	viewport.name = "GpuCageLogicalViewport_160x120"
-	viewport.size = LOGICAL_VIEW_SIZE
+	viewport.size = Vector2i(get_meta("logical_view_size", LOGICAL_VIEW_SIZE))
 	viewport.transparent_bg = true
 	viewport.disable_3d = true
 	viewport.gui_disable_input = true

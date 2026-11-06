@@ -20,7 +20,7 @@ const DIR_W := "W"                                                              
 const DIR_NW := "NW"                                                                        # Name the northwest-facing local run animation direction.
 const ANIMATION_DIRECTIONS: Array[String] = [DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW] # Keep clockwise names for eight-way aim/run selection.
 
-const VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
+var VIEWPORT_SIZE := Vector2(160.0, 120.0)                                                # Set the cropped Xybots playfield size used by the prototype.
 const SEMANTIC_LOD_FLOOR_OUTLINE_SCRIPT := "res://scripts/semantic_lod_floor_outline.gd" # Draw semantic floor footprints from live projected world corners instead of anchoring a baked sprite.
 const SEMANTIC_LOD_CYLINDER_SCRIPT := preload("res://scripts/semantic_lod_cylinder.gd")
 const SEMANTIC_GPU_BARREL_SCRIPT := preload("res://scripts/semantic_gpu_barrel.gd")
@@ -1169,6 +1169,10 @@ const SLOT_GRAPH_TUNER_PATH := "res://slot_graph_tuner.json"                    
 var mobile_controls: Control
 
 func _ready() -> void:                                                                      # Declare this function.
+	if bool(get_tree().get_meta("grudge_mobile_wide", false)):
+		var available: Vector2 = get_tree().get_meta("grudge_mobile_viewport_test_size", get_viewport_rect().size)
+		if available.x > available.y and available.y > 0.0:
+			VIEWPORT_SIZE.x = float(clampi(roundi(120.0 * available.x / available.y), 160, 320))
 	if _public_build():
 		show_top_down_source_overlay = false
 		bot_decision_trace_enabled = false
@@ -7437,6 +7441,7 @@ func _semantic_lod_floor_outline(key: String) -> Node2D:
 		if node == null:
 			push_error("Semantic LOD outline creation returned null; disabling further attempts for this run.")
 			return null
+		node.set_meta("logical_view_size", Vector2i(VIEWPORT_SIZE))
 		# Keep the purpose-built semantic props readable in Remote.  The generic
 		# outline prefix is useful for experiments, but it obscures the actual
 		# crate authoring target behind a needlessly long generated name.
@@ -9036,7 +9041,7 @@ func _apply_near_camera_crop() -> void:
 	if maze_content == null:                                                                   # Do not touch a view before its clipper/content tree has been built.
 		return
 	var zoom := near_camera_crop_zoom                                                          # Keep the crop available for the normal near-cell view; it only changes the camera composition, never world positions.
-	var focus := Vector2(near_camera_crop_focus_x, near_camera_crop_focus_y)                  # Treat the controls as a source pixel that remains at the output frame center.
+	var focus := Vector2(near_camera_crop_focus_x + (VIEWPORT_SIZE.x - 160.0) * 0.5, near_camera_crop_focus_y)                  # Treat the controls as a source pixel that remains at the output frame center.
 	maze_content.scale = Vector2.ONE * zoom                                                    # Enlarge every world-rendered child together so walls, actor, and effects stay registered.
 	maze_content.position = VIEWPORT_SIZE * 0.5 - focus * zoom                                # Translate the enlarged source point back to the fixed clip center.
 
@@ -9872,7 +9877,7 @@ func _layout_viewport() -> void:                                                
 	if single_player_combat_view and not player_views.is_empty():
 		var solo_view: Dictionary = player_views[0]
 		var solo_camera: Node2D = solo_view.get("maze_viewport", null)
-		var solo_scale := maxf(1.0, floorf(minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)))
+		var solo_scale := maxf(1.0, minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)) if mobile_controls != null else maxf(1.0, floorf(minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)))
 		if solo_camera != null:
 			solo_camera.scale = Vector2.ONE * solo_scale
 			solo_camera.position = (viewport_size - VIEWPORT_SIZE * solo_scale) * 0.5

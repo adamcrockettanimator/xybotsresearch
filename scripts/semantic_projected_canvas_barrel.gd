@@ -199,7 +199,7 @@ func _ensure_pixel_target() -> void:
 		return
 	pixel_viewport = SubViewport.new()
 	pixel_viewport.name = "SemanticCanvasPropPixelViewport"
-	pixel_viewport.size = LOGICAL_CANVAS_SIZE
+	pixel_viewport.size = Vector2i(get_meta("logical_view_size", LOGICAL_CANVAS_SIZE))
 	pixel_viewport.transparent_bg = true
 	pixel_viewport.disable_3d = true
 	pixel_viewport.gui_disable_input = true

@@ -6,7 +6,7 @@ extends Node
 
 @export var target_player_index := 0
 
-const VIEW_SIZE := Vector2(160.0, 120.0)
+var VIEW_SIZE := Vector2(160.0, 120.0)
 const OVERSCAN_SIZE := Vector2(320.0, 240.0)
 const OVERSCAN_STABLE_PATH := "res://assets/CoordinateFrames/coord_n_stable_overscan.png"
 # The green rectangle in the user-authored overscan sheet records the exact
@@ -358,6 +358,7 @@ func _initialize() -> void:
 	if controller == null:
 		push_error("Coordinate-frame renderer requires the existing controller as its parent.")
 		return
+	VIEW_SIZE = controller.VIEWPORT_SIZE
 	if target_player_index < 0 or target_player_index >= controller.player_views.size():
 		push_error("Coordinate-frame renderer was attached before player %d exists." % target_player_index)
 		return
@@ -1015,6 +1016,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		var layer_offset: Vector2 = parallax_offset if use_layers else Vector2.ZERO
 		var layer1_weight := (layer_movement_balance - 1.0) * 0.5
 		var layer2_weight := (layer_movement_balance + 1.0) * 0.5
+		material.set_shader_parameter("canvas_size", VIEW_SIZE)
 		material.set_shader_parameter("inverse_row0", inverse[0])
 		material.set_shader_parameter("inverse_row1", inverse[1])
 		material.set_shader_parameter("inverse_row2", inverse[2])
@@ -1626,6 +1628,7 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 			continue
 		var entry := entries[index]
 		var material := gpu_floor_materials[index]
+		material.set_shader_parameter("canvas_size", VIEW_SIZE)
 		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_floor_mip_texture != null
 		material.set_shader_parameter("base_texture", gpu_floor_mip_texture if use_gpu_mips else floor_source_texture)
 		material.set_shader_parameter("base_texture_size", Vector2(floor_source_image.get_size()))
@@ -1831,6 +1834,7 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		var layer1_weight := (ceiling_layer_movement_balance - 1.0) * 0.5
 		var layer2_weight := (ceiling_layer_movement_balance + 1.0) * 0.5
 		var material := gpu_ceiling_materials[index]
+		material.set_shader_parameter("canvas_size", VIEW_SIZE)
 		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_ceiling_layer1_mip_texture != null
 		material.set_shader_parameter("base_texture", gpu_ceiling_layer1_mip_texture if use_gpu_mips else ceiling_layer1_texture)
 		material.set_shader_parameter("base_texture_size", Vector2(ceiling_layer1_image.get_size()))
@@ -2598,11 +2602,12 @@ func _segment_intersects_view_frustum(first: Vector2, second: Vector2) -> bool:
 	var interval_end := 1.0
 	# Every entry is the half-plane normal.dot(point) <= limit.  Together they
 	# form the near plane, distance cap, and the left/right sides of the cone.
+	var active_fov_ratio := maxf(FOV_RATIO, VIEW_SIZE.x * 0.5 / FOCAL_LENGTH + 0.05)
 	var half_planes := [
 		{"normal": Vector2(0.0, -1.0), "limit": -NEAR_CLIP},
 		{"normal": Vector2(0.0, 1.0), "limit": MAX_DEPTH},
-		{"normal": Vector2(1.0, -FOV_RATIO), "limit": 0.0},
-		{"normal": Vector2(-1.0, -FOV_RATIO), "limit": 0.0},
+		{"normal": Vector2(1.0, -active_fov_ratio), "limit": 0.0},
+		{"normal": Vector2(-1.0, -active_fov_ratio), "limit": 0.0},
 	]
 	for plane in half_planes:
 		var normal: Vector2 = plane["normal"]

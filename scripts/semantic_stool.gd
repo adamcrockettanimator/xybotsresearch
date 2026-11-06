@@ -16,6 +16,7 @@ class StoolRasterLayer extends Node2D:
 	# inferred faces as 95 MeshInstance2D/ShaderMaterial descendants made the
 	# Remote Inspector serialize a >160 MB resource tree before an artist could
 	# inspect a single control.
+	var logical_size := LOGICAL_SIZE
 	var layers: Array[Dictionary] = []
 	# Final logical-pixel accents, drawn after semantic face fills.
 	var raster_strokes: Array[Dictionary] = []
@@ -58,11 +59,11 @@ class StoolRasterLayer extends Node2D:
 			min_x = minf(min_x, point.x)
 			max_x = maxf(max_x, point.x)
 		var span := maxf(bottom_y - top_y, 0.001)
-		for y in range(maxi(0, floori(top_y)), mini(LOGICAL_SIZE.y, ceili(bottom_y) + 1)):
+		for y in range(maxi(0, floori(top_y)), mini(logical_size.y, ceili(bottom_y) + 1)):
 			var height_fraction := clampf((float(y) + 0.5 - top_y) / span, 0.0, 1.0)
 			var multiplier := clampf(1.0 - strength * (1.0 - height_fraction), 0.0, 1.0)
 			var row_colour := Color(colour.r * multiplier, colour.g * multiplier, colour.b * multiplier, colour.a)
-			for x in range(maxi(0, floori(min_x)), mini(LOGICAL_SIZE.x, ceili(max_x) + 1)):
+			for x in range(maxi(0, floori(min_x)), mini(logical_size.x, ceili(max_x) + 1)):
 				if Geometry2D.is_point_in_polygon(Vector2(float(x) + 0.5, float(y) + 0.5), points):
 					draw_rect(Rect2(Vector2(x, y), Vector2.ONE), row_colour, true)
 
@@ -79,8 +80,8 @@ class StoolRasterLayer extends Node2D:
 			min_y = minf(min_y, point.y)
 			max_y = maxf(max_y, point.y)
 		var safe_fade := maxf(fade_pixels, 0.001)
-		for y in range(maxi(0, floori(min_y)), mini(LOGICAL_SIZE.y, ceili(max_y) + 1)):
-			for x in range(maxi(0, floori(min_x)), mini(LOGICAL_SIZE.x, ceili(max_x) + 1)):
+		for y in range(maxi(0, floori(min_y)), mini(logical_size.y, ceili(max_y) + 1)):
+			for x in range(maxi(0, floori(min_x)), mini(logical_size.x, ceili(max_x) + 1)):
 				var cell_center := Vector2(float(x) + 0.5, float(y) + 0.5)
 				if not Geometry2D.is_point_in_polygon(cell_center, points):
 					continue
@@ -316,7 +317,7 @@ func _ready() -> void:
 	_load_style()
 	viewport = SubViewport.new()
 	viewport.name = "SemanticStoolLogicalRaster_160x120"
-	viewport.size = LOGICAL_SIZE
+	viewport.size = Vector2i(get_meta("logical_view_size", LOGICAL_SIZE))
 	viewport.transparent_bg = true
 	viewport.disable_3d = true
 	viewport.gui_disable_input = true
@@ -327,6 +328,7 @@ func _ready() -> void:
 	raster_root.name = "StoolRasterLayers_Shadow_Legs_Seat"
 	viewport.add_child(raster_root)
 	raster_layer = StoolRasterLayer.new()
+	raster_layer.logical_size = viewport.size
 	raster_layer.name = "StoolSemanticCubeFaces"
 	raster_root.add_child(raster_layer)
 	display = Sprite2D.new()

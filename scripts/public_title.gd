@@ -1,9 +1,13 @@
 extends "res://scripts/grudge_title_menu.gd"
 
 var starting := false
+var rotation_prompt: Label
 
 func _ready() -> void:
 	get_tree().set_meta("grudge_public_build", true)
+	if preload("res://scripts/mobile_controls.gd").available():
+		get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+		get_tree().set_meta("grudge_mobile_wide", true)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var music := MusicAccess.get_player(get_tree())
 	if music != null and not OS.has_feature("web"):
@@ -42,6 +46,11 @@ func _ready() -> void:
 		start.add_theme_stylebox_override(state, style)
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		start.add_theme_color_override(state, MENU_INK)
+	rotation_prompt = _make_label(font, "ROTATE YOUR PHONE SIDEWAYS", 18, MENU_INK)
+	rotation_prompt.position = Vector2(54, 365)
+	rotation_prompt.size = Vector2(520, 40)
+	rotation_prompt.visible = false
+	add_child(rotation_prompt)
 	start.pressed.connect(_begin_public_match.bind(-1))
 	add_child(start)
 	var keys := ["W A S D", "MOUSE", "LEFT CLICK", "SHIFT", "R", "Q", "E", "ESC"]
@@ -72,6 +81,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_begin_public_match(-1)
 
 func _begin_public_match(device_id: int) -> void:
+	if bool(get_tree().get_meta("grudge_mobile_wide", false)) and get_viewport_rect().size.y > get_viewport_rect().size.x:
+		if rotation_prompt != null:
+			rotation_prompt.visible = true
+		return
 	if starting:
 		return
 	starting = true
