@@ -83,6 +83,10 @@ const TEAM_ONE_FRAMES := "res://assets/Characters/Cowboy2_Run_8Dir/Cowboy2_Run_8
 const TEAM_TWO_FRAMES := TEAM_ONE_FRAMES                                                       # Team 2 uses the same authored-color Cowboy2 frames; only purple costume fabric is remapped green at render time.
 const PLAYER_FRAMES := TEAM_ONE_FRAMES                                                        # Initialize the scene-authored first player with Team 1's Cowboy2 frames.
 const IDLE_FRAMES := "res://assets/Characters/Cowboy2_Idle_8Dir/Cowboy2_Idle_8Dir.tres"     # Load the twelve-frame eight-direction Cowboy 2 idle set alongside the run SpriteFrames.
+const IDLE_RELOAD_FRAMES := "res://assets/Characters/Cowboy2_IdleReload_8Dir/Cowboy2_IdleReload_8Dir.tres"
+const CROUCH_IDLE_RELOAD_FRAMES := "res://assets/Characters/Cowboy2_CrouchIdleReload_8Dir/Cowboy2_CrouchIdleReload_8Dir.tres"
+const CROUCH_WALK_RELOAD_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalkReload_8Dir/Cowboy2_CrouchWalkReload_8Dir.tres"
+const RUN_RELOAD_FRAMES := "res://assets/Characters/Cowboy2_RunReload_8Dir/Cowboy2_RunReload_8Dir.tres"
 const CROUCH_IDLE_FRAMES := "res://assets/Characters/Cowboy2_CrouchIdle_8Dir/Cowboy2_CrouchIdle_8Dir.tres"
 const CROUCH_IDLE_DUAL_WIELD_FRAMES := "res://assets/Characters/Cowboy2_CrouchIdleDualWield_8Dir/Cowboy2_CrouchIdleDualWield_8Dir.tres"
 const CROUCH_WALK_FRAMES := "res://assets/Characters/Cowboy2_CrouchWalk_8Dir/Cowboy2_CrouchWalk_8Dir.tres"
@@ -3419,6 +3423,10 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 		sprite.sprite_frames = frames.duplicate(true)                                             # Give this sprite its own mutable copy of the team's animations.
 	else:
 		sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                        # Retain the prior player resource as a safe fallback if an asset is missing.
+	_add_idle_reload_animations(sprite.sprite_frames)
+	_add_crouch_idle_reload_animations(sprite.sprite_frames)
+	_add_crouch_walk_reload_animations(sprite.sprite_frames)
+	_add_run_reload_animations(sprite.sprite_frames)
 	_add_idle_animations(sprite.sprite_frames)                                                   # Give every player and opponent the same directional idle clips as the primary player.
 	_add_crouch_walk_animations(sprite.sprite_frames)
 	_add_dual_wield_idle_animations(sprite.sprite_frames)                                       # Add the powered-up idle loops beside, not instead of, the normal idle clips.
@@ -4774,6 +4782,7 @@ func _start_pistol_reload(state: Dictionary) -> void:
 	if int(state.get("machine_gun_ammo", 0)) > 0 or int(state.get("pistol_ammo", 6)) >= 6 or not String(state.get("reload_phase", "")).is_empty():
 		return
 	var rounds := int(state.get("pistol_ammo", 6))
+	state["reload_elapsed"] = 0.0
 	state["reload_frame"] = 1 if rounds == 0 else 3 * rounds - 1
 	state["reload_phase"] = "open"
 	state["reload_timer"] = 0.20
@@ -4785,6 +4794,7 @@ func _advance_pistol_reload(state: Dictionary, delta: float) -> void:
 	if int(state.get("machine_gun_ammo", 0)) > 0:
 		state["reload_phase"] = ""
 		return
+	state["reload_elapsed"] = float(state.get("reload_elapsed", 0.0)) + delta
 	state["reload_timer"] = float(state.get("reload_timer", 0.0)) - delta
 	while float(state["reload_timer"]) <= 0.0 and not String(state["reload_phase"]).is_empty():
 		var phase := String(state["reload_phase"])
@@ -4833,7 +4843,7 @@ func _update_reload_indicators() -> void:
 			indicator.z_index = 20
 			body.add_child(indicator)
 		var state: Dictionary = player_states[actor]
-		indicator.visible = not String(state.get("reload_phase", "")).is_empty() and not bool(state.get("is_dying", false))
+		indicator.visible = not String(state.get("reload_phase", "")).is_empty() and not bool(state.get("is_dying", false)) and not String(body.animation).begins_with("IdleReload") and not String(body.animation).begins_with("RunReload") and not String(body.animation).begins_with("CrouchIdleReload") and not String(body.animation).begins_with("CrouchWalkReload")
 		if indicator.visible:
 			indicator.texture = load("res://assets/UI/Reload/reload%d.png" % int(state.get("reload_frame", 1)))
 			indicator.position = Vector2(0, -_sprite_texture_height(body) * 0.5 - 7)
@@ -11028,6 +11038,10 @@ func _setup_player_animation() -> void:                                         
 	else:                                                                                      # Run this fallback branch when previous conditions were not met.
 		player_sprite.sprite_frames = SpriteFrames.new()                                          # Update player sprite rendering or animation state.
 
+	_add_idle_reload_animations(player_sprite.sprite_frames)
+	_add_crouch_idle_reload_animations(player_sprite.sprite_frames)
+	_add_crouch_walk_reload_animations(player_sprite.sprite_frames)
+	_add_run_reload_animations(player_sprite.sprite_frames)
 	_add_idle_animations(player_sprite.sprite_frames)                                          # Add the twelve-frame directional idle clips to the primary player's run resource.
 	_add_crouch_walk_animations(player_sprite.sprite_frames)
 	_add_dual_wield_idle_animations(player_sprite.sprite_frames)                              # Add the dual-pistol idle loops alongside normal idle clips.
@@ -11059,6 +11073,119 @@ func _add_crouch_walk_animations(frames: SpriteFrames) -> void:
 			frames.set_animation_speed(animation, source.get_animation_speed(animation))
 			for frame_index in source.get_frame_count(animation):
 				frames.add_frame(animation, source.get_frame_texture(animation, frame_index), source.get_frame_duration(animation, frame_index))
+
+
+# Install the directional reload clips alongside the existing locomotion art.
+func _add_idle_reload_animations(frames: SpriteFrames) -> void:
+	var source := load(IDLE_RELOAD_FRAMES) as SpriteFrames
+	if frames == null or source == null:
+		return
+	for animation in source.get_animation_names():
+		if not String(animation).begins_with("IdleReload"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, false)
+		for frame_index in source.get_frame_count(animation):
+			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
+
+
+# Add the eight crouched idle reload views to each character sprite.
+func _add_crouch_idle_reload_animations(frames: SpriteFrames) -> void:
+	var source := load(CROUCH_IDLE_RELOAD_FRAMES) as SpriteFrames
+	if frames == null or source == null:
+		return
+	for animation in source.get_animation_names():
+		if not String(animation).begins_with("CrouchIdleReload"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, true)
+		frames.set_animation_speed(animation, 12.0)
+		for frame_index in source.get_frame_count(animation):
+			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
+
+
+# Add the crouch-walk reload from each camera to every character sprite.
+func _add_crouch_walk_reload_animations(frames: SpriteFrames) -> void:
+	var source := load(CROUCH_WALK_RELOAD_FRAMES) as SpriteFrames
+	if frames == null or source == null:
+		return
+	for animation in source.get_animation_names():
+		if not String(animation).begins_with("CrouchWalkReload"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, true)
+		frames.set_animation_speed(animation, 12.0)
+		for frame_index in source.get_frame_count(animation):
+			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
+
+
+# Install the forward-run reload from each camera for every moving direction.
+func _add_run_reload_animations(frames: SpriteFrames) -> void:
+	var source := load(RUN_RELOAD_FRAMES) as SpriteFrames
+	if frames == null or source == null:
+		return
+	for animation in source.get_animation_names():
+		if not String(animation).begins_with("RunReload"):
+			continue
+		if frames.has_animation(animation):
+			frames.remove_animation(animation)
+		frames.add_animation(animation)
+		frames.set_animation_loop(animation, true)
+		frames.set_animation_speed(animation, 12.0)
+		for frame_index in source.get_frame_count(animation):
+			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
+
+
+# Keep the authored 12 fps loop in step across views and when entering idle
+# partway through a reload, regardless of how many bullets are needed.
+func _show_idle_reload(sprite: AnimatedSprite2D, state: Dictionary, direction: String) -> bool:
+	return _show_reload_animation(sprite, state, direction, "IdleReload")
+
+
+func _show_reload_animation(sprite: AnimatedSprite2D, state: Dictionary, direction: String, prefix: String, reverse: bool = false) -> bool:
+	if String(state.get("reload_phase", "")).is_empty() or bool(state.get("is_dying", false)) or int(state.get("machine_gun_ammo", 0)) > 0:
+		return false
+	var animation := StringName(prefix + direction)
+	if sprite.sprite_frames == null or not sprite.sprite_frames.has_animation(animation):
+		return false
+	if sprite.animation != animation:
+		sprite.play(animation)
+	sprite.pause()
+	var frame_count := sprite.sprite_frames.get_frame_count(animation)
+	if frame_count <= 0:
+		return false
+	var frame_index := int(maxf(float(state.get("reload_elapsed", 0.0)), 0.0) * 12.0) % frame_count
+	if reverse:
+		frame_index = frame_count - 1 - frame_index
+	sprite.set_frame_and_progress(frame_index, 0.0)
+	return true
+
+
+# Keep the body facing generally toward its aim, as in the normal run set.
+# Relative NE/E/SE use the aim's NE view; NW/W/SW use its NW view.
+func _reload_run_offset(run: String, aim: String) -> int:
+	var directions := [DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW]
+	var run_index := directions.find(run)
+	var aim_index := directions.find(aim)
+	if run_index < 0 or aim_index < 0:
+		return 0
+	return (run_index - aim_index + directions.size()) % directions.size()
+
+
+func _reload_run_view(run: String, aim: String) -> String:
+	var directions := [DIR_N, DIR_NE, DIR_E, DIR_SE, DIR_S, DIR_SW, DIR_W, DIR_NW]
+	var aim_index := directions.find(aim)
+	if aim_index < 0:
+		aim_index = 0
+	var offset := _reload_run_offset(run, aim)
+	var turn := 1 if offset >= 1 and offset <= 3 else (-1 if offset >= 5 else 0)
+	return directions[(aim_index + turn + directions.size()) % directions.size()]
 
 
 # _add_idle_animations: Copies all eight new idle directions into one sprite's mutable run resource.
@@ -14401,6 +14528,18 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 	var other_world_aim := String(other_state.get("world_aim_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world aim direction.
 	var relative_run := _view_relative_dir(other_world_run, facing)                            # Convert run direction into this viewer's animation space.
 	var relative_aim := _view_relative_dir(other_world_aim, facing)                            # Convert aim direction into this viewer's animation space.
+	if bool(other_state.get("character_is_crouching", false)):
+		var crouch_reload_direction := _reload_run_view(relative_run, relative_aim) if moving else relative_aim
+		var crouch_reload_prefix := "CrouchWalkReload" if moving else "CrouchIdleReload"
+		var crouch_reload_reverse := moving and _reload_run_offset(relative_run, relative_aim) == 4
+		if _show_reload_animation(opponent_sprite, other_state, crouch_reload_direction, crouch_reload_prefix, crouch_reload_reverse):
+			return
+	if not bool(other_state.get("character_is_crouching", false)):
+		var reload_direction := _reload_run_view(relative_run, relative_aim) if moving else relative_aim
+		var reload_prefix := "RunReload" if moving else "IdleReload"
+		var reload_reverse := moving and _reload_run_offset(relative_run, relative_aim) == 4
+		if _show_reload_animation(opponent_sprite, other_state, reload_direction, reload_prefix, reload_reverse):
+			return
 	var moving_backward := moving and bool(other_state.get("run_animation_reversed", false))  # Reuse the player view's authoritative straight-backward decision instead of mistaking it for a strafe.
 	var animation := _idle_animation_for(relative_aim, opponent_sprite.sprite_frames) if not moving else _best_opponent_animation_for(relative_run, relative_aim, opponent_sprite.sprite_frames) # Pick a directional idle when stopped, otherwise retain the existing run/aim selection.
 	if moving_backward:
@@ -14557,6 +14696,14 @@ func _crouch_walk_animation_for(run: String, aim: String, moving: bool, frames: 
 
 
 func _play_best_animation(is_moving: bool) -> void:                                         # Declare this function.
+	if is_moving and character_is_crouching and active_player_index >= 0 and active_player_index < player_states.size() and _show_reload_animation(player_sprite, player_states[active_player_index], _reload_run_view(run_dir, DIR_N), "CrouchWalkReload", _reload_run_offset(run_dir, DIR_N) == 4):
+		last_animation = player_sprite.animation
+		last_animation_reversed = false
+		return
+	if is_moving and not character_is_crouching and active_player_index >= 0 and active_player_index < player_states.size() and _show_reload_animation(player_sprite, player_states[active_player_index], _reload_run_view(run_dir, DIR_N), "RunReload", _reload_run_offset(run_dir, DIR_N) == 4):
+		last_animation = player_sprite.animation
+		last_animation_reversed = false
+		return
 	var normal_animation := &"RunN_AimN" if run_animation_reversed else _best_animation_for(run_dir, aim_dir, is_moving) # Reuse forward art backwards for straight local-backward movement.
 	var dual_wield_armed := active_player_index >= 0 and active_player_index < player_states.size() and int(player_states[active_player_index].get("machine_gun_ammo", 0)) > 0 # Read the current player's held powerup without changing its round count.
 	var dual_wield_animation := _dual_wield_forward_animation_for(DIR_N, DIR_N, player_sprite.sprite_frames) if run_animation_reversed else _dual_wield_forward_animation_for(run_dir, aim_dir, player_sprite.sprite_frames) # Backward movement reuses the available forward dual-pistol run in reverse; strafes fall back to normal until their art exists.
@@ -14582,6 +14729,14 @@ func _play_best_animation(is_moving: bool) -> void:                             
 
 # _play_idle_animation: Plays the camera-forward idle; the local player's body always faces their own camera.
 func _play_idle_animation() -> void:
+	if character_is_crouching and active_player_index >= 0 and active_player_index < player_states.size() and _show_reload_animation(player_sprite, player_states[active_player_index], DIR_N, "CrouchIdleReload"):
+		last_animation = player_sprite.animation
+		last_animation_reversed = false
+		return
+	if not character_is_crouching and active_player_index >= 0 and active_player_index < player_states.size() and _show_idle_reload(player_sprite, player_states[active_player_index], DIR_N):
+		last_animation = player_sprite.animation
+		last_animation_reversed = false
+		return
 	if character_is_crouching and player_sprite.sprite_frames.has_animation(&"CrouchIdleN"):
 		var crouch_dual_wield_armed := active_player_index >= 0 and active_player_index < player_states.size() and int(player_states[active_player_index].get("machine_gun_ammo", 0)) > 0
 		var crouch_idle_animation := &"CrouchIdleDualN" if crouch_dual_wield_armed and player_sprite.sprite_frames.has_animation(&"CrouchIdleDualN") else &"CrouchIdleN"
@@ -14663,6 +14818,8 @@ func _hit_reaction_death_frame(player_index: int) -> Texture2D:
 # _keep_forward_run_animating: Ensures the player visibly runs throughout the short Fwd camera catch-up.
 func _keep_forward_run_animating() -> void:
 	_play_best_animation(true)                                                                 # Select the same view-relative running set used during ordinary held movement.
+	if String(player_sprite.animation).begins_with("RunReload") or String(player_sprite.animation).begins_with("CrouchWalkReload"):
+		return # Reload frames are explicitly synchronized to the shared reload timer.
 	if not player_sprite.is_playing():                                                         # Recover if another render/state change stopped the AnimatedSprite2D at the crossing edge.
 		player_sprite.play()                                                                     # Resume the current run without resetting it to frame zero.
 	player_sprite.speed_scale = FORWARD_RUN_ANIMATION_SPEED                                    # Preserve the existing animation cadence through camera transitions.
