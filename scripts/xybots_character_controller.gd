@@ -209,6 +209,7 @@ const PLAYER_BLOOD_PIXELS_PER_HEALTH := 10                                      
 const PLAYER_BLOOD_PATTERN_PIXELS := [Vector2(-6, -14), Vector2(-2, -13), Vector2(3, -12), Vector2(7, -9), Vector2(-8, -7), Vector2(-3, -5), Vector2(2, -6), Vector2(6, -3), Vector2(-5, 1), Vector2(3, 2)] # Define one source-pixel wound pattern that rotates between cardinal facings.
 const PISTOL_FIRE_INTERVAL := 0.32                                                            # Keep the infinite-ammo pistol deliberate rather than machine-gun fast.
 const DUAL_WIELD_FIRE_INTERVAL := PISTOL_FIRE_INTERVAL * 0.5                                  # Fire alternating dual pistols at exactly twice the normal pistol rate.
+const BOT_FIRE_INTERVAL_MULTIPLIER := 2.0                                                    # Each enemy fires half as often as a player with the same weapon.
 const DUAL_WIELD_AMMO := 12                                                                   # Give every dual-wield pickup the requested twelve alternating pistol rounds.
 const MACHINE_GUN_RESPAWN_SECONDS := 4.0                                                      # Leave a short contested-pickup gap before a new machine gun appears.
 const DEFAULT_COMBAT_ROUND_SECONDS := 101.60                                                  # Match the Godot importer waveform's 101.60 s end of audible song content, excluding the MP3 container tail.
@@ -2608,7 +2609,7 @@ func _update_bot_input(player_index: int, delta: float) -> void:
 			virtual_input["turn_right"] = true
 		else:
 			virtual_input["turn_left"] = true
-		virtual_input["fire"] = bool(virtual_input["fire"]) and bool(brain.get("allow_fire", true))
+		virtual_input["fire"] = bool(virtual_input["fire"]) and bool(brain.get("allow_fire", true)) and not _bot_teammate_in_fire_lane(player_index, origin, target_vector)
 		_trace_bot_decision(player_index, origin, target_vector, brain, virtual_input)
 		bot_inputs[player_index] = virtual_input
 		return
@@ -2626,7 +2627,7 @@ func _update_bot_input(player_index: int, delta: float) -> void:
 		var forward := _view_forward_vector_for_state(state).normalized()
 		var target_direction := target_vector.normalized()
 		virtual_input["fire"] = bool(brain.get("has_line_of_sight", false)) and forward.dot(target_direction) > 0.96
-	virtual_input["fire"] = bool(virtual_input["fire"]) and bool(brain.get("allow_fire", true))
+	virtual_input["fire"] = bool(virtual_input["fire"]) and bool(brain.get("allow_fire", true)) and not _bot_teammate_in_fire_lane(player_index, origin, target_vector)
 	_trace_bot_decision(player_index, origin, target_vector, brain, virtual_input)
 	bot_inputs[player_index] = virtual_input
 
@@ -2861,6 +2862,20 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	if brain.has("tactical_move"):
 		desired = brain["tactical_move"]
 		state_name = String(brain.get("tactical_state", state_name))
+	if clear_shot and _bot_teammate_in_fire_lane(player_index, origin, target_vector) and String(state.get("reload_phase", "")).is_empty():
+		brain["allow_fire"] = false
+		var side := Vector2(-target_vector.y, target_vector.x).normalized()
+		if player_index % 2 != 0:
+			side = -side
+		var side_step := _move_world_with_wall_slide(origin, side * 0.3, "east", "west", "south", "north")
+		if side_step.distance_to(origin) < 0.12:
+			side = -side
+			side_step = _move_world_with_wall_slide(origin, side * 0.3, "east", "west", "south", "north")
+		if side_step.distance_to(origin) >= 0.12:
+			desired = (side_step - origin).normalized()
+			state_name = "CLEAR_FIRE_LANE"
+	if stuck_time > 0.35 and not _bot_low_lane_clear(origin, origin + target_vector):
+		brain["crouch"] = true
 	if state_name == "SEARCH" and previous_state in ["INVESTIGATE", "LOOK_LAST_SEEN"]:
 		_request_bot_bark(player_index, "search")
 	brain["state"] = state_name
@@ -2932,6 +2947,38 @@ func _bot_firing_lane_teammate_behind(player_index: int, origin: Vector2, target
 	return false
 
 
+func _bot_teammate_in_fire_lane(player_index: int, origin: Vector2, target_vector: Vector2) -> bool:
+	if target_vector.length_squared() < 0.000001:
+		return false
+	var direction := target_vector.normalized()
+	for index in range(player_states.size()):
+		if index == player_index or index >= player_joined.size() or not player_joined[index] or PLAYER_TEAMS[index] != PLAYER_TEAMS[player_index] or bool(player_states[index].get("is_dying", false)):
+			continue
+		var offset := _player_state_world_position(player_states[index]) - origin
+		var forward := offset.dot(direction)
+		if forward > 0.0 and forward < target_vector.length() and absf(offset.cross(direction)) < PROJECTILE_PLAYER_RADIUS + forward * tan(deg_to_rad(BOT_SHOT_SPREAD_DEGREES)):
+			return true
+	return false
+
+
+# Find a nearby reachable wall shadow, keeping the current exposed position as
+# a potential peek point. Test real wall segments and the movement solver.
+func _bot_wall_cover_point(origin: Vector2, target: Vector2) -> Vector2:
+	var best := Vector2.INF
+	var best_distance := 1.05
+	for radius in [0.3, 0.55, 0.8, 1.0]:
+		for step in range(16):
+			var point: Vector2 = origin + Vector2.RIGHT.rotated(TAU * float(step) / 16.0) * float(radius)
+			var path: Vector2 = target - point
+			if path.length_squared() < 0.001 or _nearest_projectile_wall_distance(point, path.normalized(), path.length()) >= path.length():
+				continue
+			var reached := _move_world_with_wall_slide(origin, point - origin, "east", "west", "south", "north")
+			if reached.distance_to(point) < 0.04 and origin.distance_to(point) < best_distance:
+				best = point
+				best_distance = origin.distance_to(point)
+	return best
+
+
 func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, target_vector: Vector2, clear_shot: bool, delta: float, brain: Dictionary) -> void:
 	brain.erase("tactical_move")
 	brain["crouch"] = false
@@ -2942,9 +2989,56 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 	var target := origin + target_vector
 	var target_crouched := bool(player_states[target_index].get("character_is_crouching", false))
 	var low_clear := clear_shot and _bot_low_lane_clear(origin, target)
-	if int(brain.get("tactical_target", target_index)) != target_index or not clear_shot:
+	if int(brain.get("tactical_target", target_index)) != target_index or (not clear_shot and mode not in ["wall_approach", "wall_cover", "wall_peek", "reload_cover"]):
 		mode = ""
 		cooldown = maxf(cooldown, 1.5)
+	var reloading := not String(player_states[player_index].get("reload_phase", "")).is_empty()
+	if reloading:
+		var reload_point: Vector2 = brain.get("reload_cover_point", Vector2.INF)
+		if mode != "reload_cover":
+			reload_point = _bot_cover_point(origin, target)
+			if not reload_point.is_finite():
+				reload_point = _bot_wall_cover_point(origin, target)
+			brain["reload_cover_point"] = reload_point
+			mode = "reload_cover"
+		if reload_point.is_finite():
+			brain["tactical_move"] = (reload_point - origin).normalized() if origin.distance_to(reload_point) > 0.07 else Vector2.ZERO
+			brain["tactical_state"] = "RELOAD_COVER"
+			brain["crouch"] = origin.distance_to(reload_point) <= 0.12
+		brain["allow_fire"] = false
+		brain["tactical_mode"] = mode
+		brain["tactical_target"] = target_index
+		return
+	elif mode == "reload_cover":
+		mode = ""
+	if mode in ["wall_approach", "wall_cover", "wall_peek"]:
+		var cover: Vector2 = brain.get("wall_cover_point", Vector2.INF)
+		var peek: Vector2 = brain.get("wall_peek_point", Vector2.INF)
+		if not cover.is_finite() or not peek.is_finite():
+			mode = ""
+		elif mode == "wall_approach" and origin.distance_to(cover) < 0.08:
+			mode = "wall_cover"
+			timer = randf_range(1.0, 1.8)
+		elif mode == "wall_cover" and timer <= 0.0:
+			mode = "wall_peek"
+			timer = randf_range(1.2, 2.0)
+		elif mode == "wall_peek" and timer <= 0.0:
+			mode = "wall_approach"
+			timer = 2.5
+		elif mode == "wall_approach" and timer <= 0.0:
+			mode = ""
+			cooldown = 3.0
+		if mode in ["wall_approach", "wall_cover", "wall_peek"]:
+			var destination := peek if mode == "wall_peek" else cover
+			brain["tactical_move"] = (destination - origin).normalized() if origin.distance_to(destination) > 0.07 else Vector2.ZERO
+			brain["tactical_state"] = "WALL_PEEK" if mode == "wall_peek" else "WALL_COVER"
+			brain["crouch"] = mode == "wall_cover"
+			brain["allow_fire"] = mode == "wall_peek" and clear_shot
+			brain["tactical_mode"] = mode
+			brain["tactical_timer"] = timer
+			brain["tactical_cooldown"] = cooldown
+			brain["tactical_target"] = target_index
+			return
 	# Cover must remain between the actors; destruction or flanking ends the hold.
 	if mode == "cover" or mode == "cover_pop":
 		if _bot_low_lane_clear(origin, target):
@@ -2991,13 +3085,21 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 			if low_clear and _bot_firing_lane_teammate_behind(player_index, origin, target) and randf() < 0.4:
 				mode = "yield_lane"
 				timer = randf_range(1.8, 2.8)
-			elif cover.is_finite() and randf() < 0.45:
+			elif cover.is_finite() and randf() < 0.7:
 				brain["cover_point"] = cover
 				mode = "approach_cover"
 				timer = 2.5
 			else:
+				var wall_cover := _bot_wall_cover_point(origin, target)
+				if wall_cover.is_finite() and randf() < 0.65:
+					brain["wall_cover_point"] = wall_cover
+					brain["wall_peek_point"] = origin
+					mode = "wall_approach"
+					timer = 2.5
 				# React only to an actual incoming standing projectile on a collision course.
 				for shot in active_projectiles:
+					if mode != "":
+						break
 					if int(shot.get("owner", -1)) != target_index or bool(shot.get("crouched", false)):
 						continue
 					var toward: Vector2 = origin - Vector2(shot.get("position", origin))
@@ -3023,6 +3125,10 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 		brain["tactical_state"] = "LOW_FIRE" if mode == "low_shot" else "DUCK_FIRE"
 		brain["allow_fire"] = low_clear
 	if target_crouched and not bool(brain["crouch"]):
+		brain["allow_fire"] = false
+	if mode == "wall_approach":
+		brain["tactical_move"] = (Vector2(brain["wall_cover_point"]) - origin).normalized()
+		brain["tactical_state"] = "WALL_COVER"
 		brain["allow_fire"] = false
 	brain["tactical_mode"] = mode
 	brain["tactical_timer"] = timer
@@ -5167,6 +5273,8 @@ func _spawn_pistol_shot(player_index: int) -> void:
 		state["pistol_ammo"] = maxi(int(state.get("pistol_ammo", 6)) - 1, 0)
 		if int(state["pistol_ammo"]) == 0:
 			_start_pistol_reload(state)
+	if _is_bot_controlled_slot(player_index):
+		state["fire_cooldown"] = float(state["fire_cooldown"]) * BOT_FIRE_INTERVAL_MULTIPLIER
 	player_states[player_index] = state                                                        # Save the armed cooldown.
 
 
@@ -5466,12 +5574,12 @@ func _spawn_barrel_break(position: Vector2, direction: Vector2, impact_position:
 		next_combat_visual_id += 1
 
 
-# _nearest_projectile_player_hit: Finds the closest opposing body intersected by this projectile path.
+# _nearest_projectile_player_hit: Finds the closest eligible body intersected by this projectile path.
 func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vector2, maximum_distance: float, shot_crouched: bool) -> Dictionary:
 	var nearest_distance := maximum_distance + 0.001                                           # Keep the first body beyond any possible hit by default.
 	var nearest_player := -1                                                                    # Track which body owns that nearest intersection.
 	for player_index in range(player_states.size()):                                           # Check each currently active local player.
-		if player_index == owner or (player_index < player_joined.size() and not player_joined[player_index]) or PLAYER_TEAMS[player_index] == PLAYER_TEAMS[owner]: # No self hits, unjoined ghosts, or friendly fire.
+		if player_index == owner or (player_index < player_joined.size() and not player_joined[player_index]) or (PLAYER_TEAMS[player_index] == PLAYER_TEAMS[owner] and not (_is_bot_controlled_slot(owner) and _is_bot_controlled_slot(player_index))):
 			continue                                                                                   # Skip this candidate.
 		if bool(player_states[player_index].get("is_dying", false)):                            # Do not let stray bullets repeatedly hit a fallen or respawning body.
 			continue                                                                                   # The player becomes targetable again only after the reverse Death animation finishes.
@@ -8562,6 +8670,29 @@ func _process_player_context(delta: float) -> void:                             
 
 
 
+func _bot_limit_actor_overlap(player_index: int, origin: Vector2, destination: Vector2) -> Vector2:
+	var travel := destination - origin
+	var length := travel.length()
+	if length < 0.000001:
+		return destination
+	var direction := travel / length
+	var allowed := length
+	for index in range(player_states.size()):
+		if index == player_index or index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or bool(player_states[index].get("is_dying", false)):
+			continue
+		var center := _player_state_world_position(player_states[index])
+		var offset := origin - center
+		var radius := PLAYER_CAPSULE_RADIUS * 2.0
+		if offset.length_squared() < radius * radius:
+			if offset.dot(direction) < 0.0:
+				allowed = 0.0
+			continue
+		var hit := _ray_circle_hit_distance(origin, direction, center, radius)
+		if hit >= 0.0:
+			allowed = minf(allowed, maxf(hit - 0.001, 0.0))
+	return origin + direction * allowed
+
+
 # _process_bot_world_context: Moves an NPC's capsule directly through the same
 # collision solver as every player. Bot decisions are world-space grid routes;
 # translating them through a private camera's turn/strafe buttons created the
@@ -8595,6 +8726,7 @@ func _process_bot_world_context(delta: float) -> void:
 	# LOCAL_TILE_WORLD_HALF_EXTENT. Match that world speed exactly; the old bot
 	# path omitted the factor and made greenshirts run twice as fast as Bart.
 	var moved := _move_world_with_wall_slide(origin, desired * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta, "east", "west", "south", "north")
+	moved = _bot_limit_actor_overlap(active_player_index, origin, moved)
 	var actual_delta := moved - origin
 	if actual_delta.length_squared() > 0.00000001:
 		_set_player_world_position_for_current_view(moved)
@@ -8639,6 +8771,7 @@ func _process_virtual_bot_world_context(player_index: int, delta: float) -> void
 		_sync_actor_sprite_view(player_index)
 		return
 	var moved := _move_world_with_wall_slide(origin, desired.normalized() * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(bool(state["character_is_crouching"])) * delta, "east", "west", "south", "north")
+	moved = _bot_limit_actor_overlap(player_index, origin, moved)
 	var actual_delta := moved - origin
 	state["character_is_moving"] = actual_delta.length_squared() > 0.00000001
 	if bool(state["character_is_moving"]):
