@@ -26,7 +26,7 @@ func _ready() -> void:
 	_add_horizon_silhouette()
 	_add_feedback_button(font)
 	var start := Button.new()
-	start.text = "PRESS SPACE TO PLAY"
+	start.text = "TAP TO PLAY" if preload("res://scripts/mobile_controls.gd").available() else "PRESS SPACE TO PLAY"
 	start.position = Vector2(54, 300)
 	start.size = Vector2(400, 55)
 	start.add_theme_font_override("font", font)
@@ -46,6 +46,9 @@ func _ready() -> void:
 	add_child(start)
 	var keys := ["W A S D", "MOUSE", "LEFT CLICK", "SHIFT", "R", "Q", "E", "ESC"]
 	var actions := ["MOVE / STRAFE", "LOOK", "FIRE", "CROUCH", "RELOAD", "BUY HEART (5 COINS)", "BUY GUN (10 COINS)", "PAUSE / MENU"]
+	if preload("res://scripts/mobile_controls.gd").available():
+		keys = ["LEFT SIDE", "RIGHT SIDE", "FIRE", "DUCK", "RELOAD", "HEART 5", "GUN 10", "II"]
+		actions = ["DRAG TO MOVE", "DRAG TO LOOK", "TAP / HOLD TO FIRE", "TOGGLE CROUCH", "RELOAD", "BUY HEART", "BUY GUN", "PAUSE / MENU"]
 	for i in range(keys.size()):
 		var key_label := _make_label(font, keys[i], 12, MENU_INK)
 		key_label.position = Vector2(62, 545 + i * 16)
@@ -80,5 +83,5 @@ func _begin_public_match(device_id: int) -> void:
 		for slot in range(4):
 			session.call("release_slot", slot)
 		session.call("claim_slot", 0, device_id)
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if device_id < 0 else Input.MOUSE_MODE_VISIBLE
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if device_id < 0 and not preload("res://scripts/mobile_controls.gd").available() else Input.MOUSE_MODE_VISIBLE
 	call_deferred("_start_match")

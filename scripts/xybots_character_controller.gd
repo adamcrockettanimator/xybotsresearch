@@ -1166,6 +1166,8 @@ const SLOT_GRAPH_TUNER_PATH := "res://slot_graph_tuner.json"                    
 
 
 # _ready: Initializes the maze wall data, loads textures, creates renderer nodes, and draws the starting view.
+var mobile_controls: Control
+
 func _ready() -> void:                                                                      # Declare this function.
 	if _public_build():
 		show_top_down_source_overlay = false
@@ -1208,6 +1210,14 @@ func _ready() -> void:                                                          
 	_setup_combat_collectibles()                                                               # Populate one shared coin per cell and choose the first machine-gun spawn.
 	_setup_combat_hud()                                                                         # Build the first combat milestone HUD after both split-screen views exist.
 	_setup_wanted_tally_overlay()
+	if preload("res://scripts/mobile_controls.gd").available():
+		var layer := CanvasLayer.new()
+		layer.layer = 100
+		add_child(layer)
+		mobile_controls = preload("res://scripts/mobile_controls.gd").new()
+		mobile_controls.game = self
+		layer.add_child(mobile_controls)
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if clear_the_map_mode:
 		_begin_wanted_tally(false)
 	_setup_deathmatch_overlays()
@@ -1596,6 +1606,8 @@ func _setup_deathmatch_overlays() -> void:
 	canvas_layer.add_child(options_overlay)
 	options_label = Label.new()
 	options_label.text = "PAUSED\n\nWASD: MOVE / STRAFE\nMOUSE: LOOK    LEFT CLICK: FIRE\nSHIFT: CROUCH    R: RELOAD\nQ: BUY HEART    E: BUY GUN\n\nESC: RESUME    M: MAIN MENU" if _public_build() else "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:42\n\nSELECT / ESC: CLOSE"
+	if mobile_controls != null:
+		options_label.text = "PAUSED\n\nDRAG LEFT TO MOVE\nDRAG RIGHT TO LOOK\nFIRE: TAP OR HOLD\nDUCK: TOGGLE CROUCH\n\nLAYOUT: MOVE BUTTONS"
 	options_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	options_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	options_label.add_theme_font_override("font", pixel_hud_font)
@@ -1617,9 +1629,9 @@ func _input(event: InputEvent) -> void:                                         
 		_open_feedback()
 		return
 	if _public_build():
-		if event is InputEventMouseMotion and not player_states.is_empty() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not match_paused and not clear_map_waiting_to_start:
+		if mobile_controls == null and event is InputEventMouseMotion and not player_states.is_empty() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not match_paused and not clear_map_waiting_to_start:
 			player_states[0]["continuous_camera_yaw"] = wrapf(float(player_states[0].get("continuous_camera_yaw", 0.0)) + event.relative.x * 0.003, -PI, PI)
-		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not match_paused:
+		elif mobile_controls == null and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not match_paused:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if not _public_build() and event is InputEventKey and event.pressed and event.ctrl_pressed and event.keycode == KEY_Z: # Reserve standard Ctrl+Z for graph tuning undo.
 		if _slot_graph_tuner_undo_last_edit():                                                   # Undo only when an edit snapshot exists.
@@ -4408,7 +4420,7 @@ func _begin_wanted_tally(terminal: bool) -> void:
 	wanted_tally_overlay.visible = true
 	wanted_tally_prompt.visible = not terminal and clear_map_waiting_to_start
 	if wanted_tally_prompt.visible:
-		wanted_tally_prompt.text = "PRESS SPACE TO BEGIN" if _public_build() else "PRESS START TO BEGIN"
+		wanted_tally_prompt.text = "TAP TO BEGIN" if mobile_controls != null else ("PRESS SPACE TO BEGIN" if _public_build() else "PRESS START TO BEGIN")
 		_start_clear_map_intro_music()
 	wanted_tally_title.text = "ROUND %d:\nKILL ALL THE GREENSHIRTS!" % clear_map_round if not terminal else ("YOU WIN!" if combat_round_result == "YOU WIN!" else "YOU LOSE")
 	var green_slots: Array[int] = []
@@ -4495,7 +4507,7 @@ func _advance_wanted_tally(delta: float) -> void:
 				wanted_tally_overlay.visible = false
 			return
 		wanted_tally_title.text = ("YOU WIN!\nROUNDS WON: %d" % clear_map_wins) if combat_round_result == "YOU WIN!" else "YOU LOSE"
-		wanted_tally_prompt.text = "PRESS SPACE TO CONTINUE" if _public_build() else ("PRESS START FOR NEXT ROUND" if combat_round_result == "YOU WIN!" else "PRESS START TO TRY AGAIN")
+		wanted_tally_prompt.text = "TAP TO CONTINUE" if mobile_controls != null else ("PRESS SPACE TO CONTINUE" if _public_build() else ("PRESS START FOR NEXT ROUND" if combat_round_result == "YOU WIN!" else "PRESS START TO TRY AGAIN"))
 		wanted_tally_prompt.visible = true
 		return
 	var event: Dictionary = wanted_tally_queue.pop_front()
@@ -4799,7 +4811,7 @@ func _update_combat_hud() -> void:
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
 func _is_player_crouch_pressed_for(player_index: int) -> bool:
 	var joypad_id := _xbox_joypad_id_for_player(player_index)
-	return (player_index == 0 and _is_key_down(KEY_SHIFT)) or (joypad_id >= 0 and Input.get_joy_axis(joypad_id, JOY_AXIS_TRIGGER_LEFT) >= 0.45)
+	return (player_index == 0 and mobile_controls != null and mobile_controls.pressed("crouch")) or (player_index == 0 and _is_key_down(KEY_SHIFT)) or (joypad_id >= 0 and Input.get_joy_axis(joypad_id, JOY_AXIS_TRIGGER_LEFT) >= 0.45)
 
 
 func _is_player_fire_pressed_for(player_index: int) -> bool:
@@ -4807,6 +4819,8 @@ func _is_player_fire_pressed_for(player_index: int) -> bool:
 		return bool(bot_inputs.get(player_index, {}).get("fire", false))
 	if player_index < 0 or player_index >= 4:
 		return false
+	if player_index == 0 and mobile_controls != null and mobile_controls.take_fire():
+		return true
 	if player_index == 0 and _public_build() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		return true
 	var keyboard_fire: int = int([KEY_F, KEY_P, KEY_SLASH, KEY_KP_0][player_index])
@@ -4940,7 +4954,7 @@ func _process_combat(delta: float) -> void:
 		for timer_key in ["ammo_single_timer", "ammo_left_timer", "ammo_right_timer", "ammo_dual_finish_timer"]:
 			state[timer_key] = maxf(float(state.get(timer_key, 0.0)) - delta, 0.0)
 		var joypad_id := _xbox_joypad_id_for_player(player_index)
-		var reload_pressed := (joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_X)) or (player_index == 0 and _is_key_down(KEY_R))
+		var reload_pressed: bool = (joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_X)) or (player_index == 0 and (_is_key_down(KEY_R) or (mobile_controls != null and mobile_controls.take_reload())))
 		var keyboard_map_shortcut := player_index == 0 and _is_key_down(KEY_R) and _is_key_down(KEY_CTRL)
 		if reload_pressed and not keyboard_map_shortcut and not bool(state.get("reload_was_pressed", false)):
 			_start_pistol_reload(state)
@@ -8870,8 +8884,8 @@ func _update_scoreboard_shop_input() -> void:
 		var heart_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_A)
 		var gun_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_B)
 		if player_index == 0:
-			heart_pressed = heart_pressed or _is_key_down(KEY_Q if _public_build() else KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
-			gun_pressed = gun_pressed or _is_key_down(KEY_E if _public_build() else KEY_2)
+			heart_pressed = heart_pressed or (mobile_controls != null and mobile_controls.pressed("heart")) or _is_key_down(KEY_Q if _public_build() else KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
+			gun_pressed = gun_pressed or (mobile_controls != null and mobile_controls.pressed("gun")) or _is_key_down(KEY_E if _public_build() else KEY_2)
 		if player_index < player_joined.size() and player_joined[player_index] and not bool(player_states[player_index].get("is_dying", false)) and not combat_round_complete:
 			var state := player_states[player_index]
 			var coins := int(state.get("coins", 0))
@@ -8895,17 +8909,17 @@ func _process(delta: float) -> void:                                            
 	if bot_bark_player != null and bot_bark_player.playing:
 		_update_bot_bark_spatial()
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
-	var options_pressed := _is_key_down(KEY_ESCAPE)
+	var options_pressed: bool = _is_key_down(KEY_ESCAPE) or (mobile_controls != null and mobile_controls.pressed("pause"))
 	for device_id in Input.get_connected_joypads():
 		options_pressed = options_pressed or Input.is_joy_button_pressed(device_id, JOY_BUTTON_BACK)
 	if options_pressed and not was_options_pressed:
 		match_paused = not match_paused
-		if _public_build():
+		if _public_build() and mobile_controls == null:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if match_paused else Input.MOUSE_MODE_CAPTURED
 		if options_overlay != null:
 			options_overlay.visible = match_paused
 	was_options_pressed = options_pressed
-	if _public_build() and match_paused and _is_key_down(KEY_M):
+	if _public_build() and match_paused and (_is_key_down(KEY_M) or (mobile_controls != null and mobile_controls.pressed("menu"))):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_tree().change_scene_to_file("res://public_title.tscn")
 		return
@@ -9868,7 +9882,9 @@ func _layout_viewport() -> void:                                                
 		var solo_minimap: Node2D = solo_view.get("match_minimap_overlay", null)
 		if solo_minimap != null and solo_camera != null:
 			var solo_bounds := Rect2(solo_camera.position, VIEWPORT_SIZE * solo_scale)
-			solo_minimap.position = solo_bounds.position + Vector2(solo_bounds.size.x - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+			var minimap_scale := 2.0 if mobile_controls != null else 1.0
+			solo_minimap.scale = Vector2.ONE * minimap_scale
+			solo_minimap.position = solo_bounds.position + Vector2(solo_bounds.size.x - MATCH_MINIMAP_SIZE * minimap_scale - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
 		return
 	if player_views.size() > 1 and player_windows.size() > 1:                                  # Give each local player a full camera in its own native window.
 		for player_index in range(player_views.size()):                                           # Position the player camera and minimalist map on that player's own display.
@@ -13106,14 +13122,15 @@ func _read_regenerate_map() -> bool:                                            
 
 # _read_next_round: Returns true once for an end-of-round Start request, with X retained as a keyboard fallback.
 func _read_next_round() -> bool:
-	var replay_pressed := _is_key_down(KEY_X) or (_public_build() and (_is_key_down(KEY_SPACE) or (not FeedbackAccess.available() and _is_key_down(KEY_ENTER))))                                                 # Retain X as the keyboard fallback for the explicit post-round replay prompt.
+	var touch_continue: bool = mobile_controls != null and mobile_controls.take_continue()
+	var replay_pressed: bool = _is_key_down(KEY_X) or (_public_build() and (_is_key_down(KEY_SPACE) or (not FeedbackAccess.available() and _is_key_down(KEY_ENTER))))                                                 # Retain X as the keyboard fallback for the explicit post-round replay prompt.
 	# Result screens accept Start from any connected controller, even if device
 	# ownership changed or a controller was connected after the lobby.
 	for device_id in Input.get_connected_joypads():
 		replay_pressed = replay_pressed or Input.is_joy_button_pressed(device_id, JOY_BUTTON_START)
 	var replay_just_pressed := replay_pressed and not was_next_round_pressed                  # Ignore a held key so a new round cannot immediately retrigger.
 	was_next_round_pressed = replay_pressed                                                    # Store the current state for the next process frame.
-	return replay_just_pressed                                                                 # Return the one-shot replay request.
+	return replay_just_pressed or touch_continue                                               # Preserve brief touch presses between process frames.
 
 
 
@@ -13153,6 +13170,8 @@ func _read_toggle_bot_trace() -> bool:
 # _read_movement: Reads WASD or arrow movement input and returns a normalized local movement vector.
 func _read_movement() -> Vector2:                                                           # Declare this function.
 	var movement := Vector2.ZERO                                                               # Store mutable runtime state for assets, rendering, movement, or debug output.
+	if active_player_index == 0 and mobile_controls != null:
+		movement += mobile_controls.stick
 	movement += _xbox_left_stick()                                                             # Add this player's analog left-stick travel in the same screen-local axes as keyboard input.
 	if _is_player_move_left_pressed():                                                         # Read the bound player's local strafe-left input.
 		movement.x -= 1.0                                                                         # Continue the controller logic for this section.
