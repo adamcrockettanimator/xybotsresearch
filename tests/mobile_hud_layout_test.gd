@@ -8,7 +8,6 @@ func _initialize() -> void:
 	game.set_process(false)
 	game._update_combat_hud()
 	assert(game.combat_health_bars[0].columns == 0)
-	assert(not game.mobile_hud_panels[0].visible)
 	var mobile := Control.new()
 	game.mobile_controls = mobile
 	game.add_child(mobile)
@@ -27,18 +26,18 @@ func _initialize() -> void:
 		assert(number.text == "999" and second.visible)
 		assert(coin.scale.x > 1 and number.scale.x > 1 and first.scale.x > 1)
 		assert(health.position.y >= 0 and coin.position.y >= 0 and number.position.y >= 0)
-		var panels: Array[ColorRect] = game.mobile_hud_panels
-		for i in range(panels.size()):
-			assert(panels[i].visible)
-			var r := Rect2(panels[i].position, panels[i].size)
+		var health_rect := Rect2(health.position, Vector2(46, 20) * health.scale)
+		var coin_rect := Rect2(coin.position, coin.size * coin.scale).merge(Rect2(number.position, number.get_combined_minimum_size() * number.scale))
+		var ammo_rect := Rect2(first.position, first.size * first.scale).merge(Rect2(second.position, second.size * second.scale))
+		for r in [health_rect, coin_rect, ammo_rect]:
 			assert(r.position.x >= 0 and r.position.y >= 0 and r.end.x <= screen_size.x and r.end.y <= screen_size.y)
-			for j in range(i + 1, panels.size()):
-				assert(not r.intersects(Rect2(panels[j].position, panels[j].size)))
+		assert(not health_rect.intersects(coin_rect))
+		assert(not coin_rect.intersects(ammo_rect))
 	game.player_states[0]["health"] = 3
 	game.player_states[0]["machine_gun_ammo"] = 0
 	game._update_combat_hud()
 	assert(game.combat_health_bars[0].current_health == 3)
 	assert(not game.combat_ammo_second_icons[0].visible)
-	print("Mobile HUD scales health, coins and single/dual ammo without panel overlap")
+	print("Mobile HUD scales health, coins and single/dual ammo without overlap")
 	game.queue_free()
 	quit()

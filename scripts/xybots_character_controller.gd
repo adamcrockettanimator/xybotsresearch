@@ -1017,7 +1017,6 @@ var active_blood_splatters: Array[Dictionary] = []                              
 var combat_health_bars: Array[Node2D] = []                                                    # Store one visible health meter for each split-screen player.
 var combat_respawn_blackouts: Array[ColorRect] = []                                           # Store one full-view blackout panel for each defeated player's own camera.
 var combat_respawn_labels: Array[Label] = []                                                  # Store one readable death/countdown label for each local view.
-var mobile_hud_panels: Array[ColorRect] = []
 var combat_coin_labels: Array[Label] = []                                                     # Store one per-player score readout inside the lower-right of each view.
 var combat_coin_icons: Array[TextureRect] = []                                                # Store one authored coin icon beside each score readout.
 var combat_ammo_icons: Array[TextureRect] = []                                                # Primary cylinder for each local view.
@@ -1136,9 +1135,6 @@ var footstep_last_samples: Dictionary = {}
 var footstep_audio_channels: Dictionary = {}
 
 var music_player: AudioStreamPlayer
-var mobile_sample_audio := false
-var mobile_sfx_warm_queue: Array[String] = []
-var mobile_warmed_sfx: Array[AudioStream] = []
 var music_combat_remaining := 0.0
 var clear_map_result_player: AudioStreamPlayer
 var gunshot_player: AudioStreamPlayer
@@ -1184,7 +1180,6 @@ func _ready() -> void:                                                          
 	pixel_hud_font = preload("res://assets/Fonts/High Noon.woff")
 	pixel_hud_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE                            # Render hard pixel edges instead of soft vector-font smoothing.
 	pixel_hud_font.multichannel_signed_distance_field = false                                  # Disable MSDF smoothing for the same deliberately aliased presentation.
-	mobile_sample_audio = bool(get_tree().get_meta("grudge_mobile_audio_test", false)) or (OS.has_feature("web") and bool(get_tree().get_meta("grudge_mobile_wide", false)))
 	_setup_shared_audio()
 	status_label.add_theme_font_override("font", pixel_hud_font)                             # Keep even the legacy diagnostic readout consistent when it is temporarily shown.
 	if BARREL_LOD_REVIEW_LEVEL:                                                               # Keep barrel-source review free of maze occlusion and unrelated props.
@@ -1239,13 +1234,6 @@ func _ready() -> void:                                                          
 	_update_status()                                                                           # Call a helper function as part of the current controller step.
 
 
-# Web samples use the browser's lower-latency playback path. Keep this
-# per-player so desktop web and the looping music retain their existing mixer.
-func _configure_sfx_player(player: AudioStreamPlayer) -> void:
-	if mobile_sample_audio:
-		player.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
-
-
 func _setup_shared_audio() -> void:
 	# Grow bus_count instead of add_bus(-1): Godot 4.7 Web can misroute samples.
 	# Voice-only buses leave the music and effects mix untouched. The reverb
@@ -1271,7 +1259,6 @@ func _setup_shared_audio() -> void:
 		effect.damping = 0.6
 		AudioServer.add_bus_effect(reverb_bus, effect)
 	bot_bark_player = AudioStreamPlayer.new()
-	_configure_sfx_player(bot_bark_player)
 	bot_bark_player.bus = "NPC Voice"
 	add_child(bot_bark_player)
 	bot_bark_reverb_player = AudioStreamPlayer.new()
@@ -1279,55 +1266,20 @@ func _setup_shared_audio() -> void:
 	add_child(bot_bark_reverb_player)
 	music_player = MusicAccess.get_player(get_tree())
 	clear_map_result_player = AudioStreamPlayer.new()
-	_configure_sfx_player(clear_map_result_player)
 	add_child(clear_map_result_player)
 	gunshot_player = AudioStreamPlayer.new()
-	_configure_sfx_player(gunshot_player)
 	gunshot_player.stream = GUNSHOT_STREAM
 	add_child(gunshot_player)
 	coin_pickup_player = AudioStreamPlayer.new()
-	_configure_sfx_player(coin_pickup_player)
 	coin_pickup_player.stream = COIN_PICKUP_STREAM
 	coin_pickup_player.volume_db = -6.0                                                       # Halve the perceived coin pickup level without changing the other combat/UI cues.
 	add_child(coin_pickup_player)
 	heart_pickup_player = AudioStreamPlayer.new()
-	_configure_sfx_player(heart_pickup_player)
 	heart_pickup_player.stream = HEART_PICKUP_STREAM
 	add_child(heart_pickup_player)
 	machine_gun_pickup_player = AudioStreamPlayer.new()
-	_configure_sfx_player(machine_gun_pickup_player)
 	machine_gun_pickup_player.stream = MACHINE_GUN_PICKUP_STREAM
 	add_child(machine_gun_pickup_player)
-	if mobile_sample_audio and OS.has_feature("web"):
-		# Register common cues during setup instead of on their first shot/pickup.
-		for stream in [GUNSHOT_STREAM, COIN_PICKUP_STREAM, HEART_PICKUP_STREAM, MACHINE_GUN_PICKUP_STREAM]:
-			if not AudioServer.is_stream_registered_as_sample(stream):
-				AudioServer.register_stream_as_sample(stream)
-		# Spread short reload and footstep sample registration over frames so
-		# first use is less likely to decode during an action.
-		for kind in ["Walk", "Run", "Sneak", "Drop"]:
-			for sample in range(1, 7):
-				mobile_sfx_warm_queue.append(FOOTSTEP_ROOT + "%s/Wood/WASD Sound Wood %s %02d.wav" % [kind, kind, sample])
-		for sample in range(1, 6):
-			mobile_sfx_warm_queue.append("res://assets/Audio/SFX/Reloading and Weapons SFX/Revolver/Turn%d.wav" % sample)
-		for sample in range(1, 4):
-			mobile_sfx_warm_queue.append("res://assets/Audio/SFX/Reloading and Weapons SFX/Revolver/CloseRevolver%d.wav" % sample)
-
-
-# Keep references to prewarmed samples while the match is active.
-func _warm_next_mobile_sfx() -> void:
-	if mobile_sfx_warm_queue.is_empty():
-		return
-	var path: String = mobile_sfx_warm_queue.pop_front()
-	if not ResourceLoader.exists(path):
-		return
-	var stream := load(path) as AudioStream
-	if stream != null:
-		mobile_warmed_sfx.append(stream)
-		if not AudioServer.is_stream_registered_as_sample(stream):
-			AudioServer.register_stream_as_sample(stream)
-
-
 # One shared voice channel prevents overlapping chatter in larger bot matches.
 # A kill line has priority so it is not lost behind a recent investigation bark.
 func _request_bot_bark(player_index: int, category: String) -> bool:
@@ -1358,8 +1310,7 @@ func _request_bot_bark(player_index: int, category: String) -> bool:
 	bot_bark_player.stream = stream
 	bot_bark_reverb_player.stream = stream
 	bot_bark_player.play()
-	if not mobile_sample_audio:
-		bot_bark_reverb_player.play()
+	bot_bark_reverb_player.play()
 	bot_bark_last_global = now
 	bot_bark_last_by_bot[player_index] = now
 	bot_bark_last_line[player_index] = filename
@@ -1434,7 +1385,6 @@ func _play_bot_damage_grunt(player_index: int, lethal := false) -> bool:
 			AudioServer.set_bus_send(bus, "Master")
 			AudioServer.add_bus_effect(bus, AudioEffectPanner.new())
 		var voice := AudioStreamPlayer.new()
-		_configure_sfx_player(voice)
 		voice.bus = bus_name
 		add_child(voice)
 		bot_damage_channels[player_index] = {"player": voice, "panner": AudioServer.get_bus_effect(bus, 0)}
@@ -1466,7 +1416,6 @@ func _footstep_channel(player_index: int) -> Dictionary:
 		AudioServer.set_bus_send(bus, "Master")
 		AudioServer.add_bus_effect(bus, AudioEffectPanner.new())
 	var player := AudioStreamPlayer.new()
-	_configure_sfx_player(player)
 	player.bus = bus_name
 	add_child(player)
 	var channel := {"player": player, "panner": AudioServer.get_bus_effect(bus, 0)}
@@ -4247,7 +4196,6 @@ func _drop_machine_gun_for_defeat(player_index: int) -> void:
 
 # _setup_combat_hud: Adds a compact health meter below each player view without changing the renderer hierarchy.
 func _setup_combat_hud() -> void:
-	mobile_hud_panels.clear()
 	combat_health_bars.clear()                                                                  # Rebuild the small HUD set only once during scene setup.
 	combat_respawn_blackouts.clear()                                                            # Rebuild the matching per-view blackout panels during scene setup.
 	combat_respawn_labels.clear()                                                               # Rebuild the corresponding readable death/countdown labels.
@@ -4278,16 +4226,6 @@ func _setup_combat_hud() -> void:
 		view["muzzle_anchor_debug_layer"] = muzzle_debug_layer                                   # Keep one overlay root per camera.
 		view["muzzle_anchor_debug_nodes"] = {}                                                   # Cache only cross pixels separately from real combat effects.
 		player_views[player_index] = view                                                         # Save the expanded view bundle.
-		if player_index == 0:
-			for panel_name in ["MobileHealthBacking", "MobileCoinsBacking", "MobileAmmoBacking"]:
-				var panel := ColorRect.new()
-				panel.name = panel_name
-				panel.color = Color(0.0, 0.0, 0.0, 0.55)
-				panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				panel.z_index = 199
-				panel.visible = false
-				hud_layer.add_child(panel)
-				mobile_hud_panels.append(panel)
 		var meter := preload("res://scripts/combat_health_bar.gd").new()                         # Instantiate the self-contained hatch-bar drawing script.
 		meter.name = "CombatHealthP%d" % (player_index + 1)                                      # Name the node for scene-tree inspection.
 		meter.player_index = player_index                                                         # Label the meter with its owning player.
@@ -4880,23 +4818,16 @@ func _update_combat_hud() -> void:
 # The retained icons and values are shared with desktop, but get a readable
 # two-row health bar and dedicated top-edge positions on a phone.
 func _layout_mobile_combat_hud(screen_size: Vector2) -> void:
-	if combat_health_bars.is_empty() or combat_coin_icons.is_empty() or combat_ammo_icons.is_empty() or mobile_hud_panels.size() < 3:
+	if combat_health_bars.is_empty() or combat_coin_icons.is_empty() or combat_ammo_icons.is_empty():
 		return
 	var size_factor := minf(screen_size.x / 1280.0, screen_size.y / 720.0)
 	var unit := 8.0 * size_factor
-	var margin := 8.0 * size_factor
 	var top := 15.0 * size_factor
 	var health = combat_health_bars[0]
 	health.columns = 5
 	health.heart_spacing = 9.0
 	health.position = Vector2(screen_size.x * 0.14, top)
 	health.scale = Vector2.ONE * unit
-	var health_panel := mobile_hud_panels[0]
-	health_panel.position = health.position - Vector2.ONE * margin
-	var health_columns := mini(maxi(int(health.current_health), 1), 5)
-	var health_rows := 2 if int(health.current_health) > 5 else 1
-	health_panel.size = Vector2(float(health_columns - 1) * 9.0 + 10.0, float(health_rows) * 10.0) * unit + Vector2.ONE * margin * 2.0
-	health_panel.visible = true
 	var coin_icon := combat_coin_icons[0]
 	var coin_label := combat_coin_labels[0]
 	var icon_unit := unit * 1.3
@@ -4904,11 +4835,6 @@ func _layout_mobile_combat_hud(screen_size: Vector2) -> void:
 	coin_icon.scale = Vector2.ONE * icon_unit
 	coin_label.position = coin_icon.position + Vector2(6.0 * icon_unit, 0.0)
 	coin_label.scale = Vector2.ONE * unit
-	var coin_panel := mobile_hud_panels[1]
-	coin_panel.position = coin_icon.position - Vector2.ONE * margin
-	var label_size := coin_label.get_combined_minimum_size() * coin_label.scale
-	coin_panel.size = Vector2(maxf(4.0 * icon_unit, coin_label.position.x - coin_icon.position.x + label_size.x) + margin * 2.0, maxf(4.0 * icon_unit, label_size.y) + margin * 2.0)
-	coin_panel.visible = true
 	var first := combat_ammo_icons[0]
 	var second := combat_ammo_second_icons[0]
 	var ammo_unit := unit * 1.35
@@ -4916,10 +4842,6 @@ func _layout_mobile_combat_hud(screen_size: Vector2) -> void:
 	first.scale = Vector2.ONE * ammo_unit
 	second.position = first.position + Vector2(10.0 * ammo_unit, 0.0)
 	second.scale = first.scale
-	var ammo_panel := mobile_hud_panels[2]
-	ammo_panel.position = first.position - Vector2.ONE * margin
-	ammo_panel.size = Vector2((19.0 if second.visible else 9.0) * ammo_unit + margin * 2.0, 9.0 * ammo_unit + margin * 2.0)
-	ammo_panel.visible = true
 	if not scoreboard_shop_labels.is_empty():
 		scoreboard_shop_labels[0].visible = false
 
@@ -4971,7 +4893,6 @@ func _reload_sound(kind: String) -> void:
 	if stream == null:
 		return
 	var voice := AudioStreamPlayer.new()
-	_configure_sfx_player(voice)
 	voice.stream = stream
 	add_child(voice)
 	voice.finished.connect(voice.queue_free)
@@ -9034,8 +8955,6 @@ func _update_scoreboard_shop_input() -> void:
 
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
-	if mobile_sample_audio:
-		_warm_next_mobile_sfx()
 	if bot_bark_player != null and bot_bark_player.playing:
 		_update_bot_bark_spatial()
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.

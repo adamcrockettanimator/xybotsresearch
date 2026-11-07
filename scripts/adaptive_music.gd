@@ -17,6 +17,11 @@ func _ready() -> void:
 
 func set_music_mode(mode: String, _restart := false) -> void:
 	current_mode = "menu" if mode == "explore" else mode
+	# The mobile audio experiment intentionally runs without music.
+	if bool(get_tree().get_meta("grudge_mobile_wide", false)):
+		if playing:
+			stop()
+		return
 	if stream != null and not playing:
 		play()
 
