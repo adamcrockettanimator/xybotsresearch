@@ -24,7 +24,8 @@ func set_music_mode(mode: String, _restart := false) -> void:
 func _setup_music_bus() -> void:
 	var music_bus := AudioServer.get_bus_index("Music")
 	if music_bus < 0:
-		AudioServer.add_bus()
+		# Godot 4.7 Web sample routing can break when add_bus(-1) appends.
+		AudioServer.bus_count = AudioServer.bus_count + 1
 		music_bus = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(music_bus, "Music")
 		AudioServer.set_bus_send(music_bus, "Master")

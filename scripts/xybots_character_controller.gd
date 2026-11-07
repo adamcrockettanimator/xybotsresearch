@@ -1246,11 +1246,12 @@ func _configure_sfx_player(player: AudioStreamPlayer) -> void:
 
 
 func _setup_shared_audio() -> void:
+	# Grow bus_count instead of add_bus(-1): Godot 4.7 Web can misroute samples.
 	# Voice-only buses leave the music and effects mix untouched. The reverb
 	# sends through the same panner so both layers follow the speaker.
 	var voice_bus := AudioServer.get_bus_index("NPC Voice")
 	if voice_bus < 0:
-		AudioServer.add_bus()
+		AudioServer.bus_count = AudioServer.bus_count + 1
 		voice_bus = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(voice_bus, "NPC Voice")
 		AudioServer.set_bus_send(voice_bus, "Master")
@@ -1258,7 +1259,7 @@ func _setup_shared_audio() -> void:
 	bot_bark_panner = AudioServer.get_bus_effect(voice_bus, 0) as AudioEffectPanner
 	var reverb_bus := AudioServer.get_bus_index("NPC Voice Reverb")
 	if reverb_bus < 0:
-		AudioServer.add_bus()
+		AudioServer.bus_count = AudioServer.bus_count + 1
 		reverb_bus = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(reverb_bus, "NPC Voice Reverb")
 		AudioServer.set_bus_send(reverb_bus, "NPC Voice")
@@ -1426,7 +1427,7 @@ func _play_bot_damage_grunt(player_index: int, lethal := false) -> bool:
 		var bus_name := "NPC Damage %d" % player_index
 		var bus := AudioServer.get_bus_index(bus_name)
 		if bus < 0:
-			AudioServer.add_bus()
+			AudioServer.bus_count = AudioServer.bus_count + 1
 			bus = AudioServer.bus_count - 1
 			AudioServer.set_bus_name(bus, bus_name)
 			AudioServer.set_bus_send(bus, "Master")
@@ -1458,7 +1459,7 @@ func _footstep_channel(player_index: int) -> Dictionary:
 	var bus_name := "Actor Footsteps %d" % player_index
 	var bus := AudioServer.get_bus_index(bus_name)
 	if bus < 0:
-		AudioServer.add_bus()
+		AudioServer.bus_count = AudioServer.bus_count + 1
 		bus = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(bus, bus_name)
 		AudioServer.set_bus_send(bus, "Master")
