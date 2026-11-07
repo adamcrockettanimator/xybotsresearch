@@ -1,0 +1,24 @@
+extends SceneTree
+
+func _initialize() -> void:
+	set_meta("grudge_mobile_audio_test", true)
+	set_meta("grudge_public_build", true)
+	var game = load("res://main.tscn").instantiate()
+	root.add_child.call_deferred(game)
+	await process_frame
+	assert(game.mobile_sample_audio)
+	for player in [game.gunshot_player, game.coin_pickup_player, game.heart_pickup_player, game.machine_gun_pickup_player, game.bot_bark_player, game.clear_map_result_player]:
+		assert(player.playback_type == AudioServer.PLAYBACK_TYPE_SAMPLE)
+	assert(game.bot_bark_reverb_player.playback_type == AudioServer.PLAYBACK_TYPE_DEFAULT)
+	assert(game.music_player.playback_type == AudioServer.PLAYBACK_TYPE_DEFAULT)
+	var footstep: Dictionary = game._footstep_channel(0)
+	assert(footstep.player.playback_type == AudioServer.PLAYBACK_TYPE_SAMPLE)
+	var previous_count: int = game.get_child_count()
+	game._reload_sound("Turn")
+	assert(game.get_child_count() == previous_count + 1)
+	var reload_player = game.get_child(game.get_child_count() - 1)
+	assert(reload_player is AudioStreamPlayer)
+	assert(reload_player.playback_type == AudioServer.PLAYBACK_TYPE_SAMPLE)
+	print("Mobile SFX use sample playback; music retains its existing mode")
+	game.queue_free()
+	quit()
