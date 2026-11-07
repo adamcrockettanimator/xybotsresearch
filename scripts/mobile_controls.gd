@@ -129,6 +129,11 @@ func _edit_input(event: InputEvent, points: Dictionary) -> void:
 		target.y = clampf(target.y, 125.0, size.y - radius)
 		saved_positions[edit_target] = target / size
 
+# A clear-map victory remains playable until its fade and loot window ends.
+func _round_prompt_active() -> bool:
+	return game.clear_map_waiting_to_start or (game.combat_round_complete and not game.clear_map_finish_pending)
+
+
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventScreenTouch or event is InputEventScreenDrag):
 		return
@@ -153,7 +158,7 @@ func _input(event: InputEvent) -> void:
 					selected = "pause"
 				else:
 					return
-			elif game.clear_map_waiting_to_start or game.combat_round_complete:
+			elif _round_prompt_active():
 				selected = "continue"
 				continue_pending = true
 			else:
@@ -232,7 +237,7 @@ func _draw() -> void:
 		_draw_button(p.pause, "RESUME", 45.0)
 		_draw_button(p.menu, "MENU", 55.0)
 		return
-	if game.clear_map_waiting_to_start or game.combat_round_complete:
+	if _round_prompt_active():
 		_draw_button(p.continue, "BEGIN" if game.clear_map_waiting_to_start else "CONTINUE", 65.0)
 		return
 	_draw_game_buttons(p)

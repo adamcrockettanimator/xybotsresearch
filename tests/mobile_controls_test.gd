@@ -4,6 +4,7 @@ class FakeGame extends Node:
 	var match_paused := false
 	var options_overlay: Control = null
 	var combat_round_complete := false
+	var clear_map_finish_pending := false
 	var clear_map_waiting_to_start := false
 	var player_states := [{"continuous_camera_yaw": 0.0}]
 
@@ -83,6 +84,32 @@ func _initialize() -> void:
 	duck.pressed = false
 	controls._input(duck)
 	assert(not controls.pressed("crouch"))
+	# New touches remain gameplay input throughout the final loot/fade window.
+	touch.pressed = false
+	controls._input(touch)
+	game.combat_round_complete = true
+	game.clear_map_finish_pending = true
+	assert(not controls._round_prompt_active())
+	var finish_touch := InputEventScreenTouch.new()
+	finish_touch.index = 11
+	finish_touch.position = Vector2(150, 500)
+	finish_touch.pressed = true
+	controls._input(finish_touch)
+	var finish_drag := InputEventScreenDrag.new()
+	finish_drag.index = 11
+	finish_drag.position = Vector2(150, 430)
+	controls._input(finish_drag)
+	assert(controls.stick.y < -0.9 and not controls.take_continue())
+	finish_touch.pressed = false
+	controls._input(finish_touch)
+	fire.pressed = true
+	controls._input(fire)
+	assert(controls.take_fire() and not controls.take_continue())
+	fire.pressed = false
+	controls._input(fire)
+	game.clear_map_finish_pending = false
+	assert(controls._round_prompt_active())
+	game.combat_round_complete = false
 	game.clear_map_waiting_to_start = true
 	var begin := InputEventScreenTouch.new()
 	begin.index = 3
