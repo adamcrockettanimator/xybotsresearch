@@ -1017,6 +1017,7 @@ var active_blood_splatters: Array[Dictionary] = []                              
 var combat_health_bars: Array[Node2D] = []                                                    # Store one visible health meter for each split-screen player.
 var combat_respawn_blackouts: Array[ColorRect] = []                                           # Store one full-view blackout panel for each defeated player's own camera.
 var combat_respawn_labels: Array[Label] = []                                                  # Store one readable death/countdown label for each local view.
+var mobile_hud_panels: Array[ColorRect] = []
 var combat_coin_labels: Array[Label] = []                                                     # Store one per-player score readout inside the lower-right of each view.
 var combat_coin_icons: Array[TextureRect] = []                                                # Store one authored coin icon beside each score readout.
 var combat_ammo_icons: Array[TextureRect] = []                                                # Primary cylinder for each local view.
@@ -4246,6 +4247,7 @@ func _drop_machine_gun_for_defeat(player_index: int) -> void:
 
 # _setup_combat_hud: Adds a compact health meter below each player view without changing the renderer hierarchy.
 func _setup_combat_hud() -> void:
+	mobile_hud_panels.clear()
 	combat_health_bars.clear()                                                                  # Rebuild the small HUD set only once during scene setup.
 	combat_respawn_blackouts.clear()                                                            # Rebuild the matching per-view blackout panels during scene setup.
 	combat_respawn_labels.clear()                                                               # Rebuild the corresponding readable death/countdown labels.
@@ -4276,6 +4278,16 @@ func _setup_combat_hud() -> void:
 		view["muzzle_anchor_debug_layer"] = muzzle_debug_layer                                   # Keep one overlay root per camera.
 		view["muzzle_anchor_debug_nodes"] = {}                                                   # Cache only cross pixels separately from real combat effects.
 		player_views[player_index] = view                                                         # Save the expanded view bundle.
+		if player_index == 0:
+			for panel_name in ["MobileHealthBacking", "MobileCoinsBacking", "MobileAmmoBacking"]:
+				var panel := ColorRect.new()
+				panel.name = panel_name
+				panel.color = Color(0.0, 0.0, 0.0, 0.55)
+				panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				panel.z_index = 199
+				panel.visible = false
+				hud_layer.add_child(panel)
+				mobile_hud_panels.append(panel)
 		var meter := preload("res://scripts/combat_health_bar.gd").new()                         # Instantiate the self-contained hatch-bar drawing script.
 		meter.name = "CombatHealthP%d" % (player_index + 1)                                      # Name the node for scene-tree inspection.
 		meter.player_index = player_index                                                         # Label the meter with its owning player.
@@ -4859,6 +4871,57 @@ func _update_combat_hud() -> void:
 		end_round_overlay.visible = not clear_the_map_mode and not combat_round_result.is_empty()
 		if end_round_overlay.visible:
 			end_round_scoreboard.text = _final_scoreboard_text()
+
+	if mobile_controls != null:
+		_layout_mobile_combat_hud(get_viewport_rect().size)
+
+
+# Mobile HUD uses screen-relative sizes instead of the world camera's pixel scale.
+# The retained icons and values are shared with desktop, but get a readable
+# two-row health bar and dedicated top-edge positions on a phone.
+func _layout_mobile_combat_hud(screen_size: Vector2) -> void:
+	if combat_health_bars.is_empty() or combat_coin_icons.is_empty() or combat_ammo_icons.is_empty() or mobile_hud_panels.size() < 3:
+		return
+	var size_factor := minf(screen_size.x / 1280.0, screen_size.y / 720.0)
+	var unit := 8.0 * size_factor
+	var margin := 8.0 * size_factor
+	var top := 15.0 * size_factor
+	var health = combat_health_bars[0]
+	health.columns = 5
+	health.heart_spacing = 9.0
+	health.position = Vector2(screen_size.x * 0.14, top)
+	health.scale = Vector2.ONE * unit
+	var health_panel := mobile_hud_panels[0]
+	health_panel.position = health.position - Vector2.ONE * margin
+	var health_columns := mini(maxi(int(health.current_health), 1), 5)
+	var health_rows := 2 if int(health.current_health) > 5 else 1
+	health_panel.size = Vector2(float(health_columns - 1) * 9.0 + 10.0, float(health_rows) * 10.0) * unit + Vector2.ONE * margin * 2.0
+	health_panel.visible = true
+	var coin_icon := combat_coin_icons[0]
+	var coin_label := combat_coin_labels[0]
+	var icon_unit := unit * 1.3
+	coin_icon.position = Vector2(screen_size.x * 0.50, top + 4.0 * size_factor)
+	coin_icon.scale = Vector2.ONE * icon_unit
+	coin_label.position = coin_icon.position + Vector2(6.0 * icon_unit, 0.0)
+	coin_label.scale = Vector2.ONE * unit
+	var coin_panel := mobile_hud_panels[1]
+	coin_panel.position = coin_icon.position - Vector2.ONE * margin
+	var label_size := coin_label.get_combined_minimum_size() * coin_label.scale
+	coin_panel.size = Vector2(maxf(4.0 * icon_unit, coin_label.position.x - coin_icon.position.x + label_size.x) + margin * 2.0, maxf(4.0 * icon_unit, label_size.y) + margin * 2.0)
+	coin_panel.visible = true
+	var first := combat_ammo_icons[0]
+	var second := combat_ammo_second_icons[0]
+	var ammo_unit := unit * 1.35
+	first.position = Vector2(screen_size.x * 0.68, top)
+	first.scale = Vector2.ONE * ammo_unit
+	second.position = first.position + Vector2(10.0 * ammo_unit, 0.0)
+	second.scale = first.scale
+	var ammo_panel := mobile_hud_panels[2]
+	ammo_panel.position = first.position - Vector2.ONE * margin
+	ammo_panel.size = Vector2((19.0 if second.visible else 9.0) * ammo_unit + margin * 2.0, 9.0 * ammo_unit + margin * 2.0)
+	ammo_panel.visible = true
+	if not scoreboard_shop_labels.is_empty():
+		scoreboard_shop_labels[0].visible = false
 
 
 # _is_player_fire_pressed_for: Reads a right trigger, or the keyboard fallback, for one player.
