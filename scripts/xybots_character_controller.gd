@@ -7638,6 +7638,16 @@ func _project_semantic_barrel_body_panels(center: Vector2, rim_radius: float, ba
 	return result
 
 
+# Semantic cage shaders and dinette raster use an authored x=80 projection
+# center. Translate that center to the active playfield without changing their
+# scale, depth, or the renderer's independent overscan/camera offset.
+func _semantic_legacy_projection_offset(renderer: Node) -> Vector2:
+	var offset := Vector2.ZERO
+	if renderer != null and renderer.has_method("_overscan_projection_offset"):
+		offset = renderer.call("_overscan_projection_offset")
+	return offset + Vector2((VIEWPORT_SIZE.x - 160.0) * 0.5, 0.0)
+
+
 func _project_semantic_barrel_world_point(world_point: Vector2, world_height: float, renderer: Node) -> Variant:
 	if world_height <= 0.000001:
 		var floor_projection := _opponent_projection_from_current_camera(world_point, false, true)
@@ -7733,7 +7743,7 @@ func _render_live_semantic_floor_footprints() -> void:
 					var crate_forward := _view_forward_vector().normalized()
 					var crate_right := _view_right_vector().normalized()
 					var crate_camera_origin: Vector2 = crate_renderer.call("_runtime_camera_origin", crate_forward, crate_right)
-					var crate_projection_offset: Vector2 = crate_renderer.call("_overscan_projection_offset") if crate_renderer.has_method("_overscan_projection_offset") else Vector2.ZERO
+					var crate_projection_offset := _semantic_legacy_projection_offset(crate_renderer)
 					crate_outline.call("set_crate", center, float(footprint.get("side_length", 0.0)), float(footprint.get("depth", footprint.get("side_length", 0.0))), float(footprint.get("height", 0.0)), crate_camera_origin, crate_forward, crate_right, crate_projection_offset)
 			continue
 		if key.begins_with("barrel_gpu_lattice_instanced"):
@@ -7757,7 +7767,7 @@ func _render_live_semantic_floor_footprints() -> void:
 					var lattice_forward := _view_forward_vector().normalized()
 					var lattice_right := _view_right_vector().normalized()
 					var lattice_camera_origin: Vector2 = lattice_renderer.call("_runtime_camera_origin", lattice_forward, lattice_right)
-					var lattice_projection_offset: Vector2 = lattice_renderer.call("_overscan_projection_offset") if lattice_renderer.has_method("_overscan_projection_offset") else Vector2.ZERO
+					var lattice_projection_offset := _semantic_legacy_projection_offset(lattice_renderer)
 					lattice_outline.call("set_barrel", center, half_side, float(footprint.get("height", 0.0)), lattice_camera_origin, lattice_forward, lattice_right, lattice_projection_offset)
 			continue
 		if bool(footprint.get("cylinder", false)):
@@ -7826,7 +7836,7 @@ func _render_live_semantic_floor_footprints() -> void:
 				var stool_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
 				if stool_renderer == null:
 					stool_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
-				var stool_offset: Vector2 = stool_renderer.call("_overscan_projection_offset") if stool_renderer != null and stool_renderer.has_method("_overscan_projection_offset") else Vector2.ZERO
+				var stool_offset := _semantic_legacy_projection_offset(stool_renderer)
 				var stool_origin: Vector2 = stool_renderer.call("_runtime_camera_origin", stool_forward, stool_right) if stool_renderer != null and stool_renderer.has_method("_runtime_camera_origin") else _runtime_camera_origin_for_visibility()
 				outline.call("set_stool", center, stool_origin, stool_forward, stool_right, stool_offset)
 				outline.visible = true
