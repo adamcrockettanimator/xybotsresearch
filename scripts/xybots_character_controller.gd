@@ -1172,7 +1172,7 @@ const SLOT_GRAPH_TUNER_PATH := "res://slot_graph_tuner.json"                    
 var mobile_controls: Control
 
 func _ready() -> void:                                                                      # Declare this function.
-	if bool(get_tree().get_meta("grudge_mobile_wide", false)):
+	if _public_build():
 		var available: Vector2 = get_tree().get_meta("grudge_mobile_viewport_test_size", get_viewport_rect().size)
 		if available.x > available.y and available.y > 0.0:
 			VIEWPORT_SIZE.x = float(clampi(roundi(120.0 * available.x / available.y), 160, 320))
@@ -9974,7 +9974,7 @@ func _layout_viewport() -> void:                                                
 	if single_player_combat_view and not player_views.is_empty():
 		var solo_view: Dictionary = player_views[0]
 		var solo_camera: Node2D = solo_view.get("maze_viewport", null)
-		var solo_scale := maxf(1.0, minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)) if mobile_controls != null else maxf(1.0, floorf(minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)))
+		var solo_scale := maxf(1.0, minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)) if _public_build() else maxf(1.0, floorf(minf(viewport_size.x / VIEWPORT_SIZE.x, viewport_size.y / VIEWPORT_SIZE.y)))
 		if solo_camera != null:
 			solo_camera.scale = Vector2.ONE * solo_scale
 			solo_camera.position = (viewport_size - VIEWPORT_SIZE * solo_scale) * 0.5

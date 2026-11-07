@@ -5,8 +5,8 @@ var rotation_prompt: Label
 
 func _ready() -> void:
 	get_tree().set_meta("grudge_public_build", true)
+	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	if preload("res://scripts/mobile_controls.gd").available():
-		get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 		get_tree().set_meta("grudge_mobile_wide", true)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var music := MusicAccess.get_player(get_tree())
