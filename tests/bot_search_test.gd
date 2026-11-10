@@ -55,7 +55,7 @@ func _run() -> void:
 	game.player_states[0]["world_position"] = Vector2(3.5, 2.5)
 	game.bot_brains[1] = {"tactical_cooldown": 100.0}
 	var combat: Dictionary = game._update_bot_brain(1, game.player_states[1], Vector2(2.5, 2.5), 0, Vector2.RIGHT, 1.0, Vector2.RIGHT, 0.016)
-	assert(combat["state"] == "MOVE_FIRE" and combat["has_line_of_sight"])
+	assert(combat["state"] == "FIRING_POINT" and combat["has_line_of_sight"])
 	assert(Vector2(combat["move_direction"]).length() > 0.9)
 	var combat_goal: Vector2i = combat["goal_cell"]
 	var combat_move: Vector2 = combat["move_direction"]
@@ -67,7 +67,7 @@ func _run() -> void:
 	assert(combat["last_seen_position"] == Vector2(3.5, 2.5))
 	game._set_wall_between(Vector2i(2, 2), Vector2i(1, 0), false)
 	combat = game._update_bot_brain(1, game.player_states[1], Vector2(2.5, 2.5), 0, Vector2(1.2, 0), 1.2, Vector2.RIGHT, 0.016)
-	assert(combat["state"] == "MOVE_FIRE" and combat["goal_cell"] == combat_goal)
+	assert(combat["state"] == "FIRING_POINT" and combat["goal_cell"] == combat_goal)
 	assert(Vector2(combat["move_direction"]).dot(combat_move) > 0.99)
 	game.player_bots[1] = true
 	game.player_joined[0] = true

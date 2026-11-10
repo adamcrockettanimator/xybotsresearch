@@ -19,7 +19,7 @@ func _run() -> void:
 	game.player_states[1]["world_position"] = Vector2(3.5, 2.5)
 	for category in game.BOT_BARKS:
 		for filename in game.BOT_BARKS[category]:
-			assert(load(game.BOT_BARK_ROOT + filename) is AudioStream)
+			assert(load(filename if String(filename).begins_with("res://") else game.BOT_BARK_ROOT + filename) is AudioStream)
 	assert(game._request_bot_bark(1, "hearing"))
 	assert(game.bot_bark_panner.pan > 0.8)
 	var near_db: float = game.bot_bark_player.volume_db

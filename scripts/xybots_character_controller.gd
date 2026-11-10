@@ -980,7 +980,7 @@ var player_bots := [false, false, false, false]                                 
 var player_device_ids := [-1, -1, -1, -1]                                                   # Freeze each human's Godot device id when the lobby launches the match.
 var bot_inputs: Dictionary = {}                                                              # Store one small virtual input bundle for the bot currently being simulated.
 var bot_brains: Dictionary = {}                                                              # Retain each NPC's combat state, route waypoint, and progress watchdog between frames.
-@export var bot_decision_trace_enabled := true                                               # Record AI decisions automatically during bot matches; F4 remains an explicit on/off switch.
+@export var bot_decision_trace_enabled := false                                              # Avoid disk logging during normal play; F4 explicitly enables tracing.
 var bot_decision_trace_path := ""                                                           # Save the current capture under user:// and print its absolute path when tracing starts.
 var bot_decision_trace_started_seconds := 0.0                                                # Rotate long unattended captures into manageable five-minute files.
 var match_started := false
@@ -1111,6 +1111,8 @@ const BOT_BARKS := {
 	"search": ["06. Show Yourself.wav", "08. We Know You're Out There.wav", "10. I'm Gonna Find You.wav", "17. Cat and Mouse.wav", "19. Stop Hiding and Come Out!.wav", "22. I'm On To You.wav"],
 	"combat": ["03. Hey!.wav", "09. Get Outta Here.wav", "13. Intruder.wav", "14. He's Here.wav", "16. You Wanna Play This Game_.wav", "23. You're Not Leaving Here Alive.wav", "24. Hey, What are You Doing_.wav"],
 	"victory": ["11. You're Dead.wav"],
+	"ally_retreat": [EFFORT_GRUNT_ROOT + "02. Effort Grunt (Male).wav", EFFORT_GRUNT_ROOT + "03. Effort Grunt (Male).wav"],
+	"ally_attack": ["16. You Wanna Play This Game_.wav", "23. You're Not Leaving Here Alive.wav"],
 }
 const BOT_BARK_GLOBAL_GAP := 4.0
 const BOT_BARK_PERSONAL_GAP := 9.0
@@ -1154,6 +1156,7 @@ var debug_menu_checks: Dictionary = {}                                          
 var debug_menu_tuning_spins: Dictionary = {}                                                 # Store live near-view SpinBoxes so F3 tuning never depends on the Remote debugger.
 var debug_menu_layer_tuning_spins: Dictionary = {}                                           # Store runtime wall/ceiling layer SpinBoxes in the same F3 menu.
 var near_view_debug_last_map_frame := -1                                                     # Throttle the optional dynamic top-down diagnostic so it does not create a large Remote-debugger packet.
+var bot_debug_font: SystemFont
 var debug_menu_open := false                                                                 # Keep the retired Canvas-barrel layer inspector closed during MeshInstance2D authoring.
 var debug_combat_hit_label: Label                                                            # Show the most recent final combat line-of-sight verdict only inside the F3 menu.
 var last_projectile_hit_debug := "No final projectile hit check yet."                        # Preserve the exact wall/cell evidence from the latest attempted damage event.
@@ -1179,6 +1182,10 @@ func _ready() -> void:                                                          
 	if _public_build():
 		show_top_down_source_overlay = false
 		bot_decision_trace_enabled = false
+	if OS.has_feature("web"):
+		show_bot_navigation_debug = false
+		walk_through_walls_cheat = false
+		pause_round_timer_for_debug = false
 	_ensure_input_actions()                                                                    # Register local input actions before the first input polling frame.
 	pixel_hud_font = preload("res://assets/Fonts/High Noon.woff")
 	pixel_hud_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE                            # Render hard pixel edges instead of soft vector-font smoothing.
@@ -1230,7 +1237,8 @@ func _ready() -> void:                                                          
 		_begin_wanted_tally(false)
 	_setup_deathmatch_overlays()
 	_load_near_view_tuning()                                                                   # Restore only the user's deliberately saved F3 near-view values before building controls and first rendering the views.
-	_setup_debug_menu()                                                                        # Create the shared on-screen menu for toggling diagnostic overlays.
+	if not OS.has_feature("web"):
+		_setup_debug_menu()                                                                       # Keep local diagnostics out of the public HTML build.
 	_load_slot_graph_tuner_overrides()                                                         # Restore saved slot-vector adjustments before the first render.
 	if enable_3d_diagnostic:                                                                   # Only create the deprecated 3D diagnostic when explicitly requested.
 		_setup_3d_diagnostic()                                                                    # Create the side-by-side 3D map diagnostic view.
@@ -1334,7 +1342,10 @@ func _request_bot_bark(player_index: int, category: String) -> bool:
 		return false
 	var now := float(Time.get_ticks_msec()) * 0.001
 	var victory := category == "victory"
-	if not victory and (bot_bark_player.playing or now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP or now - float(bot_bark_last_by_bot.get(player_index, -INF)) < BOT_BARK_PERSONAL_GAP):
+	var urgent := category in ["ally_retreat", "ally_attack"]
+	if urgent and now - bot_bark_last_global < 1.5:
+		return false
+	if not victory and not urgent and (bot_bark_player.playing or now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP or now - float(bot_bark_last_by_bot.get(player_index, -INF)) < BOT_BARK_PERSONAL_GAP):
 		return false
 	var options: Array = BOT_BARKS[category].duplicate()
 	if victory:
@@ -1684,7 +1695,7 @@ func _input(event: InputEvent) -> void:                                         
 	if _public_build():
 		if mobile_controls == null and event is InputEventMouseMotion and not player_states.is_empty() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not match_paused and not clear_map_waiting_to_start:
 			player_states[0]["continuous_camera_yaw"] = wrapf(float(player_states[0].get("continuous_camera_yaw", 0.0)) + event.relative.x * 0.003, -PI, PI)
-		elif mobile_controls == null and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not match_paused:
+		elif mobile_controls == null and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not match_paused and not debug_menu_open:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if not _public_build() and event is InputEventKey and event.pressed and event.ctrl_pressed and event.keycode == KEY_Z: # Reserve standard Ctrl+Z for graph tuning undo.
 		if _slot_graph_tuner_undo_last_edit():                                                   # Undo only when an edit snapshot exists.
@@ -1760,7 +1771,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "camera_cutaway", "Camera Cutaway Rays")                  # Show the exact widened camera-to-player fan that selects walls for local fading.
 	_add_debug_menu_check(content, "fan_draw_order", "Fan Draw Order")                       # Show which visible wall segments the continuous silhouette fan puts above or below the local player.
 	_add_debug_menu_check(content, "world_footprints", "World Footprints")                   # Compare physical wall-clearance circles to camera-visible footprint cones.
-	_add_debug_menu_check(content, "bot_navigation", "Bot Navigation")                       # Show persistent bot routes and current perception/action.
+	_add_debug_menu_check(content, "bot_navigation", "Bot Navigation (Invincible)")                       # Show persistent bot routes and current perception/action.
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "barrel_lod_visualizer", "Barrel LOD Labels")             # Keep the currently selected static barrel LOD readable while moving through depth bands.
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
@@ -2121,26 +2132,26 @@ func _save_near_view_tuning() -> void:
 
 # _toggle_debug_menu: Opens or closes the debug control panel and refreshes its displayed state.
 func _toggle_debug_menu() -> void:
-	if not SHOW_CANVAS_BARREL_LAYER_INSPECTOR:
-		debug_menu_open = false
-		if debug_barrel_layers_panel != null:
-			debug_barrel_layers_panel.visible = false
-		_layout_viewport()
-		_update_status()
+	if OS.has_feature("web"):
 		return
-	debug_menu_open = not debug_menu_open                                                      # Flip the menu visibility state once per F3 press.
-	if debug_menu_panel != null:                                                               # Preserve the requested focused authoring mode.
-		debug_menu_panel.visible = false                                                         # Leave the older general F3 camera column hidden.
+	debug_menu_open = not debug_menu_open
+	if debug_menu_panel != null:
+		debug_menu_panel.visible = debug_menu_open and not SHOW_CANVAS_BARREL_LAYER_INSPECTOR
 	if debug_menu_right_panel != null:
-		debug_menu_right_panel.visible = false                                                   # Leave the older renderer/debug column hidden.
+		debug_menu_right_panel.visible = debug_menu_open and not SHOW_CANVAS_BARREL_LAYER_INSPECTOR
 	if debug_barrel_layers_panel != null:
-		debug_barrel_layers_panel.visible = debug_menu_open                                      # F3 now hides/shows only the Canvas barrel layer inspector.
-	if debug_menu_open:                                                                        # Refresh checkbox state whenever the panel is opened.
-		_refresh_debug_menu()                                                                    # Reflect inspector values and F2 toggles in every row.
-		_rebuild_barrel_layer_debug_controls()                                                   # Reflect the current painter stack after reopening.
-	_layout_viewport()                                                                         # Reclaim the side gutters immediately when F3 closes, or make room only while it is open.
-	_update_status()                                                                           # Update the runtime help text to advertise the current menu state.
-
+		debug_barrel_layers_panel.visible = debug_menu_open and SHOW_CANVAS_BARREL_LAYER_INSPECTOR
+	if _public_build() and mobile_controls == null:
+		if debug_menu_open:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		elif not match_paused and not clear_map_waiting_to_start:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if debug_menu_open:
+		_refresh_debug_menu()
+		if SHOW_CANVAS_BARREL_LAYER_INSPECTOR:
+			_rebuild_barrel_layer_debug_controls()
+	_layout_viewport()
+	_update_status()
 
 
 # _debug_option_value: Reads one existing debug toggle by its stable menu key.
@@ -2733,7 +2744,7 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	var last_position: Vector2 = brain.get("progress_anchor", origin)
 	var previous_direction: Vector2 = brain.get("move_direction", navigation_vector)
 	var made_progress := origin.distance_to(last_position) >= BOT_PROGRESS_DISTANCE
-	var stuck_time := 0.0 if made_progress or bool(brain.get("turning_to_path", false)) or previous_direction.length_squared() <= 0.00000001 else float(brain.get("stuck_time", 0.0)) + delta
+	var stuck_time := 0.0 if made_progress or bool(brain.get("turning_to_path", false)) or float(brain.get("recovery_time", 0.0)) > 0.0 or previous_direction.length_squared() <= 0.00000001 else float(brain.get("stuck_time", 0.0)) + delta
 	var unstick_time := maxf(0.0, float(brain.get("unstick_time", 0.0)) - delta)
 	var unstick_attempt := int(brain.get("unstick_attempt", 0))
 	var escape_direction: Vector2 = brain.get("unstick_direction", Vector2.ZERO)
@@ -2742,6 +2753,11 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	var combat_memory := maxf(0.0, float(brain.get("combat_memory", 0.0)) - delta)
 	if int(brain.get("last_seen_target", target_index)) != target_index:
 		combat_memory = 0.0
+		brain["flank_time"] = 0.0
+		brain["flank_contact_breaks"] = 0
+		brain["flank_contact_window"] = 0.0
+		brain["flank_pressure_time"] = 0.0
+		brain.erase("last_seen_position")
 	var had_contact := combat_memory > 0.0
 	var previous_state := String(brain.get("state", ""))
 	var lost_sight_time := float(brain.get("lost_sight_time", 0.0)) + delta
@@ -2754,12 +2770,47 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	# Use the exact authoritative combat LOS test—not the looser navigation ray—
 	# so bots cannot adopt a firing/strafe posture through a wall corner.
 	var clear_shot := target_vector.length_squared() > 0.00000001 and target_distance <= BOT_SIGHT_RANGE and _projectile_owner_has_clear_path_to_player(player_index, target_index, false)
+	# Once searching after a lost contact, require a brief stable reacquisition.
+	# A single corner-grazing sight frame must not restart LOOK_LAST_SEEN over
+	# and over. Fire still requires the current authoritative clear-shot test.
+	var raw_sight := clear_shot
+	var was_raw_sight := bool(brain.get("flank_previous_sight", false))
+	var caution_time := maxf(0.0, float(brain.get("caution_time", 0.0)) - delta)
+	brain["caution_time"] = caution_time
+	if was_raw_sight and not raw_sight and brain.has("last_seen_position") and caution_time <= 0.0:
+		_bot_begin_cautious_approach(brain, Vector2(brain["last_seen_position"]), "LAST SIGHTING")
+	var contact_window := maxf(0.0, float(brain.get("flank_contact_window", 0.0)) - delta)
+	var breaks := int(brain.get("flank_contact_breaks", 0)) if contact_window > 0.0 else 0
+	if bool(brain.get("flank_previous_sight", false)) and not raw_sight:
+		breaks += 1
+		contact_window = 6.0
+	brain["flank_previous_sight"] = raw_sight
+	brain["flank_contact_breaks"] = breaks
+	brain["flank_contact_window"] = contact_window
+	var pressure := float(brain.get("flank_pressure_time", 0.0))
+	if not raw_sight and had_contact and brain.has("last_seen_position"):
+		pressure += delta
+	elif raw_sight and _bot_teammate_in_fire_lane(player_index, origin, target_vector):
+		pressure += delta
+	else:
+		pressure = 0.0
+	brain["flank_pressure_time"] = pressure
+	brain["flank_cooldown"] = maxf(0.0, float(brain.get("flank_cooldown", 0.0)) - delta)
+	var sight_candidate := float(brain.get("sight_candidate_time", 0.0))
+	if clear_shot and previous_state == "SEARCH" and had_contact:
+		sight_candidate += delta
+		if sight_candidate < 0.22:
+			clear_shot = false
+	else:
+		sight_candidate = 0.0
+	brain["sight_candidate_time"] = sight_candidate
 	if clear_shot:
 		if not had_contact:
 			_request_bot_bark(player_index, "combat")
 		combat_memory = BOT_COMBAT_MEMORY_SECONDS
 		lost_sight_time = 0.0
 		brain["last_seen_position"] = origin + target_vector
+		brain["last_seen_forward"] = _view_forward_vector_for_state(player_states[target_index]).normalized()
 		brain["last_seen_target"] = target_index
 	brain["lost_sight_time"] = lost_sight_time
 	var current_cell := Vector2i(floori(origin.x), floori(origin.y))
@@ -2811,6 +2862,7 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 		brain["investigation_kind"] = "shot"
 		if previous_state != "INVESTIGATE":
 			_request_bot_bark(player_index, "hearing")
+		_bot_begin_cautious_approach(brain, bot_last_heard_shot_position, "GUNSHOT")
 		var sound_cell := Vector2i(floori(bot_last_heard_shot_position.x), floori(bot_last_heard_shot_position.y))
 		brain["investigate_cell"] = sound_cell if _is_open_cell(sound_cell) else current_cell
 		state_name = "INVESTIGATE"
@@ -2818,6 +2870,7 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	elif brain.has("footstep_pending") and combat_memory <= 0.0:
 		var heard_position: Vector2 = brain["footstep_pending"]
 		brain.erase("footstep_pending")
+		_bot_begin_cautious_approach(brain, heard_position, "FOOTSTEP")
 		brain["investigation_kind"] = "footstep"
 		var heard_cell := Vector2i(floori(heard_position.x), floori(heard_position.y))
 		brain["investigate_cell"] = heard_cell if _is_open_cell(heard_cell) else current_cell
@@ -2855,15 +2908,25 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	while route_index < route.size() and origin.distance_to(_bot_route_waypoint(route, route_index)) <= 0.09:
 		route_index += 1
 	var desired := Vector2.ZERO
+	var debug_destination := Vector2.INF
+	var debug_destination_kind := ""
 	if route_index < route.size():
 		var next_center := _bot_route_waypoint(route, route_index)
 		if detour_route_index == route_index and detour_point.is_finite() and origin.distance_to(detour_point) > 0.09:
+			debug_destination = detour_point
+			debug_destination_kind = "waypoint"
 			desired = (detour_point - origin).normalized()
 		else:
 			detour_point = _bot_prop_detour_waypoint(origin, next_center)
 			detour_route_index = route_index if detour_point.is_finite() else -1
 			var travel_target := detour_point if detour_point.is_finite() else next_center
+			debug_destination = travel_target
+			debug_destination_kind = "waypoint"
 			desired = (travel_target - origin).normalized()
+	if state_name == "LOOK_LAST_SEEN" and previous_direction.length_squared() > 0.000001:
+		desired = previous_direction
+		debug_destination = origin + desired * 0.45
+		debug_destination_kind = "direction"
 	if clear_shot and target_distance < BOT_PERSONAL_SPACE + 0.15:
 		desired = Vector2.ZERO
 		unstick_time = 0.0
@@ -2871,6 +2934,13 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 		# A blocked route gets replanned; it never receives an unbounded arbitrary
 		# world vector that can cross several cells and invalidate the route.
 		state_name = "REPLAN"
+		if not clear_shot:
+			var recovery := _bot_recovery_waypoint(player_index, origin, desired, goal_cell, brain)
+			if recovery.is_finite():
+				brain["recovery_waypoint"] = recovery
+				brain["recovery_time"] = 1.5
+		debug_destination = origin + desired * 0.45 if desired.length_squared() > 0.000001 else Vector2.INF
+		debug_destination_kind = "direction" if debug_destination.is_finite() else ""
 		route = _bot_cell_route(current_cell, goal_cell)
 		route_index = _bot_route_start_index(origin, route)
 		detour_point = Vector2.INF
@@ -2886,10 +2956,49 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	# Retain trace metadata and the committed escape choice across frames. Replacing
 	# this dictionary wholesale erased that history every tick, obscuring a stable
 	# decision as a stream of fresh turn-only actions.
-	_update_bot_tactics(player_index, origin, target_index, target_vector, clear_shot, delta, brain)
+	if clear_shot:
+		var firing_timer := float(brain.get("firing_point_timer", 0.0)) - delta
+		if int(state.get("health", PLAYER_STARTING_HEALTH)) < int(brain.get("previous_health", int(state.get("health", PLAYER_STARTING_HEALTH)))):
+			firing_timer = 0.0
+		if firing_timer <= 0.0:
+			_bot_firing_points(player_index, origin, origin + target_vector, brain)
+			brain["firing_point_timer"] = 0.8 + float(player_index % 4) * 0.1
+		else:
+			brain["firing_point_timer"] = firing_timer
+	else:
+		if lost_sight_time >= 0.35:
+			brain["firing_point_timer"] = 0.0
+	var health := int(state.get("health", PLAYER_STARTING_HEALTH))
+	if health < int(brain.get("previous_health", health)) and clear_shot:
+		brain["react_to_hit"] = true
+	brain["previous_health"] = health
+	var known_target: Vector2 = origin + target_vector if clear_shot else Vector2(brain.get("last_seen_position", origin))
+	_update_bot_tactics(player_index, origin, target_index, known_target - origin, clear_shot, delta, brain)
+	var firing_point: Vector2 = brain.get("firing_point", Vector2.INF)
+	if clear_shot and firing_point.is_finite() and not brain.has("tactical_move"):
+		desired = (firing_point - origin).normalized() if origin.distance_to(firing_point) > 0.09 else Vector2.ZERO
+		debug_destination = firing_point
+		debug_destination_kind = "firing point"
+		state_name = "FIRING_POINT"
 	if brain.has("tactical_move"):
 		desired = brain["tactical_move"]
 		state_name = String(brain.get("tactical_state", state_name))
+		match String(brain.get("tactical_mode", "")):
+			"approach_cover":
+				debug_destination = brain.get("cover_point", Vector2.INF)
+				debug_destination_kind = "cover"
+			"wall_approach", "wall_cover":
+				debug_destination = brain.get("wall_cover_point", Vector2.INF)
+				debug_destination_kind = "cover"
+			"wall_peek":
+				debug_destination = brain.get("wall_peek_point", Vector2.INF)
+				debug_destination_kind = "peek"
+			"reload_cover":
+				debug_destination = brain.get("reload_cover_point", Vector2.INF)
+				debug_destination_kind = "reload cover"
+			_:
+				debug_destination = origin + desired * 0.45 if desired.length_squared() > 0.000001 else Vector2.INF
+				debug_destination_kind = "direction" if debug_destination.is_finite() else ""
 	if clear_shot and _bot_teammate_in_fire_lane(player_index, origin, target_vector) and String(state.get("reload_phase", "")).is_empty():
 		brain["allow_fire"] = false
 		var side := Vector2(-target_vector.y, target_vector.x).normalized()
@@ -2901,11 +3010,174 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 			side_step = _move_world_with_wall_slide(origin, side * 0.3, "east", "west", "south", "north")
 		if side_step.distance_to(origin) >= 0.12:
 			desired = (side_step - origin).normalized()
+			debug_destination = side_step
+			debug_destination_kind = "clear lane"
 			state_name = "CLEAR_FIRE_LANE"
+	# A flank is based solely on the last observation, and is committed long
+	# enough to actually traverse a different route around the last-seen cell.
+	var prior_flank_time := float(brain.get("flank_time", 0.0))
+	var flank_time := maxf(0.0, prior_flank_time - delta)
+	if prior_flank_time > 0.0 and flank_time <= 0.0:
+		brain["flank_cooldown"] = 4.0
+		brain["debug_tactical_reason"] = "FLANK TIMED OUT"
+	if flank_time <= 0.0 and float(brain.get("flank_cooldown", 0.0)) <= 0.0 and float(brain.get("reaction_time", 0.0)) <= 0.0 and brain.has("last_seen_position") and (pressure >= 0.85 or breaks >= 2):
+		var last_observed: Vector2 = brain["last_seen_position"]
+		var observed_forward: Vector2 = brain.get("last_seen_forward", (last_observed - origin).normalized())
+		var flank_route := _bot_find_flank_route(player_index, current_cell, last_observed, observed_forward)
+		if flank_route.size() >= 2:
+			brain["flank_route"] = flank_route
+			brain["flank_route_index"] = _bot_route_start_index(origin, flank_route)
+			brain["flank_goal"] = Vector2i(flank_route.back())
+			brain["flank_anchor"] = last_observed
+			brain["flank_progress_anchor"] = origin
+			brain["flank_stalled"] = 0.0
+			brain["flank_detour"] = Vector2.INF
+			brain["flank_detour_index"] = -1
+			flank_time = 12.0
+			brain["flank_contact_breaks"] = 0
+			brain["flank_pressure_time"] = 0.0
+		else:
+			brain["flank_cooldown"] = 2.0
+	if flank_time > 0.0 and float(brain.get("reaction_time", 0.0)) <= 0.0:
+		var flank_route: Array = brain.get("flank_route", [])
+		var flank_index := int(brain.get("flank_route_index", 0))
+		while flank_index < flank_route.size() and origin.distance_to(_bot_route_waypoint(flank_route, flank_index)) <= 0.09:
+			flank_index += 1
+		var flank_anchor: Vector2 = brain.get("flank_progress_anchor", origin)
+		var flank_stalled := float(brain.get("flank_stalled", 0.0)) + delta
+		if origin.distance_to(flank_anchor) >= BOT_PROGRESS_DISTANCE:
+			flank_stalled = 0.0
+			brain["flank_progress_anchor"] = origin
+		brain["flank_stalled"] = flank_stalled
+		brain["flank_route_index"] = flank_index
+		if flank_index >= flank_route.size() or flank_stalled >= 2.5:
+			flank_time = 0.0
+			brain["flank_cooldown"] = 4.0
+			brain["debug_tactical_reason"] = "FLANK ARRIVED" if flank_index >= flank_route.size() else "FLANK BLOCKED"
+		else:
+			var flank_waypoint := _bot_route_waypoint(flank_route, flank_index)
+			var flank_detour: Vector2 = brain.get("flank_detour", Vector2.INF)
+			if int(brain.get("flank_detour_index", -1)) != flank_index or not flank_detour.is_finite() or origin.distance_to(flank_detour) <= 0.09:
+				flank_detour = _bot_prop_detour_waypoint(origin, flank_waypoint)
+				brain["flank_detour"] = flank_detour
+				brain["flank_detour_index"] = flank_index if flank_detour.is_finite() else -1
+			var travel_point := flank_detour if flank_detour.is_finite() else flank_waypoint
+			desired = (travel_point - origin).normalized()
+			debug_destination = travel_point
+			debug_destination_kind = "flank waypoint"
+			state_name = "FLANK"
+			brain["tactical_mode"] = ""
+			brain["tactical_cooldown"] = 1.0
+			var low_lane := clear_shot and _bot_low_lane_clear(origin, origin + target_vector)
+			var target_crouched := clear_shot and bool(player_states[target_index].get("character_is_crouching", false))
+			brain["crouch"] = target_crouched and low_lane
+			brain["allow_fire"] = clear_shot and (not target_crouched or low_lane) and not _bot_teammate_in_fire_lane(player_index, origin, target_vector)
+			brain["debug_tactical_reason"] = "AROUND LAST SEEN POSITION"
+	elif flank_time > 0.0:
+		# Being hit or witnessing a casualty can interrupt the maneuver.
+		flank_time = 0.0
+		brain["flank_cooldown"] = 2.0
+	brain["flank_time"] = flank_time
+	var reaction_time := maxf(0.0, float(brain.get("reaction_time", 0.0)) - delta)
+	var reaction_kind := String(brain.get("reaction_kind", ""))
+	if reaction_time > 0.0 and not reaction_kind.is_empty():
+		if bool(brain.get("reaction_new", false)):
+			brain["reaction_new"] = false
+			if reaction_kind == "retreat":
+				var threat: Vector2 = brain.get("reaction_threat", origin - Vector2.UP)
+				var reaction_cover: Vector2 = brain.get("candidate_cover", Vector2.INF) if clear_shot else Vector2.INF
+				if reaction_cover.is_finite():
+					var reached := _move_world_with_wall_slide(origin, reaction_cover - origin, "east", "west", "south", "north")
+					if reached.distance_to(reaction_cover) > 0.04 or (_nearest_projectile_topology_clear(reaction_cover, threat - reaction_cover) and _bot_low_lane_clear(reaction_cover, threat)):
+						reaction_cover = Vector2.INF
+				if not reaction_cover.is_finite():
+					reaction_cover = _bot_cover_point(origin, threat)
+				if not reaction_cover.is_finite():
+					reaction_cover = _bot_wall_cover_point(origin, threat)
+				if not reaction_cover.is_finite():
+					reaction_cover = _bot_reaction_fallback_point(origin, threat, player_index)
+				brain["reaction_goal"] = reaction_cover
+				brain["reaction_has_cover"] = reaction_cover.is_finite() and (not _nearest_projectile_topology_clear(reaction_cover, threat - reaction_cover) or not _bot_low_lane_clear(reaction_cover, threat))
+		# Prevent an older cover/peek timer from resurfacing during the reaction.
+		brain["tactical_mode"] = ""
+		brain["tactical_cooldown"] = 1.0
+		if reaction_kind == "retreat":
+			var reaction_goal: Vector2 = brain.get("reaction_goal", Vector2.INF)
+			if reaction_goal.is_finite():
+				desired = (reaction_goal - origin).normalized() if origin.distance_to(reaction_goal) > 0.09 else Vector2.ZERO
+				debug_destination = reaction_goal
+				debug_destination_kind = "cover" if bool(brain.get("reaction_has_cover", false)) else "retreat"
+				brain["crouch"] = desired == Vector2.ZERO and bool(brain.get("reaction_has_cover", false))
+				brain["allow_fire"] = desired == Vector2.ZERO and not brain["crouch"] and clear_shot
+				state_name = "RETREAT_TO_COVER" if bool(brain.get("reaction_has_cover", false)) else "FALL_BACK"
+			else:
+				desired = Vector2.ZERO
+				brain["crouch"] = true
+				brain["allow_fire"] = false
+				state_name = "DUCK_AFTER_HIT"
+			brain["debug_tactical_reason"] = String(brain.get("reaction_reason", "THREAT"))
+		elif reaction_kind == "aggressive":
+			# Only advance on the live opponent while actually seeing them;
+			# otherwise move toward the witnessed casualty's position.
+			var advance_target: Vector2 = origin + target_vector if clear_shot else brain.get("reaction_witness_position", origin)
+			var advance_distance := origin.distance_to(advance_target)
+			if clear_shot and advance_distance > 1.05:
+				desired = (advance_target - origin).normalized()
+				debug_destination = advance_target
+				debug_destination_kind = "advance"
+			elif not clear_shot:
+				var witnessed_cell := Vector2i(advance_target.floor())
+				var advance_route := _bot_cell_route(current_cell, witnessed_cell)
+				var advance_index := _bot_route_start_index(origin, advance_route)
+				if advance_index < advance_route.size():
+					var waypoint := _bot_route_waypoint(advance_route, advance_index)
+					desired = (waypoint - origin).normalized() if origin.distance_to(waypoint) > 0.09 else Vector2.ZERO
+					debug_destination = waypoint
+					debug_destination_kind = "waypoint"
+				else:
+					desired = Vector2.ZERO
+			else:
+				desired = Vector2.ZERO
+			var enemy_crouched := clear_shot and bool(player_states[target_index].get("character_is_crouching", false))
+			var low_lane_clear := clear_shot and _bot_low_lane_clear(origin, origin + target_vector)
+			brain["crouch"] = enemy_crouched and low_lane_clear
+			brain["allow_fire"] = clear_shot and (not enemy_crouched or low_lane_clear) and not _bot_teammate_in_fire_lane(player_index, origin, target_vector)
+			state_name = "ADVANCE_AFTER_ALLY_FALL"
+			brain["debug_tactical_reason"] = "SAW ALLY FALL"
+	else:
+		brain["reaction_kind"] = ""
+	brain["reaction_time"] = reaction_time
+	var recovery_time := maxf(0.0, float(brain.get("recovery_time", 0.0)) - delta)
+	var recovery_waypoint: Vector2 = brain.get("recovery_waypoint", Vector2.INF)
+	if recovery_time > 0.0 and recovery_waypoint.is_finite() and not clear_shot and reaction_time <= 0.0 and flank_time <= 0.0 and state_name in ["REPLAN", "SEARCH", "INVESTIGATE"]:
+		if origin.distance_to(recovery_waypoint) > 0.07:
+			desired = (recovery_waypoint - origin).normalized()
+			debug_destination = recovery_waypoint
+			debug_destination_kind = "recovery"
+			state_name = "RECOVER ROUTE"
+			brain["debug_tactical_reason"] = "BLOCKED PATH / SIDESTEP"
+		else:
+			recovery_time = 0.0
+	brain["recovery_time"] = recovery_time
+	# Pick the cautious variant once per observation, then use it only near a
+	# physical wall endpoint while traveling toward that remembered event.
+	# Actual sight immediately returns stance selection to combat tactics.
+	var cautious := false
+	if not raw_sight and reaction_time <= 0.0 and state_name in ["INVESTIGATE", "SEARCH", "LOOK_LAST_SEEN", "FLANK", "RECOVER ROUTE"] and desired.length_squared() > 0.000001 and bool(brain.get("caution_chosen", false)) and float(brain.get("caution_time", 0.0)) > 0.0:
+		var observed: Vector2 = brain.get("caution_position", origin)
+		cautious = _bot_near_cautious_corner(origin, desired, observed)
+		if cautious:
+			brain["crouch"] = true
+	brain["cautious_approach"] = cautious
 	if stuck_time > 0.35 and not _bot_low_lane_clear(origin, origin + target_vector):
 		brain["crouch"] = true
 	if state_name == "SEARCH" and previous_state in ["INVESTIGATE", "LOOK_LAST_SEEN"]:
 		_request_bot_bark(player_index, "search")
+	if desired.length_squared() <= 0.000001 and state_name != "FIRING_POINT":
+		debug_destination = Vector2.INF
+		debug_destination_kind = ""
+	brain["debug_destination"] = debug_destination
+	brain["debug_destination_kind"] = debug_destination_kind
 	brain["state"] = state_name
 	brain["target_index"] = target_index
 	brain["has_line_of_sight"] = clear_shot
@@ -2927,6 +3199,75 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	brain["combat_goal_cell"] = combat_goal
 	bot_brains[player_index] = brain
 	return brain
+
+
+# Roll once when a sound or sighting is acquired, not every frame at a corner.
+# This produces noticeable variation without rapid posture flicker.
+func _bot_begin_cautious_approach(brain: Dictionary, observed: Vector2, source: String) -> void:
+	brain["caution_chosen"] = randf() < 0.7
+	brain["caution_time"] = 6.0
+	brain["caution_position"] = observed
+	brain["caution_source"] = source
+
+
+func _bot_near_cautious_corner(origin: Vector2, desired: Vector2, observed: Vector2) -> bool:
+	if origin.distance_to(observed) > 3.5 or desired.length_squared() < 0.000001:
+		return false
+	var direction := desired.normalized()
+	for edge: Dictionary in _all_physical_wall_edges():
+		for endpoint: Vector2 in [edge["a"], edge["b"]]:
+			var to_corner := endpoint - origin
+			if to_corner.length() <= 0.9 and to_corner.dot(direction) >= -0.2:
+				return true
+	return false
+
+
+# Evaluate nearby 4x4 positions using real movement and low-shot geometry.
+# Positions are refreshed only while the opponent is observed; the stored rays
+# therefore never reveal a hidden opponent's current location.
+func _bot_firing_points(player_index: int, origin: Vector2, target: Vector2, brain: Dictionary) -> void:
+	var best_fire := Vector2.INF
+	var best_cover := Vector2.INF
+	var fire_score := -INF
+	var cover_score := -INF
+	var home := Vector2i(origin.floor())
+	for y in range(home.y - 1, home.y + 2):
+		for x in range(home.x - 1, home.x + 2):
+			var cell := Vector2i(x, y)
+			if not _is_open_cell(cell):
+				continue
+			for sy in range(4):
+				for sx in range(4):
+					var point := Vector2(cell) + Vector2(float(sx) + 0.5, float(sy) + 0.5) * 0.25
+					var travel := point - origin
+					if travel.length() > 0.9:
+						continue
+					var reached := _move_world_with_wall_slide(origin, travel, "east", "west", "south", "north")
+					if reached.distance_to(point) > 0.02:
+						continue
+					var occupied := false
+					for other in range(player_states.size()):
+						if other != player_index and other < player_joined.size() and player_joined[other] and not bool(player_states[other].get("is_dying", false)) and point.distance_to(_player_state_world_position(player_states[other])) < PLAYER_CAPSULE_RADIUS * 2.5:
+							occupied = true
+							break
+					if occupied:
+						continue
+					var ray := target - point
+					if ray.length_squared() < 0.01:
+						continue
+					var wall_clear := _nearest_projectile_topology_clear(point, ray)
+					var prop_clear := _bot_low_lane_clear(point, target)
+					var clear := wall_clear and prop_clear
+					var score := -travel.length() * 0.22 - absf(ray.length() - 1.5) * 0.8
+					if clear and score > fire_score:
+						fire_score = score
+						best_fire = point
+					elif not clear and score > cover_score:
+						cover_score = score
+						best_cover = point
+	brain["firing_target"] = target
+	brain["firing_point"] = best_fire
+	brain["candidate_cover"] = best_cover
 
 
 # Tactical decisions are held for visible intervals and separated by cooldowns.
@@ -3024,8 +3365,10 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 	if reloading:
 		var reload_point: Vector2 = brain.get("reload_cover_point", Vector2.INF)
 		if mode != "reload_cover":
-			reload_point = _bot_cover_point(origin, target)
-			if not reload_point.is_finite():
+			reload_point = Vector2(brain.get("candidate_cover", Vector2.INF)) if clear_shot else Vector2.INF
+			if not reload_point.is_finite() and clear_shot:
+				reload_point = _bot_cover_point(origin, target)
+			if not reload_point.is_finite() and clear_shot:
 				reload_point = _bot_wall_cover_point(origin, target)
 			brain["reload_cover_point"] = reload_point
 			mode = "reload_cover"
@@ -3039,23 +3382,63 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 		return
 	elif mode == "reload_cover":
 		mode = ""
+	if bool(brain.get("react_to_hit", false)):
+		brain["react_to_hit"] = false
+		var hit_cover: Vector2 = brain.get("candidate_cover", Vector2.INF)
+		if clear_shot and hit_cover.is_finite():
+			brain["debug_tactical_reason"] = "HIT / COVER AVAILABLE"
+			var cover_ray := target - hit_cover
+			if not _nearest_projectile_topology_clear(hit_cover, cover_ray):
+				brain["wall_peek_count"] = 0
+				brain["wall_cover_point"] = hit_cover
+				brain["wall_peek_point"] = origin
+				mode = "wall_approach"
+			else:
+				brain["cover_point"] = hit_cover
+				mode = "approach_cover"
+			timer = 2.5
+	if mode.is_empty():
+		brain["debug_tactical_reason"] = ""
+	var target_reloading := clear_shot and not target_crouched and low_clear and not String(player_states[target_index].get("reload_phase", "")).is_empty()
+	if target_reloading:
+		mode = ""
+		brain["debug_tactical_reason"] = "TARGET RELOADING"
+		cooldown = maxf(cooldown, 0.5)
 	if mode in ["wall_approach", "wall_cover", "wall_peek"]:
 		var cover: Vector2 = brain.get("wall_cover_point", Vector2.INF)
 		var peek: Vector2 = brain.get("wall_peek_point", Vector2.INF)
 		if not cover.is_finite() or not peek.is_finite():
 			mode = ""
+			cooldown = 3.0
 		elif mode == "wall_approach" and origin.distance_to(cover) < 0.08:
 			mode = "wall_cover"
 			timer = randf_range(1.0, 1.8)
-		elif mode == "wall_cover" and timer <= 0.0:
-			mode = "wall_peek"
-			timer = randf_range(1.2, 2.0)
-		elif mode == "wall_peek" and timer <= 0.0:
-			mode = "wall_approach"
-			timer = 2.5
 		elif mode == "wall_approach" and timer <= 0.0:
 			mode = ""
-			cooldown = 3.0
+			cooldown = 4.0
+			brain["debug_tactical_reason"] = "COVER UNREACHABLE"
+		elif mode == "wall_cover" and timer <= 0.0:
+			if int(brain.get("wall_peek_count", 0)) >= 2:
+				mode = ""
+				cooldown = 4.0
+				brain["debug_tactical_reason"] = "LEAVING COVER AFTER PEEKS"
+			else:
+				mode = "wall_peek"
+				brain["wall_peek_arrived"] = false
+				timer = 2.5 # Travel deadline; the shooting interval begins on arrival.
+		elif mode == "wall_peek":
+			if not bool(brain.get("wall_peek_arrived", false)) and origin.distance_to(peek) < 0.08:
+				brain["wall_peek_arrived"] = true
+				brain["wall_peek_count"] = int(brain.get("wall_peek_count", 0)) + 1
+				timer = randf_range(1.2, 2.0)
+			elif timer <= 0.0:
+				if bool(brain.get("wall_peek_arrived", false)):
+					mode = "wall_approach"
+					timer = 2.5
+				else:
+					mode = ""
+					cooldown = 4.0
+					brain["debug_tactical_reason"] = "PEEK UNREACHABLE"
 		if mode in ["wall_approach", "wall_cover", "wall_peek"]:
 			var destination := peek if mode == "wall_peek" else cover
 			brain["tactical_move"] = (destination - origin).normalized() if origin.distance_to(destination) > 0.07 else Vector2.ZERO
@@ -3070,6 +3453,7 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 	# Cover must remain between the actors; destruction or flanking ends the hold.
 	if mode == "cover" or mode == "cover_pop":
 		if _bot_low_lane_clear(origin, target):
+			brain["debug_tactical_reason"] = "COVER NO LONGER BLOCKS SHOT"
 			mode = "reposition"
 			timer = 0.8
 			brain["reposition_direction"] = Vector2(-target_vector.y, target_vector.x).normalized() * (1.0 if player_index % 2 == 0 else -1.0)
@@ -3102,24 +3486,34 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 	if mode == "" and clear_shot and cooldown <= 0.0:
 		# A crouching opponent must be answerable, even if they never stand up.
 		if target_crouched and not low_clear:
+			brain["debug_tactical_reason"] = "CROUCHED TARGET / LANE BLOCKED"
 			mode = "reposition"
 			timer = 0.8
 			brain["reposition_direction"] = Vector2(-target_vector.y, target_vector.x).normalized() * (1.0 if player_index % 2 == 0 else -1.0)
 		elif target_crouched and low_clear:
+			brain["debug_tactical_reason"] = "CROUCHED TARGET / CLEAR LANE"
 			mode = "low_shot"
 			timer = randf_range(1.8, 3.0)
 		else:
-			var cover := _bot_cover_point(origin, target)
+			var cover: Vector2 = brain.get("candidate_cover", Vector2.INF)
+			if cover.is_finite() and (not _nearest_projectile_topology_clear(cover, target - cover) or _bot_low_lane_clear(cover, target)):
+				cover = Vector2.INF
+			if not cover.is_finite():
+				cover = _bot_cover_point(origin, target)
 			if low_clear and _bot_firing_lane_teammate_behind(player_index, origin, target) and randf() < 0.4:
+				brain["debug_tactical_reason"] = "ALLY BEHIND / YIELD LANE"
 				mode = "yield_lane"
 				timer = randf_range(1.8, 2.8)
 			elif cover.is_finite() and randf() < 0.7:
+				brain["debug_tactical_reason"] = "PROP COVER AVAILABLE"
 				brain["cover_point"] = cover
 				mode = "approach_cover"
 				timer = 2.5
 			else:
 				var wall_cover := _bot_wall_cover_point(origin, target)
 				if wall_cover.is_finite() and randf() < 0.65:
+					brain["debug_tactical_reason"] = "WALL COVER AVAILABLE"
+					brain["wall_peek_count"] = 0
 					brain["wall_cover_point"] = wall_cover
 					brain["wall_peek_point"] = origin
 					mode = "wall_approach"
@@ -3133,6 +3527,7 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 					var toward: Vector2 = origin - Vector2(shot.get("position", origin))
 					var direction: Vector2 = shot.get("direction", Vector2.ZERO)
 					if toward.dot(direction) > 0.0 and toward.dot(direction) < 2.0 and absf(toward.cross(direction)) < 0.16 and randf() < 0.3:
+						brain["debug_tactical_reason"] = "INCOMING SHOT"
 						mode = "evade"
 						timer = randf_range(1.0, 1.7)
 						break
@@ -3154,6 +3549,13 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 		brain["allow_fire"] = low_clear
 	if target_crouched and not bool(brain["crouch"]):
 		brain["allow_fire"] = false
+	# A visible reloading opponent is an opportunity to expose and fire. This
+	# does not affect the weapon's normal cadence, ammunition, or accuracy.
+	if target_reloading:
+		brain["crouch"] = false
+		brain["allow_fire"] = true
+		brain.erase("tactical_move")
+		mode = ""
 	if mode == "wall_approach":
 		brain["tactical_move"] = (Vector2(brain["wall_cover_point"]) - origin).normalized()
 		brain["tactical_state"] = "WALL_COVER"
@@ -3295,13 +3697,65 @@ func _bot_prop_detour_waypoint(origin: Vector2, target: Vector2) -> Vector2:
 		else:
 			radius = float(barrel.get("collision_radius", BARREL_COLLISION_RADIUS)) + PLAYER_CAPSULE_RADIUS + 0.10
 		break
-	var forward := travel.normalized()
-	var side := Vector2(-forward.y, forward.x)
-	for sign in [1.0, -1.0]:
-		var candidate: Vector2 = center + side * radius * sign
-		if _barrel_sweep_hit(origin, candidate - origin).is_empty() and _barrel_sweep_hit(candidate, target - candidate).is_empty():
-			return candidate
-	return Vector2.INF
+	# A point directly beside the obstacle is often not a true tangent: the
+	# capsule clips the near corner on its way there. Search a small ring for a
+	# reachable waypoint with a clear continuation, including actual walls.
+	var best := Vector2.INF
+	var best_cost := INF
+	for extra in [0.05, 0.2, 0.4]:
+		for step in range(16):
+			var candidate := center + Vector2.RIGHT.rotated(TAU * float(step) / 16.0) * (radius + float(extra))
+			if not _is_open_cell(Vector2i(candidate.floor())):
+				continue
+			if not _barrel_sweep_hit(origin, candidate - origin).is_empty() or not _barrel_sweep_hit(candidate, target - candidate).is_empty():
+				continue
+			var first := _move_world_with_wall_slide(origin, candidate - origin, "east", "west", "south", "north")
+			if first.distance_to(candidate) > 0.02:
+				continue
+			var second := _move_world_with_wall_slide(candidate, target - candidate, "east", "west", "south", "north")
+			if second.distance_to(target) > 0.02:
+				continue
+			var cost := origin.distance_to(candidate) + candidate.distance_to(target)
+			if cost < best_cost:
+				best_cost = cost
+				best = candidate
+		if best.is_finite():
+			break
+	return best
+
+
+# When a route is physically blocked, commit briefly to a collision-checked
+# local step instead of rebuilding the same route to the same cell center.
+func _bot_recovery_waypoint(player_index: int, origin: Vector2, desired: Vector2, goal_cell: Vector2i, brain: Dictionary) -> Vector2:
+	var direction := desired.normalized()
+	if direction.length_squared() < 0.001:
+		direction = Vector2.RIGHT
+	var goal := Vector2(goal_cell) + Vector2(0.5, 0.5) if _is_open_cell(goal_cell) else origin + direction
+	var previous: Vector2 = brain.get("recovery_previous", Vector2.INF)
+	var best := Vector2.INF
+	var best_score := -INF
+	var side_sign := 1.0 if player_index % 2 == 0 else -1.0
+	for angle in [PI / 2.0, -PI / 2.0, PI / 4.0, -PI / 4.0, PI * 0.75, -PI * 0.75, PI]:
+		var step := direction.rotated(float(angle) * side_sign) * 0.42
+		var candidate := _move_world_with_wall_slide(origin, step, "east", "west", "south", "north")
+		if candidate.distance_to(origin) < 0.22 or candidate.distance_to(origin + step) > 0.04:
+			continue
+		var occupied := false
+		for other in range(player_states.size()):
+			if other != player_index and other < player_joined.size() and player_joined[other] and not bool(player_states[other].get("is_dying", false)) and candidate.distance_to(_player_state_world_position(player_states[other])) < PLAYER_CAPSULE_RADIUS * 2.2:
+				occupied = true
+				break
+		if occupied:
+			continue
+		var score := -candidate.distance_to(goal)
+		if previous.is_finite() and candidate.distance_to(previous) < 0.25:
+			score -= 2.0
+		if score > best_score:
+			best = candidate
+			best_score = score
+	if best.is_finite():
+		brain["recovery_previous"] = origin
+	return best
 
 
 func _bot_hearing_goal(player_index: int, cell: Vector2i, shot_vector: Vector2) -> Vector2i:
@@ -3467,6 +3921,60 @@ func _bot_apply_continuous_move_input(virtual_input: Dictionary, move_direction:
 	virtual_input["move_left"] = local_right < -0.20
 	virtual_input["move_forward"] = local_forward > 0.20
 	virtual_input["move_backward"] = local_forward < -0.20
+
+
+# Find a connected route to the side/rear of the last observed position,
+# without routing through that position. A hidden player's live pose is never
+# consulted. Reserve different destinations for simultaneously flanking bots.
+func _bot_find_flank_route(player_index: int, start: Vector2i, last_seen: Vector2, observed_forward: Vector2) -> Array:
+	var seen_cell := Vector2i(last_seen.floor())
+	if not _is_open_cell(start) or not _is_open_cell(seen_cell) or start == seen_cell:
+		return []
+	var forward := observed_forward.normalized()
+	if forward.length_squared() < 0.5:
+		forward = (last_seen - (Vector2(start) + Vector2(0.5, 0.5))).normalized()
+	var frontier: Array[Vector2i] = [start]
+	var came_from: Dictionary = {start: start}
+	var cursor := 0
+	while cursor < frontier.size():
+		var cell := frontier[cursor]
+		cursor += 1
+		for direction in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var next: Vector2i = cell + direction
+			if next == seen_cell or came_from.has(next) or not _can_cross_edge(cell, direction):
+				continue
+			came_from[next] = cell
+			frontier.append(next)
+	var best_route: Array = []
+	var best_score := -INF
+	for cell in frontier:
+		if cell == start or not _bot_cell_is_clear(cell):
+			continue
+		var offset := Vector2(cell) + Vector2(0.5, 0.5) - last_seen
+		if offset.length() > 2.1 or offset.length() < 0.5 or offset.normalized().dot(forward) > 0.15:
+			continue
+		var reserved := false
+		for other in bot_brains:
+			if int(other) != player_index and float(bot_brains[other].get("flank_time", 0.0)) > 0.0 and Vector2i(bot_brains[other].get("flank_goal", Vector2i(-1, -1))) == cell:
+				reserved = true
+				break
+		if reserved:
+			continue
+		var reverse: Array = [cell]
+		var at: Vector2i = cell
+		while at != start:
+			at = came_from[at]
+			reverse.append(at)
+		var route: Array = []
+		for i in range(reverse.size() - 1, -1, -1):
+			route.append(reverse[i])
+		var back_score := -offset.normalized().dot(forward)
+		var has_lane := _nearest_projectile_topology_clear(Vector2(cell) + Vector2(0.5, 0.5), last_seen - (Vector2(cell) + Vector2(0.5, 0.5)))
+		var score := back_score * 3.0 - float(route.size()) * 0.25 - absf(offset.length() - 1.2) * 0.4 + (0.5 if has_lane else 0.0)
+		if score > best_score:
+			best_score = score
+			best_route = route
+	return best_route
 
 
 # _bot_navigation_direction: Return the first step of the shortest legal maze route to the target.
@@ -3762,9 +4270,19 @@ func _reset_world_barrels() -> void:
 		for index in range(candidates.size() - 1, -1, -1):
 			if absi(candidates[index].x - dining_cell.x) <= 1 and absi(candidates[index].y - dining_cell.y) <= 1:
 				candidates.remove_at(index)
+	var cluster_cell := Vector2i(-1, -1)
 	for prop_index in range(mini(MAP_BARREL_COUNT, candidates.size())):
 		var chosen_index := randi() % candidates.size()
+		if prop_index % 2 == 1 and cluster_cell.x >= 0:
+			var best_distance := 999
+			for candidate_index in range(candidates.size()):
+				var candidate := candidates[candidate_index]
+				var distance := absi(candidate.x - cluster_cell.x) + absi(candidate.y - cluster_cell.y)
+				if distance < best_distance:
+					best_distance = distance
+					chosen_index = candidate_index
 		var chosen_cell := candidates[chosen_index]
+		cluster_cell = chosen_cell
 		candidates.remove_at(chosen_index)                                                       # Keep one barrel maximum per cell so art remains readable in the tight maze.
 		var position := _resolve_world_item_placement(_world_item_footprint("barrel", _barrel_position_in_cell(chosen_cell))) # Keep the prop's physical clearance circle away from thin wall edges.
 		if semantic_typical_props_enabled:
@@ -6011,8 +6529,78 @@ func _clear_killing_shot_blood(player_index: int) -> void:
 	active_blood_splatters = remaining_blood
 
 
+# A short local retreat is preferable to standing exposed when no cover is
+# reachable. Candidate movement still uses the shared wall and prop solver.
+func _bot_reaction_fallback_point(origin: Vector2, threat: Vector2, player_index: int) -> Vector2:
+	var away := (origin - threat).normalized()
+	if away.length_squared() < 0.001:
+		away = Vector2.UP
+	var best := Vector2.INF
+	var best_score := -INF
+	for angle in [0.0, PI / 4.0, -PI / 4.0, PI / 2.0, -PI / 2.0, PI]:
+		var direction := away.rotated(float(angle) * (1.0 if player_index % 2 == 0 else -1.0))
+		var point := _move_world_with_wall_slide(origin, direction * 0.8, "east", "west", "south", "north")
+		var travel := point.distance_to(origin)
+		if travel < 0.18:
+			continue
+		var score := point.distance_to(threat) + travel * 0.25
+		if score > best_score:
+			best = point
+			best_score = score
+	return best
+
+
+func _notify_bot_wounded(player_index: int, shot_direction: Vector2, owner_index: int) -> void:
+	var origin := _player_state_world_position(player_states[player_index])
+	# An impact gives a direction, not an exact hidden attacker position.
+	var threat := origin - shot_direction.normalized() * 1.5
+	if owner_index >= 0 and owner_index < player_states.size():
+		var seen := _player_state_world_position(player_states[owner_index])
+		if origin.distance_to(seen) <= BOT_SIGHT_RANGE and _nearest_projectile_topology_clear(origin, seen - origin):
+			threat = seen
+	var brain: Dictionary = bot_brains.get(player_index, {})
+	brain["reaction_kind"] = "retreat"
+	brain["reaction_time"] = 2.2
+	brain["reaction_new"] = true
+	brain["reaction_threat"] = threat
+	brain["reaction_reason"] = "SHOT / SEEK COVER"
+	bot_brains[player_index] = brain
+
+
+# Witnesses react to the casualty they can see, not a shared enemy location.
+func _notify_bots_of_ally_fall(fallen_index: int) -> void:
+	if fallen_index < 0 or fallen_index >= player_states.size():
+		return
+	var fallen_position := _player_state_world_position(player_states[fallen_index])
+	for index in range(player_states.size()):
+		if index == fallen_index or index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or PLAYER_TEAMS[index] != PLAYER_TEAMS[fallen_index] or bool(player_states[index].get("is_dying", false)):
+			continue
+		var origin := _player_state_world_position(player_states[index])
+		var view := fallen_position - origin
+		if view.length() > BOT_SIGHT_RANGE or (view.length() > 0.6 and _view_forward_vector_for_state(player_states[index]).normalized().dot(view.normalized()) < 0.15) or not _nearest_projectile_topology_clear(origin, view):
+			continue
+		var brain: Dictionary = bot_brains.get(index, {})
+		# A wounded bot's immediate self-preservation takes priority.
+		if String(brain.get("reaction_kind", "")) == "retreat" and float(brain.get("reaction_time", 0.0)) > 0.0:
+			continue
+		var aggressive := index % 2 == 0
+		brain["reaction_kind"] = "aggressive" if aggressive else "retreat"
+		brain["reaction_time"] = 2.8 if aggressive else 2.2
+		brain["reaction_new"] = true
+		brain["reaction_witness_position"] = fallen_position
+		# If the witness saw only the casualty, use that danger location rather
+		# than the killer's unseen live position.
+		brain["reaction_threat"] = fallen_position
+		brain["reaction_reason"] = "SAW ALLY FALL"
+		bot_brains[index] = brain
+		_request_bot_bark(index, "ally_attack" if aggressive else "ally_retreat")
+
+
 # _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
 func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1) -> bool:
+	# Observation mode protects human players only; NPCs remain vulnerable.
+	if show_bot_navigation_debug and _is_human_controlled_slot(player_index):
+		return false
 	if owner_index >= 0 and not _projectile_owner_has_clear_path_to_player(owner_index, player_index): # Make wall blocking decisive at the final damage boundary.
 		return false                                                                              # Do not permit health, score, death, or body-blood updates through a movement-blocking edge.
 	var state := player_states[player_index]                                                    # Read the target's current state.
@@ -6029,9 +6617,12 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 		music_combat_remaining = 8.0
 	state["health"] = maxi(int(state.get("health", PLAYER_MAX_HEALTH)) - 1, 0)                # Remove one hatch.
 	player_states[player_index] = state                                                        # Save the immediate hit result.
+	if _is_bot_controlled_slot(player_index) and int(state["health"]) > 0:
+		_notify_bot_wounded(player_index, shot_direction, owner_index)
 	_play_bot_damage_grunt(player_index, int(state["health"]) <= 0)                             # Lethal hits use the dedicated death voices.
 	_add_camera_blood_for_damage(player_index)                                                  # Add heart-dependent blood around this player's camera edges.
 	if int(state["health"]) <= 0:                                                             # Begin an explicit fall, three-second count, and reverse-animation respawn.
+		_notify_bots_of_ally_fall(player_index)
 		if clear_the_map_mode and player_index == 0:
 			clear_map_killer_index = owner_index if owner_index > 0 and owner_index < player_states.size() else -1
 		state["deaths"] = int(state.get("deaths", 0)) + 1
@@ -8735,6 +9326,21 @@ func _bot_limit_actor_overlap(player_index: int, origin: Vector2, destination: V
 		var hit := _ray_circle_hit_distance(origin, direction, center, radius)
 		if hit >= 0.0:
 			allowed = minf(allowed, maxf(hit - 0.001, 0.0))
+	if allowed < length * 0.5:
+		var side := Vector2(-direction.y, direction.x) * (1.0 if player_index % 2 == 0 else -1.0)
+		for sign_value in [1.0, -1.0]:
+			var step: Vector2 = side * float(sign_value) * minf(length, 0.08)
+			var candidate := _move_world_with_wall_slide(origin, step, "east", "west", "south", "north")
+			var safe := candidate.distance_to(origin) > step.length() * 0.3
+			for index in range(player_states.size()):
+				if index == player_index or index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or bool(player_states[index].get("is_dying", false)):
+					continue
+				var center := _player_state_world_position(player_states[index])
+				if candidate.distance_to(center) < minf(origin.distance_to(center), PLAYER_CAPSULE_RADIUS * 2.0) - 0.00001:
+					safe = false
+					break
+			if safe:
+				return candidate
 	return origin + direction * allowed
 
 
@@ -8750,6 +9356,9 @@ func _process_bot_world_context(delta: float) -> void:
 		return
 	var brain: Dictionary = bot_brains.get(active_player_index, {})
 	var desired: Vector2 = brain.get("move_direction", Vector2.ZERO)
+	if not bool(brain.get("has_line_of_sight", false)) and desired.length_squared() > 0.00000001:
+		world_aim_dir = _direction_string_for_world_vector(desired)
+		continuous_camera_yaw = Vector2.UP.angle_to(desired.normalized())
 	# Direct NPC locomotion bypasses the virtual camera turn controls.  Apply the
 	# combat aim to this real camera/body pose as well, otherwise a bot can enter
 	# HOLD_FIRE with a clear shot but only fire when its old travel heading happens
@@ -8803,6 +9412,9 @@ func _process_virtual_bot_world_context(player_index: int, delta: float) -> void
 	var brain: Dictionary = bot_brains.get(player_index, {})
 	state["character_is_crouching"] = bool(bot_inputs.get(player_index, {}).get("crouch", false))
 	var desired: Vector2 = brain.get("move_direction", Vector2.ZERO)
+	if not bool(brain.get("has_line_of_sight", false)) and desired.length_squared() > 0.00000001:
+		state["world_aim_dir"] = _direction_string_for_world_vector(desired)
+		state["continuous_camera_yaw"] = Vector2.UP.angle_to(desired.normalized())
 	if bool(brain.get("has_line_of_sight", false)):
 		var target_index := int(brain.get("target_index", -1))
 		if target_index >= 0 and target_index < player_states.size():
@@ -8883,7 +9495,7 @@ func _render_bound_player_context() -> void:                                    
 		show_slot_grid_debug = false
 		show_selected_wall_slot_debug = false
 		show_perspective_extents_overlay = false
-		if is_instance_valid(view_slot_overlay) and not show_pickup_range_debug:                  # Preserve collision diagnostics while the coordinate renderer owns normal slot art.
+		if is_instance_valid(view_slot_overlay) and not show_pickup_range_debug and not show_bot_navigation_debug:                  # Preserve collision diagnostics while the coordinate renderer owns normal slot art.
 			view_slot_overlay.visible = false
 		if is_instance_valid(perspective_extents_overlay) and not show_near_view_tuning_debug:
 			perspective_extents_overlay.visible = false
@@ -8904,7 +9516,7 @@ func _render_bound_player_context() -> void:                                    
 		var map_started_us := Time.get_ticks_usec()
 		_update_debug_map_overlay()                                                               # Retain the shared top-down map, including both player markers and cones.
 		var map_elapsed_us := Time.get_ticks_usec() - map_started_us
-		if show_pickup_range_debug:                                                               # The runtime-compositor path returns before legacy overlay refresh, so explicitly rebuild collision guides in every active camera.
+		if show_pickup_range_debug or show_bot_navigation_debug or (is_instance_valid(view_slot_overlay) and view_slot_overlay.has_meta("bot_label_canvas")): # Also clear labels when diagnostics are disabled.
 			_update_view_slot_debug_overlay()
 		if coordinate_renderer.has_method("record_legacy_render_breakdown"):
 			coordinate_renderer.record_legacy_render_breakdown(player_elapsed_us, opponents_elapsed_us, combat_elapsed_us, map_elapsed_us)
@@ -9034,6 +9646,9 @@ func _process(delta: float) -> void:                                            
 	scoreboard_visible = scoreboard_player_index >= 0
 	if not clear_map_waiting_to_start and not match_paused:
 		_update_scoreboard_shop_input()
+	if _read_toggle_debug_menu():
+		_toggle_debug_menu()
+		return
 	if match_paused:
 		_update_combat_hud()
 		return
@@ -9049,9 +9664,6 @@ func _process(delta: float) -> void:                                            
 			_start_clear_map_round()
 		_update_combat_hud()
 		return
-	if _read_toggle_debug_menu():                                                              # Check for a one-shot request to open or close the debug menu.
-		_toggle_debug_menu()                                                                     # Change panel visibility without changing any diagnostic state.
-		return                                                                                   # Keep the menu hotkey from also advancing gameplay this frame.
 	if _read_toggle_bot_trace():
 		_toggle_bot_decision_trace()
 		_update_status()
@@ -9375,12 +9987,20 @@ func _add_perspective_sprite_bounds(sprite: AnimatedSprite2D, color: Color, labe
 func _update_view_slot_debug_overlay() -> void:                                             # Declare this function.
 	if view_slot_overlay == null:                                                            # Skip when this player view has no slot audit overlay.
 		return                                                                                    # Return without drawing slot labels.
+	var labels_canvas: CanvasLayer = view_slot_overlay.get_meta("bot_label_canvas") if view_slot_overlay.has_meta("bot_label_canvas") else null
+	if labels_canvas != null and is_instance_valid(labels_canvas):
+		labels_canvas.visible = show_bot_navigation_debug
+		for child in labels_canvas.get_child(0).get_children():
+			child.queue_free()
+			labels_canvas.get_child(0).remove_child(child)
 	var show_pickup_view_debug := show_pickup_range_debug                                       # Draw collision footprints in every active player camera so shared visibility/collision bugs can be compared directly.
-	view_slot_overlay.visible = show_slot_grid_debug or show_pickup_view_debug                 # Share the clipped player-view overlay with the optional pickup-range guide.
+	view_slot_overlay.visible = show_slot_grid_debug or show_pickup_view_debug or show_bot_navigation_debug                 # Share the clipped player-view overlay with the optional pickup-range guide.
 	for child in view_slot_overlay.get_children():                                            # Remove previous frame's blue slot guide primitives.
 		if is_instance_valid(child) and not child.is_queued_for_deletion():                       # Skip nodes already queued by an earlier redraw.
 			view_slot_overlay.remove_child(child)                                                  # Detach it now so the rebuilt audit labels do not visually stack.
 			child.queue_free()                                                                       # Queue the old slot audit primitive for safe end-of-frame cleanup.
+	if show_bot_navigation_debug:
+		_add_player_view_bot_debug()
 	if show_pickup_view_debug:                                                                 # Draw the exact live pickup footprint in Player 1's camera as well as on the source map.
 		_add_view_pickup_collection_ellipse()                                                    # Project the same interaction ellipse through the active camera floor model.
 	if not show_slot_grid_debug:                                                              # Avoid rebuilding hidden guide geometry.
@@ -9548,6 +10168,143 @@ func _debug_slot_screen_segment(slot: Dictionary) -> Array[Vector2]:            
 	var local_b := _camera_local_point_from_world(slot["b"])                                   # Convert endpoint B into camera-local side/depth coordinates.
 	return [_screen_floor_point_for_camera_local_position(local_a), _screen_floor_point_for_camera_local_position(local_b)] # Project both endpoints through the measured floor perspective.
 
+
+
+# Diagnostic markers use the same camera visibility and world projection as
+# actors and effects. Labels may show through walls; floor outlines remain occluded.
+func _bot_debug_project_visible(world_point: Vector2, show_through_walls := false) -> Dictionary:
+	if not _world_actor_overlaps_current_camera_fan(world_point, 0.03) or (not show_through_walls and not _world_point_has_clear_camera_line(world_point)):
+		return {}
+	var projection := _opponent_projection_from_current_camera(world_point, true, true)
+	var point := Vector2(float(projection.get("screen_x", -1000.0)), float(projection.get("feet_y", -1000.0)))
+	if point.x < 0.0 or point.x > VIEWPORT_SIZE.x or point.y < 0.0 or point.y > VIEWPORT_SIZE.y:
+		return {}
+	return projection
+
+
+# Explain the actual active firing-point behavior without inventing a tactic:
+# the selector weighs a clear low-shot lane, range, and travel distance.
+func _bot_debug_action_text(player_index: int, brain: Dictionary) -> String:
+	var state_name := String(brain.get("state", "IDLE"))
+	var state: Dictionary = player_states[player_index]
+	var origin := _player_state_world_position(state)
+	var mode := String(brain.get("tactical_mode", ""))
+	var state_line := state_name.replace("_", " ")
+	if bool(brain.get("cautious_approach", false)):
+		state_line += " [CAUTIOUS]"
+	if not mode.is_empty():
+		state_line += " [" + mode.replace("_", " ") + "]"
+	var perception := "NO CONTACT"
+	var target_index := int(brain.get("target_index", -1))
+	if bool(brain.get("has_line_of_sight", false)) and target_index >= 0 and target_index < player_states.size():
+		var target_state: Dictionary = player_states[target_index]
+		perception = "SEES %s %.1f" % [PLAYER_NAMES[target_index], origin.distance_to(_player_state_world_position(target_state))]
+		if not String(target_state.get("reload_phase", "")).is_empty():
+			perception += " RELOADING"
+		if bool(target_state.get("character_is_crouching", false)):
+			perception += " CROUCHED"
+	elif state_name == "INVESTIGATE":
+		var sound_cell: Vector2i = brain.get("investigate_cell", Vector2i(-1, -1))
+		perception = "HEARD %s (%d,%d)" % [String(brain.get("investigation_kind", "sound")).to_upper(), sound_cell.x, sound_cell.y]
+	elif state_name == "FLANK" and brain.has("flank_anchor"):
+		var anchor: Vector2 = brain["flank_anchor"]
+		perception = "LAST SEEN %.1f,%.1f" % [anchor.x, anchor.y]
+	elif float(brain.get("combat_memory", 0.0)) > 0.0 and brain.has("last_seen_position"):
+		var last_seen: Vector2 = brain["last_seen_position"]
+		perception = "LAST SEEN %.1f,%.1f" % [last_seen.x, last_seen.y]
+	var activity := "AIM" if bool(brain.get("has_line_of_sight", false)) else "NO SHOT"
+	var reload_phase := String(state.get("reload_phase", ""))
+	if not reload_phase.is_empty():
+		activity = "RELOAD " + reload_phase.to_upper()
+	elif not bool(brain.get("allow_fire", true)):
+		activity = "HOLD FIRE"
+	elif float(state.get("fire_cooldown", 0.0)) > 0.0:
+		activity = "COOLDOWN %.1f" % float(state["fire_cooldown"])
+	elif bool(bot_inputs.get(player_index, {}).get("fire", false)):
+		activity = "FIRE INPUT"
+	var reason := String(brain.get("debug_tactical_reason", ""))
+	if state_name == "FIRING_POINT":
+		var destination: Vector2 = brain.get("firing_point", Vector2.INF)
+		var target: Vector2 = brain.get("firing_target", origin)
+		var movement := "HOLD"
+		if destination.is_finite() and origin.distance_to(destination) > 0.09:
+			var range_change := destination.distance_to(target) - origin.distance_to(target)
+			movement = "ADVANCE" if range_change < -0.08 else "RETREAT" if range_change > 0.08 else "REPOSITION"
+		state_line += " " + movement
+		reason = "CLEAR LOW LANE / RANGE 1.5 / TRAVEL"
+	elif state_name == "RELOAD_COVER":
+		reason = "OWN RELOAD"
+	elif state_name == "CLEAR_FIRE_LANE":
+		reason = "ALLY BLOCKS SHOT"
+	var result := "%s\n%s\n%s  HP %d" % [state_line, perception, activity, int(state.get("health", 0))]
+	if not reason.is_empty():
+		result += "\nWHY: " + reason
+	return result
+
+
+func _add_player_view_bot_debug() -> void:
+	# Canvas layers draw above world geometry and HUD canvases regardless of
+	# their z-indices. Match the active camera's transform for each local view.
+	var labels_canvas: CanvasLayer = view_slot_overlay.get_meta("bot_label_canvas") if view_slot_overlay.has_meta("bot_label_canvas") else null
+	if labels_canvas == null or not is_instance_valid(labels_canvas):
+		labels_canvas = CanvasLayer.new()
+		labels_canvas.name = "BotActionLabels%d" % active_player_index
+		labels_canvas.layer = 1001
+		var view_window: Window = player_views[active_player_index].get("player_window", get_window())
+		labels_canvas.custom_viewport = view_window
+		labels_canvas.add_child(Node2D.new())
+		add_child(labels_canvas)
+		view_slot_overlay.set_meta("bot_label_canvas", labels_canvas)
+	var labels_root: Node2D = labels_canvas.get_child(0)
+	labels_root.transform = view_slot_overlay.get_global_transform_with_canvas()
+	labels_canvas.visible = true
+	if bot_debug_font == null:
+		bot_debug_font = SystemFont.new()
+		bot_debug_font.font_names = PackedStringArray(["Arial", "DejaVu Sans", "sans-serif"])
+	for index in range(player_states.size()):
+		if index == active_player_index or index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or bool(player_states[index].get("is_dying", false)):
+			continue
+		var origin := _player_state_world_position(player_states[index])
+		var actor_projection := _bot_debug_project_visible(origin, true)
+		if actor_projection.is_empty():
+			continue
+		var brain: Dictionary = bot_brains.get(index, {})
+		var actor_feet := Vector2(float(actor_projection["screen_x"]), float(actor_projection["feet_y"]))
+		var actor_height := float(actor_projection.get("continuous_actor_height", actor_projection.get("actor_height", 20.0)))
+		var action := _bot_debug_action_text(index, brain)
+		var action_label := Label.new()
+		action_label.name = "BotAction_%d" % index
+		action_label.text = "%s: %s" % [PLAYER_NAMES[index], action]
+		action_label.position = Vector2(clampf(actor_feet.x - 20.0, 0.0, maxf(0.0, VIEWPORT_SIZE.x - 80.0)), maxf(0.0, actor_feet.y - actor_height - 20.0))
+		action_label.add_theme_font_override("font", bot_debug_font)
+		action_label.add_theme_font_size_override("font_size", 4)
+		action_label.z_as_relative = false
+		action_label.z_index = RenderingServer.CANVAS_ITEM_Z_MAX
+		action_label.add_theme_color_override("font_color", Color.WHITE)
+		action_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		action_label.add_theme_constant_override("outline_size", 1)
+		action_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		labels_root.add_child(action_label)
+		var destination: Vector2 = brain.get("debug_destination", Vector2.INF)
+		if not destination.is_finite():
+			continue
+		# Draw only the square around the bot's actual chosen destination.
+		var corners := [destination + Vector2(-0.125, -0.125), destination + Vector2(0.125, -0.125), destination + Vector2(0.125, 0.125), destination + Vector2(-0.125, 0.125)]
+		var projected_corners: Array[Dictionary] = []
+		for corner in corners:
+			projected_corners.append(_bot_debug_project_visible(corner))
+		for edge in range(4):
+			var first: Dictionary = projected_corners[edge]
+			var second: Dictionary = projected_corners[(edge + 1) % 4]
+			if first.is_empty() or second.is_empty():
+				continue
+			var line := Line2D.new()
+			line.name = "BotDestinationEdge"
+			line.set_meta("firing_point_edge", true)
+			line.points = PackedVector2Array([Vector2(float(first["screen_x"]), float(first["feet_y"])), Vector2(float(second["screen_x"]), float(second["feet_y"]))])
+			line.width = 0.5
+			line.default_color = Color(1.0, 0.85, 0.1, 1.0)
+			view_slot_overlay.add_child(line)
 
 
 # _screen_floor_point_for_camera_local_position: Projects a camera-local floor point into 160x120 screen coordinates.
@@ -10136,6 +10893,8 @@ func _add_match_minimap_bot_navigation_debug() -> void:
 		var route: Array = brain.get("route", [])
 		var colour: Color = colours[posmod(player_index - 1, colours.size())]
 		var previous := _match_minimap_point(_player_state_world_position(player_states[player_index]))
+		if bool(brain.get("has_line_of_sight", false)):
+			_add_match_minimap_line(match_minimap_dynamic_layer, previous, _match_minimap_point(Vector2(brain.get("last_seen_position", Vector2.ZERO))), Color(0.2, 0.8, 1.0, 0.8), 1.0)
 		for cell_value in route:
 			var point := _match_minimap_point(Vector2(Vector2i(cell_value)) + Vector2(0.5, 0.5))
 			_add_match_minimap_line(match_minimap_dynamic_layer, previous, point, colour, 1.0)
@@ -13249,7 +14008,7 @@ func _read_toggle_slot_grid_debug() -> bool:                                    
 
 # _read_toggle_debug_menu: Returns true once when the debug-overlay menu hotkey is pressed.
 func _read_toggle_debug_menu() -> bool:
-	if _public_build():
+	if OS.has_feature("web"):
 		return false
 	var debug_menu_pressed := Input.is_action_pressed(ACTION_TOGGLE_DEBUG_MENU) or _is_key_down(KEY_F3) # Read the current F3 debug-menu key state.
 	var debug_menu_just_pressed := debug_menu_pressed and not was_debug_menu_pressed           # Detect the first frame of the menu hotkey press.
@@ -15719,6 +16478,19 @@ func _build_random_maze_wall_edges() -> void:                                   
 	var start_cell := Vector2i(0, MAP_HEIGHT - 1)                                              # Start the test player in the southwest corner of the generated map.
 	_carve_maze_from(start_cell, visited, rng)                                                 # Carve a connected maze from the starting cell.
 	_add_extra_maze_openings(rng)                                                              # Open a few extra internal walls so the map has some loops.
+	# Open a central room and a continuous loop around the outer edge.
+	var cx := int(MAP_WIDTH / 2) - 1
+	var cy := int(MAP_HEIGHT / 2) - 1
+	for y in range(cy, cy + 2):
+		_set_wall_between(Vector2i(cx, y), Vector2i.RIGHT, false)
+	for x in range(cx, cx + 2):
+		_set_wall_between(Vector2i(x, cy), Vector2i.DOWN, false)
+	for x in range(MAP_WIDTH - 1):
+		_set_wall_between(Vector2i(x, 0), Vector2i.RIGHT, false)
+		_set_wall_between(Vector2i(x, MAP_HEIGHT - 1), Vector2i.RIGHT, false)
+	for y in range(MAP_HEIGHT - 1):
+		_set_wall_between(Vector2i(0, y), Vector2i.DOWN, false)
+		_set_wall_between(Vector2i(MAP_WIDTH - 1, y), Vector2i.DOWN, false)
 	grid_position = start_cell                                                                 # Place the player at the start of the generated maze.
 	facing = 0                                                                                 # Face north so the first view looks into the map.
 	turn_45_direction = 0                                                                      # Reset any temporary halfway-turn view when generating a new map.
