@@ -1104,7 +1104,7 @@ var match_minimap_dynamic_layer: Node2D                                         
 const MATCH_MINIMAP_SIZE := 66.0                                                               # Four-player HUD needs a compact half-size map.
 const MATCH_MINIMAP_MARGIN := 5.0                                                              # Leave a small safe inset from the upper-right screen edge.
 const MAP_DISPLAY_CONFIG := "user://map_display.cfg"
-var map_display_mode := "fullscreen"
+var map_display_mode := "minimap"
 var map_display_button: Button
 
 var pixel_hud_font: FontFile                                                                   # Share the bundled High Noon pixel font across every gameplay readout.
@@ -1927,7 +1927,7 @@ func _style_pause_button(button: Button, ink: Color, paper: Color) -> void:
 func _load_map_display_mode() -> void:
 	var config := ConfigFile.new()
 	if config.load(MAP_DISPLAY_CONFIG) == OK:
-		var saved := String(config.get_value("map", "mode", "fullscreen"))
+		var saved := String(config.get_value("map", "mode", "minimap"))
 		if saved in ["fullscreen", "minimap"]:
 			map_display_mode = saved
 
