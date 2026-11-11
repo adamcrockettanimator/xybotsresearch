@@ -195,6 +195,8 @@ const MACHINE_GUN_PICKUP_STREAM := preload("res://assets/Audio/SFX/MachineGun.mp
 const PROJECTILE_SPEED := 6                                                                 # Move pistol shots six maze cells per second.
 const PROJECTILE_LIFETIME := 1.5                                                              # Remove a shot after it has crossed the practical 9x9 combat space.
 const PLAYER_CAPSULE_RADIUS := 0.10                                                           # Match the visible body width more closely while retaining one shared circular footprint for movement, combat, and pickups.
+const PROP_CLOSED_WALL_GAP := 0.045 # A narrow visible seam, much smaller than a character.
+const PROP_MIN_PASSAGE_WIDTH := PLAYER_CAPSULE_RADIUS * 2.0 + 0.12 # Add visual and collision clearance beyond the player diameter.
 const BARREL_COLLISION_RADIUS := .05                                                       # Keep the solid lower hoop close to the visible barrel, without the previous overly wide personal-space ring.
 const BARREL_HIT_POINTS := 3
 const BARREL_PROJECTILE_RADIUS := 0.08                                                     # Approximate the visible barrel width, which is narrower than its 32-pixel canvas.
@@ -831,6 +833,7 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_fan_draw_order_debug := false                                               # Show the exact solid fan, clipped wall spans, and final above/below-player layer decision.
 @export var show_world_footprints_debug := false                                             # Show physical placement circles and camera-visible footprint cones for every floor-world item.
 @export var show_bot_navigation_debug := false                                               # Draw every NPC's current route, goal, and perception decision on the compact minimap.
+@export var show_dive_roll_debug := false # Color roll frames yellow when invulnerable and red when vulnerable.
 @export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
 @export var show_barrel_lod_visualizer := false                                              # Keep the gallery readable; labels remain available from the F3 diagnostic toggle.
 @export var pause_round_timer_for_debug := false                                             # Normal matches start with the shared countdown running.
@@ -1100,6 +1103,10 @@ var match_minimap_static_layer: Node2D                                          
 var match_minimap_dynamic_layer: Node2D                                                        # Rebuild only the two player arrows every frame.
 const MATCH_MINIMAP_SIZE := 66.0                                                               # Four-player HUD needs a compact half-size map.
 const MATCH_MINIMAP_MARGIN := 5.0                                                              # Leave a small safe inset from the upper-right screen edge.
+const MAP_DISPLAY_CONFIG := "user://map_display.cfg"
+var map_display_mode := "fullscreen"
+var map_display_button: Button
+
 var pixel_hud_font: FontFile                                                                   # Share the bundled High Noon pixel font across every gameplay readout.
 const BOT_BARK_ROOT := "res://assets/Audio/SFX/NPC Barks/"
 const EFFORT_GRUNT_ROOT := "res://assets/Audio/SFX/Effort Grunts/"
@@ -1135,6 +1142,9 @@ const FOOTSTEP_RUN_HEARING_RANGE := 4.0
 var footstep_tracks: Dictionary = {}
 var footstep_last_samples: Dictionary = {}
 var footstep_audio_channels: Dictionary = {}
+# Smoothed wall obstruction per actor, independent of its individual sound cues.
+var world_sound_occlusion: Dictionary = {}
+const SOUND_OCCLUSION_FADE_SECONDS := 0.6
 
 var music_player: AudioStreamPlayer
 var mobile_sample_audio := false
@@ -1191,6 +1201,7 @@ func _ready() -> void:                                                          
 	pixel_hud_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE                            # Render hard pixel edges instead of soft vector-font smoothing.
 	pixel_hud_font.multichannel_signed_distance_field = false                                  # Disable MSDF smoothing for the same deliberately aliased presentation.
 	mobile_sample_audio = bool(get_tree().get_meta("grudge_mobile_audio_test", false)) or (OS.has_feature("web") and bool(get_tree().get_meta("grudge_mobile_wide", false)))
+	_load_map_display_mode()
 	_setup_shared_audio()
 	status_label.add_theme_font_override("font", pixel_hud_font)                             # Keep even the legacy diagnostic readout consistent when it is temporarily shown.
 	if BARREL_LOD_REVIEW_LEVEL:                                                               # Keep barrel-source review free of maze occlusion and unrelated props.
@@ -1278,7 +1289,7 @@ func _setup_shared_audio() -> void:
 		effect.damping = 0.6
 		AudioServer.add_bus_effect(reverb_bus, effect)
 	bot_bark_player = AudioStreamPlayer.new()
-	_configure_sfx_player(bot_bark_player)
+	_configure_world_sfx_player(bot_bark_player)
 	bot_bark_player.bus = "NPC Voice"
 	add_child(bot_bark_player)
 	bot_bark_reverb_player = AudioStreamPlayer.new()
@@ -1312,7 +1323,7 @@ func _setup_shared_audio() -> void:
 				AudioServer.register_stream_as_sample(stream)
 		# Spread short reload and footstep sample registration over frames so
 		# first use is less likely to decode during an action.
-		for kind in ["Walk", "Run", "Sneak", "Drop"]:
+		for kind in ["Walk", "Run", "Sneak", "Jump", "Drop"]:
 			for sample in range(1, 7):
 				mobile_sfx_warm_queue.append(FOOTSTEP_ROOT + "%s/Wood/WASD Sound Wood %s %02d.wav" % [kind, kind, sample])
 		for sample in range(1, 6):
@@ -1333,6 +1344,119 @@ func _warm_next_mobile_sfx() -> void:
 		mobile_warmed_sfx.append(stream)
 		if not AudioServer.is_stream_registered_as_sample(stream):
 			AudioServer.register_stream_as_sample(stream)
+
+
+# A world sound is mixed for the nearest human listener, as with footsteps and
+# barks. Reuse the maze collision geometry; props do not act as sound walls.
+func _world_sound_spatial_info(player_index: int) -> Dictionary:
+	if player_index < 0 or player_index >= player_states.size():
+		return {"distance": 0.0, "pan": 0.0, "blocked": false}
+	var source := _player_state_world_position(player_states[player_index])
+	var listener := -1
+	var distance := INF
+	for candidate in range(player_states.size()):
+		if candidate < player_joined.size() and player_joined[candidate] and _is_human_controlled_slot(candidate):
+			var candidate_distance := source.distance_to(_player_state_world_position(player_states[candidate]))
+			if candidate_distance < distance:
+				distance = candidate_distance
+				listener = candidate
+	if listener < 0:
+		return {"distance": INF, "pan": 0.0, "blocked": false}
+	var listener_state: Dictionary = player_states[listener]
+	var listener_position := _player_state_world_position(listener_state)
+	var relative := source - listener_position
+	var forward := _view_forward_vector_for_state(listener_state).normalized()
+	var right := Vector2(-forward.y, forward.x)
+	var pan := clampf(right.dot(relative.normalized()), -0.85, 0.85) if distance > 0.0001 else 0.0
+	var blocked := false
+	if distance > 0.02:
+		blocked = not _nearest_projectile_topology_clear(listener_position, relative)
+	var occlusion := float(world_sound_occlusion.get(player_index, 1.0 if blocked else 0.0))
+	return {"distance": distance, "pan": pan, "blocked": blocked, "occlusion": occlusion}
+
+
+func _sound_occlusion_loss(info: Dictionary) -> float:
+	return 5.0 * float(info.get("occlusion", 1.0 if bool(info.get("blocked", false)) else 0.0)) if mobile_sample_audio else 0.0
+
+
+# A separate bus per actor lets overlapping sources keep their own wall filter
+# and panner instead of changing the effect for every sound in the game.
+func _update_world_audio_bus(bus_name: String, info: Dictionary) -> void:
+	# Never place actor effects on a shared music or master bus.
+	if bus_name == "Master" or bus_name == "Music" or bus_name.is_empty():
+		return
+	var bus := AudioServer.get_bus_index(bus_name)
+	if bus < 0:
+		AudioServer.bus_count += 1
+		bus = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(bus, bus_name)
+		AudioServer.set_bus_send(bus, "Master")
+	var filter: AudioEffectLowPassFilter = null
+	var panner: AudioEffectPanner = null
+	for effect_index in AudioServer.get_bus_effect_count(bus):
+		var effect := AudioServer.get_bus_effect(bus, effect_index)
+		if effect is AudioEffectLowPassFilter:
+			filter = effect
+		elif effect is AudioEffectPanner:
+			panner = effect
+	if panner == null:
+		panner = AudioEffectPanner.new()
+		AudioServer.add_bus_effect(bus, panner)
+	if filter == null:
+		filter = AudioEffectLowPassFilter.new()
+		AudioServer.add_bus_effect(bus, filter)
+	panner.pan = float(info.get("pan", 0.0))
+	var occlusion := clampf(float(info.get("occlusion", 1.0 if bool(info.get("blocked", false)) else 0.0)), 0.0, 1.0)
+	# Most voice energy is below the first few kilohertz. Bias the smooth
+	# logarithmic fade toward an audible cutoff earlier, so short barks do not
+	# finish while the filter is still mostly removing inaudible treble.
+	var audible_occlusion := pow(occlusion, 0.45)
+	filter.cutoff_hz = exp(lerpf(log(20500.0), log(1400.0), audible_occlusion))
+	AudioServer.set_bus_volume_db(bus, 0.0 if mobile_sample_audio else -5.0 * occlusion)
+
+
+# Keep active actor buses moving towards the current wall state each frame,
+# even while a long sound is already playing. Both entering and leaving cover
+# take the same amount of time, avoiding abrupt changes at corners.
+func _advance_world_sound_occlusion(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	for actor in range(player_states.size()):
+		if actor >= player_joined.size() or not player_joined[actor]:
+			world_sound_occlusion.erase(actor)
+			continue
+		var info := _world_sound_spatial_info(actor)
+		var target := 1.0 if bool(info.get("blocked", false)) else 0.0
+		var current := float(world_sound_occlusion.get(actor, target))
+		var value := move_toward(current, target, delta / SOUND_OCCLUSION_FADE_SECONDS)
+		world_sound_occlusion[actor] = value
+		info["occlusion"] = value
+		for bus_name in ["Actor World %d" % actor, "Actor Footsteps %d" % actor, "NPC Damage %d" % actor]:
+			if AudioServer.get_bus_index(bus_name) >= 0:
+				_update_world_audio_bus(bus_name, info)
+
+
+func _configure_world_sfx_player(player: AudioStreamPlayer) -> void:
+	_configure_sfx_player(player)
+	if OS.has_feature("web") and not mobile_sample_audio:
+		player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+
+
+func _play_world_gunshot(player_index: int) -> void:
+	if gunshot_player == null:
+		return
+	var info := _world_sound_spatial_info(player_index)
+	var voice := AudioStreamPlayer.new()
+	_configure_world_sfx_player(voice)
+	voice.stream = gunshot_player.stream
+	voice.pitch_scale = randf_range(0.78, 1.22)
+	voice.volume_db = _actor_sound_volume_db(player_index, 0.0) * 0.6 - _sound_occlusion_loss(info)
+	var actor_bus := "Actor World %d" % player_index
+	_update_world_audio_bus(actor_bus, info)
+	voice.bus = actor_bus
+	add_child(voice)
+	voice.finished.connect(voice.queue_free)
+	voice.play()
 
 
 # One shared voice channel prevents overlapping chatter in larger bot matches.
@@ -1397,7 +1521,9 @@ func _update_bot_bark_spatial() -> bool:
 	var listener_right := Vector2(-listener_forward.y, listener_forward.x)
 	if bot_bark_panner != null:
 		bot_bark_panner.pan = clampf(listener_right.dot(relative.normalized()), -0.85, 0.85) if relative.length_squared() > 0.0001 else 0.0
-	bot_bark_player.volume_db = -4.0 - minf(distance, 8.0) * 1.5
+	var sound_info := _world_sound_spatial_info(bot_bark_speaker)
+	_update_world_audio_bus("NPC Voice", sound_info)
+	bot_bark_player.volume_db = -4.0 - minf(distance, 8.0) * 1.5 - _sound_occlusion_loss(sound_info)
 	bot_bark_reverb_player.volume_db = bot_bark_player.volume_db + lerpf(-25.0, -10.0, clampf(distance / 8.0, 0.0, 1.0))
 	return true
 
@@ -1444,7 +1570,7 @@ func _play_bot_damage_grunt(player_index: int, lethal := false) -> bool:
 			AudioServer.set_bus_send(bus, "Master")
 			AudioServer.add_bus_effect(bus, AudioEffectPanner.new())
 		var voice := AudioStreamPlayer.new()
-		_configure_sfx_player(voice)
+		_configure_world_sfx_player(voice)
 		voice.bus = bus_name
 		add_child(voice)
 		bot_damage_channels[player_index] = {"player": voice, "panner": AudioServer.get_bus_effect(bus, 0)}
@@ -1457,7 +1583,9 @@ func _play_bot_damage_grunt(player_index: int, lethal := false) -> bool:
 	var right := Vector2(-forward.y, forward.x)
 	panner.pan = clampf(right.dot(relative.normalized()), -0.85, 0.85) if relative.length_squared() > 0.0001 else 0.0
 	voice.stream = stream
-	voice.volume_db = -4.0 - minf(nearest, 8.0) * 1.5
+	var sound_info := _world_sound_spatial_info(player_index)
+	_update_world_audio_bus(voice.bus, sound_info)
+	voice.volume_db = -4.0 - minf(nearest, 8.0) * 1.5 - _sound_occlusion_loss(sound_info)
 	voice.play()
 	bot_damage_last_sample[player_index] = sample
 	return true
@@ -1476,7 +1604,7 @@ func _footstep_channel(player_index: int) -> Dictionary:
 		AudioServer.set_bus_send(bus, "Master")
 		AudioServer.add_bus_effect(bus, AudioEffectPanner.new())
 	var player := AudioStreamPlayer.new()
-	_configure_sfx_player(player)
+	_configure_world_sfx_player(player)
 	player.bus = bus_name
 	add_child(player)
 	var channel := {"player": player, "panner": AudioServer.get_bus_effect(bus, 0)}
@@ -1485,7 +1613,7 @@ func _footstep_channel(player_index: int) -> Dictionary:
 
 
 func _play_wood_actor_sound(player_index: int, kind: String) -> bool:
-	if player_index < 0 or player_index >= player_states.size() or kind not in ["Walk", "Run", "Sneak", "Drop"]:
+	if player_index < 0 or player_index >= player_states.size() or kind not in ["Walk", "Run", "Sneak", "Jump", "Drop"]:
 		return false
 	var previous := int(footstep_last_samples.get("%d:%s" % [player_index, kind], 0))
 	var sample := randi_range(1, 6)
@@ -1516,7 +1644,11 @@ func _play_wood_actor_sound(player_index: int, kind: String) -> bool:
 	var right := Vector2(-forward.y, forward.x)
 	panner.pan = clampf(right.dot(relative.normalized()), -0.85, 0.85) if relative.length_squared() > 0.0001 else 0.0
 	player.stream = stream
-	player.volume_db = (-7.0 if kind == "Sneak" else -4.0) - minf(nearest, 8.0) * 2.0
+	var sound_info := _world_sound_spatial_info(player_index)
+	_update_world_audio_bus(player.bus, sound_info)
+	player.volume_db = (-7.0 if kind == "Sneak" else -4.0) - minf(nearest, 8.0) * 2.0 - _sound_occlusion_loss(sound_info)
+	if _is_bot_controlled_slot(player_index) and kind in ["Walk", "Run", "Sneak"]:
+		player.volume_db -= 8.0 + minf(nearest, 8.0) # Quieter nearby and fades faster with distance.
 	player.play()
 	footstep_last_samples["%d:%s" % [player_index, kind]] = sample
 	return true
@@ -1587,7 +1719,7 @@ func _update_actor_footsteps(delta: float) -> void:
 			if player_index < player_views.size():
 				sprite = player_views[player_index].get("player_sprite", null)
 			foot_down = _player_footstep_frame_crossed(track, sprite)
-		if bool(state.get("is_dying", false)) or distance > 1.0:
+		if bool(state.get("is_dying", false)) or bool(state.get("dive_active", false)) or distance > 1.0:
 			track["distance"] = 0.0
 			track.erase("animation")
 		elif distance > 0.00001:
@@ -1605,9 +1737,34 @@ func _update_actor_footsteps(delta: float) -> void:
 
 
 # _play_pickup_sound: Plays a shared one-shot item cue without duplicating it across local viewports.
-func _play_pickup_sound(player: AudioStreamPlayer) -> void:
-	if player != null:                                                                          # Keep early scene setup and teardown safe.
-		player.play()                                                                             # Restart the concise cue for this one successful collection.
+func _actor_sound_volume_db(player_index: int, base_db: float) -> float:
+	if player_index < 0 or player_index >= player_states.size():
+		return base_db # Non-world UI sounds retain their normal level.
+	var source := _player_state_world_position(player_states[player_index])
+	var nearest := INF
+	for listener in range(player_states.size()):
+		if listener < player_joined.size() and player_joined[listener] and _is_human_controlled_slot(listener):
+			nearest = minf(nearest, source.distance_to(_player_state_world_position(player_states[listener])))
+	return base_db - minf(nearest, 8.0) * 2.0 if is_finite(nearest) else -80.0
+
+
+func _play_pickup_sound(player: AudioStreamPlayer, player_index := -1) -> void:
+	if player == null:
+		return
+	if player_index < 0:
+		player.play() # Tally and other interface cues are not world sounds.
+		return
+	var voice := AudioStreamPlayer.new()
+	_configure_world_sfx_player(voice)
+	voice.stream = player.stream
+	var sound_info := _world_sound_spatial_info(player_index)
+	var actor_bus := "Actor World %d" % player_index
+	_update_world_audio_bus(actor_bus, sound_info)
+	voice.bus = actor_bus
+	voice.volume_db = _actor_sound_volume_db(player_index, player.volume_db) - _sound_occlusion_loss(sound_info)
+	add_child(voice)
+	voice.finished.connect(voice.queue_free)
+	voice.play()
 
 
 func _setup_deathmatch_overlays() -> void:
@@ -1668,18 +1825,135 @@ func _setup_deathmatch_overlays() -> void:
 	options_overlay.z_index = 700
 	options_overlay.visible = false
 	canvas_layer.add_child(options_overlay)
-	options_label = Label.new()
-	options_label.text = "PAUSED\n\nWASD: MOVE / STRAFE\nMOUSE: LOOK    LEFT CLICK: FIRE\nSHIFT: CROUCH    R: RELOAD\nQ: BUY HEART    E: BUY GUN\n\nESC: RESUME    M: MAIN MENU" if _public_build() else "OPTIONS\n\nMATCH PAUSED\nROUND LENGTH: 1:42\n\nSELECT / ESC: CLOSE"
+	_build_pause_broadside()
+
+
+func _build_pause_broadside() -> void:
+	var ink := Color("#3b1b12")
+	var paper := Color("#eee4ca")
+	var headline: FontFile = preload("res://assets/Fonts/High Noon.woff")
+	headline.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	var body := ThemeDB.fallback_font
+	var panel := Panel.new()
+	panel.name = "PauseBroadside"
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -280
+	panel.offset_right = 280
+	panel.offset_top = -325
+	panel.offset_bottom = 325
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = paper
+	panel_style.border_color = ink
+	panel_style.set_border_width_all(3)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	options_overlay.add_child(panel)
+	options_label = _pause_label(panel, headline, "PAUSED", 42, Rect2(30, 18, 500, 65), ink, true)
+	_pause_rule(panel, Rect2(35, 92, 490, 3), ink)
+	_pause_label(panel, headline, "CONTROLS", 25, Rect2(45, 108, 470, 35), ink)
+	var actions := ["Move / strafe", "Look", "Fire", "Crouch", "Dive roll", "Reload", "Buy heart", "Buy dual pistols", "Resume", "Main menu"]
+	var keys := ["WASD / LEFT STICK", "MOUSE / RIGHT STICK", "CLICK / RT", "SHIFT / LT", "SPACE / A", "R / X", "Q / LB", "E / RB", "ESC / SELECT", "M"]
 	if mobile_controls != null:
-		options_label.text = "PAUSED\n\nDRAG LEFT TO MOVE\nDRAG RIGHT TO LOOK\nFIRE: TAP OR HOLD\nDUCK: TOGGLE CROUCH\n\nLAYOUT: MOVE BUTTONS"
-	options_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	options_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	options_label.add_theme_font_override("font", pixel_hud_font)
-	options_label.add_theme_font_size_override("font_size", 14 if _public_build() else 18)
-	options_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	options_overlay.add_child(options_label)
-	var feedback_button := FeedbackAccess.add_button(options_overlay, pixel_hud_font, Color.WHITE)
+		actions = ["Move", "Look", "Fire", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Move buttons", "Resume", "Main menu"]
+		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "TAP / HOLD FIRE", "DUCK", "RELOAD", "HEART 5", "GUN 10", "LAYOUT", "RESUME", "MENU"]
+	elif not _public_build():
+		actions = ["Dive roll", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Close"]
+		keys = ["SPACE / A", "SHIFT / LT", "R / X", "LB", "RB", "SELECT / ESC"]
+	for i in range(actions.size()):
+		_pause_label(panel, body, actions[i], 16, Rect2(45, 150 + i * 27, 220, 23), ink)
+		_pause_label(panel, body, keys[i], 14, Rect2(285, 152 + i * 27, 230, 22), ink)
+	_pause_rule(panel, Rect2(35, 432, 490, 3), ink)
+	map_display_button = Button.new()
+	map_display_button.name = "MapDisplayButton"
+	map_display_button.text = _map_display_button_text()
+	map_display_button.add_theme_font_override("font", body)
+	map_display_button.add_theme_font_size_override("font_size", 15)
+	map_display_button.position = Vector2(100, 452)
+	map_display_button.size = Vector2(360, 45)
+	map_display_button.focus_mode = Control.FOCUS_ALL
+	_style_pause_button(map_display_button, ink, paper)
+	map_display_button.pressed.connect(_toggle_map_display_mode)
+	panel.add_child(map_display_button)
+	# Keep this button directly under the overlay for existing callers.
+	var feedback_button := FeedbackAccess.add_button(options_overlay, headline, ink)
+	feedback_button.text = "GIVE FEEDBACK"
+	feedback_button.add_theme_font_size_override("font_size", 19)
+	feedback_button.set_anchors_preset(Control.PRESET_CENTER)
+	feedback_button.offset_left = -180
+	feedback_button.offset_right = 180
+	feedback_button.offset_top = 193
+	feedback_button.offset_bottom = 245
+	_style_pause_button(feedback_button, ink, paper)
 	feedback_button.pressed.connect(_open_feedback)
+	_pause_label(panel, body, "ENTER" if mobile_controls == null else "", 12, Rect2(100, 575, 360, 20), ink, true)
+
+
+func _pause_label(parent: Control, font: Font, text: String, font_size: int, rect: Rect2, color: Color, centered := false) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.position = rect.position
+	label.size = rect.size
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if centered else HORIZONTAL_ALIGNMENT_LEFT
+	label.add_theme_font_override("font", font)
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(label)
+	return label
+
+
+func _pause_rule(parent: Control, rect: Rect2, color: Color) -> void:
+	var rule := ColorRect.new()
+	rule.position = rect.position
+	rule.size = rect.size
+	rule.color = color
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(rule)
+
+
+func _style_pause_button(button: Button, ink: Color, paper: Color) -> void:
+	button.flat = false
+	for state in ["normal", "hover", "pressed", "focus"]:
+		var style := StyleBoxFlat.new()
+		style.bg_color = ink if state in ["hover", "pressed"] else Color.TRANSPARENT
+		style.border_color = ink
+		style.set_border_width_all(3)
+		button.add_theme_stylebox_override(state, style)
+	for state in ["font_color", "font_focus_color"]:
+		button.add_theme_color_override(state, ink)
+	for state in ["font_hover_color", "font_pressed_color"]:
+		button.add_theme_color_override(state, paper)
+
+
+func _load_map_display_mode() -> void:
+	var config := ConfigFile.new()
+	if config.load(MAP_DISPLAY_CONFIG) == OK:
+		var saved := String(config.get_value("map", "mode", "fullscreen"))
+		if saved in ["fullscreen", "minimap"]:
+			map_display_mode = saved
+
+
+func _map_display_button_text() -> String:
+	return "MAP: FULLSCREEN (F8)" if map_display_mode == "fullscreen" else "MAP: MINI-MAP (F8)"
+
+
+func _toggle_map_display_mode() -> void:
+	_set_map_display_mode("minimap" if map_display_mode == "fullscreen" else "fullscreen")
+
+
+func _set_map_display_mode(mode: String, persist := true) -> void:
+	if mode not in ["fullscreen", "minimap"]:
+		return
+	map_display_mode = mode
+	if is_instance_valid(map_display_button):
+		map_display_button.text = _map_display_button_text()
+	if persist:
+		var config := ConfigFile.new()
+		config.set_value("map", "mode", mode)
+		if config.save(MAP_DISPLAY_CONFIG) != OK:
+			push_warning("Could not save map display preference")
+	_layout_viewport()
+	if not player_views.is_empty():
+		_render_all_player_views()
 
 
 func _public_build() -> bool:
@@ -1702,6 +1976,14 @@ func _input(event: InputEvent) -> void:                                         
 			return                                                                                # Keep Ctrl+Z from reaching unrelated input handling.
 	if not _public_build() and _handle_slot_graph_tuner_input(event):                                                  # Let the visible graph consume endpoint drags before gameplay input.
 		return                                                                                    # Prevent a graph drag from also driving the player.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F8:
+		_toggle_map_display_mode()
+		get_viewport().set_input_as_handled()
+		return
+	if not _public_build() and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F6:
+		_set_debug_option(not show_dive_roll_debug, "dive_roll")
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and not event.echo:                                             # Only handle real keyboard press/release events once.
 		held_keycodes[int(event.keycode)] = event.pressed                                       # Store whether this logical key is currently held.
 		if event.physical_keycode != 0:                                                         # Preserve physical key bindings when Godot supplies them.
@@ -1772,6 +2054,7 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "fan_draw_order", "Fan Draw Order")                       # Show which visible wall segments the continuous silhouette fan puts above or below the local player.
 	_add_debug_menu_check(content, "world_footprints", "World Footprints")                   # Compare physical wall-clearance circles to camera-visible footprint cones.
 	_add_debug_menu_check(content, "bot_navigation", "Bot Navigation (Invincible)")                       # Show persistent bot routes and current perception/action.
+	_add_debug_menu_check(content, "dive_roll", "Roll I-Frames (F6)")
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "barrel_lod_visualizer", "Barrel LOD Labels")             # Keep the currently selected static barrel LOD readable while moving through depth bands.
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
@@ -2175,6 +2458,8 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_world_footprints_debug
 		"bot_navigation":
 			return show_bot_navigation_debug
+		"dive_roll":
+			return show_dive_roll_debug
 		"muzzle_anchors":
 			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
 		"barrel_lod_visualizer":
@@ -2257,6 +2542,8 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 			show_bot_navigation_debug = enabled
 			if enabled:
 				show_top_down_source_overlay = true
+		"dive_roll":
+			show_dive_roll_debug = enabled
 		"muzzle_anchors":
 			show_muzzle_anchor_debug = enabled                                                     # Keep the marker diagnostic opt-in and independent of combat.
 			if not enabled:
@@ -4065,6 +4352,7 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 		sprite.sprite_frames = frames.duplicate(true)                                             # Give this sprite its own mutable copy of the team's animations.
 	else:
 		sprite.sprite_frames = player_sprite.sprite_frames.duplicate(true)                        # Retain the prior player resource as a safe fallback if an asset is missing.
+	_add_dive_roll_animations(sprite.sprite_frames)
 	_add_idle_reload_animations(sprite.sprite_frames)
 	_add_crouch_idle_reload_animations(sprite.sprite_frames)
 	_add_crouch_walk_reload_animations(sprite.sprite_frames)
@@ -4296,15 +4584,58 @@ func _reset_world_barrels() -> void:
 			var clearance := _world_item_footprint("crate" if is_fragment_raster_crate else "barrel", position)
 			clearance["radius"] = maxf(float(clearance["radius"]), Vector2(width, depth).length() * 0.5)
 			position = _resolve_world_item_placement(clearance)
+			position = _ensure_prop_wall_passage(position, Vector2(width, depth) * (0.5 if is_fragment_raster_crate else 0.6))
+			if not position.is_finite():
+				continue
 			var key := ("crate_gpu_fragment_raster_room_%d" if is_fragment_raster_crate else "barrel_gpu_lattice_instanced_room_%d") % prop_index
 			var footprint := {"id": key, "position": position, "side_length": width, "depth": depth, "height": height, "low_resolution_vector": true, "typical_spawn": true}
 			semantic_lod_floor_footprints.append(footprint)
 			_register_semantic_gameplay_prop(footprint)
 		else:
+			position = _ensure_prop_wall_passage(position, Vector2.ONE * barrel_footprint_radius)
+			if not position.is_finite():
+				continue
 			world_barrels.append({"id": next_combat_visual_id, "position": position, "hits": 0})
 			next_combat_visual_id += 1                                                           # Give every prop a stable cache key across all player cameras.
+	if semantic_typical_props_enabled:
+		_spawn_small_prop_cluster(candidates)
 	if semantic_typical_props_enabled and dining_cell.x >= 0:
 		_spawn_semantic_dining_set(dining_cell)
+
+
+# A small row in an open cell adds shared cover without sealing a corridor.
+# Each item retains its own hit, collision, destruction, and loot record.
+func _spawn_small_prop_cluster(candidates: Array[Vector2i]) -> void:
+	var width := gpu_lattice_barrel_radius * 2.0
+	var extent := Vector2.ONE * width * 0.6
+	var edges := _all_physical_wall_edges()
+	candidates.shuffle()
+	for cell in candidates:
+		var openings := 0
+		for direction in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			if _can_player_cross_edge(cell, direction):
+				openings += 1
+		if openings < 3:
+			continue
+		for rotation in 4:
+			var direction := Vector2.RIGHT.rotated(float(rotation) * PI * 0.5)
+			var center := Vector2(cell) + Vector2(0.5, 0.5) + direction.orthogonal() * 0.23
+			var first := center - direction * width * 0.64
+			var second := center + direction * width * 0.64
+			if not _prop_wall_position_clear(first, extent, edges) or not _prop_wall_position_clear(second, extent, edges):
+				continue
+			var occupied := false
+			for prop in world_barrels:
+				if Vector2(prop.get("position", Vector2.INF)).distance_to(center) < 0.48:
+					occupied = true
+					break
+			if occupied:
+				continue
+			for index in 2:
+				var footprint := {"id": "barrel_gpu_lattice_instanced_cluster_%d" % index, "position": first if index == 0 else second, "side_length": width, "depth": width, "height": gpu_lattice_barrel_height, "low_resolution_vector": true, "typical_spawn": true, "cluster_spawn": true}
+				semantic_lod_floor_footprints.append(footprint)
+				_register_semantic_gameplay_prop(footprint)
+			return
 
 
 # _find_dining_set_room_cell: Prefer a four-way open cell, with a three-way
@@ -4336,6 +4667,9 @@ func _find_dining_set_room_cell() -> Vector2i:
 
 func _spawn_semantic_dining_set(room_cell: Vector2i) -> void:
 	var center := Vector2(room_cell) + Vector2(0.5, 0.5)
+	center = _ensure_prop_wall_passage(center, Vector2(0.165, 0.27))
+	if not center.is_finite():
+		return
 	var dining_set_id := "dining_set_%d_%d" % [room_cell.x, room_cell.y]
 	var pieces: Array[Dictionary] = [
 		{"id": "chair_semantic_table_dining", "position": center, "side_length": 0.33, "depth": 0.25, "height": 0.13},
@@ -4605,7 +4939,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			var collector := player_states[collected_by]
 			collector["coins"] = int(collector.get("coins", 0)) + int(coin.get("value", 1))
 			player_states[collected_by] = collector
-			_play_pickup_sound(coin_pickup_player)                                                   # Play one shared coin chime, independent of the number of split-screen cameras.
+			_play_pickup_sound(coin_pickup_player, collected_by)                                     # Play one shared coin chime, independent of the number of split-screen cameras.
 		else:
 			remaining_coins.append(coin)
 	world_coins = remaining_coins                                                            # Keep only still-uncollected objective or dropped coins.
@@ -4628,7 +4962,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			collector["health"] = mini(PLAYER_MAX_HEALTH, int(collector.get("health", 0)) + 1)
 			player_states[collected_by] = collector
 			_clear_camera_blood_for_heart(collected_by)                                             # Heal the injured player's own camera by exactly the same blob count added for one lost health hatch.
-			_play_pickup_sound(heart_pickup_player)                                                  # Confirm the health pickup once for the whole shared match.
+			_play_pickup_sound(heart_pickup_player, collected_by)                                    # Confirm the health pickup once for the whole shared match.
 		else:
 			remaining_hearts.append(heart)
 	world_hearts = remaining_hearts                                                         # Keep heart items available until an injured joined player claims them.
@@ -4645,7 +4979,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			if not bool(state.get("is_dying", false)) and _player_can_collect_pickup(state, Vector2(gun["position"])):
 				state["machine_gun_ammo"] = int(gun.get("ammo", DUAL_WIELD_AMMO))
 				player_states[player_index] = state
-				_play_pickup_sound(machine_gun_pickup_player)
+				_play_pickup_sound(machine_gun_pickup_player, player_index)
 				collected = true
 				break
 		if not collected:
@@ -4660,7 +4994,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			if _player_can_collect_pickup(state, pickup_position):
 				state["machine_gun_ammo"] = int(machine_gun_pickup.get("ammo", DUAL_WIELD_AMMO)) # Preserve a dropped dual-wield pickup's remaining rounds rather than refilling it.
 				player_states[player_index] = state
-				_play_pickup_sound(machine_gun_pickup_player)                                        # Announce the contested weapon pickup once, not once per viewport.
+				_play_pickup_sound(machine_gun_pickup_player, player_index)                          # Announce the contested weapon pickup once, not once per viewport.
 				machine_gun_pickup = {}                                                           # Consume the shared map pickup.
 				machine_gun_respawn_timer = 0.0                                                   # A held gun does not start a duplicate-world-pickup timer.
 				break
@@ -4971,6 +5305,59 @@ func _setup_wanted_tally_overlay() -> void:
 	if _public_build():
 		var feedback_button := FeedbackAccess.add_button(wanted_tally_overlay, pixel_hud_font, Color(0.96, 0.82, 0.30, 1.0))
 		feedback_button.pressed.connect(_open_feedback)
+	var instruction := Label.new()
+	instruction.name = "RoundInstruction"
+	instruction.text = "KILL ALL THE GREENSHIRTS!"
+	instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	instruction.add_theme_font_override("font", ThemeDB.fallback_font)
+	instruction.add_theme_font_size_override("font_size", 20)
+	instruction.add_theme_color_override("font_color", Color("#eee4ca"))
+	instruction.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	instruction.offset_top = 90
+	instruction.offset_bottom = 120
+	instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wanted_tally_overlay.add_child(instruction)
+	var begin := Button.new()
+	begin.name = "BeginButton"
+	begin.text = "BEGIN"
+	begin.add_theme_font_override("font", pixel_hud_font)
+	begin.add_theme_font_size_override("font_size", 20)
+	begin.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	begin.offset_left = -300
+	begin.offset_right = -20
+	begin.offset_top = -112
+	begin.offset_bottom = -60
+	begin.focus_mode = Control.FOCUS_NONE
+	_style_pause_button(begin, Color("#eee4ca"), Color.BLACK)
+	begin.pressed.connect(_begin_wanted_round_from_button)
+	wanted_tally_overlay.add_child(begin)
+	var hint := Label.new()
+	hint.name = "BeginHint"
+	hint.text = "SPACE / CONTROLLER START" if mobile_controls == null else ""
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_override("font", ThemeDB.fallback_font)
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", Color("#eee4ca"))
+	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	hint.offset_left = -300
+	hint.offset_right = -20
+	hint.offset_top = -54
+	hint.offset_bottom = -34
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wanted_tally_overlay.add_child(hint)
+	var feedback_hint := hint.duplicate() as Label
+	feedback_hint.name = "FeedbackHint"
+	feedback_hint.text = "ENTER" if mobile_controls == null else ""
+	feedback_hint.offset_left = 20
+	feedback_hint.offset_right = 300
+	wanted_tally_overlay.add_child(feedback_hint)
+
+
+func _begin_wanted_round_from_button() -> void:
+	if clear_map_waiting_to_start and not wanted_tally_terminal:
+		_start_clear_map_round()
+	elif wanted_tally_terminal and combat_round_complete and not clear_map_finish_pending and wanted_tally_queue.is_empty():
+		_regenerate_runtime_map(true)
 
 
 func _begin_wanted_tally(terminal: bool) -> void:
@@ -4982,18 +5369,40 @@ func _begin_wanted_tally(terminal: bool) -> void:
 		var previous_posters := (growing_rounds * (growing_rounds + 1) >> 1) + maxi(prior_rounds - growing_rounds, 0) * MAX_CLEAR_MAP_GREENSHIRTS
 		clear_map_poster_start = posmod(previous_posters, WANTED_POSTER_TEXTURES.size())
 	for child in wanted_tally_overlay.get_children():
-		if child != wanted_tally_title and child != wanted_tally_prompt and child.name != "FeedbackButton":
+		if child != wanted_tally_title and child != wanted_tally_prompt and child.name not in ["FeedbackButton", "RoundInstruction", "BeginButton", "BeginHint", "FeedbackHint"]:
 			child.queue_free()
 	wanted_tally_posters.clear()
 	wanted_tally_queue.clear()
 	wanted_tally_terminal = terminal
 	wanted_tally_timer = 0.12 if terminal else 0.45
 	wanted_tally_overlay.visible = true
-	wanted_tally_prompt.visible = not terminal and clear_map_waiting_to_start
-	if wanted_tally_prompt.visible:
-		wanted_tally_prompt.text = "TAP TO BEGIN" if mobile_controls != null else ("PRESS SPACE TO BEGIN" if _public_build() else "PRESS START TO BEGIN")
+	wanted_tally_prompt.visible = false
+	var intro_visible := not terminal and clear_map_waiting_to_start
+	var button := wanted_tally_overlay.get_node("BeginButton") as Button
+	button.text = "CONTINUE" if terminal else "BEGIN"
+	button.visible = intro_visible
+	wanted_tally_overlay.get_node("BeginHint").text = "SPACE / CONTROLLER START" if mobile_controls == null else ""
+	wanted_tally_overlay.get_node("BeginHint").visible = intro_visible
+	wanted_tally_overlay.get_node("FeedbackHint").text = "ENTER" if mobile_controls == null else ""
+	wanted_tally_overlay.get_node("FeedbackHint").visible = _public_build()
+	var instruction := wanted_tally_overlay.get_node("RoundInstruction") as Label
+	instruction.text = "KILL ALL THE GREENSHIRTS!" if not terminal else ""
+	instruction.visible = intro_visible
+	var feedback_button := wanted_tally_overlay.get_node_or_null("FeedbackButton") as Button
+	if feedback_button != null:
+		feedback_button.text = "GIVE FEEDBACK"
+		feedback_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		feedback_button.offset_left = 20
+		feedback_button.offset_right = 300
+		feedback_button.offset_top = -112
+		feedback_button.offset_bottom = -60
+		feedback_button.add_theme_font_size_override("font_size", 18)
+		_style_pause_button(feedback_button, Color("#eee4ca"), Color.BLACK)
+	if intro_visible:
 		_start_clear_map_intro_music()
-	wanted_tally_title.text = "ROUND %d:\nKILL ALL THE GREENSHIRTS!" % clear_map_round if not terminal else ("YOU WIN!" if combat_round_result == "YOU WIN!" else "YOU LOSE")
+	wanted_tally_title.add_theme_font_size_override("font_size", 40)
+	wanted_tally_title.offset_bottom = 88.0
+	wanted_tally_title.text = "ROUND %d:" % clear_map_round if not terminal else ("YOU WIN!" if combat_round_result == "YOU WIN!" else "YOU LOSE")
 	var green_slots: Array[int] = []
 	for player_index in range(1, player_joined.size()):
 		if player_joined[player_index]:
@@ -5077,9 +5486,11 @@ func _advance_wanted_tally(delta: float) -> void:
 			if clear_map_banner_timer <= 0.0:
 				wanted_tally_overlay.visible = false
 			return
-		wanted_tally_title.text = ("YOU WIN!\nROUNDS WON: %d" % clear_map_wins) if combat_round_result == "YOU WIN!" else "YOU LOSE"
-		wanted_tally_prompt.text = "TAP TO CONTINUE" if mobile_controls != null else ("PRESS SPACE TO CONTINUE" if _public_build() else ("PRESS START FOR NEXT ROUND" if combat_round_result == "YOU WIN!" else "PRESS START TO TRY AGAIN"))
-		wanted_tally_prompt.visible = true
+		var instruction := wanted_tally_overlay.get_node("RoundInstruction") as Label
+		instruction.text = "ROUNDS WON: %d" % clear_map_wins if combat_round_result == "YOU WIN!" else ""
+		instruction.visible = not instruction.text.is_empty()
+		wanted_tally_overlay.get_node("BeginButton").visible = true
+		wanted_tally_overlay.get_node("BeginHint").visible = true
 		return
 	var event: Dictionary = wanted_tally_queue.pop_front()
 	var record: Dictionary = wanted_tally_posters.get(int(event["player_index"]), {})
@@ -5273,7 +5684,7 @@ func _update_combat_hud() -> void:
 				var coins := int(state.get("coins", 0))
 				var heart_color := "#ffffff" if coins >= 5 else "#5c5c5c"
 				var gun_color := "#ffffff" if coins >= 10 else "#5c5c5c"
-				shop.text = "[color=%s]%s:[img=5x5]res://assets/Items/Heart/heart.png[/img][/color] [color=%s]%s:[img=5x5]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q" if _public_build() else "A", gun_color, "E" if _public_build() else "B"] # Keep the controller cues compact while reusing the crisp heart and gun HUD art.
+				shop.text = "[color=%s]%s:[img=5x5]res://assets/Items/Heart/heart.png[/img][/color] [color=%s]%s:[img=5x5]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if _public_build() else "LB", gun_color, "E/RB" if _public_build() else "RB"] # Keep the controller cues compact while reusing the crisp heart and gun HUD art.
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -5420,12 +5831,12 @@ func _is_player_crouch_pressed_for(player_index: int) -> bool:
 	return (player_index == 0 and mobile_controls != null and mobile_controls.pressed("crouch")) or (player_index == 0 and _is_key_down(KEY_SHIFT)) or (joypad_id >= 0 and Input.get_joy_axis(joypad_id, JOY_AXIS_TRIGGER_LEFT) >= 0.45)
 
 
-func _is_player_fire_pressed_for(player_index: int) -> bool:
+func _is_player_fire_pressed_for(player_index: int, consume_mobile := true) -> bool:
 	if _is_bot_controlled_slot(player_index):
 		return bool(bot_inputs.get(player_index, {}).get("fire", false))
 	if player_index < 0 or player_index >= 4:
 		return false
-	if player_index == 0 and mobile_controls != null and mobile_controls.take_fire():
+	if player_index == 0 and mobile_controls != null and (mobile_controls.take_fire() if consume_mobile else (mobile_controls.fire_pending or mobile_controls.pressed("fire"))):
 		return true
 	if player_index == 0 and _public_build() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		return true
@@ -5451,7 +5862,7 @@ func _ammo_display_frame(rounds: int, shot_timer: float, rounds_before: int) -> 
 
 
 # Each bullet frame is followed by two rotation frames before the next bullet.
-func _reload_sound(kind: String) -> void:
+func _reload_sound(kind: String, player_index := -1) -> void:
 	if not is_inside_tree():
 		return
 	var counts := {"Turn": 5, "Close": 3}
@@ -5461,8 +5872,20 @@ func _reload_sound(kind: String) -> void:
 	if stream == null:
 		return
 	var voice := AudioStreamPlayer.new()
-	_configure_sfx_player(voice)
+	_configure_world_sfx_player(voice)
 	voice.stream = stream
+	var reload_base_db := -4.0 if player_index >= 0 and player_index < player_states.size() and _is_human_controlled_slot(player_index) else 0.0
+	voice.volume_db = _actor_sound_volume_db(player_index, reload_base_db)
+	if player_index >= 0 and player_index < player_states.size() and _is_bot_controlled_slot(player_index):
+		# Apply an additional 8 dB reduction and another dB per cell for NPC reloads.
+		var distance_loss := maxf(-voice.volume_db * 0.5, 0.0)
+		voice.volume_db -= 8.0 + distance_loss
+	if player_index >= 0 and player_index < player_states.size():
+		var sound_info := _world_sound_spatial_info(player_index)
+		var actor_bus := "Actor World %d" % player_index
+		_update_world_audio_bus(actor_bus, sound_info)
+		voice.bus = actor_bus
+		voice.volume_db -= _sound_occlusion_loss(sound_info)
 	add_child(voice)
 	voice.finished.connect(voice.queue_free)
 	voice.play()
@@ -5479,6 +5902,8 @@ func _start_pistol_reload(state: Dictionary) -> void:
 
 
 func _advance_pistol_reload(state: Dictionary, delta: float) -> void:
+	if bool(state.get("dive_active", false)):
+		return # Preserve the exact reload phase, timer, rounds, and animation frame.
 	if String(state.get("reload_phase", "")).is_empty():
 		return
 	if int(state.get("machine_gun_ammo", 0)) > 0:
@@ -5492,13 +5917,13 @@ func _advance_pistol_reload(state: Dictionary, delta: float) -> void:
 			state["reload_frame"] = int(state["reload_frame"]) + 1
 			state["reload_phase"] = "turn"
 			state["reload_timer"] += 0.08
-			_reload_sound("Turn")
+			_reload_sound("Turn", int(state.get("player_index", -1)))
 		elif phase == "open" or phase == "turn_end":
 			state["pistol_ammo"] = int(state.get("pistol_ammo", 0)) + 1
 			state["reload_frame"] = 3 * int(state["pistol_ammo"]) - 1
 			state["reload_phase"] = "bullet"
 			state["reload_timer"] += 0.18
-			_reload_sound("Close")
+			_reload_sound("Close", int(state.get("player_index", -1)))
 		elif phase == "bullet":
 			if int(state["pistol_ammo"]) >= 6:
 				state["reload_phase"] = "close"
@@ -5507,7 +5932,7 @@ func _advance_pistol_reload(state: Dictionary, delta: float) -> void:
 				state["reload_frame"] = int(state["reload_frame"]) + 1
 				state["reload_phase"] = "turn"
 				state["reload_timer"] += 0.08
-				_reload_sound("Turn")
+				_reload_sound("Turn", int(state.get("player_index", -1)))
 		elif phase == "turn":
 			state["reload_frame"] = int(state["reload_frame"]) + 1
 			state["reload_phase"] = "turn_end"
@@ -5533,7 +5958,7 @@ func _update_reload_indicators() -> void:
 			indicator.z_index = 20
 			body.add_child(indicator)
 		var state: Dictionary = player_states[actor]
-		indicator.visible = not String(state.get("reload_phase", "")).is_empty() and not bool(state.get("is_dying", false)) and not String(body.animation).begins_with("IdleReload") and not String(body.animation).begins_with("RunReload") and not String(body.animation).begins_with("CrouchIdleReload") and not String(body.animation).begins_with("CrouchWalkReload")
+		indicator.visible = not String(state.get("reload_phase", "")).is_empty() and not bool(state.get("dive_active", false)) and not bool(state.get("is_dying", false)) and not String(body.animation).begins_with("IdleReload") and not String(body.animation).begins_with("RunReload") and not String(body.animation).begins_with("CrouchIdleReload") and not String(body.animation).begins_with("CrouchWalkReload")
 		if indicator.visible:
 			indicator.texture = load("res://assets/UI/Reload/reload%d.png" % int(state.get("reload_frame", 1)))
 			indicator.position = Vector2(0, -_sprite_texture_height(body) * 0.5 - 7)
@@ -5562,17 +5987,26 @@ func _process_combat(delta: float) -> void:
 			state[timer_key] = maxf(float(state.get(timer_key, 0.0)) - delta, 0.0)
 		var joypad_id := _xbox_joypad_id_for_player(player_index)
 		var reload_pressed: bool = (joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_X)) or (player_index == 0 and (_is_key_down(KEY_R) or (mobile_controls != null and mobile_controls.take_reload())))
-		var keyboard_map_shortcut := player_index == 0 and _is_key_down(KEY_R) and _is_key_down(KEY_CTRL)
-		if reload_pressed and not keyboard_map_shortcut and not bool(state.get("reload_was_pressed", false)):
+		if reload_pressed and not bool(state.get("reload_was_pressed", false)):
 			_start_pistol_reload(state)
 		state["reload_was_pressed"] = reload_pressed
+		var fire_pressed := _is_player_fire_pressed_for(player_index, false)
+		var fire_just_pressed := fire_pressed and not bool(state.get("fire_was_pressed", false))
+		state["fire_was_pressed"] = fire_pressed
+		# A fresh shot request cancels an active reload only if a round is loaded.
+		# Holding fire through an empty-cylinder auto-reload does not repeatedly
+		# interrupt it as soon as the first new round is inserted.
+		if fire_just_pressed and not bool(state.get("dive_active", false)) and int(state.get("pistol_ammo", 0)) > 0 and not String(state.get("reload_phase", "")).is_empty():
+			state["reload_phase"] = ""
 		_advance_pistol_reload(state, delta)
 		state["fire_cooldown"] = maxf(float(state.get("fire_cooldown", 0.0)) - delta, 0.0)       # Let the deliberate pistol cadence recover.
 		state["hit_timer"] = maxf(float(state.get("hit_timer", 0.0)) - delta, 0.0)               # Let the temporary hit art expire.
 		player_states[player_index] = state                                                       # Save timing before potentially firing.
 		if player_index == 1 and not player_two_joined and not _is_bot_controlled_slot(player_index): # Do not let an unjoined human P2 ghost fire; greenshirts remain active.
 			continue                                                                                   # Wait until a person joins P2.
-		if String(state.get("reload_phase", "")).is_empty() and float(state["fire_cooldown"]) <= 0.0 and _is_player_fire_pressed_for(player_index):  # Spawn one shot only when the pistol is ready.
+		if not bool(state.get("dive_active", false)) and String(state.get("reload_phase", "")).is_empty() and float(state["fire_cooldown"]) <= 0.0 and fire_pressed:  # Spawn one shot only when the pistol is ready.
+			if player_index == 0 and mobile_controls != null:
+				mobile_controls.take_fire()
 			_spawn_pistol_shot(player_index)                                                         # Create a shot using the player's actual current world heading.
 	_advance_barrel_loot(delta)                                                               # Move thrown loot in shared world space before testing pickup contact.
 	_collect_combat_pickups(delta)                                                              # Pick up coins and the contested gun after all players have finished moving.
@@ -5835,9 +6269,7 @@ func _spawn_pistol_shot(player_index: int) -> void:
 		bot_last_heard_shot_position = body_origin
 	if show_muzzle_anchor_debug:
 		muzzle_anchor_debug_markers.append({"id": int(shot["id"]), "owner": player_index, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "muzzle_hand": muzzle_hand, "timer": MUZZLE_ANCHOR_DEBUG_LINGER_SECONDS}) # Snapshot the spawned shared muzzle so both camera comparisons remain visible after the shot itself is gone.
-	if gunshot_player != null:
-		gunshot_player.pitch_scale = randf_range(0.78, 1.22)
-		gunshot_player.play()
+	_play_world_gunshot(player_index)
 	if dual_wield_rounds > 0:                                                                   # Consume one alternating pistol round only while the dual-wield pickup remains armed.
 		var hand := "left" if dual_wield_rounds % 2 == 0 else "right"
 		state["ammo_%s_before" % hand] = int(dual_wield_rounds / 2) if hand == "left" else int((dual_wield_rounds + 1) / 2)
@@ -6158,6 +6590,16 @@ func _spawn_barrel_break(position: Vector2, direction: Vector2, impact_position:
 		next_combat_visual_id += 1
 
 
+# Frames 4–10 of the 13-frame roll grant invincibility.
+# Use the same elapsed-time-to-frame conversion as the displayed roll sprite.
+func _dive_roll_invulnerable(state: Dictionary) -> bool:
+	if not bool(state.get("dive_active", false)):
+		return false
+	var elapsed := float(state.get("dive_elapsed", 0.0))
+	var frame := int(elapsed * 12.0)
+	return elapsed >= 0.0 and frame >= 3 and frame <= 9
+
+
 # _nearest_projectile_player_hit: Finds the closest eligible body intersected by this projectile path.
 func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vector2, maximum_distance: float, shot_crouched: bool) -> Dictionary:
 	var nearest_distance := maximum_distance + 0.001                                           # Keep the first body beyond any possible hit by default.
@@ -6165,6 +6607,8 @@ func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vect
 	for player_index in range(player_states.size()):                                           # Check each currently active local player.
 		if player_index == owner or (player_index < player_joined.size() and not player_joined[player_index]) or (PLAYER_TEAMS[player_index] == PLAYER_TEAMS[owner] and not (_is_bot_controlled_slot(owner) and _is_bot_controlled_slot(player_index))):
 			continue                                                                                   # Skip this candidate.
+		if _dive_roll_invulnerable(player_states[player_index]):
+			continue # Projectiles pass through during the protected frames.
 		if bool(player_states[player_index].get("is_dying", false)):                            # Do not let stray bullets repeatedly hit a fallen or respawning body.
 			continue                                                                                   # The player becomes targetable again only after the reverse Death animation finishes.
 		if bool(player_states[player_index].get("character_is_crouching", false)) and not shot_crouched:
@@ -6604,6 +7048,8 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 	if owner_index >= 0 and not _projectile_owner_has_clear_path_to_player(owner_index, player_index): # Make wall blocking decisive at the final damage boundary.
 		return false                                                                              # Do not permit health, score, death, or body-blood updates through a movement-blocking edge.
 	var state := player_states[player_index]                                                    # Read the target's current state.
+	if _dive_roll_invulnerable(state):
+		return false
 	if bool(state.get("is_dying", false)):                                                     # Ignore stray simultaneous bullets once this player is already down.
 		return false                                                                              # Keep one death sequence and one countdown per defeat.
 	var target_forward := _view_forward_vector_for_state(state).normalized()                   # Use target facing to choose front/side impact art.
@@ -7011,6 +7457,9 @@ func _sync_actor_sprite_view(player_index: int) -> AnimatedSprite2D:
 	var run_direction := String(state.get("world_run_dir", DIR_N))
 	var aim_direction := String(state.get("world_aim_dir", run_direction))
 	var moving := bool(state.get("character_is_moving", false))
+	var roll_aim: Vector2 = state.get("dive_aim_vector", _world_vector_for_direction_string(aim_direction))
+	if _show_dive_roll(sprite, state, _direction_string_for_world_vector(roll_aim)):
+		return sprite
 	var animation := _best_opponent_animation_for(run_direction, aim_direction, sprite.sprite_frames) if moving else _idle_animation_for(aim_direction, sprite.sprite_frames)
 	if bool(state.get("character_is_crouching", false)) and sprite.sprite_frames.has_animation(&"CrouchWalkN"):
 		animation = _crouch_walk_animation_for(run_direction, aim_direction, moving, sprite.sprite_frames, int(state.get("machine_gun_ammo", 0)) > 0)
@@ -9222,6 +9671,175 @@ func _movement_speed_multiplier(is_crouching: bool) -> float:
 	return maxf(crouch_move_speed_multiplier, 0.05) if is_crouching else 1.0
 
 
+# Integrate the speed curve so displacement is independent of frame time.
+# The airborne dive holds a little above running speed; the landing quickly
+# eases down to 30% of running speed for the remainder of the animation.
+func _dive_roll_base_distance_at_time(seconds: float) -> float:
+	var run_speed := LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND
+	var fast_speed := run_speed * 1.15
+	var slow_speed := run_speed * 0.30
+	var air_end := 0.40
+	var ease_end := 0.85
+	var time := clampf(seconds, 0.0, 13.0 / 12.0)
+	if time <= air_end:
+		return fast_speed * time
+	var ease_duration := ease_end - air_end
+	var ease_time := minf(time - air_end, ease_duration)
+	var t := ease_time / ease_duration
+	# Integral of smoothstep(t) = 3t² - 2t³.
+	var eased_distance := fast_speed * ease_time + (slow_speed - fast_speed) * ease_duration * (t * t * t - 0.5 * t * t * t * t)
+	return fast_speed * air_end + eased_distance + slow_speed * maxf(time - ease_end, 0.0)
+
+
+# Add a smooth travel boost precisely during frames 4–10. Its speed begins
+# and ends at zero so entering or leaving invincibility does not cause a jerk.
+func _dive_roll_distance_at_time(seconds: float) -> float:
+	var start := 3.0 / 12.0
+	var duration := 7.0 / 12.0
+	var t := clampf((seconds - start) / duration, 0.0, 1.0)
+	var boost := LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * 0.70
+	return _dive_roll_base_distance_at_time(seconds) + boost * duration * (t - sin(TAU * t) / TAU)
+
+
+# Only commit an NPC roll when it can end at real, directly reachable cover.
+func _bot_dive_cover_goal(player_index: int, brain: Dictionary) -> Vector2:
+	var origin := _player_state_world_position(player_states[player_index])
+	var mode := String(brain.get("tactical_mode", ""))
+	var reaction := String(brain.get("reaction_kind", ""))
+	var goal := Vector2.INF
+	var threat := Vector2.INF
+	if reaction == "retreat" and bool(brain.get("reaction_has_cover", false)):
+		goal = brain.get("reaction_goal", Vector2.INF)
+		threat = brain.get("reaction_threat", Vector2.INF)
+	elif mode in ["reload_cover", "approach_cover", "wall_approach", "evade"]:
+		var target_index := int(brain.get("target_index", -1))
+		if target_index >= 0 and target_index < player_states.size():
+			threat = _player_state_world_position(player_states[target_index])
+		match mode:
+			"reload_cover": goal = brain.get("reload_cover_point", Vector2.INF)
+			"approach_cover": goal = brain.get("cover_point", Vector2.INF)
+			"wall_approach": goal = brain.get("wall_cover_point", Vector2.INF)
+			"evade":
+				if threat.is_finite():
+					goal = _bot_cover_point(origin, threat)
+					if not goal.is_finite():
+						goal = _bot_wall_cover_point(origin, threat)
+	if not goal.is_finite() or not threat.is_finite():
+		return Vector2.INF
+	var travel := goal - origin
+	if travel.length() <= 0.12 or travel.length() > _dive_roll_distance_at_time(13.0 / 12.0):
+		return Vector2.INF
+	if _nearest_projectile_topology_clear(goal, threat - goal) and _bot_low_lane_clear(goal, threat):
+		return Vector2.INF
+	var reached := _move_world_with_wall_slide(origin, travel, "east", "west", "south", "north")
+	if reached.distance_to(goal) > 0.04:
+		return Vector2.INF
+	for other in range(player_states.size()):
+		if other != player_index and other < player_joined.size() and player_joined[other] and not bool(player_states[other].get("is_dying", false)) and goal.distance_to(_player_state_world_position(player_states[other])) < PLAYER_CAPSULE_RADIUS * 2.0:
+			return Vector2.INF
+	return goal
+
+
+# A roll is a timed movement through the normal wall collision solver.
+func _advance_dive_roll(player_index: int, delta: float, bound: bool) -> bool:
+	var state: Dictionary = player_states[player_index]
+	if bool(state.get("is_dying", false)):
+		state["dive_active"] = false
+		state.erase("dive_buffer_direction")
+		return false
+	state["dive_cooldown"] = maxf(0.0, float(state.get("dive_cooldown", 0.0)) - delta)
+	var bot := _is_bot_controlled_slot(player_index)
+	var pressed := false
+	var direction := Vector2.ZERO
+	var brain: Dictionary = bot_brains.get(player_index, {})
+	if bot:
+		var mode := String(brain.get("tactical_mode", ""))
+		var reaction := String(brain.get("reaction_kind", ""))
+		var reason := mode if mode in ["evade", "reload_cover", "approach_cover", "wall_approach"] else reaction if reaction == "retreat" else ""
+		if not reason.is_empty() and reason != String(state.get("dive_bot_reason", "")):
+			var goal := _bot_dive_cover_goal(player_index, brain)
+			if goal.is_finite() and randf() < 0.4:
+				pressed = true
+				direction = goal - _player_state_world_position(state)
+				state["dive_cover_goal"] = goal
+		state["dive_bot_reason"] = reason
+	else:
+		var joy := _xbox_joypad_id_for_player(player_index)
+		pressed = (player_index == 0 and _is_key_down(KEY_SPACE)) or (joy >= 0 and Input.is_joy_button_pressed(joy, JOY_BUTTON_A))
+		if bound:
+			var local := _read_movement()
+			direction = _view_right_vector() * local.x - _view_forward_vector() * local.y
+	var newly_pressed := pressed and not bool(state.get("dive_was_pressed", false))
+	state["dive_was_pressed"] = pressed
+	var was_rolling := bool(state.get("dive_active", false))
+	var elapsed_before_input := float(state.get("dive_elapsed", 0.0))
+	if was_rolling and elapsed_before_input >= 13.0 / 12.0:
+		state["dive_active"] = false
+	elif was_rolling and not bot and newly_pressed and direction.length_squared() > 0.04 and elapsed_before_input >= 13.0 / 12.0 - 0.25:
+		state["dive_buffer_direction"] = direction
+	if not bool(state.get("dive_active", false)) and not bot and state.has("dive_buffer_direction"):
+		if not newly_pressed:
+			direction = state["dive_buffer_direction"]
+			newly_pressed = true
+		state.erase("dive_buffer_direction")
+	if not bool(state.get("dive_active", false)) and newly_pressed and direction.length_squared() > 0.04 and (not bot or float(state["dive_cooldown"]) <= 0.0):
+		if bound and (is_transitioning or forward_step != 0 or strafe_step != 0 or is_turn_passthrough):
+			return false
+		var aim := _view_forward_vector_for_state(state).normalized()
+		var right := Vector2(-aim.y, aim.x)
+		var lateral := direction.dot(right)
+		var forward := direction.dot(aim)
+		state["dive_side"] = "Right" if lateral > 0.0 else "Left"
+		var roll_art_facing := aim
+		if absf(lateral) < absf(forward) * 0.5:
+			# Temporary forward/back artwork: choose the left-roll NW/SE view
+			# at takeoff, then keep its facing fixed as the camera orbits.
+			state["dive_side"] = "Left"
+			roll_art_facing = aim.rotated(PI * 0.25 if forward > 0.0 else -PI * 0.75)
+		state["dive_aim_vector"] = roll_art_facing
+		state["dive_direction"] = direction.normalized()
+		state["dive_elapsed"] = 0.0
+		state["dive_active"] = true
+		state["dive_cooldown"] = 1.8 if bot else 0.0
+	if not bool(state.get("dive_active", false)):
+		return false
+	var elapsed := float(state.get("dive_elapsed", 0.0))
+	if elapsed >= 13.0 / 12.0:
+		state["dive_active"] = false
+		return false
+	if bound and not bot and continuous_third_person_camera:
+		_update_continuous_camera_yaw(delta)
+	var duration := minf(delta, 13.0 / 12.0 - elapsed)
+	var origin := _player_state_world_position(state)
+	var distance := _dive_roll_distance_at_time(elapsed + duration) - _dive_roll_distance_at_time(elapsed)
+	if bot and state.has("dive_cover_goal"):
+		distance = minf(distance, origin.distance_to(Vector2(state["dive_cover_goal"])))
+	var moved := _move_world_with_wall_slide(origin, Vector2(state["dive_direction"]) * distance, "east", "west", "south", "north")
+	if bot:
+		moved = _bot_limit_actor_overlap(player_index, origin, moved)
+	state["dive_elapsed"] = elapsed + delta
+	state["world_position"] = moved
+	state["grid_position"] = Vector2i(floori(moved.x), floori(moved.y))
+	if elapsed < 2.0 / 12.0 and elapsed + duration >= 2.0 / 12.0:
+		_play_wood_actor_sound(player_index, "Jump")
+	if elapsed < 6.0 / 12.0 and elapsed + duration >= 6.0 / 12.0:
+		_play_wood_actor_sound(player_index, "Drop")
+	state["character_is_moving"] = true
+	state["world_run_dir"] = _direction_string_for_world_vector(Vector2(state["dive_direction"]))
+	state["character_is_crouching"] = bool(bot_inputs.get(player_index, {}).get("crouch", false)) if bot else _is_player_crouch_pressed_for(player_index)
+	if bound:
+		_set_player_world_position_for_current_view(moved)
+		character_is_crouching = bool(state["character_is_crouching"])
+		character_is_moving = true
+		world_run_dir = state["world_run_dir"]
+		var roll_aim: Vector2 = state.get("dive_aim_vector", _view_forward_vector())
+		_show_dive_roll(player_sprite, state, _view_relative_vector_dir(roll_aim))
+	else:
+		state["local_floor_position"] = HOME_LOCAL_FLOOR_POSITION
+		_sync_actor_sprite_view(player_index)
+	return true
+
+
 # _process_player_context: Runs input, movement, turn, transition, and animation for the currently bound player.
 func _process_player_context(delta: float) -> void:                                      # Declare this function.
 	# NPCs do not yet own a deliberate cover/crouch behavior. Keep their stance
@@ -9444,20 +10062,24 @@ func _process_virtual_bot_world_context(player_index: int, delta: float) -> void
 
 
 
-# _process_continuous_third_person_input: Keeps the maze/collision grid authoritative while
-# moving the experimental camera and player as continuous world-space quantities.
-func _process_continuous_third_person_input(delta: float) -> void:
+# Turn the continuous camera independently of locomotion, including during rolls.
+func _update_continuous_camera_yaw(delta: float) -> void:
 	var device_id := _xbox_joypad_id_for_player()
 	var stick_x := Input.get_joy_axis(device_id, JOY_AXIS_RIGHT_X) if device_id >= 0 else 0.0
 	# The coordinate-frame renderer temporarily borrows the right stick while
-	# its LB-held depth-dither radial menu is open.  Keep camera yaw stationary
-	# until LB is released, then resume ordinary controller input immediately.
+	# its D-pad-held depth-dither radial menu is open.  Keep camera yaw stationary
+	# until D-pad left is released, then resume ordinary controller input immediately.
 	if bool(get_meta("coordinate_dither_menu_captures_right_stick", false)):
 		stick_x = 0.0
 	if absf(stick_x) < XBOX_STICK_DEADZONE:
 		stick_x = 0.0
 	var key_turn := 0.0 if _public_build() and active_player_index == 0 else float(int(_is_player_turn_right_pressed()) - int(_is_player_turn_left_pressed()))
 	continuous_camera_yaw = wrapf(continuous_camera_yaw + (stick_x + key_turn) * continuous_camera_turn_radians_per_second * delta, -PI, PI)
+
+
+# Keep the maze/collision grid authoritative during continuous camera movement.
+func _process_continuous_third_person_input(delta: float) -> void:
+	_update_continuous_camera_yaw(delta)
 	var movement := _read_movement()
 	var forward := _view_forward_vector()
 	var right := _view_right_vector()
@@ -9593,8 +10215,8 @@ func _apply_wall_art_debug_visibility() -> void:
 func _update_scoreboard_shop_input() -> void:
 	for player_index in range(player_states.size()):
 		var joypad_id := _xbox_joypad_id_for_player(player_index)
-		var heart_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_A)
-		var gun_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_B)
+		var heart_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_LEFT_SHOULDER)
+		var gun_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_RIGHT_SHOULDER)
 		if player_index == 0:
 			heart_pressed = heart_pressed or (mobile_controls != null and mobile_controls.pressed("heart")) or _is_key_down(KEY_Q if _public_build() else KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
 			gun_pressed = gun_pressed or (mobile_controls != null and mobile_controls.pressed("gun")) or _is_key_down(KEY_E if _public_build() else KEY_2)
@@ -9606,18 +10228,19 @@ func _update_scoreboard_shop_input() -> void:
 				state["health"] = mini(PLAYER_MAX_HEALTH, int(state.get("health", 0)) + 1)
 				player_states[player_index] = state
 				_clear_camera_blood_for_heart(player_index)                                             # Treat a purchased heart as the same one-health recovery, removing one matching set of close-screen blood drops.
-				_play_pickup_sound(heart_pickup_player)                                               # Reuse the health cue for a successful controller heart purchase.
+				_play_pickup_sound(heart_pickup_player, player_index)                                 # Reuse the health cue for a successful controller heart purchase.
 			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10:
 				state["coins"] = coins - 10
 				state["machine_gun_ammo"] = DUAL_WIELD_AMMO
 				player_states[player_index] = state
-				_play_pickup_sound(machine_gun_pickup_player)                                         # Reuse the weapon cue for a successful controller gun purchase.
+				_play_pickup_sound(machine_gun_pickup_player, player_index)                           # Reuse the weapon cue for a successful controller gun purchase.
 		was_shop_heart_pressed[player_index] = heart_pressed
 		was_shop_gun_pressed[player_index] = gun_pressed
 
 
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
 func _process(delta: float) -> void:                                                        # Declare this function.
+	_advance_world_sound_occlusion(delta)
 	if mobile_sample_audio:
 		_warm_next_mobile_sfx()
 	if bot_bark_player != null and bot_bark_player.playing:
@@ -9632,6 +10255,8 @@ func _process(delta: float) -> void:                                            
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if match_paused else Input.MOUSE_MODE_CAPTURED
 		if options_overlay != null:
 			options_overlay.visible = match_paused
+		if match_paused and is_instance_valid(map_display_button):
+			map_display_button.grab_focus()
 	was_options_pressed = options_pressed
 	if _public_build() and match_paused and (_is_key_down(KEY_M) or (mobile_controls != null and mobile_controls.pressed("menu"))):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -9686,10 +10311,14 @@ func _process(delta: float) -> void:                                            
 			continue
 		if player_index >= player_views.size() and _is_bot_controlled_slot(player_index):
 			_update_bot_input(player_index, delta)
-			_process_virtual_bot_world_context(player_index, delta)
+			if not _advance_dive_roll(player_index, delta, false):
+				_process_virtual_bot_world_context(player_index, delta)
 			continue
 		_bind_player_context(player_index)                                                       # Load this player's movement state and view nodes into the existing renderer.
 		_update_bot_input(player_index, delta)                                                   # Supply virtual controls only for title-menu bot slots.
+		if _advance_dive_roll(player_index, delta, true):
+			_save_player_context(player_index)
+			continue
 		if _is_bot_controlled_slot(player_index) and continuous_third_person_camera:
 			_process_bot_world_context(delta)                                                       # NPCs navigate in shared world space, never through a camera-turn input gate.
 		else:
@@ -10665,6 +11294,25 @@ func _layout_debug_menu_panels(viewport_size: Vector2) -> void:
 		debug_barrel_layers_panel.size = Vector2(300.0, viewport_size.y - DEBUG_MENU_SIDE_MARGIN * 2.0)
 
 
+# Clip each map to its own camera view, including split-screen windows.
+func _layout_match_map(view: Dictionary, camera: Node2D) -> void:
+	var map: Node2D = view.get("match_minimap_overlay", null)
+	if not is_instance_valid(map) or not is_instance_valid(camera):
+		return
+	var clip := map.get_parent() as Control
+	if clip == null:
+		return
+	clip.position = camera.position
+	clip.size = VIEWPORT_SIZE * camera.scale
+	if map_display_mode == "minimap":
+		var compact_scale := 2.0 if mobile_controls != null and single_player_combat_view else 1.0
+		map.rotation = 0.0
+		map.scale = Vector2.ONE * compact_scale
+		map.position = Vector2(clip.size.x - MATCH_MINIMAP_SIZE * compact_scale - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+	else:
+		map.scale = Vector2.ONE * maxf(camera.scale.x * 1.5, 1.0)
+
+
 # _layout_viewport: Scales and centers the 160x120 playfield crop inside the current Godot window.
 func _layout_viewport() -> void:                                                            # Declare this function.
 	var viewport_size := get_viewport_rect().size                                              # Store mutable runtime state for assets, rendering, movement, or debug output.
@@ -10685,9 +11333,7 @@ func _layout_viewport() -> void:                                                
 				var layout_cell: int = int([0, 2, 1, 3][player_index]) # Team 1 top row, Team 2 bottom row.
 				var cell_origin := grid_origin + Vector2(float(layout_cell % 2) * VIEWPORT_SIZE.x * camera_scale, float(layout_cell / 2) * VIEWPORT_SIZE.y * camera_scale)
 				view_node.position = cell_origin
-			var minimap: Node2D = view.get("match_minimap_overlay", null)
-			if minimap != null and view_node != null:
-				minimap.position = view_node.position + Vector2(VIEWPORT_SIZE.x * camera_scale - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+			_layout_match_map(view, view_node)
 			var source_map: Node2D = view.get("debug_map_overlay", null)
 			if source_map != null:
 				if player_index == 0:
@@ -10738,12 +11384,7 @@ func _layout_viewport() -> void:                                                
 		var solo_map: Node2D = solo_view.get("debug_map_overlay", null)
 		if solo_map != null:
 			solo_map.visible = false
-		var solo_minimap: Node2D = solo_view.get("match_minimap_overlay", null)
-		if solo_minimap != null and solo_camera != null:
-			var solo_bounds := Rect2(solo_camera.position, VIEWPORT_SIZE * solo_scale)
-			var minimap_scale := 2.0 if mobile_controls != null else 1.0
-			solo_minimap.scale = Vector2.ONE * minimap_scale
-			solo_minimap.position = solo_bounds.position + Vector2(solo_bounds.size.x - MATCH_MINIMAP_SIZE * minimap_scale - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+		_layout_match_map(solo_view, solo_camera)
 		return
 	if player_views.size() > 1 and player_windows.size() > 1:                                  # Give each local player a full camera in its own native window.
 		for player_index in range(player_views.size()):                                           # Position the player camera and minimalist map on that player's own display.
@@ -10758,11 +11399,7 @@ func _layout_viewport() -> void:                                                
 			var legacy_map: Node2D = view.get("debug_map_overlay", null)
 			if legacy_map != null:
 				legacy_map.visible = false                                                           # Never show the old blue-grid/source-map overlay during a match.
-			var minimap: Node2D = view.get("match_minimap_overlay", null)
-			if minimap != null and view_node != null:
-				minimap.scale = Vector2.ONE
-				var camera_bounds := Rect2(view_node.position, VIEWPORT_SIZE * camera_scale)          # Use the actual displayed camera frame rather than the surrounding letterbox/window.
-				minimap.position = camera_bounds.position + Vector2(camera_bounds.size.x - MATCH_MINIMAP_SIZE - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN) # Keep the map in the camera's upper-right corner, over the play view.
+			_layout_match_map(view, view_node)
 		if diagnostic_3d_display != null:
 			diagnostic_3d_display.visible = false                                                  # Keep abandoned diagnostics out of both player windows.
 		return                                                                                    # Skip the former single-window shared-map/split-screen layout.
@@ -10804,7 +11441,12 @@ func _setup_match_minimap_overlay() -> void:
 	match_minimap_overlay = Node2D.new()                                                       # Create a compact UI-space map root.
 	match_minimap_overlay.name = "MatchMinimap"                                                # Keep the replacement map easy to locate in the scene tree.
 	match_minimap_overlay.z_index = 300                                                        # Keep it above the player camera while remaining below end-round text.
-	canvas_layer.add_child(match_minimap_overlay)                                               # Attach it to this player's native HUD canvas.
+	var map_clip := Control.new()
+	map_clip.name = "MatchMapClip"
+	map_clip.clip_contents = true
+	map_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas_layer.add_child(map_clip)
+	map_clip.add_child(match_minimap_overlay)
 	var map_backing := ColorRect.new()                                                          # Add a translucent field so white topology remains readable over every scene texture.
 	map_backing.name = "Backdrop"                                                              # Keep the readability layer easy to identify in the scene tree.
 	map_backing.position = Vector2.ZERO                                                        # Cover the map from its local upper-left corner.
@@ -10862,7 +11504,29 @@ func _update_match_minimap_overlay() -> void:
 					_add_match_minimap_line(match_minimap_static_layer, bottom_left, bottom_right, wall_color, 2.0)
 				if x == MAP_WIDTH - 1 and _has_wall_edge(cell, Vector2i(1, 0)):
 					_add_match_minimap_line(match_minimap_static_layer, top_right, bottom_right, wall_color, 2.0)
+		match_minimap_static_layer.set_meta("map_wall_width", -1.0)
 		match_minimap_static_layer.set_meta("map_static_dirty", false)                          # Retain the maze geometry until its topology changes.
+	var fullscreen_map := map_display_mode == "fullscreen"
+	var backdrop := match_minimap_overlay.get_node_or_null("Backdrop") as ColorRect
+	if backdrop != null:
+		backdrop.visible = not fullscreen_map
+	match_minimap_static_layer.modulate = Color(1.0, 1.0, 1.0, 0.65 if fullscreen_map else 1.0)
+	var map_scale := maxf(match_minimap_overlay.scale.x, 0.001)
+	var wall_width := 2.0 / map_scale if fullscreen_map else 2.0
+	if not is_equal_approx(float(match_minimap_static_layer.get_meta("map_wall_width", -1.0)), wall_width):
+		for line in match_minimap_static_layer.get_children():
+			if line is Line2D:
+				line.width = wall_width
+		match_minimap_static_layer.set_meta("map_wall_width", wall_width)
+	if fullscreen_map and active_player_index >= 0 and active_player_index < player_states.size():
+		var forward := _view_forward_vector_for_state(player_states[active_player_index]).normalized()
+		match_minimap_overlay.rotation = -Vector2.UP.angle_to(forward)
+		var clip := match_minimap_overlay.get_parent() as Control
+		if clip != null and is_instance_valid(player_sprite):
+			var sprite_screen := player_sprite.get_global_transform_with_canvas().origin
+			var anchor := clip.get_global_transform_with_canvas().affine_inverse() * sprite_screen
+			var self_point := _match_minimap_point(_player_state_world_position(player_states[active_player_index]))
+			match_minimap_overlay.position = anchor - (self_point * map_scale).rotated(match_minimap_overlay.rotation)
 	_clear_debug_map_layer(match_minimap_dynamic_layer)                                        # Replace just the two player arrows each frame.
 	for player_index in range(player_states.size()):
 		if player_index >= player_joined.size() or not player_joined[player_index]:
@@ -10875,7 +11539,8 @@ func _update_match_minimap_overlay() -> void:
 		var right := Vector2(-forward.y, forward.x)                                               # Derive a perpendicular arrow base without needing a camera cone.
 		var color := TEAM_ONE_COLOR if PLAYER_TEAMS[player_index] == 0 else TEAM_TWO_COLOR # Match Team 1 pants and Team 2 vests.
 		var arrow := Polygon2D.new()                                                              # Use one tiny filled triangle rather than any view frustum artwork.
-		arrow.polygon = PackedVector2Array([center + forward * 7.0, center - forward * 4.0 + right * 4.0, center - forward * 4.0 - right * 4.0]) # Use bolder player arrows that remain legible at a glance.
+		var marker_scale := (0.24 if player_index == active_player_index else 0.13) if fullscreen_map else 1.0
+		arrow.polygon = PackedVector2Array([center + forward * 7.0 * marker_scale, center - forward * 4.0 * marker_scale + right * 4.0 * marker_scale, center - forward * 4.0 * marker_scale - right * 4.0 * marker_scale]) # Use bolder player arrows that remain legible at a glance.
 		arrow.color = color                                                                       # Apply the player's identifying color.
 		match_minimap_dynamic_layer.add_child(arrow)                                              # Draw it over the white wall network.
 	_add_match_minimap_camera_cutaway_debug()                                                  # Overlay only the local camera fan when its F3 diagnostic is enabled.
@@ -11090,6 +11755,53 @@ func _world_item_footprint(kind: String, position: Vector2) -> Dictionary:
 # the camera fan, wall-span checks, and diagnostics.
 func _dining_furniture_footprint(footprint: Dictionary) -> Dictionary:
 	return {"shape": OcclusionFootprintShape.RECTANGLE, "kind": "dining_furniture", "position": Vector2(footprint.get("position", Vector2.ZERO)), "half_width": float(footprint.get("side_length", 0.0)) * 0.5, "half_depth": float(footprint.get("depth", 0.0)) * 0.5}
+
+
+# Measure the separation between an axis-aligned prop envelope and a finite
+# wall segment. Finite segments matter: their ends can create diagonal gaps.
+func _prop_wall_gap(position: Vector2, half_extents: Vector2, edge: Dictionary) -> float:
+	var a: Vector2 = edge["a"]
+	var b: Vector2 = edge["b"]
+	var segment := b - a
+	var amount := clampf((position - a).dot(segment) / segment.length_squared(), 0.0, 1.0) if segment.length_squared() > 0.000001 else 0.0
+	var wall_point := a + segment * amount
+	var nearest := Vector2(clampf(wall_point.x, position.x - half_extents.x, position.x + half_extents.x), clampf(wall_point.y, position.y - half_extents.y, position.y + half_extents.y))
+	return wall_point.distance_to(nearest)
+
+
+func _prop_wall_position_clear(position: Vector2, half_extents: Vector2, edges: Array) -> bool:
+	for edge: Dictionary in edges:
+		var gap := _prop_wall_gap(position, half_extents, edge)
+		# Do not embed the visible envelope in a wall. Small nonzero seams look
+		# closed; larger openings must leave enough room for the whole player.
+		if gap < 0.012 or (gap > PROP_CLOSED_WALL_GAP and gap < PROP_MIN_PASSAGE_WIDTH):
+			return false
+	return true
+
+
+# Keep the closest suitable placement in the same cell. This permits a small,
+# visibly closed seam as well as a genuinely walkable opening, at corners too.
+func _ensure_prop_wall_passage(original: Vector2, half_extents: Vector2) -> Vector2:
+	var edges := _all_physical_wall_edges()
+	if _prop_wall_position_clear(original, half_extents, edges):
+		return original
+	var best := Vector2.INF
+	var best_distance := INF
+	var cell := Vector2(floorf(original.x), floorf(original.y))
+	# Search locally in small increments, choosing the least intrusive change.
+	for x_step in range(-14, 15):
+		for y_step in range(-14, 15):
+			var offset := Vector2(x_step, y_step) * 0.025
+			var distance := offset.length_squared()
+			if distance >= best_distance:
+				continue
+			var candidate := original + offset
+			if candidate.x < cell.x or candidate.x >= cell.x + 1.0 or candidate.y < cell.y or candidate.y >= cell.y + 1.0:
+				continue
+			if _prop_wall_position_clear(candidate, half_extents, edges):
+				best = candidate
+				best_distance = distance
+	return best
 
 
 # _resolve_world_item_placement: Push a floor item out of physical wall edges.
@@ -11979,6 +12691,7 @@ func _setup_player_animation() -> void:                                         
 	else:                                                                                      # Run this fallback branch when previous conditions were not met.
 		player_sprite.sprite_frames = SpriteFrames.new()                                          # Update player sprite rendering or animation state.
 
+	_add_dive_roll_animations(player_sprite.sprite_frames)
 	_add_idle_reload_animations(player_sprite.sprite_frames)
 	_add_crouch_idle_reload_animations(player_sprite.sprite_frames)
 	_add_crouch_walk_reload_animations(player_sprite.sprite_frames)
@@ -11994,6 +12707,22 @@ func _setup_player_animation() -> void:                                         
 	player_sprite.centered = true                                                              # Update player sprite rendering or animation state.
 	player_sprite.z_index = 10                                                                 # Update player sprite rendering or animation state.
 
+
+
+# Directional roll art is shared by all players and opponents.
+func _add_dive_roll_animations(frames: SpriteFrames) -> void:
+	for side in ["Left", "Right"]:
+		var source := load("res://assets/Characters/Cowboy2_DiveRoll%s_8Dir/Cowboy2_DiveRoll%s_8Dir.tres" % [side, side]) as SpriteFrames
+		if source == null:
+			continue
+		for animation in source.get_animation_names():
+			if frames.has_animation(animation):
+				frames.remove_animation(animation)
+			frames.add_animation(animation)
+			frames.set_animation_loop(animation, false)
+			frames.set_animation_speed(animation, 12.0)
+			for frame_index in source.get_frame_count(animation):
+				frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
 
 
 # Copy all eight crouch views into each mutable character resource.
@@ -12028,6 +12757,7 @@ func _add_idle_reload_animations(frames: SpriteFrames) -> void:
 			frames.remove_animation(animation)
 		frames.add_animation(animation)
 		frames.set_animation_loop(animation, false)
+		frames.set_animation_speed(animation, 6.0)
 		for frame_index in source.get_frame_count(animation):
 			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
 
@@ -12044,7 +12774,7 @@ func _add_crouch_idle_reload_animations(frames: SpriteFrames) -> void:
 			frames.remove_animation(animation)
 		frames.add_animation(animation)
 		frames.set_animation_loop(animation, true)
-		frames.set_animation_speed(animation, 12.0)
+		frames.set_animation_speed(animation, 6.0)
 		for frame_index in source.get_frame_count(animation):
 			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
 
@@ -12061,7 +12791,7 @@ func _add_crouch_walk_reload_animations(frames: SpriteFrames) -> void:
 			frames.remove_animation(animation)
 		frames.add_animation(animation)
 		frames.set_animation_loop(animation, true)
-		frames.set_animation_speed(animation, 12.0)
+		frames.set_animation_speed(animation, 8.0)
 		for frame_index in source.get_frame_count(animation):
 			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
 
@@ -12078,12 +12808,12 @@ func _add_run_reload_animations(frames: SpriteFrames) -> void:
 			frames.remove_animation(animation)
 		frames.add_animation(animation)
 		frames.set_animation_loop(animation, true)
-		frames.set_animation_speed(animation, 12.0)
+		frames.set_animation_speed(animation, 8.0)
 		for frame_index in source.get_frame_count(animation):
 			frames.add_frame(animation, source.get_frame_texture(animation, frame_index))
 
 
-# Keep the authored 12 fps loop in step across views and when entering idle
+# Keep the reload loop in step across views and when entering idle
 # partway through a reload, regardless of how many bullets are needed.
 func _show_idle_reload(sprite: AnimatedSprite2D, state: Dictionary, direction: String) -> bool:
 	return _show_reload_animation(sprite, state, direction, "IdleReload")
@@ -12101,7 +12831,7 @@ func _show_reload_animation(sprite: AnimatedSprite2D, state: Dictionary, directi
 	var frame_count := sprite.sprite_frames.get_frame_count(animation)
 	if frame_count <= 0:
 		return false
-	var frame_index := int(maxf(float(state.get("reload_elapsed", 0.0)), 0.0) * 12.0) % frame_count
+	var frame_index := int(maxf(float(state.get("reload_elapsed", 0.0)), 0.0) * sprite.sprite_frames.get_animation_speed(animation)) % frame_count
 	if reverse:
 		frame_index = frame_count - 1 - frame_index
 	sprite.set_frame_and_progress(frame_index, 0.0)
@@ -13781,7 +14511,7 @@ func _ensure_input_actions() -> void:                                           
 	_ensure_key_action(ACTION_MOVE_BACKWARD, [KEY_S])                                         # Bind S to player-one local backward movement.
 	_ensure_key_action(ACTION_TURN_LEFT, [KEY_Q])                                             # Bind Q to player-one snapped left turns.
 	_ensure_key_action(ACTION_TURN_RIGHT, [KEY_E])                                            # Bind E to player-one snapped right turns.
-	# The map regeneration action is configured with Ctrl+R in project.godot.
+	# F7 rerolls the map without conflicting with crouch + reload.
 	_ensure_key_action(ACTION_TOGGLE_SLOT_GRID_DEBUG, [KEY_F2])                               # Bind F2 to the blue slot-grid audit overlay toggle.
 	_ensure_key_action(ACTION_TOGGLE_DEBUG_MENU, [KEY_F3])                                    # Bind F3 to the grouped debug-overlay menu toggle.
 	_ensure_key_action(ACTION_TOGGLE_BOT_TRACE, [KEY_F4])                                     # Bind F4 to the opt-in bot decision trace.
@@ -13867,7 +14597,7 @@ func _xbox_left_stick() -> Vector2:                                             
 
 # _xbox_right_stick_turn: Converts a deliberate right-stick horizontal push into the bound player's one-shot turn direction.
 func _xbox_right_stick_turn() -> int:                                                       # Declare this function.
-	if bool(get_meta("coordinate_dither_menu_captures_right_stick", false)):                  # Let the held LB radial menu own the stick.
+	if bool(get_meta("coordinate_dither_menu_captures_right_stick", false)):                  # Let the held D-pad radial menu own the stick.
 		return 0                                                                                # Do not queue cardinal turns while choosing a dither.
 	var device_id := _xbox_joypad_id_for_player()                                              # Find the controller assigned to the currently bound local player.
 	if device_id < 0:                                                                          # Return no turn when no controller is attached.
@@ -13974,7 +14704,7 @@ func _read_turn() -> int:                                                       
 func _read_regenerate_map() -> bool:                                                        # Declare this function.
 	if _public_build():
 		return false
-	var regenerate_pressed := _is_key_down(KEY_CTRL) and (Input.is_action_pressed(ACTION_REGENERATE_MAP) or _is_key_down(KEY_R)) # Require Ctrl for map regeneration.
+	var regenerate_pressed := _is_key_down(KEY_F7) # Keep Ctrl+R available for crouch-reloading.
 	var regenerate_just_pressed := regenerate_pressed and not was_regenerate_map_pressed       # Detect the first frame of the regenerate key press.
 	was_regenerate_map_pressed = regenerate_pressed                                           # Store current regenerate state for next frame.
 	return regenerate_just_pressed                                                            # Return whether the hotkey should fire this frame.
@@ -14567,6 +15297,8 @@ func _try_cross_tile(sequence_name: String, grid_delta: Vector2i, blocked_label:
 
 # _position_player: Projects the player local tile position into the 160x120 perspective floor trapezoid.
 func _position_player() -> void:                                                            # Declare this function.
+	if active_player_index >= 0 and active_player_index < player_states.size():
+		_update_dive_debug_overlay(player_sprite, player_states[active_player_index])
 	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)) and String(player_states[active_player_index].get("death_phase", "")) == "countdown": # Let the blackout own this local view between the two authored Death passes.
 		player_sprite.visible = false                                                             # Prevent later positioning code from restoring the fallen last frame.
 		return                                                                                    # Do not update or redraw the body until reverse Death starts at respawn.
@@ -14678,6 +15410,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 		return                                                                                    # Return without projecting anything.
 	var target_world := _player_state_world_position(other_state)                               # Convert the opponent to world-grid coordinates.
 	_apply_opponent_animation(other_state)                                                     # Choose the opponent animation before projection so sprite dimensions are current.
+	_update_dive_debug_overlay(opponent_sprite, other_state)
 	var target_in_viewer_near_cell := use_near_cell_motion_envelope and not use_continuous_world_projection_for_near_actors and _world_position_is_in_active_player_cell(target_world) # Preserve the old envelope only when deliberately comparing it; Option 1 gives every same-cell actor the shared continuous point projection.
 	var projection := _near_cell_motion_projection(_near_cell_local_position_for_world(target_world)) if target_in_viewer_near_cell else _opponent_projection_from_current_camera(target_world, true, use_continuous_world_projection_for_near_actors) # Option 1 selects the unclamped effect projector for same-cell opponents, matching bullets and smoke exactly.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
@@ -15012,8 +15745,83 @@ func _world_footprint_near_draw_layer(footprint: Dictionary) -> int:
 	return _world_actor_draw_layer(center) + near_offset - center_offset
 
 
-# Keep wall layers intact; place each object before every drawn wall that
-# intersects the continuous camera-to-footprint cone.
+# A wall touching a footprint is not necessarily between it and the camera.
+# Partition the contact span at the exact footprint boundaries, then compare
+# each resulting interval against the nearest surface on the same ray.
+func _wall_span_precedes_footprint(contacts: Array, footprint: Dictionary, origin: Vector2) -> bool:
+	if contacts.size() < 2:
+		return false
+	var a := Vector2(contacts[0])
+	var segment := Vector2(contacts[1]) - a
+	if segment.length_squared() < 0.00000001:
+		return false
+	var breaks: Array[float] = [0.0, 1.0]
+	var center := Vector2(footprint.get("position", Vector2.ZERO))
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+		var extents := Vector2(float(footprint.get("half_width", 0.0)), float(footprint.get("half_depth", 0.0)))
+		for axis in 2:
+			if absf(segment[axis]) < 0.000001:
+				continue
+			for side in [-1.0, 1.0]:
+				var t: float = (center[axis] + float(side) * extents[axis] - a[axis]) / segment[axis]
+				if t > 0.0 and t < 1.0:
+					breaks.append(t)
+	else:
+		var radius := float(footprint.get("radius", 0.0))
+		var offset := a - center
+		var qa := segment.length_squared()
+		var qb := 2.0 * offset.dot(segment)
+		var qc := offset.length_squared() - radius * radius
+		var discriminant := qb * qb - 4.0 * qa * qc
+		if discriminant >= 0.0:
+			for root in [(-qb - sqrt(discriminant)) / (2.0 * qa), (-qb + sqrt(discriminant)) / (2.0 * qa)]:
+				if root > 0.0 and root < 1.0:
+					breaks.append(root)
+	breaks.sort()
+	for index in range(breaks.size() - 1):
+		if breaks[index + 1] - breaks[index] <= 0.000001:
+			continue
+		var point := a + segment * ((breaks[index] + breaks[index + 1]) * 0.5)
+		var ray := point - origin
+		var wall_distance := ray.length()
+		if wall_distance <= 0.000001:
+			continue
+		var direction := ray / wall_distance
+		var object_distance := -1.0
+		if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+			object_distance = _ray_box_distance(origin, direction, center, Vector2(float(footprint.get("half_width", 0.0)), float(footprint.get("half_depth", 0.0))))
+		else:
+			object_distance = _ray_circle_hit_distance(origin, direction, center, float(footprint.get("radius", 0.0)))
+		if object_distance >= 0.0 and wall_distance < object_distance - 0.001:
+			return true
+	return false
+
+
+# A wall flush with the outside edge of a footprint may fall just outside the
+# circle's tangent cone, yet its vertical surface projects over the prop. If
+# camera and prop are on the same side, that neighboring wall belongs behind.
+func _wall_is_adjacent_behind_footprint(a: Vector2, b: Vector2, footprint: Dictionary, origin: Vector2) -> bool:
+	var center := Vector2(footprint.get("position", Vector2.ZERO))
+	var radius := float(footprint.get("radius", 0.0))
+	var extents := Vector2(radius, radius)
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+		extents = Vector2(float(footprint.get("half_width", 0.0)), float(footprint.get("half_depth", 0.0)))
+	if not is_equal_approx(a.x, b.x) and not is_equal_approx(a.y, b.y):
+		return false
+	var axis := 0 if is_equal_approx(a.x, b.x) else 1
+	var tangent := 1 - axis
+	var prop_side := center[axis] - a[axis]
+	var camera_side := origin[axis] - a[axis]
+	if prop_side * camera_side <= 0.0:
+		return false
+	var gap := absf(prop_side) - extents[axis]
+	if gap < -0.001 or gap > 0.02:
+		return false
+	return center[tangent] + extents[tangent] >= minf(a[tangent], b[tangent]) and center[tangent] - extents[tangent] <= maxf(a[tangent], b[tangent])
+
+
+# Keep wall layers intact. The footprint cone determines which overlapping
+# walls lie in front of the prop and which lie behind its first surface.
 func _world_footprint_draw_layer(footprint: Dictionary) -> int:
 	var center := Vector2(footprint.get("position", Vector2.ZERO))
 	var layer := _world_footprint_near_draw_layer(footprint)
@@ -15052,11 +15860,21 @@ func _world_footprint_draw_layer(footprint: Dictionary) -> int:
 		if angle > right_angle:
 			right_angle = angle
 			right = point
+	var foreground_limit := 4096
+	var background_limit := -4096
 	for entry in renderer.last_wall_entries:
 		var contacts: Array = renderer.call("_segment_contact_points_in_cutaway_fan", Vector2(entry["world_a"]), Vector2(entry["world_b"]), origin, left, right)
-		if not contacts.is_empty():
-			layer = mini(layer, int(entry.get("wall_draw_layer", layer + 1)) - 1)
-	return layer
+		var wall_layer := int(entry.get("wall_draw_layer", layer))
+		if contacts.is_empty():
+			if _wall_is_adjacent_behind_footprint(Vector2(entry["world_a"]), Vector2(entry["world_b"]), footprint, origin):
+				background_limit = maxi(background_limit, wall_layer + 1)
+			continue
+		if _wall_span_precedes_footprint(contacts, footprint, origin):
+			foreground_limit = mini(foreground_limit, wall_layer - 1)
+		else:
+			background_limit = maxi(background_limit, wall_layer + 1)
+	# A foreground wall wins if two whole-object painter constraints conflict.
+	return mini(maxi(layer, background_limit), foreground_limit)
 
 
 # _opponent_camera_side_margin_from_projection: Converts projected sprite width into camera-space fan overlap.
@@ -15428,6 +16246,13 @@ func _world_vector_for_direction_string(direction: String) -> Vector2:          
 
 
 
+# Resolve a frozen world-space body facing from the currently bound camera.
+func _view_relative_vector_dir(world_vector: Vector2) -> String:
+	var depth := world_vector.dot(_view_forward_vector())
+	var side := world_vector.dot(_view_right_vector())
+	return _direction_string_for_world_vector(Vector2(-side, -depth))
+
+
 # _view_relative_dir: Converts a world direction into the viewer's screen-relative animation direction.
 func _view_relative_dir(world_direction: String, viewer_facing: int) -> String:           # Declare this function.
 	var world_vector := _world_vector_for_direction_string(world_direction)                    # Convert the saved world direction into a vector.
@@ -15462,6 +16287,49 @@ func _play_combat_death_animation(sprite: AnimatedSprite2D, state: Dictionary, d
 	sprite.pause()                                                                              # Stop AnimatedSprite2D from advancing independently of shared combat state.
 
 
+func _show_dive_roll(sprite: AnimatedSprite2D, state: Dictionary, direction: String) -> bool:
+	if sprite == null or sprite.sprite_frames == null or not bool(state.get("dive_active", false)):
+		return false
+	var animation := StringName("Dive%s%s" % [String(state.get("dive_side", "Left")), direction])
+	if not sprite.sprite_frames.has_animation(animation):
+		return false
+	if sprite.animation != animation:
+		sprite.play(animation)
+	sprite.pause()
+	var elapsed := float(state.get("dive_elapsed", 0.0))
+	sprite.set_frame_and_progress(clampi(int(elapsed * 12.0), 0, 12), 0.0)
+	return true
+
+
+# Overlay the exact sprite silhouette during a roll: yellow = protected,
+# red = vulnerable. Child sprites inherit projection, clipping, and draw order.
+func _update_dive_debug_overlay(sprite: AnimatedSprite2D, state: Dictionary) -> void:
+	if sprite == null:
+		return
+	var overlay := sprite.get_node_or_null("DiveRollDebug") as Sprite2D
+	var visible_now := show_dive_roll_debug and bool(state.get("dive_active", false)) and not bool(state.get("is_dying", false))
+	if not visible_now:
+		if overlay != null:
+			overlay.visible = false
+		return
+	if overlay == null:
+		overlay = Sprite2D.new()
+		overlay.name = "DiveRollDebug"
+		overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var material := ShaderMaterial.new()
+		material.shader = preload("res://scripts/dive_roll_debug.gdshader")
+		overlay.material = material
+		sprite.add_child(overlay)
+	overlay.centered = sprite.centered
+	overlay.offset = sprite.offset
+	overlay.flip_h = sprite.flip_h
+	overlay.flip_v = sprite.flip_v
+	overlay.texture = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame) if sprite.sprite_frames != null and sprite.sprite_frames.has_animation(sprite.animation) else null
+	var color := Color(1.0, 0.88, 0.0, 0.78) if _dive_roll_invulnerable(state) else Color(1.0, 0.08, 0.08, 0.78)
+	(overlay.material as ShaderMaterial).set_shader_parameter("debug_color", color)
+	overlay.visible = overlay.texture != null
+
+
 # _apply_opponent_animation: Plays the other player's full view-relative run/aim set when visible in this screen.
 func _apply_opponent_animation(other_state: Dictionary) -> void:                           # Declare this function.
 	if opponent_sprite.sprite_frames == null:                                                  # Skip animation if the opponent sprite has no SpriteFrames resource.
@@ -15477,7 +16345,10 @@ func _apply_opponent_animation(other_state: Dictionary) -> void:                
 	var other_world_run := String(other_state.get("world_run_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world run direction.
 	var other_world_aim := String(other_state.get("world_aim_dir", _direction_string_for_facing(other_facing))) # Read the opponent's world aim direction.
 	var relative_run := _view_relative_dir(other_world_run, facing)                            # Convert run direction into this viewer's animation space.
-	var relative_aim := _view_relative_dir(other_world_aim, facing)                            # Convert aim direction into this viewer's animation space.
+	var relative_aim := _view_relative_dir(other_world_aim, facing)
+	var roll_aim: Vector2 = other_state.get("dive_aim_vector", _world_vector_for_direction_string(other_world_aim))
+	if _show_dive_roll(opponent_sprite, other_state, _view_relative_vector_dir(roll_aim)):
+		return                            # Convert aim direction into this viewer's animation space.
 	if bool(other_state.get("character_is_crouching", false)):
 		var crouch_reload_direction := _reload_run_view(relative_run, relative_aim) if moving else relative_aim
 		var crouch_reload_prefix := "CrouchWalkReload" if moving else "CrouchIdleReload"
@@ -16670,7 +17541,7 @@ func _update_status() -> void:                                                  
 	var player_two_line := lines[1] if lines.size() > 1 else "P2 missing"                    # Preserve the second state line when both local players exist.
 	if not player_two_joined:                                                                  # Explain exactly how a second person enters the match before the later AI fallback milestone.
 		player_two_line = "P2 waiting — controller 2: Start, stick, or RT; keyboard: numpad / 0." # Keep the unjoined player readable without allowing accidental movement.
-	status_label.text = "%s\n%s\nP1: controller 1 / WASD + Q/E / RT or F fire. P2: controller 2 / numpad / RT or 0 fire. R reloads. Ctrl+R rerolls map. F2 slot grid. F3 %s debug menu. F4 bot trace %s." % [lines[0] if lines.size() > 0 else "P1 missing", player_two_line, "closes" if debug_menu_open else "opens", "ON" if bot_decision_trace_enabled else "off"] # Update the on-screen debug status label.
+	status_label.text = "%s\n%s\nP1: controller 1 / WASD + Q/E / RT or F fire. P2: controller 2 / numpad / RT or 0 fire. R reloads. F7 rerolls map. F2 slot grid. F3 %s debug menu. F4 bot trace %s." % [lines[0] if lines.size() > 0 else "P1 missing", player_two_line, "closes" if debug_menu_open else "opens", "ON" if bot_decision_trace_enabled else "off"] # Update the on-screen debug status label.
 
 
 

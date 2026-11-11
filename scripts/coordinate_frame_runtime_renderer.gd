@@ -704,6 +704,7 @@ func _input(event: InputEvent) -> void:
 	# shared diagnostic controls so a single press cannot toggle each layer twice.
 	if target_player_index != 0:
 		return
+	# The D-pad owns local renderer diagnostics; shoulder buttons are purchases.
 	if event is InputEventJoypadMotion and dither_menu_open:
 		if event.axis == JOY_AXIS_RIGHT_X:
 			dither_menu_right_stick.x = event.axis_value
@@ -713,14 +714,14 @@ func _input(event: InputEvent) -> void:
 			return
 		if dither_menu_right_stick.length() >= 0.55:
 			if absf(dither_menu_right_stick.x) >= absf(dither_menu_right_stick.y):
-				dither_menu_selection = 2 if dither_menu_right_stick.x > 0.0 else 0 # 4×4 / smooth
+				dither_menu_selection = 2 if dither_menu_right_stick.x > 0.0 else 0
 			else:
-				dither_menu_selection = 3 if dither_menu_right_stick.y > 0.0 else 1 # 8×8 / 2×2
+				dither_menu_selection = 3 if dither_menu_right_stick.y > 0.0 else 1
 			_refresh_dither_radial_menu()
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventJoypadButton:
-		if event.button_index == JOY_BUTTON_LEFT_SHOULDER:
+		if event.button_index == JOY_BUTTON_DPAD_LEFT:
 			if event.pressed:
 				dither_menu_open = true
 				_set_dither_menu_right_stick_capture(true)
@@ -738,15 +739,7 @@ func _input(event: InputEvent) -> void:
 		if dither_menu_open:
 			get_viewport().set_input_as_handled()
 			return
-		if event.pressed and event.button_index == JOY_BUTTON_DPAD_LEFT:
-			set_depth_dither_gradient_width(depth_dither_near_half_width_pixels - 0.5)
-			get_viewport().set_input_as_handled()
-			return
 		if event.pressed and event.button_index == JOY_BUTTON_DPAD_RIGHT:
-			set_depth_dither_gradient_width(depth_dither_near_half_width_pixels + 0.5)
-			get_viewport().set_input_as_handled()
-			return
-		if event.pressed and event.button_index == JOY_BUTTON_RIGHT_SHOULDER:
 			set_semantic_lattice_anisotropic_filter_enabled(not semantic_lattice_anisotropic_filter_enabled)
 			get_viewport().set_input_as_handled()
 		return
@@ -1201,7 +1194,7 @@ func _refresh_dither_radial_menu() -> void:
 	var bayer2_marker := ">" if dither_menu_selection == 1 else " "
 	var bayer4_marker := ">" if dither_menu_selection == 2 else " "
 	var bayer8_marker := ">" if dither_menu_selection == 3 else " "
-	dither_radial_menu.text = "DEPTH DITHER\n\n        %s 2×2\n\n%s Smooth       %s 4×4\n\n        %s 8×8\n\nHold LB · aim right stick · release" % [bayer2_marker, smooth_marker, bayer4_marker, bayer8_marker]
+	dither_radial_menu.text = "DEPTH DITHER\n\n        %s 2×2\n\n%s Smooth       %s 4×4\n\n        %s 8×8\n\nHold D-pad left · aim right stick · release" % [bayer2_marker, smooth_marker, bayer4_marker, bayer8_marker]
 	dither_radial_menu.visible = true
 
 
@@ -1311,7 +1304,7 @@ func _refresh_runtime_status(visible_wall_count: int) -> void:
 	var displayed_texture_label := "Wall_Layer1+Layer2" if wall_parallax_enabled and layer_mode_available else active_wall_texture_label
 	var ceiling_layers_available := ceiling_layer1_image != null and ceiling_layer2_image != null
 	var render_backend := "GPU" if _can_use_gpu_wall_renderer() else "CPU"
-	var status_text := "Coord %s | %d walls | %s | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  B:%s  N:%s [/]  I:%s  O:%s  RB:%s  P:%s  C:%s  L:%s  V:%s" % [_pose_key(), visible_wall_count, render_backend, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "SEM" if semantic_wall_material_enabled else "BMP", str(semantic_lattice_min_logical_line_width), "ON" if wall_depth_light_dither_enabled else "OFF", "ON" if wall_depth_light_dither_debug_enabled else "OFF", "ON" if semantic_lattice_anisotropic_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if gpu_wall_renderer_enabled else "OFF", "SEM" if semantic_floor_material_enabled else "BMP"]
+	var status_text := "Coord %s | %d walls | %s | Wall:%s [G/K] | Floor:%s [M]\nT:%s  Y:%s  U:%s  H:%s  J:%s  B:%s  N:%s [/]  I:%s  O:%s  D-pad right:%s  P:%s  C:%s  L:%s  V:%s" % [_pose_key(), visible_wall_count, render_backend, displayed_texture_label, active_floor_texture_label, "ON" if show_runtime_walls else "OFF", "ON" if show_quad_outlines else "OFF", "ON" if integer_uv_scale_snap_enabled else "OFF", "ON" if wall_ewa_filter_enabled else "OFF", "SEM" if semantic_wall_material_enabled else "BMP", str(semantic_lattice_min_logical_line_width), "ON" if wall_depth_light_dither_enabled else "OFF", "ON" if wall_depth_light_dither_debug_enabled else "OFF", "ON" if semantic_lattice_anisotropic_filter_enabled else "OFF", "ON" if wall_parallax_enabled and layer_mode_available else "OFF", "ON" if ceiling_parallax_enabled and ceiling_layers_available else "OFF", "ON" if layer_uv_edge_clamp_enabled else "OFF", "ON" if gpu_wall_renderer_enabled else "OFF", "SEM" if semantic_floor_material_enabled else "BMP"]
 	if is_instance_valid(status):
 		status.text = status_text
 	if is_instance_valid(runtime_status):

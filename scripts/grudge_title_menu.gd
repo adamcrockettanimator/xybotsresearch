@@ -40,7 +40,7 @@ func _ready() -> void:
 	font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	font.multichannel_signed_distance_field = false
 	var backdrop := ColorRect.new()
-	backdrop.color = Color("#f1c827")
+	backdrop.color = Color("#ddd6bb")
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(backdrop)

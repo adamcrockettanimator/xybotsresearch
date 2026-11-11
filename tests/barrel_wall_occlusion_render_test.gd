@@ -10,8 +10,8 @@ func bind(game: Node, pos: Vector2) -> void:
 
 func difference(first: Image, second: Image) -> int:
 	var result := 0
-	for y in range(first.get_height() / 2):
-		for x in range(first.get_width() / 2):
+	for y in range(first.get_height()):
+		for x in range(first.get_width()):
 			if first.get_pixel(x, y) != second.get_pixel(x, y):
 				result += 1
 	return result
@@ -25,6 +25,9 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	var game = wrapper.get_node("CoordinateFrameGame")
+	game.wanted_tally_overlay.visible = false
+	game.clear_map_waiting_to_start = false
+	game.clear_map_banner_timer = 0.0
 	wrapper.process_mode = Node.PROCESS_MODE_DISABLED
 	game.continuous_third_person_camera = true
 	game.player_joined = [true, false, false, false]
@@ -55,6 +58,7 @@ func _run() -> void:
 	game._render_bound_player_context()
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	var nodes: Dictionary = game.player_views[0]["combat_nodes"]
 	var sprite: Sprite2D = nodes.get("barrel_4567")
 	if sprite == null:
@@ -65,6 +69,7 @@ func _run() -> void:
 	shadow.visible = false
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	print("sprite visible=", sprite.visible, " pos=", sprite.position, " scale=", sprite.scale, " z=", sprite.z_index)
 	for entry in renderer.last_wall_entries:
 		print("wall ", entry["edge_key"], " z=", game._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1, " quad=", entry["quad"])
@@ -73,11 +78,13 @@ func _run() -> void:
 	shadow.visible = false
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	var hidden := root.get_texture().get_image()
 	sprite.visible = true
 	sprite.z_index = 4000
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	var front := root.get_texture().get_image()
 	var shown := difference(normal, hidden)
 	var covered := difference(front, normal)
@@ -88,10 +95,12 @@ func _run() -> void:
 	shadow.visible = false
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	var before_image := root.get_texture().get_image()
 	sprite.visible = false
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	var before_visible := difference(before_image, root.get_texture().get_image())
 	bind(game, before + Vector2(0.35, 0.0))
 	renderer._rebuild()
@@ -99,11 +108,13 @@ func _run() -> void:
 	shadow.visible = false
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	var covered_image := root.get_texture().get_image()
 	var retained_when_covered := sprite.visible
 	sprite.visible = false
 	await process_frame
 	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw()
 	var fully_covered := difference(covered_image, root.get_texture().get_image())
 	print("pixels before=", before_visible, " partly covered=", shown, " fully covered=", fully_covered, " sprite retained=", retained_when_covered)
 	wrapper.queue_free()

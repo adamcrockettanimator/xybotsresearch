@@ -56,6 +56,11 @@ func _layout() -> Dictionary:
 	for name in EDITABLE:
 		if saved_positions.has(name):
 			points[name] = saved_positions[name] * s
+	# Keep pause actions outside the centered pause broadside and its buttons.
+	if game != null and game.match_paused and not editing:
+		points["pause"] = Vector2(s.x - 75.0, s.y * 0.25)
+		points["menu"] = Vector2(s.x - 75.0, s.y * 0.50)
+		points["layout"] = Vector2(s.x - 75.0, s.y * 0.75)
 	return points
 
 func _load_layout() -> void:
@@ -158,6 +163,8 @@ func _input(event: InputEvent) -> void:
 					selected = "pause"
 				else:
 					return
+			elif game.clear_map_waiting_to_start or (game.wanted_tally_overlay != null and game.wanted_tally_overlay.visible):
+				return # Let the briefing and results buttons receive touches independently.
 			elif _round_prompt_active():
 				selected = "continue"
 				continue_pending = true
@@ -238,7 +245,8 @@ func _draw() -> void:
 		_draw_button(p.menu, "MENU", 55.0)
 		return
 	if _round_prompt_active():
-		_draw_button(p.continue, "BEGIN" if game.clear_map_waiting_to_start else "CONTINUE", 65.0)
+		if not game.clear_map_waiting_to_start and (game.wanted_tally_overlay == null or not game.wanted_tally_overlay.visible):
+			_draw_button(p.continue, "CONTINUE", 65.0)
 		return
 	_draw_game_buttons(p)
 

@@ -1,8 +1,9 @@
 extends SceneTree
 
 class TestController extends "res://scripts/xybots_character_controller.gd":
+	var test_origin := Vector2.ZERO
 	func _runtime_camera_origin_for_visibility() -> Vector2:
-		return Vector2.ZERO
+		return test_origin
 
 	func _world_actor_draw_layer(_position: Vector2) -> int:
 		return 200
@@ -36,6 +37,25 @@ func _initialize() -> void:
 	renderer.last_wall_entries.clear()
 	renderer.last_wall_entries.append({"world_a": Vector2(1, 2), "world_b": Vector2(2, 2), "wall_draw_layer": 100})
 	assert(game._world_footprint_draw_layer(circle) == game._world_footprint_near_draw_layer(circle), "wall outside cone must not change object layer")
+	# A wall touching the side or back of furniture is inside its triangular
+	# support cone, but lies behind the first visible footprint surface.
+	var touching_box := {"shape": game.OcclusionFootprintShape.RECTANGLE, "position": Vector2(1.165, 2.0), "half_width": 0.165, "half_depth": 0.27}
+	var touching_barrel := {"shape": game.OcclusionFootprintShape.CIRCLE, "position": Vector2(1.08, 2.0), "radius": 0.08}
+	renderer.last_wall_entries.clear()
+	renderer.last_wall_entries.append({"world_a": Vector2(1.0, 1.0), "world_b": Vector2(1.0, 3.0), "wall_draw_layer": 100})
+	game.test_origin = Vector2(2.0, 0.0)
+	assert(game._world_footprint_draw_layer(touching_box) == game._world_footprint_near_draw_layer(touching_box), "adjacent wall must not paint over the near side of furniture")
+	assert(game._world_footprint_draw_layer(touching_barrel) == game._world_footprint_near_draw_layer(touching_barrel), "adjacent wall must not paint over the near side of a barrel")
+	# The adjacent wall can have a later inherited wall layer; the object must
+	# still paint after it when the camera is on the same side.
+	renderer.last_wall_entries[0]["wall_draw_layer"] = 300
+	assert(game._world_footprint_draw_layer(touching_box) == 301)
+	assert(game._world_footprint_draw_layer(touching_barrel) == 301)
+	renderer.last_wall_entries[0]["wall_draw_layer"] = 100
+	game.test_origin = Vector2(0.0, 0.0)
+	assert(game._world_footprint_draw_layer(touching_box) == 99, "a wall genuinely in front of the furniture still draws over it")
+	assert(game._world_footprint_draw_layer(touching_barrel) == 99, "a wall genuinely in front of the barrel still draws over it")
+	game.test_origin = Vector2.ZERO
 	renderer.free()
 	game._build_empty_grid_audit_wall_edges()
 	game._set_wall_between(Vector2i(1, 1), Vector2i.RIGHT, true)

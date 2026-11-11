@@ -3,6 +3,7 @@ extends SceneTree
 class FakeGame extends Node:
 	var match_paused := false
 	var options_overlay: Control = null
+	var wanted_tally_overlay: Control = null
 	var combat_round_complete := false
 	var clear_map_finish_pending := false
 	var clear_map_waiting_to_start := false
@@ -118,11 +119,17 @@ func _initialize() -> void:
 	controls._input(begin)
 	begin.pressed = false
 	controls._input(begin)
-	assert(controls.take_continue())
+	# Intro taps are reserved for the separate Begin and Feedback buttons.
 	assert(not controls.take_continue())
 	game.clear_map_waiting_to_start = false
 	game.combat_round_complete = true
+	game.wanted_tally_overlay = Control.new()
+	game.wanted_tally_overlay.visible = true
 	begin.pressed = true
+	controls._input(begin)
+	assert(not controls.take_continue())
+	game.wanted_tally_overlay.free()
+	game.wanted_tally_overlay = null
 	controls._input(begin)
 	assert(controls.take_continue())
 	game.combat_round_complete = false
