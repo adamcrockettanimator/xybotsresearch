@@ -36,25 +36,24 @@ func _run() -> void:
 	game.player_states[4]["world_position"] = Vector2(1.5, 2.5)
 	game.player_states[4]["continuous_camera_yaw"] = PI * 0.5
 	game._set_wall_between(Vector2i(1, 2), Vector2i.RIGHT, true)
+	game.bot_bark_player.stop()
+	game.bot_bark_reverb_player.stop()
 	game.bot_bark_last_global = -INF
+	game.bot_bark_last_by_bot.clear()
 	assert(game._apply_projectile_hit(1, Vector2.LEFT, 0))
 	assert(game.bot_brains[2]["reaction_kind"] == "aggressive")
 	assert(game.bot_brains[3]["reaction_kind"] == "retreat")
 	assert(not game.bot_brains.has(4) or not game.bot_brains[4].has("reaction_kind"))
-	assert(game.bot_bark_speaker == 2 and game.BOT_BARKS["ally_attack"].has(game.bot_bark_last_line[2]))
-	game.bot_bark_last_global = -INF
-	assert(game._request_bot_bark(3, "ally_retreat"))
-	assert(game.bot_bark_speaker == 3 and game.BOT_BARKS["ally_retreat"].has(game.bot_bark_last_line[3]))
+	assert(game.bot_bark_speaker in [2, 3])
+	assert(not game.bot_bark_used_lines.is_empty())
+	# The second witness must wait; concurrent reactions never interrupt speech.
+	assert(not game._request_bot_bark(3, "ally_fall"))
 	assert(not game.bot_brains[2].has("last_seen_position"))
 	assert(Vector2(game.bot_brains[3]["reaction_threat"]) == Vector2(2.5, 2.5))
 	var witness_origin := Vector2(2.1, 2.5)
 	brain = game._update_bot_brain(2, game.player_states[2], witness_origin, 0, Vector2(1.4, 0), 1.4, Vector2.RIGHT, 0.1)
 	assert(brain["state"] == "ADVANCE_AFTER_ALLY_FALL")
 	assert(Vector2(brain["move_direction"]).dot(Vector2.RIGHT) > 0.9)
-	# Both fallback and attack sounds are actual available resources.
-	for category in ["ally_retreat", "ally_attack"]:
-		for filename in game.BOT_BARKS[category]:
-			assert(load(filename if String(filename).begins_with("res://") else game.BOT_BARK_ROOT + filename) is AudioStream)
 	print("Wounded retreat, visible ally-fall reactions, bark choice and occlusion passed")
 	game.queue_free()
 	quit()

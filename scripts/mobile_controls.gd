@@ -11,8 +11,16 @@ var buttons := {}
 var continue_pending := false
 var fire_pending := false
 var reload_pending := false
+var roll_pending := false
 var crouch_toggled := false
-const EDITABLE := ["crouch", "fire", "reload", "heart", "gun", "pause"]
+var stick_crouch_held := false
+var stick_down_ms := 0
+var stick_tap_candidate := false
+var last_stick_tap_ms := -10000
+var last_stick_tap_position := Vector2.ZERO
+const STICK_DOUBLE_TAP_MS := 350
+const STICK_TAP_RADIUS := 40.0
+const EDITABLE := ["crouch", "fire", "reload", "roll", "heart", "gun", "pause"]
 var layout_path := "user://mobile_control_layout.cfg"
 var saved_positions := {}
 var editing := false
@@ -44,6 +52,7 @@ func _layout() -> Dictionary:
 		"crouch": corner - Vector2(cos(deg_to_rad(15.0)), sin(deg_to_rad(15.0))) * arc_radius,
 		"fire": corner - Vector2.ONE.normalized() * arc_radius,
 		"reload": corner - Vector2(cos(deg_to_rad(75.0)), sin(deg_to_rad(75.0))) * arc_radius,
+		"roll": corner - Vector2.ONE.normalized() * arc_radius - Vector2(115.0, 0.0),
 		"heart": Vector2(s.x * 0.38, s.y * 0.91),
 		"gun": Vector2(s.x * 0.53, s.y * 0.91),
 		"pause": Vector2(s.x * 0.07, s.y * 0.10),
@@ -89,6 +98,10 @@ func _start_editing() -> void:
 	stick = Vector2.ZERO
 	fire_pending = false
 	reload_pending = false
+	roll_pending = false
+	stick_crouch_held = false
+	stick_tap_candidate = false
+	last_stick_tap_ms = -10000
 	if game.options_overlay != null:
 		game.options_overlay.visible = false
 
@@ -136,7 +149,7 @@ func _edit_input(event: InputEvent, points: Dictionary) -> void:
 
 # A clear-map victory remains playable until its fade and loot window ends.
 func _round_prompt_active() -> bool:
-	return game.clear_map_waiting_to_start or (game.combat_round_complete and not game.clear_map_finish_pending)
+	return game.clear_map_waiting_to_start or (game.combat_round_complete and (not game.clear_map_finish_pending or game.get("post_kill_active") == true))
 
 
 func _input(event: InputEvent) -> void:
@@ -165,11 +178,17 @@ func _input(event: InputEvent) -> void:
 					return
 			elif game.clear_map_waiting_to_start or (game.wanted_tally_overlay != null and game.wanted_tally_overlay.visible):
 				return # Let the briefing and results buttons receive touches independently.
+			elif game.get("post_kill_active") == true:
+				if pos.distance_to(points.continue) < 65.0:
+					selected = "continue"
+					continue_pending = true
+				else:
+					selected = "look"
 			elif _round_prompt_active():
 				selected = "continue"
 				continue_pending = true
 			else:
-				for name in ["pause", "crouch", "fire", "reload", "heart", "gun"]:
+				for name in ["pause", "crouch", "fire", "reload", "roll", "heart", "gun"]:
 					if pos.distance_to(points[name]) < (56.0 if name == "fire" else 48.0):
 						selected = name
 						break
@@ -179,11 +198,19 @@ func _input(event: InputEvent) -> void:
 					crouch_toggled = not crouch_toggled
 				elif selected == "reload":
 					reload_pending = true
+				elif selected == "roll":
+					roll_pending = true
 				elif selected == "fire":
 					fire_pending = true
 			if selected == "stick" and not fingers.values().has("stick"):
 				stick_origin = pos
 				stick = Vector2.ZERO
+				stick_down_ms = Time.get_ticks_msec()
+				stick_crouch_held = stick_down_ms - last_stick_tap_ms <= STICK_DOUBLE_TAP_MS and pos.distance_to(last_stick_tap_position) <= STICK_TAP_RADIUS
+				stick_tap_candidate = not stick_crouch_held
+				if stick_crouch_held:
+					crouch_toggled = false
+					last_stick_tap_ms = -10000
 			elif selected == "stick":
 				return
 			fingers[id] = selected
@@ -196,12 +223,21 @@ func _input(event: InputEvent) -> void:
 			if not fingers.values().has(selected):
 				buttons.erase(selected)
 			if selected == "stick":
+				if stick_tap_candidate and Time.get_ticks_msec() - stick_down_ms <= STICK_DOUBLE_TAP_MS:
+					last_stick_tap_ms = Time.get_ticks_msec()
+					last_stick_tap_position = stick_origin
+				else:
+					last_stick_tap_ms = -10000
+				stick_crouch_held = false
+				stick_tap_candidate = false
 				stick = Vector2.ZERO
 	elif fingers.has(id):
 		var selected: String = fingers[id]
 		var previous: Vector2 = finger_positions.get(id, pos)
 		finger_positions[id] = pos
 		if selected == "stick":
+			if pos.distance_to(stick_origin) > STICK_TAP_RADIUS:
+				stick_tap_candidate = false
 			stick = (pos - stick_origin).limit_length(70.0) / 70.0
 		elif (selected == "look" or selected == "fire") and not game.match_paused and not game.clear_map_waiting_to_start and not game.player_states.is_empty():
 			game.player_states[0]["continuous_camera_yaw"] = wrapf(float(game.player_states[0].get("continuous_camera_yaw", 0.0)) + (pos.x - previous.x) * 0.006, -PI, PI)
@@ -209,7 +245,7 @@ func _input(event: InputEvent) -> void:
 
 func pressed(name: String) -> bool:
 	if name == "crouch":
-		return crouch_toggled
+		return crouch_toggled or stick_crouch_held
 	return bool(buttons.get(name, false))
 
 func take_fire() -> bool:
@@ -220,6 +256,11 @@ func take_fire() -> bool:
 func take_reload() -> bool:
 	var result := reload_pending or pressed("reload")
 	reload_pending = false
+	return result
+
+func take_roll() -> bool:
+	var result := roll_pending or pressed("roll")
+	roll_pending = false
 	return result
 
 func take_continue() -> bool:
@@ -254,6 +295,7 @@ func _draw_game_buttons(p: Dictionary) -> void:
 	_draw_button(p.crouch, "DUCK ON" if crouch_toggled else "DUCK", 42.0)
 	_draw_button(p.fire, "FIRE", 52.0)
 	_draw_button(p.reload, "RELOAD", 42.0)
+	_draw_button(p.roll, "ROLL", 42.0)
 	_draw_button(p.heart, "HEART 5", 39.0)
 	_draw_button(p.gun, "GUN 10", 39.0)
 	_draw_button(p.pause, "II", 35.0)

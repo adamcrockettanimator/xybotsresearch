@@ -1,0 +1,5491 @@
+{
+  "zach": {
+    "hearing": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_002.wav",
+        "id": "wwhat was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 2,
+        "source": "0001 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_003.wav",
+        "id": "i heard a noise you better go check it out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 3,
+        "source": "0002 - I heard a noise. You better go check it out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_005.wav",
+        "id": "something smells fishy",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 5,
+        "source": "0004 - Something smells fishy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_006.wav",
+        "id": "i got a feelin were being watched",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 6,
+        "source": "0005 - I got a feeling we're being watched.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_007.wav",
+        "id": "shh what was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 7,
+        "source": "0006 - Shh What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_008.wav",
+        "id": "was that you",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 8,
+        "source": "0007 - Was that you.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_009.wav",
+        "id": "did you hear that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 9,
+        "source": "0008 - Did you hear that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_010.wav",
+        "id": "what was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 10,
+        "source": "0001 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_015.wav",
+        "id": "quiet listen",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 15,
+        "source": "0017 - Quiet. Listen.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_018.wav",
+        "id": "i hear movement",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 18,
+        "source": "0020 - I hear movement.wav"
+      }
+    ],
+    "shot": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_012.wav",
+        "id": "jumpin jehoshaphat what in tarnation was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 12,
+        "source": "0014 - Jumping Jehosaphat What in tarnation was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_013.wav",
+        "id": "that werent the wind",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 13,
+        "source": "0015 - That weren't the wind.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_017.wav",
+        "id": "i smell a fight",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 17,
+        "source": "0019 - I smell a fight.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_019.wav",
+        "id": "sounds like trouble",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 19,
+        "source": "0021 - Sounds like trouble.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_020.wav",
+        "id": "we aint alone",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 20,
+        "source": "0022 - We ain't alone.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_021.wav",
+        "id": "that aint good",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 21,
+        "source": "0023 - That ain't good.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_022.wav",
+        "id": "i reckon troubles afoot",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 22,
+        "source": "0024 - I reckon trouble's afoot.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_023.wav",
+        "id": "whats that ruckus",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 23,
+        "source": "0025 - What's that ruckus.wav"
+      }
+    ],
+    "ally_fall": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_026.wav",
+        "id": "he shot jed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 26,
+        "source": "0030 - He shot jed.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_030.wav",
+        "id": "billy bob",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 30,
+        "source": "0033 - Billy Bob!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_033.wav",
+        "id": "just you an me now boy",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 33,
+        "source": "0036 - just you and me now boy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_034.wav",
+        "id": "ill get you if its the last thing i do",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 34,
+        "source": "0037 - get you if it's the last thing I do.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_035.wav",
+        "id": "you enjoying yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 35,
+        "source": "0038 - you enjoying yourself.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_036.wav",
+        "id": "i bet youre real proud of yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 36,
+        "source": "0039 - bet you're real proud of yourself.wav"
+      }
+    ],
+    "attacking": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_040.wav",
+        "id": "fire",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 40,
+        "source": "0045 - fire.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_041.wav",
+        "id": "shoot him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 41,
+        "source": "0046 - Shoot him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_042.wav",
+        "id": "kill him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 42,
+        "source": "0047 - Kill him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_043.wav",
+        "id": "take that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 43,
+        "source": "0048 - take that! .wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_046.wav",
+        "id": "get a rope",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 46,
+        "source": "0051 - Get a rope.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_050.wav",
+        "id": "im gonna put a hole in ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 50,
+        "source": "0044 - I'm gonna put a hole in you.wav"
+      }
+    ],
+    "reply_attack": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_044.wav",
+        "id": "and that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 44,
+        "source": "0049 - And that.wav"
+      }
+    ],
+    "flank": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_071.wav",
+        "id": "im goin around",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 71,
+        "source": "0073 - I'm going around.wav"
+      }
+    ],
+    "flee": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_078.wav",
+        "id": "screw this im outta here",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 78,
+        "source": "0086 - Screw this! I'm outta here!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_079.wav",
+        "id": "mama help",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 79,
+        "source": "0088 - Mama Help!.wav"
+      }
+    ],
+    "hiding": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_087.wav",
+        "id": "if i cant see him maybe he cant see me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 87,
+        "source": "0096 - If I can't see him, maybe he can't see me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_090.wav",
+        "id": "i aint stickin my head out there",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 90,
+        "source": "0101 - I ain't stickin' my head out there.wav"
+      }
+    ],
+    "hit": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_103.wav",
+        "id": "my leg",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 103,
+        "source": "0109 - my leg!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_109.wav",
+        "id": "im hit",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 109,
+        "source": "0110 - I'm hit!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/reaction_0107.wav",
+        "id": "dammit",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "source": "0107 - dammit!.wav"
+      }
+    ],
+    "hit_player": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_117.wav",
+        "id": "i think i got him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 117,
+        "source": "0116 - I think I got him.wav"
+      }
+    ],
+    "investigate": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_132.wav",
+        "id": "now ive got a gun you hear me",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 132,
+        "source": "0128B - now, I got a gun, you hear me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_139.wav",
+        "id": "you guys go chek it out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 139,
+        "source": "0124 - You guys go check it out.wav"
+      }
+    ],
+    "death": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_144.wav",
+        "id": "i can see the light",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 144,
+        "source": "0133B - I can see the light.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/reaction_0141b.wav",
+        "id": "dagnabbit",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "source": "0141B - dagnabbit.wav"
+      }
+    ],
+    "victory": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_157.wav",
+        "id": "not so tough now are ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 157,
+        "source": "0145 - Not so tough now, are ya.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_162.wav",
+        "id": "ill get a shovel",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 162,
+        "source": "0147 - I'll get a shovel.wav"
+      }
+    ],
+    "lost_contact": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_173.wav",
+        "id": "ha chicken",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 173,
+        "source": "0159B - ha! chicken.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_178.wav",
+        "id": "whered that little varmint scurry off to",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 178,
+        "source": "0161 - Where'd that little varmit scurry off to.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_181.wav",
+        "id": "whered he go",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 181,
+        "source": "0160 - Where'd he go.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_184.wav",
+        "id": "coward",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 184,
+        "source": "0163 - coward!.wav"
+      }
+    ],
+    "player_cover": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_188.wav",
+        "id": "hes pinned",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 188,
+        "source": "0162 - He's pinned!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_189.wav",
+        "id": "coward",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 189,
+        "source": "0163 - coward!.wav"
+      }
+    ],
+    "player_reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_190.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 190,
+        "source": "0043 - get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_194.wav",
+        "id": "outta bullets",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 194,
+        "source": "0164 - Outta bullets!.wav"
+      }
+    ],
+    "combat": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_202.wav",
+        "id": "get that sissy boy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 202,
+        "source": "0167 - Get that sissy boy!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_210.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 210,
+        "source": "0043 - get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_211.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 211,
+        "source": "0183B - There he is!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_217.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 217,
+        "source": "0183B - There he is!.wav"
+      }
+    ],
+    "reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_224.wav",
+        "id": "dang it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 224,
+        "source": "0191 - dang it.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_227.wav",
+        "id": "hold on a second",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 227,
+        "source": "0193 - hold on a second.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_236.wav",
+        "id": "im empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 236,
+        "source": "0192 - im empty.wav"
+      }
+    ],
+    "search": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_243.wav",
+        "id": "i think i heard him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 243,
+        "source": "0216 - I think I heard him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_244.wav",
+        "id": "i think hes this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 244,
+        "source": "0215 - I think he's this way.wav"
+      }
+    ],
+    "cover": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_247.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 247,
+        "source": "0220 - Look out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/zach/sheet_252.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 252,
+        "source": "0220 - Look out!.wav"
+      }
+    ]
+  },
+  "adam": {
+    "hearing": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_002.wav",
+        "id": "wwhat was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 2,
+        "source": "0246 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_005.wav",
+        "id": "something smells fishy",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 5,
+        "source": "0249 - Something smells fishy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_006.wav",
+        "id": "i got a feelin were being watched",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 6,
+        "source": "0250 - I got a feeling we're being watched.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_007.wav",
+        "id": "shh what was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 7,
+        "source": "0251 - Shh. What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_008.wav",
+        "id": "was that you",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 8,
+        "source": "0252 - Was that you.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_009.wav",
+        "id": "did you hear that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 9,
+        "source": "0253 - Did you hear that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_010.wav",
+        "id": "what was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 10,
+        "source": "0246 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_014.wav",
+        "id": "easy now somebodys testing our patience",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 14,
+        "source": "0259 - Easy now. Somebody's testing our patience.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_015.wav",
+        "id": "quiet listen",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 15,
+        "source": "0260 - Quiet. Listen.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_018.wav",
+        "id": "i hear movement",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 18,
+        "source": "0265 - I hear movement.wav"
+      }
+    ],
+    "shot": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_013.wav",
+        "id": "that werent the wind",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 13,
+        "source": "0258 - That weren't the wind.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_017.wav",
+        "id": "i smell a fight",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 17,
+        "source": "0264 - I smell a fight.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_019.wav",
+        "id": "sounds like trouble",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 19,
+        "source": "0266 - Sounds like trouble.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_020.wav",
+        "id": "we aint alone",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 20,
+        "source": "0267 - We ain't alone.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_021.wav",
+        "id": "that aint good",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 21,
+        "source": "0268 - That ain't good.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_022.wav",
+        "id": "i reckon troubles afoot",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 22,
+        "source": "0269 - I reckon trouble's afoot.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_023.wav",
+        "id": "whats that ruckus",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 23,
+        "source": "0270 - What's that ruckus.wav"
+      }
+    ],
+    "ally_fall": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_025.wav",
+        "id": "youll pay for that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 25,
+        "source": "0272 - You'll pay for that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_026.wav",
+        "id": "he shot jed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 26,
+        "source": "0274 - He shot Jed.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_032.wav",
+        "id": "he killed him",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 32,
+        "source": "0283 - He killed him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_034.wav",
+        "id": "ill get you if its the last thing i do",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 34,
+        "source": "0287 - I'll get you if it's the last thing I do.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_035.wav",
+        "id": "you enjoying yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 35,
+        "source": "0288 - You enjoying yourself.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_036.wav",
+        "id": "i bet youre real proud of yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 36,
+        "source": "0289 - Now I bet you're real proud of yourself.wav"
+      }
+    ],
+    "attacking": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_040.wav",
+        "id": "fire",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 40,
+        "source": "0297 - Fire!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_041.wav",
+        "id": "shoot him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 41,
+        "source": "0298 - Shoot him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_042.wav",
+        "id": "kill him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 42,
+        "source": "0299 - Kill Him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_043.wav",
+        "id": "take that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 43,
+        "source": "0300 - Take That!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_046.wav",
+        "id": "get a rope",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 46,
+        "source": "0303 - Get a rope!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_050.wav",
+        "id": "im gonna put a hole in ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 50,
+        "source": "0296 - I'm gonna put a hole in ya.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_051.wav",
+        "id": "this ones got your name on it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 51,
+        "source": "0312 - This one's got your name on it.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_053.wav",
+        "id": "watch this",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 53,
+        "source": "0314 - Watch this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_054.wav",
+        "id": "you want some of this",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 54,
+        "source": "0315 - You want some of this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_055.wav",
+        "id": "you picked the wrong gang",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 55,
+        "source": "0316 - You picked the wrong gang.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_056.wav",
+        "id": "that cover wont last forever",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 56,
+        "source": "0317 - That cover won't last forever.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_057.wav",
+        "id": "i got a whole wagonload of whoopin",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 57,
+        "source": "0318 - I got a whole wagon load of whooping.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_058.wav",
+        "id": "youre softer than weekold biscuits",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 58,
+        "source": "0319 - You're softer than weak old biscuits.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_060.wav",
+        "id": "hold still",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 60,
+        "source": "0321 - hold still.wav"
+      }
+    ],
+    "reply_attack": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_044.wav",
+        "id": "and that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 44,
+        "source": "0301 - And that!.wav"
+      }
+    ],
+    "charge": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_061.wav",
+        "id": "charge",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 61,
+        "source": "0323 - Charge!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_062.wav",
+        "id": "lets rush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 62,
+        "source": "0324 - lets rush him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_065.wav",
+        "id": "im going for it",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 65,
+        "source": "0328 - I'm going for it.wav"
+      }
+    ],
+    "flank": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_066.wav",
+        "id": "keep him busy ill go round",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 66,
+        "source": "0329 - keep him busy I'll go around.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_067.wav",
+        "id": "ill get behind him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 67,
+        "source": "0330 - I'll get behind him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_068.wav",
+        "id": "yall keep on him ill shoot him in the back",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 68,
+        "source": "0331 - y'all keep on him I'll shoot him in the back.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_071.wav",
+        "id": "im goin around",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 71,
+        "source": "0333 - I'm going around.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_073.wav",
+        "id": "get his attention",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 73,
+        "source": "0337 - Get his attention.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_074.wav",
+        "id": "he cant shoot in two directions at once",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 74,
+        "source": "0338 - He can't shoot in two directions at once.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_075.wav",
+        "id": "ill go around and flatten him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 75,
+        "source": "0339 - I'll go around and flatten him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_076.wav",
+        "id": "keep him busy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 76,
+        "source": "0341 - Keep him busy.wav"
+      }
+    ],
+    "flee": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_078.wav",
+        "id": "screw this im outta here",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 78,
+        "source": "0343 - Screw this, I'm outta here.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_079.wav",
+        "id": "mama help",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 79,
+        "source": "0348 - Mama, help!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_080.wav",
+        "id": "i aint paid enough for this",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 80,
+        "source": "0350 - I ain't paid enough for this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_082.wav",
+        "id": "i resign effective immediately",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 82,
+        "source": "0354 - I resign, effective immediately!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_083.wav",
+        "id": "this hands lost i fold",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 83,
+        "source": "0355 - This hand's lost, I fold!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_086.wav",
+        "id": "ive had enough",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 86,
+        "source": "0363 - I've had enough.wav"
+      }
+    ],
+    "hiding": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_087.wav",
+        "id": "if i cant see him maybe he cant see me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 87,
+        "source": "0366 - If I can't see him maybe he can't see me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_089.wav",
+        "id": "lets ambush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 89,
+        "source": "0368 - let's ambush him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_090.wav",
+        "id": "i aint stickin my head out there",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 90,
+        "source": "0371 - ain't sticking my head out there.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_091.wav",
+        "id": "ill wait for him to come to me",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 91,
+        "source": "0372B - I'll wait for him to come to me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_092.wav",
+        "id": "this walls lucky im behind it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 92,
+        "source": "0375 - This wall's lucky I'm behind it.wav"
+      }
+    ],
+    "hit": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_095.wav",
+        "id": "ohhhh thats gonna leave a mark",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 95,
+        "source": "0380 - Oh, that's gonna leave a mark.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_099.wav",
+        "id": "ouch",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 99,
+        "source": "0385 - Ouch!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_100.wav",
+        "id": "hungh",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 100,
+        "source": "0386 - 'hungh!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_103.wav",
+        "id": "my leg",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 103,
+        "source": "0390 - my leg.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_106.wav",
+        "id": "that smarts",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 106,
+        "source": "0400C - That smarts!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_108.wav",
+        "id": "he got me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 108,
+        "source": "0401B - He got me..wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_109.wav",
+        "id": "im hit",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 109,
+        "source": "0401C - I'm Hit!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_110.wav",
+        "id": "winged me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 110,
+        "source": "0406 - winged me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_116.wav",
+        "id": "thats gonna leave a mark",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 116,
+        "source": "0381 - That's gonna leave a mark.wav"
+      }
+    ],
+    "hit_player": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_119.wav",
+        "id": "i hit him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 119,
+        "source": "0418 - I hit him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_120.wav",
+        "id": "i shot him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 120,
+        "source": "0419 - I shot him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_123.wav",
+        "id": "tougher than i thought",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 123,
+        "source": "0424 - tougher than I thought.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_124.wav",
+        "id": "theres more where that came from",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 124,
+        "source": "0426 - there's more where that came from.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_129.wav",
+        "id": "stings dont it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 129,
+        "source": "0432 - stings don't it.wav"
+      }
+    ],
+    "investigate": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_134.wav",
+        "id": "ill go check",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 134,
+        "source": "0440 - I'll go check.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_135.wav",
+        "id": "better go see what that was",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 135,
+        "source": "0501 - better go see what that was.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_137.wav",
+        "id": "ill bet its that bounty hunter",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 137,
+        "source": "0505B - I'll bet it's that bounty hunter.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_138.wav",
+        "id": "spread out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 138,
+        "source": "0506 - spread out.wav"
+      }
+    ],
+    "death": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_140.wav",
+        "id": "bastard",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 140,
+        "source": "0509 - bastard.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_142.wav",
+        "id": "you suck",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 142,
+        "source": "0513 - you suck.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_143.wav",
+        "id": "dag nabbit",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 143,
+        "source": "0514 - dag nabbit.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_144.wav",
+        "id": "i can see the light",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 144,
+        "source": "0515 - can see the light.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_145.wav",
+        "id": "im comin mama",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 145,
+        "source": "0517B - I'm coming mama .wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_148.wav",
+        "id": "i knew this job had drawbacks",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 148,
+        "source": "0520 - I knew this job had drawbacks.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_149.wav",
+        "id": "well played you bastard",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 149,
+        "source": "0521 - Well played, you bastard.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_150.wav",
+        "id": "reckon i misjudged the odds",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 150,
+        "source": "0523 - Reckon I've misjudged the odds.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_152.wav",
+        "id": "well ill be damned",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 152,
+        "source": "0528 - Well, I'll be damned.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_153.wav",
+        "id": "i had so much promise",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 153,
+        "source": "0532 - had so much promise.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_154.wav",
+        "id": "tell the cook more gravy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 154,
+        "source": "0534 - tell the cook more gravy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_156.wav",
+        "id": "hes a straight shooter",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 156,
+        "source": "0537 - he's a straight shooter.wav"
+      }
+    ],
+    "victory": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_157.wav",
+        "id": "not so tough now are ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 157,
+        "source": "0540B - not so tough now are ya .wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_159.wav",
+        "id": "check his pockets",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 159,
+        "source": "0544 - check his pockets.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_162.wav",
+        "id": "ill get a shovel",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 162,
+        "source": "0554 - i'll get a shovel.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_163.wav",
+        "id": "lets let the buzzards have him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 163,
+        "source": "0557 - let's let the buzzards have him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_164.wav",
+        "id": "ha ha ha",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 164,
+        "source": "0558 - ha ha ha!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_165.wav",
+        "id": "i get his gun",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 165,
+        "source": "0575 - I get his gun!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_167.wav",
+        "id": "were gettin pretty good at this",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 167,
+        "source": "0578 - We're getting pretty good at this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_168.wav",
+        "id": "bullseye",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 168,
+        "source": "0581 - Bullseye!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_169.wav",
+        "id": "thats what you get",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 169,
+        "source": "0583 - That's what you get!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_170.wav",
+        "id": "i get his hat",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 170,
+        "source": "0585 - I get his hat!.wav"
+      }
+    ],
+    "lost_contact": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_171.wav",
+        "id": "shoot whered he go",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 171,
+        "source": "0586 - Shoot! Where'd he go.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_172.wav",
+        "id": "maybe he ran away",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 172,
+        "source": "0443 - maybe he ran away.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_173.wav",
+        "id": "ha chicken",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 173,
+        "source": "0445 - Ha! Chicken!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_174.wav",
+        "id": "maybe hes gone to church",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 174,
+        "source": "0448 - Maybe he's gone to church.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_175.wav",
+        "id": "think we can call that a victory",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 175,
+        "source": "0449 - Think we can call that a victory.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_176.wav",
+        "id": "hes not gone hes thinking",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 176,
+        "source": "0450 - He's not gone, he's thinking.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_178.wav",
+        "id": "whered that little varmint scurry off to",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 178,
+        "source": "0453 - Where'd that little varmint scurry off to.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_179.wav",
+        "id": "i can smell your cowardice",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 179,
+        "source": "0454 - I can smell your cowardice!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_181.wav",
+        "id": "whered he go",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 181,
+        "source": "0456 - Where'd he go.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_182.wav",
+        "id": "i lost him",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 182,
+        "source": "0459 - I lost him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_183.wav",
+        "id": "find him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 183,
+        "source": "0461 - Find him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_185.wav",
+        "id": "he thinks he can hide",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 185,
+        "source": "0467B - He thinks he can hide!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_187.wav",
+        "id": "hes a slippery fella",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 187,
+        "source": "0472 - He's a slippery fella.wav"
+      }
+    ],
+    "player_reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_190.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 190,
+        "source": "0294 - Get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_191.wav",
+        "id": "hes empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 191,
+        "source": "0476 - He's empty.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_192.wav",
+        "id": "nows our chance",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 192,
+        "source": "0478 - Now's our chance.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_193.wav",
+        "id": "hear that move",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 193,
+        "source": "0479 - hear that, move.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_195.wav",
+        "id": "youre mine now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 195,
+        "source": "0485B - youre mine now.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_196.wav",
+        "id": "hes reloading",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 196,
+        "source": "0487 - he's reloading.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_198.wav",
+        "id": "oh youre dead now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 198,
+        "source": "0493 - oh you're dead now.wav"
+      }
+    ],
+    "combat": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_203.wav",
+        "id": "yikes",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 203,
+        "source": "0499 - Yikes.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_209.wav",
+        "id": "rush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 209,
+        "source": "0596 - Rush him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_210.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 210,
+        "source": "0294 - Get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_211.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 211,
+        "source": "0600 - there he is!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_212.wav",
+        "id": "hes over here",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 212,
+        "source": "0603 - he's over here!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_213.wav",
+        "id": "its him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 213,
+        "source": "0604 - its him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_214.wav",
+        "id": "i found him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 214,
+        "source": "0605 - I found him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_217.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 217,
+        "source": "0600 - there he is!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_218.wav",
+        "id": "dont give him a clean shot",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 218,
+        "source": "0612 - Don't give him a clean shot.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_219.wav",
+        "id": "the jig is up",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 219,
+        "source": "0613 - the jig is up!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_220.wav",
+        "id": "you fixin to die",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 220,
+        "source": "0614B - you fixin to die!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_221.wav",
+        "id": "ill fill you full of lead",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 221,
+        "source": "0615 - ill fill you full of lead.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_222.wav",
+        "id": "youre about to meet your maker",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 222,
+        "source": "0616 - You're about to meet your maker.wav"
+      }
+    ],
+    "reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_224.wav",
+        "id": "dang it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 224,
+        "source": "0618 - dang it.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_225.wav",
+        "id": "im dry",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 225,
+        "source": "0620 - I'm dry.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_226.wav",
+        "id": "hold on now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 226,
+        "source": "0621 - Hold on now.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_227.wav",
+        "id": "hold on a second",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 227,
+        "source": "0622 - Hold on a second.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_228.wav",
+        "id": "time out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 228,
+        "source": "0623 - Time out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_229.wav",
+        "id": "empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 229,
+        "source": "0624 - Empty!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_230.wav",
+        "id": "cover me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 230,
+        "source": "0625 - cover me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_231.wav",
+        "id": "im dry",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 231,
+        "source": "0620 - I'm dry.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_232.wav",
+        "id": "gotta freshen up",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 232,
+        "source": "0629 - gotta freshen up.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_234.wav",
+        "id": "im out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 234,
+        "source": "0630 - Im out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_235.wav",
+        "id": "nobody shoot till im ready",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 235,
+        "source": "0631 - nobody shoot until I'm ready.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_236.wav",
+        "id": "im empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 236,
+        "source": "0624 - I'm Empty!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_237.wav",
+        "id": "keep him busy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 237,
+        "source": "0341 - Keep him busy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_239.wav",
+        "id": "aint done with you yet",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 239,
+        "source": "0639 - I ain't done with you yet.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_240.wav",
+        "id": "just a minute",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 240,
+        "source": "0640 - Just a minute.wav"
+      }
+    ],
+    "search": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_242.wav",
+        "id": "cmon out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 242,
+        "source": "0647 - Cmon out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_243.wav",
+        "id": "i think i heard him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 243,
+        "source": "0648 - I think I heard him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_244.wav",
+        "id": "i think hes this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 244,
+        "source": "0650 - I think he's this way!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_245.wav",
+        "id": "he went this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 245,
+        "source": "0651 - he went this way!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_246.wav",
+        "id": "keep your eyes peeled",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 246,
+        "source": "0653 - Keep your eyes peeled.wav"
+      }
+    ],
+    "cover": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_247.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 247,
+        "source": "0654 - Look out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_249.wav",
+        "id": "yikes",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 249,
+        "source": "0499 - Yikes.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_250.wav",
+        "id": "time out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 250,
+        "source": "0623 - Time out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_251.wav",
+        "id": "hide me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 251,
+        "source": "0657 - hide me!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_252.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 252,
+        "source": "0654 - Look out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/adam/sheet_253.wav",
+        "id": "take cover",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 253,
+        "source": "0660 - take cover.wav"
+      }
+    ]
+  },
+  "rowan": {
+    "hearing": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_002.wav",
+        "id": "wwhat was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 2,
+        "source": "Rowan 0001 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_005.wav",
+        "id": "something smells fishy",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 5,
+        "source": "Rowan 0005 - Something smells fishy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_006.wav",
+        "id": "i got a feelin were being watched",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 6,
+        "source": "Rowan 0006 - I got a feeling we're being watched.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_008.wav",
+        "id": "was that you",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 8,
+        "source": "Rowan 0008 - Was that you.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_009.wav",
+        "id": "did you hear that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 9,
+        "source": "Rowan 0010 - Did you hear that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_010.wav",
+        "id": "what was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 10,
+        "source": "Rowan 0001 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_018.wav",
+        "id": "i hear movement",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 18,
+        "source": "Rowan 0020 - I hear movement.wav"
+      }
+    ],
+    "shot": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_017.wav",
+        "id": "i smell a fight",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 17,
+        "source": "Rowan 0019 - I smell a fight.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_019.wav",
+        "id": "sounds like trouble",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 19,
+        "source": "Rowan 0022 - Sounds like trouble.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_020.wav",
+        "id": "we aint alone",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 20,
+        "source": "Rowan 0025 - We ain't alone.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_021.wav",
+        "id": "that aint good",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 21,
+        "source": "Rowan 0024 - That ain't good.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_022.wav",
+        "id": "i reckon troubles afoot",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 22,
+        "source": "Rowan 0026 - I reckon trouble's afoot.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_023.wav",
+        "id": "whats that ruckus",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 23,
+        "source": "Rowan 0027 - What's that ruckus.wav"
+      }
+    ],
+    "ally_fall": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_025.wav",
+        "id": "youll pay for that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 25,
+        "source": "Rowan 0029 - You'll pay for that!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_026.wav",
+        "id": "he shot jed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 26,
+        "source": "Rowan 0030 - He shot Jed!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_027.wav",
+        "id": "jed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 27,
+        "source": "Rowan 0031 - Jed!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_028.wav",
+        "id": "kenny",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 28,
+        "source": "Rowan 0032 - Kenny!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_029.wav",
+        "id": "carl",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 29,
+        "source": "Rowan 0033 - Carl!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_030.wav",
+        "id": "billy bob",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 30,
+        "source": "Rowan 0034 - Billy Bob!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_031.wav",
+        "id": "jim bob",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 31,
+        "source": "Rowan 0035 - Jim Bob!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_032.wav",
+        "id": "he killed him",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 32,
+        "source": "Rowan 0037 - He killed him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_033.wav",
+        "id": "just you an me now boy",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 33,
+        "source": "Rowan 0038 - Just you and me now, boy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_034.wav",
+        "id": "ill get you if its the last thing i do",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 34,
+        "source": "Rowan 0039 - I'll get you if that's the last thing I do.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_035.wav",
+        "id": "you enjoying yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 35,
+        "source": "Rowan 0040 - You enjoying yourself.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_036.wav",
+        "id": "i bet youre real proud of yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 36,
+        "source": "Rowan 0041 - I bet you're real proud of yourself.wav"
+      }
+    ],
+    "attacking": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_040.wav",
+        "id": "fire",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 40,
+        "source": "Rowan 0045 - Fire!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_041.wav",
+        "id": "shoot him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 41,
+        "source": "Rowan 0046 - Shoot him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_042.wav",
+        "id": "kill him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 42,
+        "source": "Rowan 0047 - kill him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_043.wav",
+        "id": "take that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 43,
+        "source": "Rowan 0048 - take that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_046.wav",
+        "id": "get a rope",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 46,
+        "source": "Rowan 0051 - get a rope.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_049.wav",
+        "id": "bang bang",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 49,
+        "source": "Rowan 0060 - Bang Bang.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_050.wav",
+        "id": "im gonna put a hole in ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 50,
+        "source": "Rowan 0044 - I'm gonna put a hole in you.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_051.wav",
+        "id": "this ones got your name on it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 51,
+        "source": "Rowan 0067 - This one's got your name on it.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_053.wav",
+        "id": "watch this",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 53,
+        "source": "Rowan 0069 - Watch this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_054.wav",
+        "id": "you want some of this",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 54,
+        "source": "Rowan 0071 - You want some of this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_055.wav",
+        "id": "you picked the wrong gang",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 55,
+        "source": "Rowan 0072 - You picked the wrong gang.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_058.wav",
+        "id": "youre softer than weekold biscuits",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 58,
+        "source": "Rowan 0078 - you're softer than weak old biscuits.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_059.wav",
+        "id": "im warnin you",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 59,
+        "source": "Rowan 0079 - I'm warning you.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_060.wav",
+        "id": "hold still",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 60,
+        "source": "Rowan 0080 - hold still.wav"
+      }
+    ],
+    "reply_attack": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_044.wav",
+        "id": "and that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 44,
+        "source": "Rowan 0049 - and that.wav"
+      }
+    ],
+    "charge": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_061.wav",
+        "id": "charge",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 61,
+        "source": "Rowan 0081 - charge.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_062.wav",
+        "id": "lets rush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 62,
+        "source": "Rowan 0084 - Let's rush him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_063.wav",
+        "id": "hes pinned close the distance",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 63,
+        "source": "Rowan 0085 - He's pinned close the distance.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_065.wav",
+        "id": "im going for it",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 65,
+        "source": "Rowan 0088 - I'm going for it.wav"
+      }
+    ],
+    "flank": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_066.wav",
+        "id": "keep him busy ill go round",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 66,
+        "source": "Rowan 0089 - keep him busy. I'll go round.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_067.wav",
+        "id": "ill get behind him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 67,
+        "source": "Rowan 0090 - I'll get behind him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_069.wav",
+        "id": "you go that way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 69,
+        "source": "Rowan 0098 - You go that way.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_070.wav",
+        "id": "ill go this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 70,
+        "source": "Rowan 0097 - I'll go this way.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_071.wav",
+        "id": "im goin around",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 71,
+        "source": "Rowan 0095 - I'm going around.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_073.wav",
+        "id": "get his attention",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 73,
+        "source": "Rowan 0101 - Get his attention.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_074.wav",
+        "id": "he cant shoot in two directions at once",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 74,
+        "source": "Rowan 0102 - He can't shoot in two directions at once.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_075.wav",
+        "id": "ill go around and flatten him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 75,
+        "source": "Rowan 0104 - I'll go around and flatten him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_076.wav",
+        "id": "keep him busy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 76,
+        "source": "Rowan 0106 - Keep him busy.wav"
+      }
+    ],
+    "flee": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_078.wav",
+        "id": "screw this im outta here",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 78,
+        "source": "Rowan 0116 - screw this! Im outta here!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_079.wav",
+        "id": "mama help",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 79,
+        "source": "Rowan 0110 - MAMA, HELP!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_080.wav",
+        "id": "i aint paid enough for this",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 80,
+        "source": "Rowan 0111 - I ain't paid enough for this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_081.wav",
+        "id": "skedaddle thats what mamad say",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 81,
+        "source": "Rowan 0122 - skedaddle, that's what mama'd say.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_082.wav",
+        "id": "i resign effective immediately",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 82,
+        "source": "Rowan 0124 - I resign! Effective immediately!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_083.wav",
+        "id": "this hands lost i fold",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 83,
+        "source": "Rowan 0128 - this hands lost, I fold.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_084.wav",
+        "id": "thats it im outta here",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 84,
+        "source": "Rowan 0132 - that's it! I'm outta here!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_085.wav",
+        "id": "you aint worth the trouble",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 85,
+        "source": "Rowan 0134 - You ain't worth the trouble.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_086.wav",
+        "id": "ive had enough",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 86,
+        "source": "Rowan 0135 - I've had enough.wav"
+      }
+    ],
+    "hiding": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_088.wav",
+        "id": "let him pass by then we jump him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 88,
+        "source": "Rowan 0154 - let him pass by, then we jump him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_089.wav",
+        "id": "lets ambush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 89,
+        "source": "Rowan 0151 - Let's ambush him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_090.wav",
+        "id": "i aint stickin my head out there",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 90,
+        "source": "Rowan 0157 - I aint stickin my head out there.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_091.wav",
+        "id": "ill wait for him to come to me",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 91,
+        "source": "Rowan 0160 - I'll wait for him to come to me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_092.wav",
+        "id": "this walls lucky im behind it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 92,
+        "source": "Rowan 0164 - this walls lucky I'm behind it.wav"
+      }
+    ],
+    "hit": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_093.wav",
+        "id": "ow ow ow ow",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 93,
+        "source": "Rowan 0170 - ow ow ow OW.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_095.wav",
+        "id": "ohhhh thats gonna leave a mark",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 95,
+        "source": "Rowan 0183 - Oh, that's gonna leave a mark!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_096.wav",
+        "id": "that one tickled",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 96,
+        "source": "Rowan 0189 - That one tickled! .wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_097.wav",
+        "id": "guh",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 97,
+        "source": "Rowan 0253 - guh!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_103.wav",
+        "id": "my leg",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 103,
+        "source": "Rowan 0202 - My leg.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_104.wav",
+        "id": "my arm",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 104,
+        "source": "Rowan 0203 - My arm.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_105.wav",
+        "id": "mama",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 105,
+        "source": "Rowan 0269 - Mama,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_106.wav",
+        "id": "that smarts",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 106,
+        "source": "Rowan 0245 - that smarts.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_108.wav",
+        "id": "he got me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 108,
+        "source": "Rowan 0247 - he got me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_109.wav",
+        "id": "im hit",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 109,
+        "source": "Rowan 0248 - I'm hit.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_110.wav",
+        "id": "winged me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 110,
+        "source": "Rowan 0249 - winged me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_111.wav",
+        "id": "now that was downright impolite",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 111,
+        "source": "Rowan 0250 - now that was downright impolite.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_112.wav",
+        "id": "youll pay interest on that one",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 112,
+        "source": "Rowan 0275 - You'll pay interest on that one.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_115.wav",
+        "id": "thats the side i sleep on",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 115,
+        "source": "Rowan 0288 - That's the side I sleep on.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_116.wav",
+        "id": "thats gonna leave a mark",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 116,
+        "source": "Rowan 0187 - That's gonna leave a mark!.wav"
+      }
+    ],
+    "hit_player": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_117.wav",
+        "id": "i think i got him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 117,
+        "source": "Rowan 0295 - I think I got him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_118.wav",
+        "id": "i got him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 118,
+        "source": "Rowan 0296 - I got him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_119.wav",
+        "id": "i hit him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 119,
+        "source": "Rowan 0297 - I hit him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_120.wav",
+        "id": "i shot him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 120,
+        "source": "Rowan 0298 - I shot him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_121.wav",
+        "id": "hes still movin",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 121,
+        "source": "Rowan 0306 - He's still moving.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_122.wav",
+        "id": "i winged him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 122,
+        "source": "Rowan 0307 - I winged him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_123.wav",
+        "id": "tougher than i thought",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 123,
+        "source": "Rowan 0309 - Tougher than I thought.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_124.wav",
+        "id": "theres more where that came from",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 124,
+        "source": "Rowan 0310 - There's more where that came from.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_125.wav",
+        "id": "so he does bleed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 125,
+        "source": "Rowan 0311 - So he does bleed.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_126.wav",
+        "id": "hows that feel",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 126,
+        "source": "Rowan 0315 - How's that feel.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_129.wav",
+        "id": "stings dont it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 129,
+        "source": "Rowan 0321 - Stings don't it.wav"
+      }
+    ],
+    "investigate": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_131.wav",
+        "id": "keep your eyes open",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 131,
+        "source": "Rowan 0333 - Keep your eyes open.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_132.wav",
+        "id": "now ive got a gun you hear me",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 132,
+        "source": "Rowan 0335 - it... now I've got a gun you hear me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_133.wav",
+        "id": "what have i gotten myself into",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 133,
+        "source": "Rowan 0345 - what have I gotten myself into.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_134.wav",
+        "id": "ill go check",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 134,
+        "source": "Rowan 0350 - I'll go check.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_135.wav",
+        "id": "better go see what that was",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 135,
+        "source": "Rowan 0352 - Better go see what that was.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_137.wav",
+        "id": "ill bet its that bounty hunter",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 137,
+        "source": "Rowan 0359 - I'll bet it's that bounty hunter.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_138.wav",
+        "id": "spread out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 138,
+        "source": "Rowan 0362 - Spread out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_139.wav",
+        "id": "you guys go chek it out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 139,
+        "source": "Rowan 0367 - You guys go check it out.wav"
+      }
+    ],
+    "death": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_140.wav",
+        "id": "bastard",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 140,
+        "source": "Rowan 0369 - bastard!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_142.wav",
+        "id": "you suck",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 142,
+        "source": "Rowan 0372 - you suck,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_144.wav",
+        "id": "i can see the light",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 144,
+        "source": "Rowan 0379 - I can see the light.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_145.wav",
+        "id": "im comin mama",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 145,
+        "source": "Rowan 0381 - I'm coming, mama.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_147.wav",
+        "id": "tell mama i was mostly good",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 147,
+        "source": "Rowan 0384 - Tell mama I was mostly good.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_149.wav",
+        "id": "well played you bastard",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 149,
+        "source": "Rowan 0389 - Well played, you bastard.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_150.wav",
+        "id": "reckon i misjudged the odds",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 150,
+        "source": "Rowan 0392 - Reckon I misjudged the odds.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_153.wav",
+        "id": "i had so much promise",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 153,
+        "source": "Rowan 0399 - I had so much promise.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_154.wav",
+        "id": "tell the cook more gravy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 154,
+        "source": "Rowan 0400 - tell the cook more gravy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_155.wav",
+        "id": "i aint paid enough to die",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 155,
+        "source": "Rowan 0404 - I ain't paid enough to die.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_156.wav",
+        "id": "hes a straight shooter",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 156,
+        "source": "Rowan 0406 - He's a straight shooter.wav"
+      }
+    ],
+    "victory": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_157.wav",
+        "id": "not so tough now are ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 157,
+        "source": "Rowan 0422 - Not so tough now, are ya.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_158.wav",
+        "id": "glad thats over",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 158,
+        "source": "Rowan 0429 - Glad that's over.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_159.wav",
+        "id": "check his pockets",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 159,
+        "source": "Rowan 0432 - Check his pockets.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_162.wav",
+        "id": "ill get a shovel",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 162,
+        "source": "Rowan 0439 - I'll get a shovel.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_165.wav",
+        "id": "i get his gun",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 165,
+        "source": "Rowan 0448 - I get his gun.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_167.wav",
+        "id": "were gettin pretty good at this",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 167,
+        "source": "Rowan 0452 - We're getting pretty good at this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_168.wav",
+        "id": "bullseye",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 168,
+        "source": "Rowan 0454 - Bullseye.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_169.wav",
+        "id": "thats what you get",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 169,
+        "source": "Rowan 0466 - That's what you get.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_170.wav",
+        "id": "i get his hat",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 170,
+        "source": "Rowan 0469 - I get his hat.wav"
+      }
+    ],
+    "lost_contact": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_171.wav",
+        "id": "shoot whered he go",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 171,
+        "source": "Rowan 0485 - shoot where'd he go.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_172.wav",
+        "id": "maybe he ran away",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 172,
+        "source": "Rowan 0531 - maybe he ran away.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_173.wav",
+        "id": "ha chicken",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 173,
+        "source": "Rowan 0525 - ha chicken.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_174.wav",
+        "id": "maybe hes gone to church",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 174,
+        "source": "Rowan 0548 - Maybe he's gone to church.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_175.wav",
+        "id": "think we can call that a victory",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 175,
+        "source": "Rowan 0534 - Think we can call that a victory.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_176.wav",
+        "id": "hes not gone hes thinking",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 176,
+        "source": "Rowan 0535 - He's not gone, he's thinking.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_178.wav",
+        "id": "whered that little varmint scurry off to",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 178,
+        "source": "Rowan 0541 - Where'd that little varmint scurry off to.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_179.wav",
+        "id": "i can smell your cowardice",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 179,
+        "source": "Rowan 0539 - I can smell your cowardice.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_180.wav",
+        "id": "he vanished thats usually my trick",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 180,
+        "source": "Rowan 0544 - He vanished that's usually my trick.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_181.wav",
+        "id": "whered he go",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 181,
+        "source": "Rowan 0550 - Where'd he go.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_182.wav",
+        "id": "i lost him",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 182,
+        "source": "Rowan 0551 - I lost him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_184.wav",
+        "id": "coward",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 184,
+        "source": "Rowan 0552 - coward.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_185.wav",
+        "id": "he thinks he can hide",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 185,
+        "source": "Rowan 0552 - he thinks he can hide!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_186.wav",
+        "id": "he thinks he can run",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 186,
+        "source": "Rowan 0555 - He thinks he can run.wav"
+      }
+    ],
+    "player_cover": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_188.wav",
+        "id": "hes pinned",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 188,
+        "source": "Rowan 0558 - He's pinned!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_189.wav",
+        "id": "coward",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 189,
+        "source": "Rowan 0552 - coward.wav"
+      }
+    ],
+    "player_reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_190.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 190,
+        "source": "Rowan 0043 - Get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_191.wav",
+        "id": "hes empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 191,
+        "source": "Rowan 0561 - He's empty!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_192.wav",
+        "id": "nows our chance",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 192,
+        "source": "Rowan 0562 - Now's our chance!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_195.wav",
+        "id": "youre mine now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 195,
+        "source": "Rowan 0569 - You're mine now.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_196.wav",
+        "id": "hes reloading",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 196,
+        "source": "Rowan 0570 - He's reloading.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_197.wav",
+        "id": "an opening get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 197,
+        "source": "Rowan 0571 - an opening! get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_198.wav",
+        "id": "oh youre dead now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 198,
+        "source": "Rowan 0575 - Oh, you're dead now.wav"
+      }
+    ],
+    "combat": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_202.wav",
+        "id": "get that sissy boy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 202,
+        "source": "Rowan 0579 - Get that sissy boy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_203.wav",
+        "id": "yikes",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 203,
+        "source": "Rowan 0580 - Yikes.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_209.wav",
+        "id": "rush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 209,
+        "source": "Rowan 0600 - rush him,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_210.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 210,
+        "source": "Rowan 0043 - Get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_211.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 211,
+        "source": "Rowan 0602 - there he is,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_212.wav",
+        "id": "hes over here",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 212,
+        "source": "Rowan 0604 - he's over here,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_213.wav",
+        "id": "its him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 213,
+        "source": "Rowan 0616 - It's him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_214.wav",
+        "id": "i found him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 214,
+        "source": "Rowan 0606 - I found him,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_217.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 217,
+        "source": "Rowan 0602 - there he is,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_218.wav",
+        "id": "dont give him a clean shot",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 218,
+        "source": "Rowan 0624 - Don't give him a clean shot!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_219.wav",
+        "id": "the jig is up",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 219,
+        "source": "Rowan 0625 - The jig is up.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_220.wav",
+        "id": "you fixin to die",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 220,
+        "source": "Rowan 0628 - You fixin' to die.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_221.wav",
+        "id": "ill fill you full of lead",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 221,
+        "source": "Rowan 0629 - I'll fill you full of lead.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_222.wav",
+        "id": "youre about to meet your maker",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 222,
+        "source": "Rowan 0630 - You're about to meet your maker.wav"
+      }
+    ],
+    "reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_224.wav",
+        "id": "dang it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 224,
+        "source": "Rowan 0633 - Dang it!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_225.wav",
+        "id": "im dry",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 225,
+        "source": "Rowan 0634 - I'm dry!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_226.wav",
+        "id": "hold on now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 226,
+        "source": "Rowan 0635 - Hold on now.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_227.wav",
+        "id": "hold on a second",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 227,
+        "source": "Rowan 0636 - Hold on a second.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_228.wav",
+        "id": "time out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 228,
+        "source": "Rowan 0637 - Time out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_229.wav",
+        "id": "empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 229,
+        "source": "Rowan 0639 - Empty.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_230.wav",
+        "id": "cover me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 230,
+        "source": "Rowan 0640 - Cover me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_231.wav",
+        "id": "im dry",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 231,
+        "source": "Rowan 0634 - I'm dry!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_232.wav",
+        "id": "gotta freshen up",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 232,
+        "source": "Rowan 0644 - Gotta freshen up.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_234.wav",
+        "id": "im out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 234,
+        "source": "Rowan 0647 - I'm out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_235.wav",
+        "id": "nobody shoot till im ready",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 235,
+        "source": "Rowan 0648 - Nobody shoot till I'm ready.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_236.wav",
+        "id": "im empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 236,
+        "source": "Rowan 0649 - I'm empty!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_237.wav",
+        "id": "keep him busy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 237,
+        "source": "Rowan 0106 - Keep him busy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_238.wav",
+        "id": "im running out of bullets",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 238,
+        "source": "Rowan 0651 - I'm running out of bullets.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_239.wav",
+        "id": "aint done with you yet",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 239,
+        "source": "Rowan 0652 - I ain't done with you yet.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_240.wav",
+        "id": "just a minute",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 240,
+        "source": "Rowan 0653 - Just a minute.wav"
+      }
+    ],
+    "search": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_243.wav",
+        "id": "i think i heard him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 243,
+        "source": "Rowan 0666 - I think I heard him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_244.wav",
+        "id": "i think hes this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 244,
+        "source": "Rowan 0661 - I think he's this way.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_245.wav",
+        "id": "he went this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 245,
+        "source": "Rowan 0662 - He went this way!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_246.wav",
+        "id": "keep your eyes peeled",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 246,
+        "source": "Rowan 0663 - Keep your eyes peeled.wav"
+      }
+    ],
+    "cover": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_247.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 247,
+        "source": "Rowan 0667 - Look out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_249.wav",
+        "id": "yikes",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 249,
+        "source": "Rowan 0580 - Yikes.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_250.wav",
+        "id": "time out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 250,
+        "source": "Rowan 0637 - Time out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_251.wav",
+        "id": "hide me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 251,
+        "source": "Rowan 0671 - Hide me!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_252.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 252,
+        "source": "Rowan 0667 - Look out!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/sheet_253.wav",
+        "id": "take cover",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 253,
+        "source": "Rowan 0673 - Take cover!.wav"
+      }
+    ],
+    "player_roll": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/roll_0807.wav",
+        "id": "where are you rolling off to",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "source": "Rowan 0807 - Where are you rolling off to.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/rowan/roll_0812.wav",
+        "id": "acting like a goddamn tumbleweed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "source": "Rowan 0812 - Acting like a goddamn tumbleweed.wav"
+      }
+    ]
+  },
+  "devin": {
+    "hearing": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_002.wav",
+        "id": "wwhat was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 2,
+        "source": "1-12.100 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_005.wav",
+        "id": "something smells fishy",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 5,
+        "source": "1-19.620 - Something smells fishy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_006.wav",
+        "id": "i got a feelin were being watched",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 6,
+        "source": "1-22.464 - I got a feeling we're being watched.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_007.wav",
+        "id": "shh what was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 7,
+        "source": "1-33.479 - shh what was that_.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_008.wav",
+        "id": "was that you",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 8,
+        "source": "1-37.008 - was that you.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_009.wav",
+        "id": "did you hear that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 9,
+        "source": "1-38.970 - did you hear that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_010.wav",
+        "id": "what was that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 10,
+        "source": "1-12.100 - What was that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_015.wav",
+        "id": "quiet listen",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 15,
+        "source": "2-11.340 - Quiet, listen.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_018.wav",
+        "id": "i hear movement",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 18,
+        "source": "2-24.052 - I hear movement.wav"
+      }
+    ],
+    "shot": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_013.wav",
+        "id": "that werent the wind",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 13,
+        "source": "2-05.880 - That weren't the wind.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_017.wav",
+        "id": "i smell a fight",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 17,
+        "source": "2-21.978 - I smell a fight.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_019.wav",
+        "id": "sounds like trouble",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 19,
+        "source": "2-25.550 - sounds like trouble.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_020.wav",
+        "id": "we aint alone",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 20,
+        "source": "2-28.500 - we ain't alone.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_021.wav",
+        "id": "that aint good",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 21,
+        "source": "2-30.522 - that ain't good.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_022.wav",
+        "id": "i reckon troubles afoot",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 22,
+        "source": "2-33.410 - I reckon troubles afoot.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_023.wav",
+        "id": "whats that ruckus",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 23,
+        "source": "2-36.414 - what's that ruckus.wav"
+      }
+    ],
+    "ally_fall": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_025.wav",
+        "id": "youll pay for that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 25,
+        "source": "2-41.450 - you'll pay for that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_026.wav",
+        "id": "he shot jed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 26,
+        "source": "2-43.760 - he shot jed.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_027.wav",
+        "id": "jed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 27,
+        "source": "2-45.580 - jed.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_028.wav",
+        "id": "kenny",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 28,
+        "source": "2-46.562 - kenny.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_029.wav",
+        "id": "carl",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 29,
+        "source": "2-47.620 - carl.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_030.wav",
+        "id": "billy bob",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 30,
+        "source": "2-49.010 - billy bob.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_031.wav",
+        "id": "jim bob",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 31,
+        "source": "2-50.280 - jim bob.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_032.wav",
+        "id": "he killed him",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 32,
+        "source": "2-51.660 - he killed him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_034.wav",
+        "id": "ill get you if its the last thing i do",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 34,
+        "source": "3-36.656 - I'll get you if the last thing I do.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_035.wav",
+        "id": "you enjoying yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 35,
+        "source": "3-40.420 - you Enjoying yourself.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_036.wav",
+        "id": "i bet youre real proud of yourself",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 1,
+        "sheet_row": 36,
+        "source": "3-45.452 - I bet you're real proud of yourself.wav"
+      }
+    ],
+    "attacking": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_040.wav",
+        "id": "fire",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 40,
+        "source": "3-57.870 - fire .wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_041.wav",
+        "id": "shoot him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 41,
+        "source": "3-58.840 - shoot him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_042.wav",
+        "id": "kill him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 42,
+        "source": "3-59.764 - kill him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_043.wav",
+        "id": "take that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 43,
+        "source": "4-00.874 - take that.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_046.wav",
+        "id": "get a rope",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 46,
+        "source": "4-06.292 - Get a rope! .wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_049.wav",
+        "id": "bang bang",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 49,
+        "source": "4-32.810 - bang bang.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_050.wav",
+        "id": "im gonna put a hole in ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 50,
+        "source": "3-55.486 - I'm gonna put a hole in you.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_051.wav",
+        "id": "this ones got your name on it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 51,
+        "source": "4-51.056 - This one's got your name on it!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_053.wav",
+        "id": "watch this",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 53,
+        "source": "4-55.800 - Watch this!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_054.wav",
+        "id": "you want some of this",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 54,
+        "source": "4-57.480 - You want some of this.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_055.wav",
+        "id": "you picked the wrong gang",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 55,
+        "source": "5-02.952 - You picked the wrong gang!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_056.wav",
+        "id": "that cover wont last forever",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 56,
+        "source": "5-08.556 - That cover won't last forever!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_057.wav",
+        "id": "i got a whole wagonload of whoopin",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 57,
+        "source": "5-13.904 - I got a whole wagon load of whoopin'!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_058.wav",
+        "id": "youre softer than weekold biscuits",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 58,
+        "source": "5-18.180 - You're softer than weak old biscuits!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_059.wav",
+        "id": "im warnin you",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 59,
+        "source": "5-20.960 - I'm warnin' you!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_060.wav",
+        "id": "hold still",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 60,
+        "source": "5-23.140 - Hold still!.wav"
+      }
+    ],
+    "reply_attack": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_044.wav",
+        "id": "and that",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 44,
+        "source": "4-02.040 - and that.wav"
+      }
+    ],
+    "charge": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_061.wav",
+        "id": "charge",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 61,
+        "source": "5-25.560 - Charge!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_062.wav",
+        "id": "lets rush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 62,
+        "source": "5-26.880 - Let's rush him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_065.wav",
+        "id": "im going for it",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 65,
+        "source": "5-35.140 - I'm goin' for it!.wav"
+      }
+    ],
+    "flank": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_066.wav",
+        "id": "keep him busy ill go round",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 66,
+        "source": "5-39.448 - keep him busy. I'll go around.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_067.wav",
+        "id": "ill get behind him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 67,
+        "source": "5-58.310 - I'll get behind him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_068.wav",
+        "id": "yall keep on him ill shoot him in the back",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 68,
+        "source": "6-01.208 - Y'all keep on him, I'll shoot him in the back.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_071.wav",
+        "id": "im goin around",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 71,
+        "source": "6-12.336 - I'm going around.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_072.wav",
+        "id": "you distract him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 72,
+        "source": "6-13.980 - You distract him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_073.wav",
+        "id": "get his attention",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 73,
+        "source": "6-15.600 - Get his attention.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_074.wav",
+        "id": "he cant shoot in two directions at once",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 74,
+        "source": "6-18.832 - He can't shoot in two directions at once,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_075.wav",
+        "id": "ill go around and flatten him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 75,
+        "source": "6-22.686 - I'll go around and flatten him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_076.wav",
+        "id": "keep him busy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 76,
+        "source": "6-26.766 - Keep him busy!.wav"
+      }
+    ],
+    "flee": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_078.wav",
+        "id": "screw this im outta here",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 78,
+        "source": "6-42.413 - screw this im outta here!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_079.wav",
+        "id": "mama help",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 79,
+        "source": "6-44.040 - Mama, help!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_080.wav",
+        "id": "i aint paid enough for this",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 80,
+        "source": "6-46.150 - I ain't paid enough for this!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_082.wav",
+        "id": "i resign effective immediately",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 82,
+        "source": "7-00.308 - I resign effective immediately.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_083.wav",
+        "id": "this hands lost i fold",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 83,
+        "source": "7-03.989 - this hands lost, I fold.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_084.wav",
+        "id": "thats it im outta here",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 84,
+        "source": "7-22.090 - Thats it Im outta here.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_085.wav",
+        "id": "you aint worth the trouble",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 85,
+        "source": "7-10.440 - You ain't worth the trouble!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_086.wav",
+        "id": "ive had enough",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 86,
+        "source": "7-12.660 - I've had enough!.wav"
+      }
+    ],
+    "hiding": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_087.wav",
+        "id": "if i cant see him maybe he cant see me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 87,
+        "source": "7-35.856 - if I can't see him maybe he can't see me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_088.wav",
+        "id": "let him pass by then we jump him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 88,
+        "source": "7-39.838 - let him pass by then we jump him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_089.wav",
+        "id": "lets ambush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 89,
+        "source": "7-42.294 - let's ambush him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_090.wav",
+        "id": "i aint stickin my head out there",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 90,
+        "source": "8-22.872 - I ain't stickin' my head out there!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_091.wav",
+        "id": "ill wait for him to come to me",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 91,
+        "source": "8-27.716 - I'll wait for him to come to me!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_092.wav",
+        "id": "this walls lucky im behind it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 92,
+        "source": "8-37.780 - This wall's lucky I'm behind it!.wav"
+      }
+    ],
+    "hit": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_094.wav",
+        "id": "my mama made this shirt",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 94,
+        "source": "8-43.096 - My mama made this shirt!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_095.wav",
+        "id": "ohhhh thats gonna leave a mark",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 95,
+        "source": "8-46.410 - ohh thats gonna leave a mark.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_096.wav",
+        "id": "that one tickled",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 96,
+        "source": "8-49.070 - That one tickled!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_099.wav",
+        "id": "ouch",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 99,
+        "source": "9-02.860 - Ouch!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_103.wav",
+        "id": "my leg",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 103,
+        "source": "9-10.360 - my leg.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_104.wav",
+        "id": "my arm",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 104,
+        "source": "9-11.860 - my arm.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_105.wav",
+        "id": "mama",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 105,
+        "source": "9-13.220 - mama.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_108.wav",
+        "id": "he got me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 108,
+        "source": "9-28.600 - He got me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_109.wav",
+        "id": "im hit",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 109,
+        "source": "9-30.400 - I'm hit.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_110.wav",
+        "id": "winged me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 110,
+        "source": "9-31.400 - Winged me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_111.wav",
+        "id": "now that was downright impolite",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 111,
+        "source": "9-34.780 - Now that was downright impolite.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_112.wav",
+        "id": "youll pay interest on that one",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 112,
+        "source": "9-39.308 - You'll pay interest on that one.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_115.wav",
+        "id": "thats the side i sleep on",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 115,
+        "source": "9-55.250 - That's the side I sleep on!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_116.wav",
+        "id": "thats gonna leave a mark",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 116,
+        "source": "9-58.840 - That's gonna leave a mark.wav"
+      }
+    ],
+    "hit_player": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_117.wav",
+        "id": "i think i got him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 117,
+        "source": "10-04.520 - I think I got him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_118.wav",
+        "id": "i got him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 118,
+        "source": "10-07.290 - I got him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_119.wav",
+        "id": "i hit him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 119,
+        "source": "10-08.260 - I hit him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_120.wav",
+        "id": "i shot him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 120,
+        "source": "10-09.540 - I shot him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_121.wav",
+        "id": "hes still movin",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 121,
+        "source": "10-11.230 - He's still moving!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_122.wav",
+        "id": "i winged him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 122,
+        "source": "10-13.480 - I winged him,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_123.wav",
+        "id": "tougher than i thought",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 123,
+        "source": "10-15.500 - tougher than I thought,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_124.wav",
+        "id": "theres more where that came from",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 124,
+        "source": "10-22.368 - There's more where that came from,.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_125.wav",
+        "id": "so he does bleed",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 125,
+        "source": "10-25.700 - so he does bleed.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_129.wav",
+        "id": "stings dont it",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 129,
+        "source": "10-38.736 - stings don't it.wav"
+      }
+    ],
+    "investigate": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_132.wav",
+        "id": "now ive got a gun you hear me",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 132,
+        "source": "10-52.320 - now. I've got a gun you hear me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_133.wav",
+        "id": "what have i gotten myself into",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 133,
+        "source": "10-56.005 - what have I gotten myself into.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_134.wav",
+        "id": "ill go check",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 134,
+        "source": "10-59.560 - I'll go check.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_135.wav",
+        "id": "better go see what that was",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 135,
+        "source": "11-26.100 - better go see what that was.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_136.wav",
+        "id": "ill bet its that sherrif",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 136,
+        "source": "11-31.260 - I'll bet it's that sheriff.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_137.wav",
+        "id": "ill bet its that bounty hunter",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 137,
+        "source": "11-33.964 - I bet it's that bounty hunter.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_138.wav",
+        "id": "spread out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 138,
+        "source": "11-36.660 - Spread out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_139.wav",
+        "id": "you guys go chek it out",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 139,
+        "source": "11-38.156 - you guys go check it out .wav"
+      }
+    ],
+    "death": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_144.wav",
+        "id": "i can see the light",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 144,
+        "source": "12-09.600 - I can see the light.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_145.wav",
+        "id": "im comin mama",
+        "repeatable": true,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 145,
+        "source": "12-11.960 - I'm coming mama.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_148.wav",
+        "id": "i knew this job had drawbacks",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 148,
+        "source": "12-22.520 - I knew this job had drawbacks.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_149.wav",
+        "id": "well played you bastard",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 149,
+        "source": "12-25.460 - Well played, you bastard.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_150.wav",
+        "id": "reckon i misjudged the odds",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 150,
+        "source": "12-33.748 - I reckon I misjudged the odds.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_152.wav",
+        "id": "well ill be damned",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 152,
+        "source": "12-42.536 - Well, I'll be damned.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_153.wav",
+        "id": "i had so much promise",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 153,
+        "source": "12-47.200 - I had so much promise.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_154.wav",
+        "id": "tell the cook more gravy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 154,
+        "source": "12-54.023 - tell the cook more gravy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_155.wav",
+        "id": "i aint paid enough to die",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 155,
+        "source": "12-58.710 - I ain't paid enough to die.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_156.wav",
+        "id": "hes a straight shooter",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 156,
+        "source": "13-03.456 - He's a straight shooter.wav"
+      }
+    ],
+    "victory": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_157.wav",
+        "id": "not so tough now are ya",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 157,
+        "source": "13-10.010 - not so tough now are ya.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_158.wav",
+        "id": "glad thats over",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 158,
+        "source": "13-26.136 - glad that's over.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_159.wav",
+        "id": "check his pockets",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 159,
+        "source": "13-27.692 - check his pockets.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_162.wav",
+        "id": "ill get a shovel",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 162,
+        "source": "13-33.980 - I'll get a shovel.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_163.wav",
+        "id": "lets let the buzzards have him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 163,
+        "source": "13-37.112 - Let's let the buzzards have him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_167.wav",
+        "id": "were gettin pretty good at this",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 167,
+        "source": "13-47.540 - We're getting pretty good at this!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_168.wav",
+        "id": "bullseye",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 168,
+        "source": "13-49.760 - Bullseye!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_170.wav",
+        "id": "i get his hat",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 170,
+        "source": "14-08.360 - I get his hat.wav"
+      }
+    ],
+    "lost_contact": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_171.wav",
+        "id": "shoot whered he go",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 171,
+        "source": "13-58.220 - Shoot, where'd he go.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_172.wav",
+        "id": "maybe he ran away",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 172,
+        "source": "14-27.826 - Maybe he ran away.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_173.wav",
+        "id": "ha chicken",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 173,
+        "source": "14-29.669 - ha! chicken!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_174.wav",
+        "id": "maybe hes gone to church",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 174,
+        "source": "14-43.900 - Maybe he's gone to church.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_175.wav",
+        "id": "think we can call that a victory",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 175,
+        "source": "14-56.830 - I think we can call that a victory.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_176.wav",
+        "id": "hes not gone hes thinking",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 176,
+        "source": "15-05.774 - he's not gone he's thinking.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_178.wav",
+        "id": "whered that little varmint scurry off to",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 178,
+        "source": "15-31.922 - where's that little varmit scurry off to.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_181.wav",
+        "id": "whered he go",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 181,
+        "source": "15-56.696 - where'd he go.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_182.wav",
+        "id": "i lost him",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 182,
+        "source": "15-58.030 - I lost him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_183.wav",
+        "id": "find him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 183,
+        "source": "15-59.360 - find him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_184.wav",
+        "id": "coward",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 184,
+        "source": "16-00.730 - coward.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_185.wav",
+        "id": "he thinks he can hide",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 185,
+        "source": "16-02.800 - he thinks he can hide.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_186.wav",
+        "id": "he thinks he can run",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 186,
+        "source": "16-05.260 - he thinks he can run!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_187.wav",
+        "id": "hes a slippery fella",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 187,
+        "source": "16-11.032 - he's a slippery fella .wav"
+      }
+    ],
+    "player_cover": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_188.wav",
+        "id": "hes pinned",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 188,
+        "source": "16-27.720 - He's pinned!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_189.wav",
+        "id": "coward",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 189,
+        "source": "16-00.730 - coward.wav"
+      }
+    ],
+    "player_reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_190.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 190,
+        "source": "16-32.060 - Get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_191.wav",
+        "id": "hes empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 191,
+        "source": "16-33.040 - He's empty!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_192.wav",
+        "id": "nows our chance",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 192,
+        "source": "16-34.640 - Now's our chance!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_195.wav",
+        "id": "youre mine now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 195,
+        "source": "16-42.644 - You're mine now.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_196.wav",
+        "id": "hes reloading",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 196,
+        "source": "16-45.530 - He's reloading.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_197.wav",
+        "id": "an opening get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 197,
+        "source": "16-47.353 - an opening, get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_198.wav",
+        "id": "oh youre dead now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 198,
+        "source": "16-49.212 - Oh, you're dead now.wav"
+      }
+    ],
+    "combat": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_202.wav",
+        "id": "get that sissy boy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 202,
+        "source": "17-01.240 - Get that sissy boy.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_203.wav",
+        "id": "yikes",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 203,
+        "source": "17-04.002 - yikes.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_209.wav",
+        "id": "rush him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 209,
+        "source": "17-32.920 - Rush him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_210.wav",
+        "id": "get him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 210,
+        "source": "16-32.060 - Get him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_211.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 211,
+        "source": "17-35.780 - There he is.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_212.wav",
+        "id": "hes over here",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 212,
+        "source": "17-37.020 - He's over here.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_214.wav",
+        "id": "i found him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 214,
+        "source": "17-49.060 - I found him!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_217.wav",
+        "id": "there he is",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 217,
+        "source": "17-35.780 - There he is.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_218.wav",
+        "id": "dont give him a clean shot",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 218,
+        "source": "18-06.578 - Don't give him a clean shot!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_219.wav",
+        "id": "the jig is up",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 219,
+        "source": "18-09.020 - The jig is up!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_220.wav",
+        "id": "you fixin to die",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 220,
+        "source": "18-11.556 - You fixin' to die!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_221.wav",
+        "id": "ill fill you full of lead",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 221,
+        "source": "18-15.036 - I'll fill you full of lead!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_222.wav",
+        "id": "youre about to meet your maker",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 222,
+        "source": "18-18.968 - You're about to meet your maker!.wav"
+      }
+    ],
+    "reload": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_225.wav",
+        "id": "im dry",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 225,
+        "source": "18-29.760 - I'm dry!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_226.wav",
+        "id": "hold on now",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 226,
+        "source": "18-31.700 - Hold on, Now!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_227.wav",
+        "id": "hold on a second",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 227,
+        "source": "18-33.778 - hold on a second.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_228.wav",
+        "id": "time out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 228,
+        "source": "18-39.140 - time out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_229.wav",
+        "id": "empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 229,
+        "source": "18-42.178 - empty.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_230.wav",
+        "id": "cover me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 230,
+        "source": "18-43.618 - cover me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_231.wav",
+        "id": "im dry",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 231,
+        "source": "18-29.760 - I'm dry!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_232.wav",
+        "id": "gotta freshen up",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 232,
+        "source": "18-56.526 - I gotta freshen up.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_233.wav",
+        "id": "my irons cold",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 233,
+        "source": "18-58.618 - my irons cold.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_235.wav",
+        "id": "nobody shoot till im ready",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 235,
+        "source": "19-17.526 - nobody shoot till I'm ready.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_236.wav",
+        "id": "im empty",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 236,
+        "source": "19-20.530 - I'm empty.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_237.wav",
+        "id": "keep him busy",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 237,
+        "source": "6-26.766 - Keep him busy!.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_238.wav",
+        "id": "im running out of bullets",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 238,
+        "source": "19-25.330 - I'm running out of bullets.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_239.wav",
+        "id": "aint done with you yet",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 239,
+        "source": "19-28.322 - I ain't done with you yet.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_240.wav",
+        "id": "just a minute",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 240,
+        "source": "19-32.066 - just a minute.wav"
+      }
+    ],
+    "search": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_243.wav",
+        "id": "i think i heard him",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 243,
+        "source": "19-53.196 - I think I heard him.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_244.wav",
+        "id": "i think hes this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 244,
+        "source": "19-55.104 - I think he's this way.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_245.wav",
+        "id": "he went this way",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 245,
+        "source": "19-57.066 - He went this way.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_246.wav",
+        "id": "keep your eyes peeled",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 246,
+        "source": "19-58.772 - Keep your eyes peeled.wav"
+      }
+    ],
+    "cover": [
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_247.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 247,
+        "source": "20-06.120 - look out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_249.wav",
+        "id": "yikes",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 249,
+        "source": "17-04.002 - yikes.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_250.wav",
+        "id": "time out",
+        "repeatable": false,
+        "min_enemies": 1,
+        "max_enemies": 999,
+        "sheet_row": 250,
+        "source": "18-39.140 - time out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_251.wav",
+        "id": "hide me",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 251,
+        "source": "20-13.890 - Hide me.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_252.wav",
+        "id": "look out",
+        "repeatable": true,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 252,
+        "source": "20-06.120 - look out.wav"
+      },
+      {
+        "path": "res://assets/Audio/Dialog/Barks/devin/sheet_253.wav",
+        "id": "take cover",
+        "repeatable": false,
+        "min_enemies": 2,
+        "max_enemies": 999,
+        "sheet_row": 253,
+        "source": "20-16.530 - take cover.wav"
+      }
+    ]
+  }
+}

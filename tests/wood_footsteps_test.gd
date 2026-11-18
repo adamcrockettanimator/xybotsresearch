@@ -56,7 +56,7 @@ func _run() -> void:
 	var brain: Dictionary = game._update_bot_brain(1, game.player_states[1], Vector2(3.5, 1.5), 0, Vector2(-1.68, 0), 1.68, Vector2.LEFT, 0.016)
 	assert(brain["state"] == "INVESTIGATE" and brain["investigation_kind"] == "footstep")
 	assert(brain["investigate_cell"] == Vector2i(1, 1))
-	assert(game.BOT_BARKS["hearing"].has(game.bot_bark_last_line[1]))
+	assert(game.bot_bark_speaker == 1 and game.bot_bark_player.playing)
 	# Sneaking is audible to the listener but cannot create a bot alert.
 	game.bot_brains.clear()
 	game.player_states[0]["character_is_crouching"] = true

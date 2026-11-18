@@ -7,6 +7,7 @@ class FakeGame extends Node:
 	var combat_round_complete := false
 	var clear_map_finish_pending := false
 	var clear_map_waiting_to_start := false
+	var post_kill_active := false
 	var player_states := [{"continuous_camera_yaw": 0.0}]
 
 func _initialize() -> void:
@@ -110,6 +111,31 @@ func _initialize() -> void:
 	controls._input(fire)
 	game.clear_map_finish_pending = false
 	assert(controls._round_prompt_active())
+	game.clear_map_finish_pending = true
+	game.post_kill_active = true
+	var post_touch := InputEventScreenTouch.new()
+	post_touch.index = 20
+	post_touch.position = Vector2(600, 300)
+	post_touch.pressed = true
+	controls._input(post_touch)
+	var before_yaw: float = game.player_states[0].continuous_camera_yaw
+	var post_drag := InputEventScreenDrag.new()
+	post_drag.index = 20
+	post_drag.position = Vector2(630, 300)
+	controls._input(post_drag)
+	assert(is_equal_approx(float(game.player_states[0].continuous_camera_yaw), before_yaw + 0.18))
+	assert(not controls.take_continue())
+	post_touch.pressed = false
+	controls._input(post_touch)
+	post_touch.index = 21
+	post_touch.position = points.continue
+	post_touch.pressed = true
+	controls._input(post_touch)
+	assert(controls.take_continue())
+	post_touch.pressed = false
+	controls._input(post_touch)
+	game.post_kill_active = false
+	game.clear_map_finish_pending = false
 	game.combat_round_complete = false
 	game.clear_map_waiting_to_start = true
 	var begin := InputEventScreenTouch.new()
