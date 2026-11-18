@@ -9,55 +9,31 @@ func _run() -> void:
 	game.set_process(false)
 	game._build_empty_grid_audit_wall_edges()
 	game.world_barrels.clear()
-	game.player_bots[1] = true
-	game.player_joined[0] = true
-	game.player_joined[1] = true
-	game.player_states[0] = game._make_player_state(0, Vector2i(2, 2), 0)
-	game.player_states[0]["world_position"] = Vector2(2.5, 2.5)
-	game.player_states[0]["continuous_camera_yaw"] = 0.0
-	game.player_states[1] = game._make_player_state(1, Vector2i(3, 2), 0)
-	game.player_states[1]["world_position"] = Vector2(3.5, 2.5)
-	for category in game.BOT_BARKS:
-		for filename in game.BOT_BARKS[category]:
-			assert(load(filename if String(filename).begins_with("res://") else game.BOT_BARK_ROOT + filename) is AudioStream)
+	for i in range(3):
+		game.player_joined[i] = true
+		game.player_bots[i] = i > 0
+		game.player_states[i] = game._make_player_state(i, Vector2i(2 + i, 2), 0)
+		game.player_states[i]["world_position"] = Vector2(2.5 + i, 2.5)
+	for voice in game.BOT_BARK_BANK.data.values():
+		for category in voice.values():
+			for line in category:
+				assert(load(line["path"]) is AudioStream)
 	assert(game._request_bot_bark(1, "hearing"))
-	assert(game.bot_bark_panner.pan > 0.8)
-	var near_db: float = game.bot_bark_player.volume_db
-	var near_wet_delta: float = game.bot_bark_reverb_player.volume_db - near_db
-	assert(not game._request_bot_bark(1, "combat"))
-	game.player_states[1]["world_position"] = Vector2(0.5, 5.5)
-	assert(game._update_bot_bark_spatial())
-	assert(game.bot_bark_panner.pan < 0.0)
-	assert(game._request_bot_bark(1, "victory"))
-	assert(game.bot_bark_panner.pan < 0.0)
-	assert(game.bot_bark_player.volume_db < near_db)
-	assert(game.bot_bark_reverb_player.volume_db - game.bot_bark_player.volume_db > near_wet_delta)
-	assert(game.bot_bark_player.playing)
-	# A real NPC killing a human invokes the victory line despite cooldown.
-	game.player_states[1]["world_position"] = Vector2(3.5, 2.5)
-	game.player_states[1]["grid_position"] = Vector2i(3, 2)
-	game.player_states[0]["health"] = 1
-	game.bot_bark_last_line[1] = ""
-	game.clear_the_map_mode = false
-	assert(game._apply_projectile_hit(0, Vector2.LEFT, 1))
-	assert(game.bot_bark_player.playing)
-	# Hearing is connected to the actual investigation transition.
-	game.player_states[0]["is_dying"] = false
-	game.player_states[0]["health"] = 3
-	game.player_states[0]["world_position"] = Vector2(2.5, 2.5)
-	game.player_states[0]["grid_position"] = Vector2i(2, 2)
+	assert(not game._request_bot_bark(2, "hearing"))
+	assert(game.bot_bark_used_lines.size() == 1)
+	var first_line: String = game.bot_bark_used_lines.keys()[0]
 	game.bot_bark_player.stop()
 	game.bot_bark_reverb_player.stop()
 	game.bot_bark_last_global = -INF
 	game.bot_bark_last_by_bot.clear()
-	game.bot_bark_last_line.clear()
-	game.bot_brains.clear()
-	game._set_wall_between(Vector2i(2, 2), Vector2i(1, 0), true)
-	game.bot_heard_shot_serial += 1
-	game.bot_last_heard_shot_position = Vector2(2.5, 2.5)
-	var brain: Dictionary = game._update_bot_brain(1, game.player_states[1], Vector2(3.5, 2.5), 0, Vector2.LEFT, 1.0, Vector2.LEFT, 0.016)
-	assert(brain["state"] == "INVESTIGATE")
-	assert(game.bot_bark_last_line.has(1) and game.BOT_BARKS["hearing"].has(game.bot_bark_last_line[1]))
-	print("NPC barks: imported clips, hearing, cooldown, directional distance/reverb, and kill priority passed")
+	assert(game._request_bot_bark(2, "hearing"))
+	assert(game.bot_bark_used_lines.size() == 2)
+	assert(game.bot_bark_used_lines.has(first_line))
+	game._reset_combat_round()
+	assert(game.bot_bark_used_lines.is_empty())
+	assert(not game._request_bot_bark(0, "hearing"))
+	game._notify_bots_of_prop_break(Vector2(3.5, 2.5))
+	assert(game.bot_brains[1].has("prop_sound_pending"))
+	print("Barks: assets, voice exclusion, shared channel, round history and prop hearing passed")
 	game.queue_free()
 	quit()

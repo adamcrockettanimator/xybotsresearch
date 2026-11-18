@@ -15,25 +15,22 @@ func _run() -> void:
 	game.player_states[0]["world_position"] = Vector2(2.5, 2.5)
 	game.player_states[1] = game._make_player_state(1, Vector2i(3, 2), 0)
 	game.player_states[1]["world_position"] = Vector2(3.5, 2.5)
-	for sample in range(1, game.BOT_DAMAGE_SAMPLE_COUNT + 1):
-		assert(load(game.BOT_DAMAGE_ROOT + "%02d. Damage Grunt (Male).wav" % sample) is AudioStream)
+	game.player_states[1]["voice_actor"] = "adam"
+	game.player_states[1]["health"] = 2
 	assert(game._apply_projectile_hit(1, Vector2.RIGHT, 0))
 	assert(game.bot_damage_channels.has(1))
 	var channel: Dictionary = game.bot_damage_channels[1]
 	assert(channel["player"].playing)
 	assert(channel["panner"].pan > 0.8)
-	var first: String = game.bot_damage_last_sample[1]
-	game.player_states[1]["health"] = 1
+	var hit_stream: AudioStream = channel["player"].stream
+	assert(hit_stream.resource_path.begins_with("res://assets/Audio/Dialog/Barks/adam/"))
 	assert(game._apply_projectile_hit(1, Vector2.RIGHT, 0))
-	assert(game.player_states[1]["is_dying"])
-	assert(channel["player"].playing)
-	assert(game.bot_damage_last_sample[1] != first)
+	assert(game.player_states[1]["is_dying"] and channel["player"].playing)
+	var death_stream: AudioStream = channel["player"].stream
+	assert(death_stream.resource_path.begins_with("res://assets/Audio/Dialog/Barks/adam/"))
+	assert(death_stream != hit_stream)
 	assert(not game._apply_projectile_hit(1, Vector2.RIGHT, 0))
-	assert(game.bot_damage_last_sample[1].begins_with(game.EFFORT_GRUNT_ROOT))
-	assert(game._play_bot_damage_grunt(0))
-	assert(game.bot_damage_last_sample[0].begins_with(game.EFFORT_GRUNT_ROOT))
-	for sample in game.EFFORT_HIT_SAMPLES + game.EFFORT_DEATH_SAMPLES + game.EFFORT_VICTORY_SAMPLES:
-		assert(load(game.EFFORT_GRUNT_ROOT + "%02d. Effort Grunt (Male).wav" % sample) is AudioStream)
-	print("NPC damage grunts: assets, hit, lethal hit, spatialization and guards passed")
+	assert(not game._request_bot_bark(0, "hit"))
+	print("Assigned-actor injury and death reactions, spatialization and guards passed")
 	game.queue_free()
 	quit()

@@ -9,7 +9,8 @@ uniform bool apply_green_costume_remap = false;
 // This hue is intentionally not full-bright green. Its scale is calculated
 // from the source pixel luminance, preserving the readable dark, mid, and
 // light bands in the purple shirt and vest without making them glow.
-const vec3 GREEN_COSTUME_HUE = vec3(0.15, 0.80, 0.28);
+uniform vec4 costume_hue : source_color = vec4(0.15, 0.80, 0.28, 1.0);
+uniform float costume_luma_boost = 1.0;
 const vec3 LUMA_WEIGHTS = vec3(0.299, 0.587, 0.114);
 
 void fragment() {
@@ -30,8 +31,8 @@ void fragment() {
 			&& sampled.b > sampled.r * 0.45;
 		if (purple_costume) {
 			float source_luma = dot(sampled.rgb, LUMA_WEIGHTS);
-			float green_luma = dot(GREEN_COSTUME_HUE, LUMA_WEIGHTS);
-			sampled.rgb = GREEN_COSTUME_HUE * clamp(source_luma / green_luma, 0.0, 1.0);
+			float green_luma = dot(costume_hue.rgb, LUMA_WEIGHTS);
+			sampled.rgb = costume_hue.rgb * clamp(source_luma * costume_luma_boost / green_luma, 0.0, 1.0);
 		}
 	}
 	COLOR = sampled;

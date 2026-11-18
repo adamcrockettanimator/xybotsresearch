@@ -1106,6 +1106,10 @@ const MATCH_MINIMAP_MARGIN := 5.0                                               
 const MAP_DISPLAY_CONFIG := "user://map_display.cfg"
 var map_display_mode := "minimap"
 var map_display_button: Button
+var aim_assist_button: Button
+var aim_assist_enabled := true
+const AIM_ASSIST_CONFIG := "user://aim_assist.cfg"
+const AIM_ASSIST_ANGLE := 2.0
 
 var pixel_hud_font: FontFile                                                                   # Share the bundled High Noon pixel font across every gameplay readout.
 const BOT_BARK_ROOT := "res://assets/Audio/SFX/NPC Barks/"
@@ -1113,16 +1117,20 @@ const EFFORT_GRUNT_ROOT := "res://assets/Audio/SFX/Effort Grunts/"
 const EFFORT_HIT_SAMPLES := [1, 2, 3, 25, 22]
 const EFFORT_DEATH_SAMPLES := [34, 29, 26, 27]
 const EFFORT_VICTORY_SAMPLES := [4, 5, 37, 38, 32, 16, 17, 14, 13, 11]
-const BOT_BARKS := {
-	"hearing": ["01. Huh_.wav", "02. What_.wav", "04. What's That_.wav", "05. Who's There_.wav", "07. Shh... Listen.wav", "12. I Think Someone's Here.wav", "18. Who Goes There_.wav", "20. I Heard Something....wav", "21. Hey, What Was That_.wav"],
-	"search": ["06. Show Yourself.wav", "08. We Know You're Out There.wav", "10. I'm Gonna Find You.wav", "17. Cat and Mouse.wav", "19. Stop Hiding and Come Out!.wav", "22. I'm On To You.wav"],
-	"combat": ["03. Hey!.wav", "09. Get Outta Here.wav", "13. Intruder.wav", "14. He's Here.wav", "16. You Wanna Play This Game_.wav", "23. You're Not Leaving Here Alive.wav", "24. Hey, What are You Doing_.wav"],
-	"victory": ["11. You're Dead.wav"],
-	"ally_retreat": [EFFORT_GRUNT_ROOT + "02. Effort Grunt (Male).wav", EFFORT_GRUNT_ROOT + "03. Effort Grunt (Male).wav"],
-	"ally_attack": ["16. You Wanna Play This Game_.wav", "23. You're Not Leaving Here Alive.wav"],
-}
-const BOT_BARK_GLOBAL_GAP := 4.0
-const BOT_BARK_PERSONAL_GAP := 9.0
+const BOT_BARK_BANK := preload("res://assets/Audio/Dialog/bark_bank.json")
+const BOT_BARK_VOICES := ["zach", "adam", "rowan", "devin"]
+var bot_bark_used_lines: Dictionary = {}
+var bot_bark_pending_reloads: Dictionary = {}
+var bot_bark_pending_reply: Dictionary = {}
+var bot_bark_pending_ally_falls: Array[Dictionary] = []
+var bot_bark_pending_tactical: Array[Dictionary] = []
+var bot_bark_pending_mandatory: Array[Dictionary] = []
+var bot_bark_processing_queue := false
+var bot_combat_started := false
+var post_kill_active := false
+var post_kill_taunt_timer := 0.0
+const BOT_BARK_GLOBAL_GAP := 0.75
+const BOT_BARK_PERSONAL_GAP := 3.0
 var bot_bark_player: AudioStreamPlayer
 var bot_bark_reverb_player: AudioStreamPlayer
 var bot_bark_panner: AudioEffectPanner
@@ -1202,6 +1210,7 @@ func _ready() -> void:                                                          
 	pixel_hud_font.multichannel_signed_distance_field = false                                  # Disable MSDF smoothing for the same deliberately aliased presentation.
 	mobile_sample_audio = bool(get_tree().get_meta("grudge_mobile_audio_test", false)) or (OS.has_feature("web") and bool(get_tree().get_meta("grudge_mobile_wide", false)))
 	_load_map_display_mode()
+	_load_aim_assist()
 	_setup_shared_audio()
 	status_label.add_theme_font_override("font", pixel_hud_font)                             # Keep even the legacy diagnostic readout consistent when it is temporarily shown.
 	if BARREL_LOD_REVIEW_LEVEL:                                                               # Keep barrel-source review free of maze occlusion and unrelated props.
@@ -1226,6 +1235,7 @@ func _ready() -> void:                                                          
 	_setup_local_multiplayer()                                                                 # Create the second local screen and player-state records.
 	_apply_session_roster()                                                                    # Convert title-menu vacancies into active bot combatants before views and HUDs are built.
 	_separate_starting_bots()
+	_assign_round_bot_voices()
 	if clear_the_map_mode:
 		match_started = false                                                                     # Keep the ready-screen posters from masking a live match.
 	if bots_enabled and bot_decision_trace_enabled:
@@ -1461,34 +1471,150 @@ func _play_world_gunshot(player_index: int) -> void:
 
 # One shared voice channel prevents overlapping chatter in larger bot matches.
 # A kill line has priority so it is not lost behind a recent investigation bark.
+# Suspicious-noise lines make no sense once the source is already visible.
+func _bot_can_see_human_for_bark(player_index: int) -> bool:
+	var observer := _player_state_world_position(player_states[player_index])
+	var facing := _view_forward_vector_for_state(player_states[player_index]).normalized()
+	for target in range(player_states.size()):
+		if target >= player_joined.size() or not player_joined[target] or not _is_human_controlled_slot(target) or bool(player_states[target].get("is_dying", false)):
+			continue
+		var direction := _player_state_world_position(player_states[target]) - observer
+		var distance := direction.length()
+		if distance > BOT_SIGHT_RANGE or (distance > 0.6 and facing.dot(direction.normalized()) < 0.15):
+			continue
+		if _projectile_owner_has_clear_path_to_player(player_index, target, false):
+			return true
+	return false
+
+
+# Weight is editable per recording; speech length reduces the chance of long
+# lines, especially in combat. The final enemy can deliver a longer death.
+func _choose_bark_line(candidates: Array, category: String) -> Dictionary:
+	var weights: Array[float] = []
+	var total := 0.0
+	var quiet := not bot_combat_started and category in ["hearing", "shot", "investigate", "search"]
+	var final_death := category == "death" and _living_enemy_count() == 0
+	var exponent := 0.8 if final_death else 1.5 if quiet else 2.8
+	for line in candidates:
+		var duration := float(line.get("duration_seconds", 1.0))
+		var weight := maxf(float(line.get("weight", 1.0)), 0.0) / pow(1.0 + maxf(duration - 0.65, 0.0), exponent)
+		weights.append(weight)
+		total += weight
+	if total <= 0.0:
+		return {}
+	var draw := randf() * total
+	for index in range(candidates.size()):
+		draw -= weights[index]
+		if draw <= 0.0 and weights[index] > 0.0:
+			return candidates[index]
+	for index in range(candidates.size() - 1, -1, -1):
+		if weights[index] > 0.0:
+			return candidates[index]
+	return {}
+
+
+func _queue_tactical_bark(player_index: int, category: String) -> void:
+	if bot_bark_processing_queue or category not in ["combat", "flank", "cover", "flee", "player_cover", "player_reload", "player_spotted", "lost_contact", "search", "investigate", "charge", "taunt"]:
+		return
+	for item in bot_bark_pending_tactical:
+		if int(item["speaker"]) == player_index and String(item["category"]) == category:
+			return
+	var priority := 1 if category in ["taunt", "investigate"] else 2
+	var event := {"speaker": player_index, "category": category, "priority": priority, "expires": float(Time.get_ticks_msec()) * 0.001 + 3.0}
+	var insert_at := bot_bark_pending_tactical.size()
+	for index in range(bot_bark_pending_tactical.size()):
+		if int(bot_bark_pending_tactical[index].get("priority", 1)) < priority:
+			insert_at = index
+			break
+	bot_bark_pending_tactical.insert(insert_at, event)
+
+
 func _request_bot_bark(player_index: int, category: String) -> bool:
-	if bot_bark_player == null or not _is_bot_controlled_slot(player_index) or player_index >= player_states.size() or not BOT_BARKS.has(category):
+	if bot_bark_player == null or player_index < 0 or player_index >= player_states.size() or not _is_bot_controlled_slot(player_index):
+		return false
+	var urgent := category in ["hit", "death", "first_sighting", "kill_player"]
+	if post_kill_active and category not in ["victory", "death", "hit", "kill_player"]:
+		return false
+	if category in ["hearing", "shot", "investigate"] and bot_combat_started:
+		return false
+	if category in ["hearing", "shot"] and _bot_can_see_human_for_bark(player_index):
+		return false
+	if category != "death" and (bool(player_states[player_index].get("is_dying", false)) or int(player_states[player_index].get("health", 0)) <= 0):
 		return false
 	var now := float(Time.get_ticks_msec()) * 0.001
-	var victory := category == "victory"
-	var urgent := category in ["ally_retreat", "ally_attack"]
-	if urgent and now - bot_bark_last_global < 1.5:
+	if not urgent and bot_damage_channels.has(player_index) and (bot_damage_channels[player_index]["player"] as AudioStreamPlayer).playing:
+		_queue_tactical_bark(player_index, category)
 		return false
-	if not victory and not urgent and (bot_bark_player.playing or now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP or now - float(bot_bark_last_by_bot.get(player_index, -INF)) < BOT_BARK_PERSONAL_GAP):
+	if not urgent and (bot_bark_player.playing or now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP or (category not in ["reload", "reply_attack", "ally_fall"] and now - float(bot_bark_last_by_bot.get(player_index, -INF)) < BOT_BARK_PERSONAL_GAP)):
+		_queue_tactical_bark(player_index, category)
 		return false
-	var options: Array = BOT_BARKS[category].duplicate()
-	if victory:
-		for sample in EFFORT_VICTORY_SAMPLES:
-			options.append(EFFORT_GRUNT_ROOT + "%02d. Effort Grunt (Male).wav" % sample)
-	var choice := randi_range(0, options.size() - 1)
-	var last := String(bot_bark_last_line.get(player_index, ""))
-	if options.size() > 1 and String(options[choice]) == last:
-		choice = (choice + 1 + randi_range(0, options.size() - 2)) % options.size()
-	var filename := String(options[choice])
-	var stream := load(filename if filename.begins_with("res://") else BOT_BARK_ROOT + filename) as AudioStream
+	var voice: String = String(player_states[player_index].get("voice_actor", ""))
+	if voice.is_empty():
+		voice = BOT_BARK_VOICES[posmod(player_index - 1, BOT_BARK_VOICES.size())]
+	var bank: Dictionary = BOT_BARK_BANK.data.get(voice, {})
+	var candidates: Array = []
+	for line in bank.get(category, []):
+		if String(line.get("id", "")) == "coward":
+			var own_brain: Dictionary = bot_brains.get(player_index, {})
+			if String(own_brain.get("state", "")) in ["RETREAT_TO_COVER", "FALL_BACK", "DUCK_AFTER_HIT"] or String(own_brain.get("tactical_mode", "")) in ["approach_cover", "wall_approach", "wall_cover", "reload_cover"]:
+				continue
+		var survivors := _living_enemy_count()
+		if category == "death" and int(player_states[player_index].get("health", 0)) <= 0:
+			survivors += 1
+		if survivors < int(line.get("min_enemies", 1)) or survivors > int(line.get("max_enemies", 999)):
+			continue
+		if bool(line.get("repeatable", false)) or not bot_bark_used_lines.has(String(line.get("id", ""))):
+			candidates.append(line)
+	if candidates.is_empty():
+		return false
+	var selected := _choose_bark_line(candidates, category)
+	if selected.is_empty():
+		return false
+	var stream := load(String(selected["path"])) as AudioStream
 	if stream == null:
 		return false
+	if urgent:
+		# Multiple enemies may spot the player together. Keep every first-sight
+		# reaction, but stagger them so a large group does not all shout at once.
+		if category == "first_sighting":
+			var simultaneous_sightings := 0
+			for channel in bot_damage_channels.values():
+				if int(channel.get("priority", 0)) == 70 and (channel["player"] as AudioStreamPlayer).playing:
+					simultaneous_sightings += 1
+			if simultaneous_sightings >= 2:
+				_queue_mandatory_bark(player_index, category)
+				return false
+		var priority := {"first_sighting": 70, "kill_player": 80, "hit": 90, "death": 100}.get(category, 0) as int
+		if bot_damage_channels.has(player_index):
+			var current: Dictionary = bot_damage_channels[player_index]
+			if (current["player"] as AudioStreamPlayer).playing and int(current.get("priority", 0)) > priority:
+				if category in ["first_sighting", "kill_player"]:
+					_queue_mandatory_bark(player_index, category)
+				return false
+			if (current["player"] as AudioStreamPlayer).playing and int(current.get("priority", 0)) == 70 and category == "hit":
+				_queue_mandatory_bark(player_index, "first_sighting")
+				var interrupted_brain: Dictionary = bot_brains.get(player_index, {})
+				interrupted_brain["first_sighting_barked"] = false
+				bot_brains[player_index] = interrupted_brain
+		# A hurt actor stops their own sentence; other actors keep speaking.
+		if bot_bark_speaker == player_index and bot_bark_player.playing:
+			bot_bark_player.stop()
+			bot_bark_reverb_player.stop()
+			bot_bark_speaker = -1
+		if not _play_bot_reaction_stream(player_index, stream):
+			return false
+		bot_damage_channels[player_index]["priority"] = priority
+		if category in ["first_sighting", "kill_player"]:
+			for pending in bot_bark_pending_mandatory.duplicate():
+				if int(pending["speaker"]) == player_index and String(pending["category"]) == category:
+					bot_bark_pending_mandatory.erase(pending)
+		if not bool(selected.get("repeatable", false)):
+			bot_bark_used_lines[String(selected["id"])] = true
+		return true
 	bot_bark_speaker = player_index
 	if not _update_bot_bark_spatial():
 		bot_bark_speaker = -1
 		return false
-	bot_bark_player.stop()
-	bot_bark_reverb_player.stop()
 	bot_bark_player.stream = stream
 	bot_bark_reverb_player.stream = stream
 	bot_bark_player.play()
@@ -1496,7 +1622,12 @@ func _request_bot_bark(player_index: int, category: String) -> bool:
 		bot_bark_reverb_player.play()
 	bot_bark_last_global = now
 	bot_bark_last_by_bot[player_index] = now
-	bot_bark_last_line[player_index] = filename
+	if String(selected.get("id", "")) == "take that":
+		bot_bark_pending_reply = {"speaker": player_index, "until": now + stream.get_length() + 3.5}
+	elif category != "reply_attack":
+		bot_bark_pending_reply.clear()
+	if not bool(selected.get("repeatable", false)):
+		bot_bark_used_lines[String(selected["id"])] = true
 	return true
 
 
@@ -1525,6 +1656,29 @@ func _update_bot_bark_spatial() -> bool:
 	_update_world_audio_bus("NPC Voice", sound_info)
 	bot_bark_player.volume_db = -4.0 - minf(distance, 8.0) * 1.5 - _sound_occlusion_loss(sound_info)
 	bot_bark_reverb_player.volume_db = bot_bark_player.volume_db + lerpf(-25.0, -10.0, clampf(distance / 8.0, 0.0, 1.0))
+	return true
+
+
+# Injury and death use actor-local buses, so they can overlap conversation
+# without changing another speaker's position or interrupting that speaker.
+func _play_bot_reaction_stream(player_index: int, stream: AudioStream) -> bool:
+	var sound_info := _world_sound_spatial_info(player_index)
+	var distance := float(sound_info.get("distance", INF))
+	if not is_finite(distance):
+		return false
+	if not bot_damage_channels.has(player_index):
+		var bus_name := "NPC Damage %d" % player_index
+		_update_world_audio_bus(bus_name, sound_info)
+		var voice := AudioStreamPlayer.new()
+		_configure_world_sfx_player(voice)
+		voice.bus = bus_name
+		add_child(voice)
+		bot_damage_channels[player_index] = {"player": voice, "panner": AudioServer.get_bus_effect(AudioServer.get_bus_index(bus_name), 0)}
+	var voice: AudioStreamPlayer = bot_damage_channels[player_index]["player"]
+	_update_world_audio_bus(voice.bus, sound_info)
+	voice.stream = stream
+	voice.volume_db = -4.0 - minf(distance, 8.0) * 1.5 - _sound_occlusion_loss(sound_info)
+	voice.play()
 	return true
 
 
@@ -1853,8 +2007,8 @@ func _build_pause_broadside() -> void:
 	var actions := ["Move / strafe", "Look", "Fire", "Crouch", "Dive roll", "Reload", "Buy heart", "Buy dual pistols", "Resume", "Main menu"]
 	var keys := ["WASD / LEFT STICK", "MOUSE / RIGHT STICK", "CLICK / RT", "SHIFT / LT", "SPACE / A", "R / X", "Q / LB", "E / RB", "ESC / SELECT", "M"]
 	if mobile_controls != null:
-		actions = ["Move", "Look", "Fire", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Move buttons", "Resume", "Main menu"]
-		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "TAP / HOLD FIRE", "DUCK", "RELOAD", "HEART 5", "GUN 10", "LAYOUT", "RESUME", "MENU"]
+		actions = ["Move", "Look", "Fire", "Crouch", "Dive roll", "Reload", "Buy heart", "Buy dual pistols", "Resume", "Main menu"]
+		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "TAP FIRE", "DUCK / 2X HOLD", "MOVE + ROLL", "RELOAD", "HEART 5", "GUN 10", "RESUME", "MENU"]
 	elif not _public_build():
 		actions = ["Dive roll", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Close"]
 		keys = ["SPACE / A", "SHIFT / LT", "R / X", "LB", "RB", "SELECT / ESC"]
@@ -1867,12 +2021,21 @@ func _build_pause_broadside() -> void:
 	map_display_button.text = _map_display_button_text()
 	map_display_button.add_theme_font_override("font", body)
 	map_display_button.add_theme_font_size_override("font_size", 15)
-	map_display_button.position = Vector2(100, 452)
-	map_display_button.size = Vector2(360, 45)
+	map_display_button.position = Vector2(100, 440)
+	map_display_button.size = Vector2(360, 38)
 	map_display_button.focus_mode = Control.FOCUS_ALL
 	_style_pause_button(map_display_button, ink, paper)
 	map_display_button.pressed.connect(_toggle_map_display_mode)
 	panel.add_child(map_display_button)
+	aim_assist_button = Button.new()
+	aim_assist_button.name = "AimAssistButton"
+	aim_assist_button.text = _aim_assist_button_text()
+	aim_assist_button.position = Vector2(100, 480)
+	aim_assist_button.size = Vector2(360, 38)
+	aim_assist_button.add_theme_font_size_override("font_size", 15)
+	_style_pause_button(aim_assist_button, ink, paper)
+	aim_assist_button.pressed.connect(_toggle_aim_assist)
+	panel.add_child(aim_assist_button)
 	# Keep this button directly under the overlay for existing callers.
 	var feedback_button := FeedbackAccess.add_button(options_overlay, headline, ink)
 	feedback_button.text = "GIVE FEEDBACK"
@@ -1922,6 +2085,25 @@ func _style_pause_button(button: Button, ink: Color, paper: Color) -> void:
 		button.add_theme_color_override(state, ink)
 	for state in ["font_hover_color", "font_pressed_color"]:
 		button.add_theme_color_override(state, paper)
+
+
+func _load_aim_assist() -> void:
+	var config := ConfigFile.new()
+	if config.load(AIM_ASSIST_CONFIG) == OK:
+		aim_assist_enabled = bool(config.get_value("aim", "enabled", true))
+
+
+func _aim_assist_button_text() -> String:
+	return "AIM ASSIST: ON" if aim_assist_enabled else "AIM ASSIST: OFF"
+
+
+func _toggle_aim_assist() -> void:
+	aim_assist_enabled = not aim_assist_enabled
+	aim_assist_button.text = _aim_assist_button_text()
+	var config := ConfigFile.new()
+	config.set_value("aim", "enabled", aim_assist_enabled)
+	if config.save(AIM_ASSIST_CONFIG) != OK:
+		push_warning("Could not save aim assist preference")
 
 
 func _load_map_display_mode() -> void:
@@ -2870,6 +3052,38 @@ func _separate_starting_bots() -> void:
 		player_states[player_index] = replacement
 
 
+# Assign at round start, after spawn corrections, so an enemy never changes voice
+# during the round. Prefer its archetype, but use an unused actor when the
+# archetype pools cannot otherwise give every outlaw a distinct voice.
+func _assign_round_bot_voices() -> void:
+	var counts := {"zach": 0, "devin": 0, "rowan": 0, "adam": 0}
+	for index in range(player_states.size()):
+		if index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index):
+			continue
+		var state: Dictionary = player_states[index]
+		var enemy_type := String(state.get("enemy_type", "player"))
+		var preferred: Array = ["zach", "devin"] if enemy_type == "weak" else ["devin", "rowan"] if enemy_type == "clever" else ["rowan", "adam"] if enemy_type == "strong" else BOT_BARK_VOICES.duplicate()
+		var choices: Array = []
+		for voice in preferred:
+			if int(counts[voice]) == 0:
+				choices.append(voice)
+		if choices.is_empty():
+			for voice in BOT_BARK_VOICES:
+				if int(counts[voice]) == 0:
+					choices.append(voice)
+		if choices.is_empty():
+			var least := 999999
+			for voice in preferred:
+				least = mini(least, int(counts[voice]))
+			for voice in preferred:
+				if int(counts[voice]) == least:
+					choices.append(voice)
+		var chosen: String = choices.pick_random()
+		counts[chosen] += 1
+		state["voice_actor"] = chosen
+		player_states[index] = state
+
+
 # _is_human_controlled_slot: Uses the immutable match-start roster, not a live
 # autoload that may be recreated as Godot replaces the title scene.
 func _is_human_controlled_slot(player_index: int) -> bool:
@@ -2891,6 +3105,9 @@ func _update_bot_input(player_index: int, delta: float) -> void:
 		bot_brains.erase(player_index)
 		return
 	var state: Dictionary = player_states[player_index]
+	if post_kill_active:
+		_update_post_kill_bot_input(player_index, state, delta)
+		return
 	var origin := _player_state_world_position(state)
 	var target_index := -1
 	var target_distance := INF
@@ -2956,6 +3173,58 @@ func _update_bot_input(player_index: int, delta: float) -> void:
 	virtual_input["fire"] = bool(virtual_input["fire"]) and bool(brain.get("allow_fire", true)) and not _bot_teammate_in_fire_lane(player_index, origin, target_vector)
 	_trace_bot_decision(player_index, origin, target_vector, brain, virtual_input)
 	bot_inputs[player_index] = virtual_input
+
+
+# Survivors walk toward the fallen player without shooting. The usual maze
+# routes and collision solver still determine how they get there.
+func _update_post_kill_bot_input(player_index: int, state: Dictionary, frame_delta: float) -> void:
+	var origin := _player_state_world_position(state)
+	var body := _player_state_world_position(player_states[0])
+	var delta := body - origin
+	var desired := Vector2.ZERO
+	var brain: Dictionary = bot_brains.get(player_index, {})
+	if not bool(state.get("is_dying", false)) and delta.length() > 0.55:
+		var current := Vector2i(origin.floor())
+		var goal := Vector2i(body.floor())
+		var route := _bot_cell_route(current, goal)
+		var waypoint := Vector2.INF
+		if current == goal or (_nearest_projectile_topology_clear(origin, delta) and delta.length() < 1.8):
+			waypoint = body
+		elif route.size() >= 2:
+			var route_index := clampi(_bot_route_start_index(origin, route), 0, route.size() - 1)
+			waypoint = _bot_route_waypoint(route, route_index)
+		if waypoint.is_finite():
+			var detour: Vector2 = brain.get("gather_detour", Vector2.INF)
+			if detour.is_finite() and origin.distance_to(detour) < 0.12:
+				detour = Vector2.INF
+			if not detour.is_finite():
+				detour = _bot_prop_detour_waypoint(origin, waypoint)
+			brain["gather_detour"] = detour
+			desired = ((detour if detour.is_finite() else waypoint) - origin).normalized()
+		var last_position: Vector2 = brain.get("gather_last_position", origin)
+		var stuck := float(brain.get("gather_stuck_time", 0.0)) + frame_delta if origin.distance_to(last_position) < 0.003 else 0.0
+		brain["gather_last_position"] = origin
+		brain["gather_stuck_time"] = stuck
+		var recovery: Vector2 = brain.get("gather_recovery", Vector2.INF)
+		if recovery.is_finite() and origin.distance_to(recovery) < 0.12:
+			recovery = Vector2.INF
+		if stuck > 0.6:
+			recovery = _bot_recovery_waypoint(player_index, origin, desired, goal, brain)
+			brain["gather_stuck_time"] = 0.0
+		if recovery.is_finite():
+			desired = (recovery - origin).normalized()
+		brain["gather_recovery"] = recovery
+	brain["move_direction"] = desired
+	brain["has_line_of_sight"] = true
+	brain["target_index"] = 0
+	brain["allow_fire"] = false
+	brain["crouch"] = false
+	brain["state"] = "GATHER_AT_BODY"
+	bot_brains[player_index] = brain
+	var inputs := {"turn_left": false, "turn_right": false, "move_left": false, "move_right": false, "move_forward": false, "move_backward": false, "fire": false, "crouch": false}
+	var forward := _view_forward_vector_for_state(state).normalized()
+	_bot_apply_continuous_move_input(inputs, desired, forward, Vector2(-forward.y, forward.x))
+	bot_inputs[player_index] = inputs
 
 
 # _toggle_bot_decision_trace: Open a fresh JSONL capture so every test run is
@@ -3061,6 +3330,25 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	# A single corner-grazing sight frame must not restart LOOK_LAST_SEEN over
 	# and over. Fire still requires the current authoritative clear-shot test.
 	var raw_sight := clear_shot
+	var in_view := raw_sight and (target_distance <= 0.6 or _view_forward_vector_for_state(state).normalized().dot(target_vector.normalized()) >= 0.15)
+	var sees_human := in_view and _is_human_controlled_slot(target_index)
+	var had_seen_human := bool(brain.get("bark_has_seen_human", false))
+	var unseen_time := float(brain.get("bark_human_unseen_time", 0.0))
+	if sees_human:
+		bot_combat_started = true
+		# A brief occlusion should not generate a fresh callout every frame.
+		if had_seen_human and unseen_time >= 1.0:
+			_request_bot_bark(player_index, "player_spotted")
+		brain["bark_has_seen_human"] = true
+		brain["bark_human_unseen_time"] = 0.0
+		if not bool(brain.get("first_sighting_barked", false)) and _request_bot_bark(player_index, "first_sighting"):
+			brain["first_sighting_barked"] = true
+	elif had_seen_human:
+		brain["bark_human_unseen_time"] = unseen_time + delta
+	var sees_roll := raw_sight and _is_human_controlled_slot(target_index) and bool(player_states[target_index].get("dive_active", false)) and (target_distance <= 0.6 or _view_forward_vector_for_state(state).normalized().dot(target_vector.normalized()) >= 0.15)
+	if sees_roll and not bool(brain.get("bark_visible_roll", false)):
+		_request_bot_bark(player_index, "player_roll")
+	brain["bark_visible_roll"] = sees_roll
 	var was_raw_sight := bool(brain.get("flank_previous_sight", false))
 	var caution_time := maxf(0.0, float(brain.get("caution_time", 0.0)) - delta)
 	brain["caution_time"] = caution_time
@@ -3091,15 +3379,29 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	else:
 		sight_candidate = 0.0
 	brain["sight_candidate_time"] = sight_candidate
+	var target_in_cover := clear_shot and bool(player_states[target_index].get("character_is_crouching", false)) and _bot_target_has_nearby_cover(origin, origin + target_vector)
+	if target_in_cover and not bool(brain.get("bark_player_cover", false)):
+		_request_bot_bark(player_index, "player_cover")
+	brain["bark_player_cover"] = target_in_cover
 	if clear_shot:
 		if not had_contact:
 			_request_bot_bark(player_index, "combat")
 		combat_memory = BOT_COMBAT_MEMORY_SECONDS
+		brain["lost_contact_barked"] = false
 		lost_sight_time = 0.0
 		brain["last_seen_position"] = origin + target_vector
 		brain["last_seen_forward"] = _view_forward_vector_for_state(player_states[target_index]).normalized()
 		brain["last_seen_target"] = target_index
+	if not raw_sight and brain.has("last_seen_position") and lost_sight_time >= 5.0 and not bool(brain.get("lost_contact_barked", false)):
+		if _request_bot_bark(player_index, "lost_contact"):
+			brain["lost_contact_barked"] = true
 	brain["lost_sight_time"] = lost_sight_time
+	var bark_clock := float(Time.get_ticks_msec()) * 0.001
+	if clear_shot and bot_combat_started and bark_clock >= float(brain.get("next_combat_taunt", INF)):
+		_request_bot_bark(player_index, "taunt")
+		brain["next_combat_taunt"] = bark_clock + randf_range(15.0, 25.0)
+	elif clear_shot and not brain.has("next_combat_taunt"):
+		brain["next_combat_taunt"] = bark_clock + randf_range(12.0, 20.0)
 	var current_cell := Vector2i(floori(origin.x), floori(origin.y))
 	var visited: Dictionary = brain.get("visited_cells", {})
 	visited[current_cell] = float(Time.get_ticks_msec()) * 0.001
@@ -3135,6 +3437,7 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 		brain["investigate_cell"] = Vector2i(-1, -1)
 		brain["investigation_kind"] = ""
 		brain.erase("footstep_pending")
+		brain.erase("prop_sound_pending")
 		brain["last_seen_cell"] = Vector2i(floori(origin.x + target_vector.x), floori(origin.y + target_vector.y))
 		# A visible opponent is the long-term destination at every combat range.
 		# Switching to adjacent strafing cells near a distance threshold caused a
@@ -3146,14 +3449,26 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 		# A sound is a snapshot, not live knowledge of the shooter's position.
 		brain["heard_shot_serial"] = bot_heard_shot_serial
 		brain.erase("footstep_pending")
+		brain.erase("prop_sound_pending")
 		brain["investigation_kind"] = "shot"
 		if previous_state != "INVESTIGATE":
-			_request_bot_bark(player_index, "hearing")
+			_request_bot_bark(player_index, "shot")
+			_request_bot_bark(player_index, "investigate")
 		_bot_begin_cautious_approach(brain, bot_last_heard_shot_position, "GUNSHOT")
 		var sound_cell := Vector2i(floori(bot_last_heard_shot_position.x), floori(bot_last_heard_shot_position.y))
 		brain["investigate_cell"] = sound_cell if _is_open_cell(sound_cell) else current_cell
 		state_name = "INVESTIGATE"
 		goal_cell = brain["investigate_cell"]
+	elif brain.has("prop_sound_pending") and combat_memory <= 0.0:
+		var prop_position: Vector2 = brain["prop_sound_pending"]
+		brain.erase("prop_sound_pending")
+		brain["investigation_kind"] = "prop"
+		_bot_begin_cautious_approach(brain, prop_position, "PROP BREAK")
+		var prop_cell := Vector2i(floori(prop_position.x), floori(prop_position.y))
+		brain["investigate_cell"] = prop_cell if _is_open_cell(prop_cell) else current_cell
+		state_name = "INVESTIGATE"
+		goal_cell = brain["investigate_cell"]
+		_request_bot_bark(player_index, "shot")
 	elif brain.has("footstep_pending") and combat_memory <= 0.0:
 		var heard_position: Vector2 = brain["footstep_pending"]
 		brain.erase("footstep_pending")
@@ -3165,6 +3480,7 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 		goal_cell = brain["investigate_cell"]
 		if previous_state != "INVESTIGATE":
 			_request_bot_bark(player_index, "hearing")
+			_request_bot_bark(player_index, "investigate")
 	elif combat_memory > 0.0 and lost_sight_time < 0.35 and brain.has("last_seen_position"):
 		# A momentary corner occlusion should not reverse the bot's route or aim.
 		state_name = "LOOK_LAST_SEEN"
@@ -3321,6 +3637,7 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 			brain["flank_detour"] = Vector2.INF
 			brain["flank_detour_index"] = -1
 			flank_time = 12.0
+			_request_bot_bark(player_index, "flank")
 			brain["flank_contact_breaks"] = 0
 			brain["flank_pressure_time"] = 0.0
 		else:
@@ -3370,6 +3687,7 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 	if reaction_time > 0.0 and not reaction_kind.is_empty():
 		if bool(brain.get("reaction_new", false)):
 			brain["reaction_new"] = false
+			brain["hiding_barked"] = false
 			if reaction_kind == "retreat":
 				var threat: Vector2 = brain.get("reaction_threat", origin - Vector2.UP)
 				var reaction_cover: Vector2 = brain.get("candidate_cover", Vector2.INF) if clear_shot else Vector2.INF
@@ -3456,9 +3774,19 @@ func _update_bot_brain(player_index: int, state: Dictionary, origin: Vector2, ta
 		if cautious:
 			brain["crouch"] = true
 	brain["cautious_approach"] = cautious
+	if state_name != previous_state:
+		if state_name == "ADVANCE_AFTER_ALLY_FALL":
+			_request_bot_bark(player_index, "charge")
+		if state_name == "FALL_BACK":
+			_request_bot_bark(player_index, "flee")
+		elif state_name == "RETREAT_TO_COVER":
+			_request_bot_bark(player_index, "cover")
+	if bool(brain.get("reaction_has_cover", false)) and state_name == "RETREAT_TO_COVER" and desired.length_squared() < 0.000001 and not bool(brain.get("hiding_barked", false)):
+		if _request_bot_bark(player_index, "hiding"):
+			brain["hiding_barked"] = true
 	if stuck_time > 0.35 and not _bot_low_lane_clear(origin, origin + target_vector):
 		brain["crouch"] = true
-	if state_name == "SEARCH" and previous_state in ["INVESTIGATE", "LOOK_LAST_SEEN"]:
+	if state_name == "SEARCH" and previous_state in ["INVESTIGATE", "LOOK_LAST_SEEN"] and lost_sight_time >= 5.0:
 		_request_bot_bark(player_index, "search")
 	if desired.length_squared() <= 0.000001 and state_name != "FIRING_POINT":
 		debug_destination = Vector2.INF
@@ -3562,6 +3890,15 @@ func _bot_firing_points(player_index: int, origin: Vector2, target: Vector2, bra
 func _bot_low_lane_clear(origin: Vector2, target: Vector2) -> bool:
 	var path := target - origin
 	return path.length() > 0.001 and _nearest_projectile_barrel_hit(origin, path.normalized(), path.length(), 0.5).is_empty()
+
+
+# Only call out the player's cover when the blocking prop is near the player.
+# An obstacle next to the observing bot can be the bot's own cover instead.
+func _bot_target_has_nearby_cover(observer: Vector2, target: Vector2) -> bool:
+	var toward_observer := observer - target
+	if toward_observer.length() < 0.001:
+		return false
+	return not _nearest_projectile_barrel_hit(target, toward_observer.normalized(), minf(toward_observer.length(), 0.75), 0.5).is_empty()
 
 
 func _bot_cover_point(origin: Vector2, target: Vector2) -> Vector2:
@@ -3687,6 +4024,9 @@ func _update_bot_tactics(player_index: int, origin: Vector2, target_index: int, 
 	if mode.is_empty():
 		brain["debug_tactical_reason"] = ""
 	var target_reloading := clear_shot and not target_crouched and low_clear and not String(player_states[target_index].get("reload_phase", "")).is_empty()
+	if target_reloading and not bool(brain.get("bark_target_reloading", false)):
+		_request_bot_bark(player_index, "player_reload")
+	brain["bark_target_reloading"] = target_reloading
 	if target_reloading:
 		mode = ""
 		brain["debug_tactical_reason"] = "TARGET RELOADING"
@@ -4388,8 +4728,42 @@ func _create_character_sprite(sprite_name: String, team_index: int) -> AnimatedS
 
 
 # _make_player_state: Builds one serializable local player state dictionary.
+# Stable roster positions make each new round add exactly one enemy.
+func _enemy_type_for_slot(player_index: int) -> String:
+	var types := ["weak", "weak", "clever", "clever", "strong", "weak", "clever", "weak", "weak", "strong"]
+	if player_index <= 0:
+		return "player"
+	if player_index <= types.size():
+		return types[player_index - 1]
+	return "clever" if player_index % 3 == 0 else "weak"
+
+
+func _enemy_heart_cap(state: Dictionary) -> int:
+	match String(state.get("enemy_type", "player")):
+		"weak": return 3
+		"clever": return 4
+	return PLAYER_MAX_HEALTH
+
+
+func _can_use_dual_pistols(state: Dictionary) -> bool:
+	return String(state.get("enemy_type", "player")) != "weak"
+
+
+func _living_enemy_count() -> int:
+	var count := 0
+	for index in range(1, player_states.size()):
+		if index < player_joined.size() and player_joined[index] and _is_bot_controlled_slot(index) and not bool(player_states[index].get("is_dying", false)) and int(player_states[index].get("health", 0)) > 0:
+			count += 1
+	return count
+
+
 func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: int) -> Dictionary: # Declare this function.
-	return {                                                                                    # Return a complete player-state record.
+	var enemy_type := _enemy_type_for_slot(player_index) if clear_the_map_mode and single_player_combat_view and player_index > 0 else "player"
+	var starting_health := 1 if enemy_type == "weak" else 2 if enemy_type == "clever" else 3
+	var actors := ["zach", "devin"] if enemy_type == "weak" else ["devin", "rowan"] if enemy_type == "clever" else ["rowan", "adam"] if enemy_type == "strong" else []
+	return {
+		"enemy_type": enemy_type,
+		"voice_actor": actors.pick_random() if not actors.is_empty() else "",                                                                                    # Return a complete player-state record.
 		"player_index": player_index,                                                             # Store this player's local index.
 		"active_sequence": [],                                                                     # Store any currently playing captured transition frames.
 		"active_sequence_name": "idle",                                                            # Store the current transition or idle label.
@@ -4428,7 +4802,7 @@ func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: i
 		"last_visible_wall_ids": [],                                                               # Store this player's currently rendered wall ids.
 		"was_left_turn_pressed": false,                                                            # Store this player's left-turn one-shot latch.
 		"was_right_turn_pressed": false,                                                           # Store this player's right-turn one-shot latch.
-		"health": PLAYER_STARTING_HEALTH,                                                         # Begin each round with three recoverable hearts.
+		"health": starting_health,
 		"coins": 0,                                                                                # Track this player's collected objective coins across deaths and respawns.
 		"kills": 0,
 		"deaths": 0,
@@ -4695,6 +5069,17 @@ func _spawn_semantic_dining_set(room_cell: Vector2i) -> void:
 
 # _reset_combat_round: Re-arms the shared clock whenever a new map/coin layout begins.
 func _reset_combat_round() -> void:
+	bot_bark_used_lines.clear()
+	bot_bark_last_by_bot.clear()
+	bot_bark_pending_reloads.clear()
+	bot_bark_pending_reply.clear()
+	bot_bark_pending_ally_falls.clear()
+	bot_bark_pending_tactical.clear()
+	bot_bark_pending_mandatory.clear()
+	bot_combat_started = false
+	post_kill_active = false
+	post_kill_taunt_timer = 0.0
+	bot_bark_last_global = -INF
 	clear_map_killer_index = -1
 	combat_round_time_remaining = maxf(combat_round_duration_seconds, 0.0)                  # Treat zero as an intentional infinite-time test round.
 	combat_round_complete = false                                                            # Allow score collection again on the new round.
@@ -4781,6 +5166,19 @@ func _finish_clear_map(victory: bool) -> void:
 	clear_map_finish_pending = true
 	clear_map_finish_victory = victory
 	clear_map_finish_timer = -(float(DEATH_FALL_SECONDS) + 2.0 / 60.0) if victory else 0.0
+	if not victory:
+		post_kill_active = true
+		post_kill_taunt_timer = 1.0
+		bot_bark_pending_tactical.clear()
+		bot_bark_pending_ally_falls.clear()
+		bot_bark_pending_reloads.clear()
+		bot_bark_pending_reply.clear()
+		if bot_bark_player != null:
+			bot_bark_player.stop()
+			bot_bark_reverb_player.stop()
+		if clear_map_result_fade != null:
+			clear_map_result_fade.visible = false
+		return
 	if clear_map_result_fade != null:
 		clear_map_result_fade.color = Color(0.0, 0.0, 0.0, 0.0)
 		clear_map_result_fade.visible = true
@@ -4788,6 +5186,9 @@ func _finish_clear_map(victory: bool) -> void:
 
 func _advance_clear_map_finish(delta: float) -> void:
 	if not clear_map_finish_pending:
+		return
+	if post_kill_active:
+		_advance_post_kill_scene(delta)
 		return
 	clear_map_finish_timer = minf(clear_map_finish_timer + delta, CLEAR_MAP_RESULT_FADE_SECONDS)
 	var fade_amount := maxf(clear_map_finish_timer, 0.0) / CLEAR_MAP_RESULT_FADE_SECONDS
@@ -4812,6 +5213,41 @@ func _advance_clear_map_finish(delta: float) -> void:
 	_begin_wanted_tally(true)
 	if music_enabled and music_player != null:
 		music_player.call("set_music_mode", "win" if victory else "lose", true)
+
+
+func _advance_post_kill_scene(delta: float) -> void:
+	post_kill_taunt_timer = maxf(post_kill_taunt_timer - delta, 0.0)
+	if post_kill_taunt_timer > 0.0 or (bot_bark_player != null and bot_bark_player.playing):
+		return
+	for channel in bot_damage_channels.values():
+		if (channel["player"] as AudioStreamPlayer).playing:
+			return
+	var body := _player_state_world_position(player_states[0])
+	var nearby: Array[int] = []
+	for index in range(1, player_states.size()):
+		if index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or bool(player_states[index].get("is_dying", false)):
+			continue
+		var direction := body - _player_state_world_position(player_states[index])
+		if direction.length() <= 1.5 and _nearest_projectile_topology_clear(_player_state_world_position(player_states[index]), direction):
+			nearby.append(index)
+	nearby.shuffle()
+	for index in nearby:
+		if _request_bot_bark(index, "victory"):
+			post_kill_taunt_timer = 2.0
+			return
+	post_kill_taunt_timer = 1.0
+
+
+func _skip_post_kill_scene() -> void:
+	post_kill_active = false
+	clear_map_finish_pending = false
+	combat_round_result = "YOU LOSE"
+	clear_map_round = 1
+	clear_map_wins = 0
+	clear_map_reward = {}
+	clear_map_carried_inventory.clear()
+	_regenerate_runtime_map(true)
+	_start_clear_map_round()
 
 
 func _all_greenshirts_defeated() -> bool:
@@ -4952,14 +5388,14 @@ func _collect_combat_pickups(delta: float) -> void:
 				if player_index >= player_joined.size() or not player_joined[player_index]:
 					continue
 				var state := player_states[player_index]
-				if bool(state.get("is_dying", false)) or int(state.get("health", PLAYER_MAX_HEALTH)) >= PLAYER_MAX_HEALTH:
+				if bool(state.get("is_dying", false)) or int(state.get("health", PLAYER_MAX_HEALTH)) >= _enemy_heart_cap(state):
 					continue
 				if _player_can_collect_pickup(state, heart_position):
 					collected_by = player_index
 					break
 		if collected_by >= 0:
 			var collector := player_states[collected_by]
-			collector["health"] = mini(PLAYER_MAX_HEALTH, int(collector.get("health", 0)) + 1)
+			collector["health"] = mini(_enemy_heart_cap(collector), int(collector.get("health", 0)) + 1)
 			player_states[collected_by] = collector
 			_clear_camera_blood_for_heart(collected_by)                                             # Heal the injured player's own camera by exactly the same blob count added for one lost health hatch.
 			_play_pickup_sound(heart_pickup_player, collected_by)                                    # Confirm the health pickup once for the whole shared match.
@@ -4976,7 +5412,7 @@ func _collect_combat_pickups(delta: float) -> void:
 			if player_index >= player_joined.size() or not player_joined[player_index]:
 				continue
 			var state := player_states[player_index]
-			if not bool(state.get("is_dying", false)) and _player_can_collect_pickup(state, Vector2(gun["position"])):
+			if not bool(state.get("is_dying", false)) and _can_use_dual_pistols(state) and _player_can_collect_pickup(state, Vector2(gun["position"])):
 				state["machine_gun_ammo"] = int(gun.get("ammo", DUAL_WIELD_AMMO))
 				player_states[player_index] = state
 				_play_pickup_sound(machine_gun_pickup_player, player_index)
@@ -4989,7 +5425,7 @@ func _collect_combat_pickups(delta: float) -> void:
 		var pickup_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)
 		for player_index in range(player_states.size()):
 			var state := player_states[player_index]
-			if bool(state.get("is_dying", false)) or (player_index == 1 and not player_two_joined):
+			if player_index >= player_joined.size() or not player_joined[player_index] or bool(state.get("is_dying", false)) or not _can_use_dual_pistols(state):
 				continue
 			if _player_can_collect_pickup(state, pickup_position):
 				state["machine_gun_ammo"] = int(machine_gun_pickup.get("ammo", DUAL_WIELD_AMMO)) # Preserve a dropped dual-wield pickup's remaining rounds rather than refilling it.
@@ -5307,7 +5743,7 @@ func _setup_wanted_tally_overlay() -> void:
 		feedback_button.pressed.connect(_open_feedback)
 	var instruction := Label.new()
 	instruction.name = "RoundInstruction"
-	instruction.text = "KILL ALL THE GREENSHIRTS!"
+	instruction.text = "KILL ALL THE OUTLAWS!"
 	instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instruction.add_theme_font_override("font", ThemeDB.fallback_font)
 	instruction.add_theme_font_size_override("font_size", 20)
@@ -5386,7 +5822,7 @@ func _begin_wanted_tally(terminal: bool) -> void:
 	wanted_tally_overlay.get_node("FeedbackHint").text = "ENTER" if mobile_controls == null else ""
 	wanted_tally_overlay.get_node("FeedbackHint").visible = _public_build()
 	var instruction := wanted_tally_overlay.get_node("RoundInstruction") as Label
-	instruction.text = "KILL ALL THE GREENSHIRTS!" if not terminal else ""
+	instruction.text = "KILL ALL THE OUTLAWS!" if not terminal else ""
 	instruction.visible = intro_visible
 	var feedback_button := wanted_tally_overlay.get_node_or_null("FeedbackButton") as Button
 	if feedback_button != null:
@@ -5411,10 +5847,24 @@ func _begin_wanted_tally(terminal: bool) -> void:
 	# canvas is 960x720, so 6 canvas pixels correspond to one artwork pixel.
 	var compact := green_slots.size() > 8
 	var columns := 8 if compact else 4
-	var card_scale := 1.0 if compact else 2.0
-	var column_pitch := 108.0 if compact else 90.0 * card_scale
-	var row_pitch := 174.0 if compact else 145.0 * card_scale
+	# Two rows of the large cards run into the instruction and bottom buttons.
+	# Use four screen pixels per authored pixel for rounds 5-8, and reserve the
+	# full reward-label height as well as a gap between rows.
+	var card_scale := 1.0 if compact else 4.0 / 3.0 if green_slots.size() > 4 else 2.0
 	var row_count := ceili(float(green_slots.size()) / float(columns))
+	var viewport_size := wanted_tally_overlay.size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		viewport_size = get_viewport_rect().size
+	var area_top := 128.0
+	var area_bottom := maxf(area_top, viewport_size.y - 124.0)
+	var board_units_high := float(maxi(row_count - 1, 0)) * 174.0 + 164.0
+	var board_units_wide := float(maxi(mini(columns, green_slots.size()) - 1, 0)) * (108.0 if compact else 90.0) + 87.0
+	var fit_scale := minf((area_bottom - area_top) / board_units_high, maxf(viewport_size.x - 40.0, 1.0) / board_units_wide)
+	if fit_scale < card_scale:
+		card_scale = maxf(floorf(fit_scale * 3.0) / 3.0, 1.0 / 3.0)
+	var column_pitch := (108.0 if compact else 90.0) * card_scale
+	var row_pitch := 174.0 * card_scale
+	var board_top := (area_top + area_bottom) * 0.5 - board_units_high * card_scale * 0.5
 	for row_index in range(green_slots.size()):
 		var player_index := green_slots[row_index]
 		var card := Control.new()
@@ -5424,7 +5874,7 @@ func _begin_wanted_tally(terminal: bool) -> void:
 		var column := row_index % columns
 		var row := row_index / columns
 		var items_in_row := mini(columns, green_slots.size() - row * columns)
-		card.position = Vector2((float(column) - float(items_in_row - 1) * 0.5) * column_pitch - 43.5 * card_scale, (float(row) - float(row_count - 1) * 0.5) * row_pitch - 72.5 * card_scale)
+		card.position = Vector2((float(column) - float(items_in_row - 1) * 0.5) * column_pitch - 43.5 * card_scale, board_top - viewport_size.y * 0.5 + float(row) * row_pitch).round()
 		# The pre-round briefing introduces wanted posters one at a time.  Result
 		# screens instead open on the complete board so the player can immediately
 		# see the whole roster before the kill tally starts.
@@ -5669,7 +6119,7 @@ func _update_combat_hud() -> void:
 			var team_label := team_score_labels[player_index]
 			team_label.position = viewport_node.position + Vector2(3.0, 12.0) * viewport_node.scale
 			team_label.scale = viewport_node.scale
-			team_label.text = "[color=#f2df47]KILL ALL THE GREENSHIRTS[/color]" if clear_the_map_mode and player_index == 0 else "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
+			team_label.text = "[color=#f2df47]KILL ALL THE OUTLAWS[/color]" if clear_the_map_mode and player_index == 0 else "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
 			team_label.visible = not (clear_the_map_mode and single_player_combat_view)
 			var board := scoreboard_labels[player_index]
 			var board_visible := not clear_the_map_mode and scoreboard_player_index == player_index
@@ -5781,9 +6231,12 @@ func _update_combat_hud() -> void:
 			var result_label := combat_round_result_labels[player_index]
 			if is_instance_valid(result_label):
 				result_label.position = Vector2((window_size.x - result_label.size.x) * 0.5, (window_size.y - result_label.size.y) * 0.5) # Center the end-of-round message in the play screen.
-				result_label.visible = clear_the_map_mode and clear_map_banner_timer > 0.0 and not combat_round_complete
-				if result_label.visible:
-					result_label.text = "KILL ALL THE\nGREENSHIRTS!"
+				result_label.visible = post_kill_active or (clear_the_map_mode and clear_map_banner_timer > 0.0 and not combat_round_complete)
+				if post_kill_active:
+					result_label.position.y = maxf(window_size.y - 90.0, 0.0)
+					result_label.text = "TAP CONTINUE" if mobile_controls != null else "START / X: PLAY AGAIN"
+				elif result_label.visible:
+					result_label.text = "KILL ALL THE\nOUTLAWS!"
 	if end_round_overlay != null and end_round_scoreboard != null:
 		end_round_overlay.visible = not clear_the_map_mode and not combat_round_result.is_empty()
 		if end_round_overlay.visible:
@@ -5899,6 +6352,10 @@ func _start_pistol_reload(state: Dictionary) -> void:
 	state["reload_frame"] = 1 if rounds == 0 else 3 * rounds - 1
 	state["reload_phase"] = "open"
 	state["reload_timer"] = 0.20
+	var reload_index := int(state.get("player_index", -1))
+	if _is_bot_controlled_slot(reload_index):
+		if not _request_bot_bark(reload_index, "reload"):
+			bot_bark_pending_reloads[reload_index] = true
 
 
 func _advance_pistol_reload(state: Dictionary, delta: float) -> void:
@@ -5991,12 +6448,15 @@ func _process_combat(delta: float) -> void:
 			_start_pistol_reload(state)
 		state["reload_was_pressed"] = reload_pressed
 		var fire_pressed := _is_player_fire_pressed_for(player_index, false)
-		var fire_just_pressed := fire_pressed and not bool(state.get("fire_was_pressed", false))
+		var mobile_fire: bool = player_index == 0 and mobile_controls != null and bool(mobile_controls.fire_pending)
+		var fire_just_pressed := mobile_fire or (fire_pressed and not bool(state.get("fire_was_pressed", false)))
+		if mobile_fire:
+			mobile_controls.fire_pending = false
 		state["fire_was_pressed"] = fire_pressed
 		# A fresh shot request cancels an active reload only if a round is loaded.
 		# Holding fire through an empty-cylinder auto-reload does not repeatedly
 		# interrupt it as soon as the first new round is inserted.
-		if fire_just_pressed and not bool(state.get("dive_active", false)) and int(state.get("pistol_ammo", 0)) > 0 and not String(state.get("reload_phase", "")).is_empty():
+		if fire_just_pressed and (not bool(state.get("dive_active", false)) or float(state.get("dive_elapsed", 0.0)) >= 13.0 / 12.0 - 0.125) and int(state.get("pistol_ammo", 0)) > 0 and not String(state.get("reload_phase", "")).is_empty():
 			state["reload_phase"] = ""
 		_advance_pistol_reload(state, delta)
 		state["fire_cooldown"] = maxf(float(state.get("fire_cooldown", 0.0)) - delta, 0.0)       # Let the deliberate pistol cadence recover.
@@ -6004,9 +6464,7 @@ func _process_combat(delta: float) -> void:
 		player_states[player_index] = state                                                       # Save timing before potentially firing.
 		if player_index == 1 and not player_two_joined and not _is_bot_controlled_slot(player_index): # Do not let an unjoined human P2 ghost fire; greenshirts remain active.
 			continue                                                                                   # Wait until a person joins P2.
-		if not bool(state.get("dive_active", false)) and String(state.get("reload_phase", "")).is_empty() and float(state["fire_cooldown"]) <= 0.0 and fire_pressed:  # Spawn one shot only when the pistol is ready.
-			if player_index == 0 and mobile_controls != null:
-				mobile_controls.take_fire()
+		if (not bool(state.get("dive_active", false)) or float(state.get("dive_elapsed", 0.0)) >= 13.0 / 12.0 - 0.125) and String(state.get("reload_phase", "")).is_empty() and ((float(state["fire_cooldown"]) <= 0.0 and fire_pressed) if _is_bot_controlled_slot(player_index) else fire_just_pressed):  # Spawn one shot only when the pistol is ready.
 			_spawn_pistol_shot(player_index)                                                         # Create a shot using the player's actual current world heading.
 	_advance_barrel_loot(delta)                                                               # Move thrown loot in shared world space before testing pickup contact.
 	_collect_combat_pickups(delta)                                                              # Pick up coins and the contested gun after all players have finished moving.
@@ -6245,6 +6703,8 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var smoke_origin := body_origin + direction * minf(muzzle_distance, .2)                    # Anchor smoke halfway down the gameplay muzzle segment so it reads at the visible raised barrel rather than in front of the projectile.
 	if _is_bot_controlled_slot(player_index):
 		direction = direction.rotated(deg_to_rad(randf_range(-BOT_SHOT_SPREAD_DEGREES, BOT_SHOT_SPREAD_DEGREES)))
+	elif aim_assist_enabled:
+		direction = _assisted_shot_direction(player_index, origin, direction, crouched)
 	var maximum_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME                               # Determine a stable visual end point for the complete projectile lifetime.
 	if _music_shot_threatens_enemy(player_index, origin, direction, maximum_distance, projectile_height):
 		music_combat_remaining = 8.0
@@ -6264,6 +6724,8 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	shot["crouched"] = crouched
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
+	if _is_bot_controlled_slot(player_index) and bool(bot_brains.get(player_index, {}).get("has_line_of_sight", false)):
+		_request_bot_bark(player_index, "attacking")
 	if _is_human_controlled_slot(player_index):
 		bot_heard_shot_serial += 1
 		bot_last_heard_shot_position = body_origin
@@ -6483,9 +6945,22 @@ func _damage_barrel(barrel_id: int, direction: Vector2, impact_position: Vector2
 		for hole_index in range(active_wall_bullet_holes.size() - 1, -1, -1):
 			if int(active_wall_bullet_holes[hole_index].get("barrel_id", -1)) == barrel_id:
 				active_wall_bullet_holes.remove_at(hole_index)
+		_notify_bots_of_prop_break(position)
 		_spawn_barrel_break(position, direction, impact_position, impact_height)
 		_drop_barrel_loot(position)
 		return
+
+
+# A breaking prop creates a local sound, not knowledge of who caused it.
+func _notify_bots_of_prop_break(position: Vector2) -> void:
+	for index in range(player_states.size()):
+		if index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or bool(player_states[index].get("is_dying", false)):
+			continue
+		if _player_state_world_position(player_states[index]).distance_to(position) > 7.0:
+			continue
+		var brain: Dictionary = bot_brains.get(index, {})
+		brain["prop_sound_pending"] = position
+		bot_brains[index] = brain
 
 
 # Roll a small mix, with a rare empty barrel and rare pistol; spread items around the full circle.
@@ -6601,6 +7076,32 @@ func _dive_roll_invulnerable(state: Dictionary) -> bool:
 
 
 # _nearest_projectile_player_hit: Finds the closest eligible body intersected by this projectile path.
+func _assisted_shot_direction(owner: int, origin: Vector2, direction: Vector2, crouched: bool) -> Vector2:
+	var max_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME
+	if not _nearest_projectile_player_hit(owner, origin, direction, max_distance, crouched).is_empty():
+		return direction
+	var best_angle := deg_to_rad(AIM_ASSIST_ANGLE) + 0.00001
+	var best_direction := direction
+	for target in range(player_states.size()):
+		if target == owner or target >= player_joined.size() or not player_joined[target] or PLAYER_TEAMS[target] == PLAYER_TEAMS[owner]:
+			continue
+		var offset := _player_state_world_position(player_states[target]) - origin
+		var distance := offset.length()
+		if distance <= PROJECTILE_PLAYER_RADIUS or distance > max_distance:
+			continue
+		var center_angle := direction.angle_to(offset)
+		var edge_angle := asin(clampf(PROJECTILE_PLAYER_RADIUS / distance, 0.0, 1.0))
+		var correction := maxf(absf(center_angle) - edge_angle + 0.0001, 0.0)
+		if correction >= best_angle:
+			continue
+		var candidate := direction.rotated(signf(center_angle) * correction)
+		var hit := _nearest_projectile_player_hit(owner, origin, candidate, max_distance, crouched)
+		if int(hit.get("player_index", -1)) == target:
+			best_angle = correction
+			best_direction = candidate
+	return best_direction
+
+
 func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vector2, maximum_distance: float, shot_crouched: bool) -> Dictionary:
 	var nearest_distance := maximum_distance + 0.001                                           # Keep the first body beyond any possible hit by default.
 	var nearest_player := -1                                                                    # Track which body owns that nearest intersection.
@@ -7004,7 +7505,7 @@ func _notify_bot_wounded(player_index: int, shot_direction: Vector2, owner_index
 			threat = seen
 	var brain: Dictionary = bot_brains.get(player_index, {})
 	brain["reaction_kind"] = "retreat"
-	brain["reaction_time"] = 2.2
+	brain["reaction_time"] = randf_range(4.5, 6.0) if int(player_states[player_index].get("health", 0)) == 1 and randf() < 0.4 else 2.2
 	brain["reaction_new"] = true
 	brain["reaction_threat"] = threat
 	brain["reaction_reason"] = "SHOT / SEEK COVER"
@@ -7016,6 +7517,7 @@ func _notify_bots_of_ally_fall(fallen_index: int) -> void:
 	if fallen_index < 0 or fallen_index >= player_states.size():
 		return
 	var fallen_position := _player_state_world_position(player_states[fallen_index])
+	var witnesses: Array[int] = []
 	for index in range(player_states.size()):
 		if index == fallen_index or index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or PLAYER_TEAMS[index] != PLAYER_TEAMS[fallen_index] or bool(player_states[index].get("is_dying", false)):
 			continue
@@ -7023,6 +7525,7 @@ func _notify_bots_of_ally_fall(fallen_index: int) -> void:
 		var view := fallen_position - origin
 		if view.length() > BOT_SIGHT_RANGE or (view.length() > 0.6 and _view_forward_vector_for_state(player_states[index]).normalized().dot(view.normalized()) < 0.15) or not _nearest_projectile_topology_clear(origin, view):
 			continue
+		witnesses.append(index)
 		var brain: Dictionary = bot_brains.get(index, {})
 		# A wounded bot's immediate self-preservation takes priority.
 		if String(brain.get("reaction_kind", "")) == "retreat" and float(brain.get("reaction_time", 0.0)) > 0.0:
@@ -7037,7 +7540,10 @@ func _notify_bots_of_ally_fall(fallen_index: int) -> void:
 		brain["reaction_threat"] = fallen_position
 		brain["reaction_reason"] = "SAW ALLY FALL"
 		bot_brains[index] = brain
-		_request_bot_bark(index, "ally_attack" if aggressive else "ally_retreat")
+	if not witnesses.is_empty():
+		witnesses.shuffle()
+		bot_bark_pending_ally_falls.append({"witnesses": witnesses, "expires": float(Time.get_ticks_msec()) * 0.001 + 6.0})
+		_process_pending_ally_fall_barks()
 
 
 # _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
@@ -7061,14 +7567,27 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 	state["hit_timer"] = HIT_REACTION_DURATION                                                 # Hold that pose long enough to read.
 	if owner_index >= 0 and owner_index < player_states.size() and PLAYER_TEAMS[owner_index] != PLAYER_TEAMS[player_index] and (_is_human_controlled_slot(owner_index) or _is_human_controlled_slot(player_index)):
 		music_combat_remaining = 8.0
+	if _is_bot_controlled_slot(player_index) and owner_index >= 0 and _is_human_controlled_slot(owner_index):
+		bot_combat_started = true
 	state["health"] = maxi(int(state.get("health", PLAYER_MAX_HEALTH)) - 1, 0)                # Remove one hatch.
 	player_states[player_index] = state                                                        # Save the immediate hit result.
 	if _is_bot_controlled_slot(player_index) and int(state["health"]) > 0:
+		_request_bot_bark(player_index, "hit")
 		_notify_bot_wounded(player_index, shot_direction, owner_index)
-	_play_bot_damage_grunt(player_index, int(state["health"]) <= 0)                             # Lethal hits use the dedicated death voices.
+
+	if owner_index >= 0 and owner_index < player_states.size() and _is_bot_controlled_slot(owner_index) and _is_human_controlled_slot(player_index) and int(state["health"]) > 0:
+		_request_bot_bark(owner_index, "hit_player")
 	_add_camera_blood_for_damage(player_index)                                                  # Add heart-dependent blood around this player's camera edges.
 	if int(state["health"]) <= 0:                                                             # Begin an explicit fall, three-second count, and reverse-animation respawn.
+		# Stop only this dying actor's previous chatter, never another actor's.
+		if bot_bark_speaker == player_index and bot_bark_player != null and bot_bark_player.playing:
+			bot_bark_player.stop()
+			bot_bark_reverb_player.stop()
+			bot_bark_speaker = -1
+		bot_bark_pending_reloads.erase(player_index)
 		_notify_bots_of_ally_fall(player_index)
+		if _is_bot_controlled_slot(player_index):
+			_request_bot_bark(player_index, "death")
 		if clear_the_map_mode and player_index == 0:
 			clear_map_killer_index = owner_index if owner_index > 0 and owner_index < player_states.size() else -1
 		state["deaths"] = int(state.get("deaths", 0)) + 1
@@ -7078,7 +7597,7 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 			owner["kills"] = int(owner.get("kills", 0)) + 1
 			player_states[owner_index] = owner
 			if _is_bot_controlled_slot(owner_index) and _is_human_controlled_slot(player_index):
-				_request_bot_bark(owner_index, "victory")
+				_request_bot_bark(owner_index, "kill_player")
 			if not clear_the_map_mode:
 				_maybe_drop_heart_for_kill(player_index)                                                # A kill can leave a rare one-health recovery item at the defeat location.
 		_begin_combat_death(player_index)                                                          # Choose a safe corner now while preserving the fallen body at its old location.
@@ -7694,7 +8213,12 @@ func _apply_runtime_world_sprite_style(sprite: Node2D, sprite_scale: float, team
 		sprite.material = material
 	sprite.self_modulate = Color.WHITE                                                        # Preserve every authored PNG color before the optional green-costume remap.
 	material.set_shader_parameter("texel_stride", _runtime_world_sprite_texel_stride(world_view_depth) if use_texel_lod else 1.0) # Keep authored coin LOD textures exact while other world sprites retain shader sampling reduction.
-	material.set_shader_parameter("apply_green_costume_remap", apply_green_costume_remap and resolved_team_index == 1) # Restrict the value-preserving green remap to Team 2 player fabric; gameplay pickups retain authored color.
+	material.set_shader_parameter("apply_green_costume_remap", apply_green_costume_remap and resolved_team_index == 1)
+	if resolved_team_index == 1:
+		var enemy_type := String(player_states[team_index].get("enemy_type", "weak")) if team_index >= 0 and team_index < player_states.size() else "weak"
+		var hue := Color(1.0, 0.95, 0.03) if enemy_type == "clever" else Color(0.82, 0.15, 0.12) if enemy_type == "strong" else Color(0.15, 0.80, 0.28)
+		material.set_shader_parameter("costume_luma_boost", 5.0 if enemy_type == "clever" else 1.0)
+		material.set_shader_parameter("costume_hue", hue) # Restrict the value-preserving green remap to Team 2 player fabric; gameplay pickups retain authored color.
 	sprite.position = sprite.position.round()                                                   # Keep every world sprite registered on the 160x120 logical pixel grid.
 
 
@@ -8120,7 +8644,7 @@ func _update_combat_view() -> void:
 			sprite.position = player_sprite.position                                                  # Reuse their visible feet registration.
 			sprite.scale = player_sprite.scale                                                        # Reuse their body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], 0.0, true, true) # Give the hit body the same selective green costume remap as its owner.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, player_index, 0.0, true, true) # Give the hit body the same selective green costume remap as its owner.
 			sprite.z_index = player_sprite.z_index + 3                                               # Keep reaction above nearby environment art.
 			player_sprite.visible = false                                                            # Prevent the previous run/idle frame from overlapping the hit pose.
 		else:
@@ -8132,7 +8656,7 @@ func _update_combat_view() -> void:
 			sprite.position = Vector2(float(projection["screen_x"]), _sprite_center_y_for_feet(opponent_sprite, float(projection["feet_y"]), scale_value)) # Match their existing body anchor.
 			sprite.scale = Vector2.ONE * scale_value                                                  # Match normal opponent body scale.
 			sprite.material = null                                                                  # Hit frames are cached independently; clear any prior palette before assigning their owner's shader.
-			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, PLAYER_TEAMS[player_index], float(projection.get("view_depth", 0.0)), true, true) # Match the hit body to its owning team's selective costume treatment.
+			_apply_runtime_world_sprite_style(sprite, sprite.scale.x, player_index, float(projection.get("view_depth", 0.0)), true, true) # Match the hit body to its owning team's selective costume treatment.
 			sprite.z_index = int(projection["z_index"]) + 3                                        # Keep hit art readable.
 			var view: Dictionary = player_views[active_player_index] if active_player_index >= 0 and active_player_index < player_views.size() else {}
 			var opponents: Dictionary = view.get("opponent_sprites", {})
@@ -9765,7 +10289,7 @@ func _advance_dive_roll(player_index: int, delta: float, bound: bool) -> bool:
 		state["dive_bot_reason"] = reason
 	else:
 		var joy := _xbox_joypad_id_for_player(player_index)
-		pressed = (player_index == 0 and _is_key_down(KEY_SPACE)) or (joy >= 0 and Input.is_joy_button_pressed(joy, JOY_BUTTON_A))
+		pressed = (player_index == 0 and (_is_key_down(KEY_SPACE) or (mobile_controls != null and mobile_controls.take_roll()))) or (joy >= 0 and Input.is_joy_button_pressed(joy, JOY_BUTTON_A))
 		if bound:
 			var local := _read_movement()
 			direction = _view_right_vector() * local.x - _view_forward_vector() * local.y
@@ -9848,6 +10372,8 @@ func _process_player_context(delta: float) -> void:                             
 	character_is_crouching = false if _is_bot_controlled_slot(active_player_index) else _is_player_crouch_pressed_for(active_player_index)
 	_ensure_forward_cell_experiment_position()                                                 # Keep this opt-in experiment's real capsule in the cell ahead before reading input or rendering a new pose.
 	if active_player_index < player_states.size() and bool(player_states[active_player_index].get("is_dying", false)): # Let the explicit death sequence own the body and camera while down.
+		if post_kill_active and continuous_third_person_camera and _is_human_controlled_slot(active_player_index):
+			_update_continuous_camera_yaw(delta)
 		character_is_moving = false                                                               # Prevent normal locomotion from competing with the authored Death frames.
 		_play_combat_death_animation(player_sprite, player_states[active_player_index], &"DeathN") # The local player always sees the camera-forward north death render.
 		return                                                                                    # Ignore all player input and normal movement until the respawn is complete.
@@ -10223,13 +10749,13 @@ func _update_scoreboard_shop_input() -> void:
 		if player_index < player_joined.size() and player_joined[player_index] and not bool(player_states[player_index].get("is_dying", false)) and not combat_round_complete:
 			var state := player_states[player_index]
 			var coins := int(state.get("coins", 0))
-			if heart_pressed and not was_shop_heart_pressed[player_index] and coins >= 5 and int(state.get("health", 0)) < PLAYER_MAX_HEALTH:
+			if heart_pressed and not was_shop_heart_pressed[player_index] and coins >= 5 and int(state.get("health", 0)) < _enemy_heart_cap(state):
 				state["coins"] = coins - 5
-				state["health"] = mini(PLAYER_MAX_HEALTH, int(state.get("health", 0)) + 1)
+				state["health"] = mini(_enemy_heart_cap(state), int(state.get("health", 0)) + 1)
 				player_states[player_index] = state
 				_clear_camera_blood_for_heart(player_index)                                             # Treat a purchased heart as the same one-health recovery, removing one matching set of close-screen blood drops.
 				_play_pickup_sound(heart_pickup_player, player_index)                                 # Reuse the health cue for a successful controller heart purchase.
-			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10:
+			elif gun_pressed and not was_shop_gun_pressed[player_index] and coins >= 10 and _can_use_dual_pistols(state):
 				state["coins"] = coins - 10
 				state["machine_gun_ammo"] = DUAL_WIELD_AMMO
 				player_states[player_index] = state
@@ -10239,12 +10765,139 @@ func _update_scoreboard_shop_input() -> void:
 
 
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
+# One witness is chosen per casualty. A brief queue lets a witness respond
+# after existing chatter without allowing a crowd of overlapping callouts.
+func _queue_mandatory_bark(player_index: int, category: String) -> void:
+	for event in bot_bark_pending_mandatory:
+		if int(event["speaker"]) == player_index and String(event["category"]) == category:
+			return
+	bot_bark_pending_mandatory.append({"speaker": player_index, "category": category})
+
+
+# Hit/death take precedence on a single actor. A displaced first sight or kill
+# line waits until that actor can actually speak, rather than being discarded.
+func _process_pending_mandatory_barks() -> void:
+	for event in bot_bark_pending_mandatory.duplicate():
+		var index := int(event["speaker"])
+		var category := String(event["category"])
+		if index < 0 or index >= player_states.size() or bool(player_states[index].get("is_dying", false)) or int(player_states[index].get("health", 0)) <= 0:
+			bot_bark_pending_mandatory.erase(event)
+			continue
+		if category == "first_sighting" and not _bot_can_see_human_for_bark(index):
+			continue
+		if bot_damage_channels.has(index) and (bot_damage_channels[index]["player"] as AudioStreamPlayer).playing:
+			continue
+		if _request_bot_bark(index, category):
+			if category == "first_sighting":
+				var brain: Dictionary = bot_brains.get(index, {})
+				brain["first_sighting_barked"] = true
+				bot_brains[index] = brain
+			bot_bark_pending_mandatory.erase(event)
+
+
+func _process_pending_tactical_barks() -> void:
+	if bot_bark_player == null or bot_bark_player.playing:
+		return
+	var now := float(Time.get_ticks_msec()) * 0.001
+	if now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP:
+		return
+	for event in bot_bark_pending_tactical.duplicate():
+		var index := int(event["speaker"])
+		var category := String(event["category"])
+		if now > float(event["expires"]) or index < 0 or index >= player_states.size() or bool(player_states[index].get("is_dying", false)):
+			bot_bark_pending_tactical.erase(event)
+			continue
+		var brain: Dictionary = bot_brains.get(index, {})
+		var state_name := String(brain.get("state", ""))
+		var can_see := bool(brain.get("has_line_of_sight", false))
+		var stale := (category == "flank" and float(brain.get("flank_time", 0.0)) <= 0.0) or (category == "player_reload" and not bool(brain.get("bark_target_reloading", false))) or (category == "player_cover" and not bool(brain.get("bark_player_cover", false)))
+		stale = stale or (category == "cover" and state_name != "RETREAT_TO_COVER") or (category == "flee" and state_name != "FALL_BACK") or (category == "charge" and state_name != "ADVANCE_AFTER_ALLY_FALL")
+		stale = stale or (category in ["combat", "taunt"] and not can_see) or (category == "player_spotted" and not _bot_can_see_human_for_bark(index)) or (category in ["lost_contact", "search"] and can_see) or (category == "investigate" and (state_name != "INVESTIGATE" or bot_combat_started))
+		if stale:
+			bot_bark_pending_tactical.erase(event)
+			continue
+		if now - float(bot_bark_last_by_bot.get(index, -INF)) < BOT_BARK_PERSONAL_GAP or (bot_damage_channels.has(index) and (bot_damage_channels[index]["player"] as AudioStreamPlayer).playing):
+			continue
+		bot_bark_processing_queue = true
+		var played := _request_bot_bark(index, category)
+		bot_bark_processing_queue = false
+		if played and category == "lost_contact":
+			brain["lost_contact_barked"] = true
+			bot_brains[index] = brain
+		bot_bark_pending_tactical.erase(event)
+		return
+
+
+func _process_pending_ally_fall_barks() -> void:
+	var now := float(Time.get_ticks_msec()) * 0.001
+	while not bot_bark_pending_ally_falls.is_empty():
+		var event: Dictionary = bot_bark_pending_ally_falls[0]
+		if now > float(event.get("expires", 0.0)):
+			bot_bark_pending_ally_falls.pop_front()
+			continue
+		if bot_bark_player == null or bot_bark_player.playing or now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP:
+			return
+		var witness_is_speaking := false
+		for index in event.get("witnesses", []):
+			if bot_damage_channels.has(int(index)) and (bot_damage_channels[int(index)]["player"] as AudioStreamPlayer).playing:
+				witness_is_speaking = true
+				continue
+			if _request_bot_bark(int(index), "ally_fall"):
+				bot_bark_pending_ally_falls.pop_front()
+				return
+		if witness_is_speaking:
+			return
+		bot_bark_pending_ally_falls.pop_front()
+
+
+func _process_pending_bark_reply() -> void:
+	if bot_bark_pending_reply.is_empty():
+		return
+	var now := float(Time.get_ticks_msec()) * 0.001
+	var first := int(bot_bark_pending_reply.get("speaker", -1))
+	if now > float(bot_bark_pending_reply.get("until", 0.0)) or first < 0 or first >= player_states.size():
+		bot_bark_pending_reply.clear()
+		return
+	if bot_bark_player.playing or now - bot_bark_last_global < BOT_BARK_GLOBAL_GAP:
+		return
+	var origin := _player_state_world_position(player_states[first])
+	# Prefer a nearby ally; the original speaker can finish their own sentence.
+	var choices: Array[int] = []
+	for index in range(1, player_states.size()):
+		if index != first:
+			choices.append(index)
+	choices.append(first)
+	for index in choices:
+		if index >= player_joined.size() or not player_joined[index] or not _is_bot_controlled_slot(index) or bool(player_states[index].get("is_dying", false)) or _player_state_world_position(player_states[index]).distance_to(origin) > 4.0:
+			continue
+		if not bool(bot_brains.get(index, {}).get("has_line_of_sight", false)) or not bool(bot_brains.get(index, {}).get("allow_fire", false)):
+			continue
+		if _request_bot_bark(index, "reply_attack"):
+			bot_bark_pending_reply.clear()
+			return
+
+
+func _process_pending_reload_barks() -> void:
+	for key in bot_bark_pending_reloads.keys():
+		var index := int(key)
+		if index < 0 or index >= player_states.size() or bool(player_states[index].get("is_dying", false)) or String(player_states[index].get("reload_phase", "")).is_empty():
+			bot_bark_pending_reloads.erase(key)
+		elif _request_bot_bark(index, "reload"):
+			bot_bark_pending_reloads.erase(key)
+			break
+
+
 func _process(delta: float) -> void:                                                        # Declare this function.
 	_advance_world_sound_occlusion(delta)
 	if mobile_sample_audio:
 		_warm_next_mobile_sfx()
 	if bot_bark_player != null and bot_bark_player.playing:
 		_update_bot_bark_spatial()
+	_process_pending_mandatory_barks()
+	_process_pending_ally_fall_barks()
+	_process_pending_reload_barks()
+	_process_pending_tactical_barks()
+	_process_pending_bark_reply()
 	_layout_viewport()                                                                         # Call a helper function as part of the current controller step.
 	var options_pressed: bool = _is_key_down(KEY_ESCAPE) or (mobile_controls != null and mobile_controls.pressed("pause"))
 	for device_id in Input.get_connected_joypads():
@@ -10301,6 +10954,9 @@ func _process(delta: float) -> void:                                            
 	if _read_regenerate_map():                                                                 # Check for a one-shot request to reroll the current 4x4 maze.
 		_regenerate_runtime_map()                                                                 # Build and display a new random maze immediately.
 		return                                                                                    # Skip movement this frame because the player was reset into the new map.
+	if post_kill_active and next_round_pressed:
+		_skip_post_kill_scene()
+		return
 	if combat_round_complete and not clear_map_finish_pending and next_round_pressed:           # Do not let a held Start key skip the final-kill fade/result cue.
 		_regenerate_runtime_map(true)                                                             # Show the next wanted posters before the player starts the round.
 		return                                                                                    # Keep the replay key from also moving a player this frame.
@@ -17321,6 +17977,7 @@ func _mark_debug_map_static_layers_dirty() -> void:
 func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:                    # Declare this function.
 	player_states = _make_start_player_states()                                                # Restore Bart, Jed, Hank, and Wyatt so keyboard-only players remain simulated after a replay.
 	_separate_starting_bots()
+	_assign_round_bot_voices()
 	bot_brains.clear()                                                                          # Old maze routes and goals are invalid after every new clear-map round.
 	for player_index in range(player_views.size()):                                           # Reset the visible animation latch for every player view.
 		_bind_player_context(player_index)                                                       # Bind this player's state and sprite.

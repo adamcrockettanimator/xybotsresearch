@@ -87,8 +87,8 @@ func _rebuild_broadside() -> void:
 	var actions := ["Move / strafe", "Look", "Fire", "Crouch", "Dive roll", "Reload", "Buy heart", "Buy dual pistols", "Pause / menu"]
 	var keys := ["WASD / LEFT STICK", "MOUSE / RIGHT STICK", "CLICK / RT", "SHIFT / LT", "SPACE / A", "R / X", "Q / LB", "E / RB", "ESC / SELECT"]
 	if preload("res://scripts/mobile_controls.gd").available():
-		actions = ["Move", "Look", "Fire", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Pause / menu"]
-		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "FIRE", "DUCK", "RELOAD", "HEART 5", "GUN 10", "II"]
+		actions = ["Move", "Look", "Fire", "Crouch", "Dive roll", "Reload", "Buy heart", "Buy dual pistols", "Pause / menu"]
+		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "FIRE", "DUCK / 2X HOLD", "MOVE + ROLL", "RELOAD", "HEART 5", "GUN 10", "II"]
 	for i in range(actions.size()):
 		_page_label(page, body_font, actions[i], 15, Rect2(left, top + 302 + i * 27, 185, 24), false)
 		_page_label(page, body_font, keys[i], 12, Rect2(left + 190, top + 304 + i * 27, right_column - left - 200, 22), false)

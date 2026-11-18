@@ -1,0 +1,1266 @@
+﻿actor,file,tags,weight,repeatable,min_enemies,max_enemies,duration_seconds,matching
+zach,0001 - What was that copy.wav,#hearing,1.0,no,,,1.55,unassigned
+zach,0001 - What was that.wav,#hearing,1.0,no,,,1.55,existing
+zach,0002 - I heard a noise. You better go check it out.wav,#hearing,1.0,no,,,2.7,existing
+zach,0003 - Who's there.wav,#hearing,1.0,no,,,1.0,unassigned
+zach,0004 - Something smells fishy.wav,#hearing,1.0,no,,,1.7,existing
+zach,0005 - I got a feeling we're being watched.wav,#hearing,1.0,no,,,2.35,existing
+zach,0006 - Shh What was that.wav,#hearing #search,1.0,no,,,1.8,existing
+zach,0007 - Was that you.wav,#hearing #search,1.0,no,,,1.1,existing
+zach,0008 - Did you hear that.wav,#hearing #search,1.0,no,,,1.25,existing
+zach,0011 - What was that.wav,#hearing #search,1.0,no,,,1.15,same wording
+zach,0012 - I heard something.wav,#hearing,1.0,no,,,1.5,unassigned
+zach,0014 - Jumping Jehosaphat What in tarnation was that.wav,#shot,0.5,no,,,3.85,existing
+zach,0015 - That weren't the wind.wav,#shot,1.0,no,,,1.9,existing
+zach,0016 - easy now someones testing our patience.wav,#hearing,0.5,no,,,2.65,unassigned
+zach,0017 - Quiet. Listen.wav,#hearing #search,1.0,no,,,1.45,existing
+zach,0018 - Come out. Come out wherever you are.wav,#hearing #search,1.0,no,,,2.55,script wording
+zach,0019 - I smell a fight.wav,#shot,1.0,no,,,1.45,existing
+zach,0020 - I hear movement.wav,#hearing,1.0,no,,,1.4,existing
+zach,0021 - Sounds like trouble.wav,#shot,1.0,no,,,1.5,existing
+zach,0022 - We ain't alone.wav,#shot,1.0,no,,,1.4,existing
+zach,0023 - That ain't good.wav,#shot #allyfall,1.0,no,,,1.3,existing
+zach,0024 - I reckon trouble's afoot.wav,#shot,1.0,no,,,2.05,existing
+zach,0025 - What's that ruckus.wav,#shot,1.0,no,,,1.45,existing
+zach,0027 - He's cutting us down.wav,#ally_fall,1.0,no,,,1.6,unassigned
+zach,"0028 - Ooh, you'll pay for that.wav",#ally_fall,1.0,no,,,1.6,unassigned
+zach,0030 - He shot jed.wav,#ally_fall,1.0,no,,,1.5,existing
+zach,0031 - Oh my God. They killed kenny.wav,#ally_fall,1.0,no,,,2.7,unassigned
+zach,0032 - no! Carl!.wav,#ally_fall,1.0,no,,,1.35,unassigned
+zach,0033 - Billy Bob!.wav,#ally_fall,1.0,no,,,1.15,existing
+zach,0034 - oh God Jim Bob.wav,#ally_fall,1.0,no,,,1.95,unassigned
+zach,0035 - they killed him.wav,#ally_fall,1.0,no,,,1.15,unassigned
+zach,0036 - just you and me now boy.wav,#ally_fall,1.0,no,,,1.7,existing
+zach,0037 - get you if it's the last thing I do.wav,#ally_fall,1.0,no,,,2.4,existing
+zach,0038 - you enjoying yourself.wav,#ally_fall,1.0,no,,,1.65,existing
+zach,0039 - bet you're real proud of yourself.wav,#ally_fall,1.0,no,,,2.1,existing
+zach,0040 - shoulda been more careful.wav,#ally_fall,1.0,no,,,1.55,unassigned
+zach,0043 - get him!.wav,#combat #player_reload,1.0,no,,,0.9,existing
+zach,0044 - I'm gonna put a hole in you.wav,#attacking,1.0,no,,,1.8,existing
+zach,0045 - fire.wav,#attacking,1.0,no,,,0.9,existing
+zach,0046 - Shoot him.wav,#attacking,1.0,no,,,0.75,existing
+zach,0047 - Kill him.wav,#attacking,1.0,no,,,0.9,existing
+zach,0048 - take that! .wav,#attacking,1.0,no,,,0.9,existing
+zach,0049 - And that.wav,#reply_attack,1.0,no,,,0.9,existing
+zach,0050 - die already.wav,#attacking,1.0,no,,,1.2,unassigned
+zach,0051 - Get a rope.wav,#attacking,1.0,no,,,1.05,existing
+zach,0065 - Lets rush them.wav,#charge #player_reload,1.0,no,,,1.4,unassigned
+zach,0067 - going for it.wav,#charge,1.0,no,,,1.25,unassigned
+zach,0073 - I'm going around.wav,#flank,1.0,no,,,1.3,existing
+zach,0074 - You keep them busy.wav,#flank,1.0,no,,,1.25,unassigned
+zach,0086 - Screw this! I'm outta here!.wav,#flee,1.0,no,,,2.15,existing
+zach,0088 - Mama Help!.wav,#flee #hit,1.0,no,,,0.905,existing
+zach,"0096 - If I can't see him, maybe he can't see me.wav",#hiding,1.0,no,,,3.4,existing
+zach,0101 - I ain't stickin' my head out there.wav,#hiding,1.0,no,,,2.8,existing
+zach,0103 - I ain't stickin' my head out there.wav,#hiding,1.0,no,,,2.1,same wording
+zach,0106 - ah! my leg!.wav,#hit,1.0,no,,,1.3,unassigned
+zach,0107 - dammit!.wav,#ally_fall #hit #reload,1.0,yes,,,0.8,existing
+zach,0108 - AHH!.wav,#hit,1.0,yes,,,1.0,unassigned
+zach,0109 - my leg!.wav,#hit,1.0,no,,,1.2,existing
+zach,0110 - I'm hit!.wav,#hit,1.0,no,,,1.15,existing
+zach,"0111 - Oh, that smarts.wav",#hit,1.0,no,,,1.65,unassigned
+zach,0116 - I think I got him.wav,#hit_player #kill_player,1.0,no,,,1.45,existing
+zach,"0117 - It stings, don't it.wav",#hit_player ,1.0,no,,,1.8,unassigned
+zach,0124 - You guys go check it out.wav,#investigate,1.0,no,,,1.7,existing
+zach,"0128B - now, I got a gun, you hear me.wav",#investigate,1.0,no,,,1.67,existing
+zach,0133B - I can see the light.wav,#death,0.5,no,,,1.549,existing
+zach,0141B - dagnabbit.wav,#ally_fall #death #hit #reload,1.0,yes,,,1.249,existing
+zach,"0145 - Not so tough now, are ya.wav",#victory,1.0,no,,,2.1,existing
+zach,0147 - I'll get a shovel.wav,#victory,1.0,no,,,1.35,existing
+zach,0159B - ha! chicken.wav,#lost_contact,1.0,no,,,1.093,existing
+zach,0160 - Where'd he go.wav,#lost_contact,1.0,no,,,1.0,existing
+zach,0161 - Where'd that little varmit scurry off to.wav,#lost_contact,0.5,no,,,1.812,existing
+zach,0162 - He's pinned!.wav,#player_cover,1.0,no,,,1.1,existing
+zach,0163 - coward!.wav,#lost_contact #player_cover,1.0,no,,,1.2,existing
+zach,0164 - Outta bullets!.wav,#player_reload,1.0,no,,,1.4,existing
+zach,"0165 - Oh, you're mine now!.wav",#player_reload #ally_fall,1.0,no,,,1.7,unassigned
+zach,0167 - Get that sissy boy!.wav,#combat,1.0,no,,,2.25,existing
+zach,0179 - Get him!.wav,#combat #player_reload,1.0,no,,,0.9,same wording
+zach,0180 - I see him!.wav,#first_sighting #player_spotted,1.0,yes,,,1.2,unassigned
+zach,0183B - There he is!.wav,#combat #first_sighting,1.0,yes,,,1.063,existing
+zach,0187B - Hold on I'm reloading give me a second.wav,#reload,1.0,no,,,2.541,unassigned
+zach,0191 - dang it.wav,#ally_fall #hit #reload,1.0,yes,,,0.95,existing
+zach,0192 - im empty.wav,#reload,1.0,no,,,1.3,existing
+zach,0193 - hold on a second.wav,#reload,1.0,no,,,1.45,existing
+zach,0215 - I think he's this way.wav,#search,1.0,no,,,1.6,existing
+zach,0216 - I think I heard him.wav,#search,1.0,no,,,1.25,existing
+zach,0220 - Look out!.wav,#cover,1.0,yes,,,1.2,existing
+zach,0222 - Holy shit!.wav,#hit #reload ally_fall,1.0,no,,,2.1,unassigned
+zach,0235 - make your peace with the Lord.wav,#taunt #victory,1.0,no,,,1.85,script wording
+zach,"0238 - you're pushing your luck, mister!.wav",#taunt #ally_fall,1.0,no,,,2.55,script wording
+adam,0246 - What was that.wav,#hearing,1.0,yes,,,0.9,existing
+adam,0247 - I heard a noise.wav,#hearing,1.0,yes,,,1.15,unassigned
+adam,0248 - Who's there.wav,#hearing,1.0,yes,,,1.4,unassigned
+adam,0249 - Something smells fishy.wav,#hearing,1.0,no,,,1.4,existing
+adam,0250 - I got a feeling we're being watched.wav,#hearing,1.0,no,,,2.25,existing
+adam,0251 - Shh. What was that.wav,#hearing,1.0,yes,,,1.7,existing
+adam,0252 - Was that you.wav,#hearing,1.0,yes,,,0.85,existing
+adam,0253 - Did you hear that.wav,#hearing,1.0,yes,,,1.0,existing
+adam,0254 - What was that.wav,#hearing,1.0,yes,,,0.8,same wording
+adam,0255 - I heard something.wav,#hearing #searching,1.0,yes,,,1.35,unassigned
+adam,0256 - jumpin Jehosaphat. What was that.wav,#shot,0.5,no,,,2.05,unassigned
+adam,0257 - What in tarnation was that.wav,#shot,1.0,no,,,2.2,unassigned
+adam,0258 - That weren't the wind.wav,#shot,1.0,no,,,1.611,existing
+adam,0259 - Easy now. Somebody's testing our patience.wav,#hearing,1.0,no,,,2.778,existing
+adam,0260 - Quiet. Listen.wav,#hearing,1.0,yes,,,1.55,existing
+adam,0262B - Quiet. Listen.wav,#hearing,1.0,yes,,,1.451,same wording
+adam,0262C - Quiet. Listen.wav,#hearing,1.0,yes,,,1.419,same wording
+adam,"0263 - Come out, come out, wherever you are.wav",#hearing  #searching,1.0,yes,,,2.1,script wording
+adam,0264 - I smell a fight.wav,#shot #searching,1.0,no,,,1.35,existing
+adam,0265 - I hear movement.wav,#hearing #searching,1.0,no,,,1.0,existing
+adam,0266 - Sounds like trouble.wav,#shot,1.0,no,,,1.3,existing
+adam,0267 - We ain't alone.wav,#shot,1.0,no,,,1.2,existing
+adam,0268 - That ain't good.wav,#shot #reloading #ally_fall,1.0,yes,,,1.15,existing
+adam,0269 - I reckon trouble's afoot.wav,#shot,1.0,no,,,1.9,existing
+adam,0270 - What's that ruckus.wav,#shot,1.0,no,,,1.2,existing
+adam,0271 - He's cutting us down.wav,#ally_fall,1.0,yes,,,1.55,unassigned
+adam,0272 - You'll pay for that.wav,#ally_fall,1.0,yes,,,1.3,existing
+adam,0274 - He shot Jed.wav,#ally_fall,1.0,no,,,1.255,existing
+adam,0277 - Oh my god. He killed Kenny.wav,#ally_fall,1.0,no,,,2.15,unassigned
+adam,0278 - He shot Carl.wav,#ally_fall,1.0,no,,,1.35,unassigned
+adam,0279 - He shot Billy Bob.wav,#ally_fall,1.0,no,,,1.55,unassigned
+adam,0281 - He shot Jim Bob.wav,#ally_fall,1.0,no,,,1.25,unassigned
+adam,0282 - Jim Bob's down.wav,#ally_fall,1.0,no,,,1.25,unassigned
+adam,0283 - He killed him.wav,#ally_fall,1.0,no,,,0.95,existing
+adam,"0284 - It's just you and me now, boy.wav",#ally_fall,1.0,no,,,1.7,unassigned
+adam,"0285 - It's just you and me now, boy.wav",#ally_fall,1.0,no,,,1.991,unassigned
+adam,0287 - I'll get you if it's the last thing I do.wav,#ally_fall #combat #hit,1.0,no,,,2.35,existing
+adam,0288 - You enjoying yourself.wav,#ally_fall,1.0,no,,,1.3,existing
+adam,0289 - Now I bet you're real proud of yourself.wav,#ally_fall,1.0,no,,,1.85,existing
+adam,0291 - Should have been more careful.wav,#ally_fall,1.0,no,,,1.35,unassigned
+adam,0292 - Get him!2.wav,#combat #player_reload #player_spotted,1.0,yes,,,0.378,unassigned
+adam,0294 - Get him!.wav,#combat #player_reload,1.0,yes,,,0.75,existing
+adam,0295 - Get him!.wav,#combat #player_reload,1.0,yes,,,0.9,same wording
+adam,0296 - I'm gonna put a hole in ya.wav,#attacking,1.0,yes,,,1.7,existing
+adam,0297 - Fire!.wav,#attacking,1.0,yes,,,0.8,existing
+adam,0298 - Shoot him!.wav,#attacking,1.0,yes,,,1.9,existing
+adam,0299 - Kill Him!.wav,#attacking,1.0,yes,,,0.9,existing
+adam,0300 - Take That!.wav,#attacking,1.0,yes,,,0.95,existing
+adam,0301 - And that!.wav,#reply_attack,1.0,yes,,,0.9,existing
+adam,0302 - Die Already!2.wav,#hit_player,1.0,yes,,,1.25,unassigned
+adam,0303 - Get a rope!.wav,#attacking,1.0,no,,,0.95,existing
+adam,0306 - Would you just die already.wav,#hit_player,1.0,yes,,,1.5,unassigned
+adam,0307 - Stick him!.wav,#attacking,1.0,no,,,0.85,unassigned
+adam,0308 - Sick him!.wav,#attacking,1.0,no,,,0.8,unassigned
+adam,0309 - Bang!.wav,#attacking,1.0,no,,,0.8,unassigned
+adam,0310 - Ha ha ha! Bang Bang!.wav,#attacking,1.0,no,,,1.8,unassigned
+adam,0311 - I'm gonna put a hole in ya.wav,#attacking,1.0,no,,,1.85,same wording
+adam,0312 - This one's got your name on it.wav,#attacking,1.0,no,,,1.8,existing
+adam,0313 - This one will get him.wav,#attacking,1.0,yes,,,1.3,unassigned
+adam,0314 - Watch this.wav,#attacking,1.0,no,,,1.4,existing
+adam,0315 - You want some of this.wav,#attacking,1.0,no,,,1.4,existing
+adam,0316 - You picked the wrong gang.wav,#attacking,0.5,no,,,2.1,existing
+adam,0317 - That cover won't last forever.wav,#attacking,1.0,yes,,,1.85,existing
+adam,0318 - I got a whole wagon load of whooping.wav,#attacking,1.0,no,,,2.45,existing
+adam,0319 - You're softer than weak old biscuits.wav,#attacking,0.5,no,,,2.6,existing
+adam,0320 - I'm warning and you.wav,#attacking #hit #ally_fall,1.0,yes,,,1.5,unassigned
+adam,0321 - hold still.wav,#attacking #player_roll,1.0,yes,,,1.2,existing
+adam,0322 - hold still!.wav,#attacking #player_roll,1.0,yes,,,1.1,same wording
+adam,0323 - Charge!.wav,#charge,1.0,yes,,,1.45,existing
+adam,0324 - lets rush him.wav,#charge,1.0,yes,,,1.05,existing
+adam,0325 - he's pinned close in .wav,#charge #player_cover,1.0,yes,,,1.75,unassigned
+adam,0326 - he's pinned! now's our chance.wav,#charge #player_cover,1.0,yes,,,2.15,unassigned
+adam,"0327 - enough dancing, let's finish this.wav",#player_roll #player_cover,1.0,yes,,,2.05,unassigned
+adam,0328 - I'm going for it.wav,#charge,1.0,yes,,,1.4,existing
+adam,0329 - keep him busy I'll go around.wav,#flank,1.0,yes,,,2.0,existing
+adam,0330 - I'll get behind him.wav,#flank,1.0,yes,,,1.25,existing
+adam,0331 - y'all keep on him I'll shoot him in the back.wav,#flank,1.0,yes,,,2.15,existing
+adam,0332 - you go that way. I'll go this way.wav,#flank,1.0,yes,,,2.45,unassigned
+adam,0333 - I'm going around.wav,#flank,1.0,yes,,,1.15,existing
+adam,0334 - I'm going 'round.wav,#flank,1.0,yes,,,1.05,unassigned
+adam,0335 - I'm going around back.wav,#flank,1.0,yes,,,1.05,unassigned
+adam,0336 - Y'all distract him.wav,#flank  #reload,1.0,yes,,,1.15,unassigned
+adam,0337 - Get his attention.wav,#flank,1.0,yes,,,1.15,existing
+adam,0338 - He can't shoot in two directions at once.wav,#flank,1.0,yes,,,2.1,existing
+adam,0339 - I'll go around and flatten him.wav,#flank,1.0,yes,,,1.5,existing
+adam,0340 - I'll get around behind him.wav,#flank,1.0,yes,,,1.3,unassigned
+adam,0341 - Keep him busy.wav,#flank #reload,1.0,yes,,,1.0,existing
+adam,0342 - sniveling.wav,#hit,1.0,yes,,,2.1,unassigned
+adam,"0343 - Screw this, I'm outta here.wav",#flee,1.0,yes,,,1.65,existing
+adam,"0344 - screw this, I'm outta here.wav",#flee,1.0,yes,,,2.5,same wording
+adam,0345 - Screw This.wav,#flee,1.0,yes,,,1.75,unassigned
+adam,0346 - I'm I'm outta here!.wav,#flee,1.0,yes,,,2.65,unassigned
+adam,0347 - Screw this! I'm outta here!.wav,#flee,1.0,yes,,,2.25,same wording
+adam,0347B - Screw this! I'm outta here!.wav,#flee,1.0,yes,,,2.466,same wording
+adam,"0348 - Mama, help!.wav",#flee #hit,1.0,yes,,,1.014,existing
+adam,"0349 - Oh, mama!.wav",#hit,1.0,yes,,,1.05,unassigned
+adam,0350 - I ain't paid enough for this.wav,#flee,1.0,yes,,,2.15,existing
+adam,0351 - I ain't paid enough for this!.wav,#flee,1.0,yes,,,1.85,same wording
+adam,0352 - Ski-daddle!.wav,#flee,1.0,yes,,,1.45,unassigned
+adam,"0353 - Ski-daddle, that's what mom would say.wav",#flee,1.0,yes,,,2.05,unassigned
+adam,"0354 - I resign, effective immediately!.wav",#flee,1.0,yes,,,2.6,existing
+adam,"0355 - This hand's lost, I fold!.wav",#flee,1.0,yes,,,2.0,existing
+adam,0358 - that's it I'm out of here.wav,#flee,1.0,yes,,,1.6,unassigned
+adam,0359 - that's it I'm out of here.wav,#flee,1.0,yes,,,2.3,unassigned
+adam,0360 - it I'm out of here.wav,#flee,1.0,yes,,,1.95,unassigned
+adam,0361 - ain't worth the trouble.wav,#flee,1.0,yes,,,1.5,unassigned
+adam,0362 - ain't worth the trouble.wav,#flee,1.0,yes,,,1.95,unassigned
+adam,0363 - I've had enough.wav,#flee,1.0,yes,,,1.35,existing
+adam,0364B - I've had enough!.wav,#flee,1.0,yes,,,1.2,same wording
+adam,0366 - If I can't see him maybe he can't see me.wav,#hiding,1.0,yes,,,2.75,existing
+adam,0367 - him pass by then we jump him.wav,#hiding,1.0,yes,,,1.95,unassigned
+adam,0368 - let's ambush him.wav,#hiding,1.0,yes,,,1.3,existing
+adam,0371 - ain't sticking my head out there.wav,#hiding,1.0,yes,,,1.6,existing
+adam,0372B - I'll wait for him to come to me.wav,#hiding,1.0,yes,,,1.456,existing
+adam,0373 - Let's wait for him to come to us.wav,#hiding,1.0,yes,,,1.9,unassigned
+adam,0375 - This wall's lucky I'm behind it.wav,#hiding,1.0,yes,,,1.7,existing
+adam,0376 - Ow! Ow! Owww!.wav,#hit,2.0,yes,,,1.7,unassigned
+adam,0377 - Owww!.wav,#hit,2.0,yes,,,1.95,unassigned
+adam,0378 - Ow! Hey!.wav,#hit,2.0,yes,,,0.95,unassigned
+adam,0379 - My Mama made me this shirt.wav,#hit,1.0,yes,,,1.65,unassigned
+adam,"0380 - Oh, that's gonna leave a mark.wav",#hit,1.0,yes,,,1.9,existing
+adam,0381 - That's gonna leave a mark.wav,#hit,1.0,yes,,,1.55,existing
+adam,"0382B - Oh, that one tickled..wav",#hit,1.0,yes,,,1.054,unassigned
+adam,0382C - Doh!.wav,#hit,2.0,yes,,,0.431,unassigned
+adam,0382D - Oh that one tickled.wav,#hit,1.0,yes,,,1.171,unassigned
+adam,0383 - 'goh!.wav,#hit,2.0,yes,,,0.75,unassigned
+adam,0384 - ow!.wav,#hit,2.0,yes,,,0.75,unassigned
+adam,0385 - Ouch!.wav,#hit,2.0,yes,,,0.95,existing
+adam,0386 - 'hungh!.wav,#hit,2.0,yes,,,0.9,existing
+adam,0387 - oh!.wav,#hit,2.0,yes,,,0.8,unassigned
+adam,0388 - d'ow.wav,#hit,2.0,yes,,,0.8,unassigned
+adam,0389 - dammit!.wav,#ally_fall #hit #reload #death,2.0,yes,,,0.75,same wording
+adam,0390 - my leg.wav,#hit,1.0,yes,,,1.0,existing
+adam,"0400B - Oh, that smarts. .wav",#hit,1.0,yes,,,1.564,unassigned
+adam,0400C - That smarts!.wav,#hit,1.0,yes,,,0.913,existing
+adam,0401B - He got me..wav,#hit #death,1.0,yes,,,0.56,existing
+adam,0401C - I'm Hit!.wav,#hit,1.0,yes,,,0.438,existing
+adam,"0402 - Oh, he got me.wav",#hit #death,1.0,yes,,,1.25,unassigned
+adam,0403B - D'aw!.wav,#hit,2.0,yes,,,0.598,unassigned
+adam,0403C - I'm hit!.wav,#hit,1.0,yes,,,0.383,same wording
+adam,"0403D - d'aw, I'm hit!.wav",#hit,1.0,yes,,,1.012,unassigned
+adam,0404B - oof!.wav,#hit,1.0,yes,,,0.491,unassigned
+adam,0404C - he winged me!.wav,#hit,1.0,yes,,,0.649,unassigned
+adam,0406 - winged me.wav,#hit,1.0,yes,,,0.8,existing
+adam,0407 - that was downright impolite.wav,#hit #death,1.0,yes,,,1.6,unassigned
+adam,0408 - pay interest on that one.wav,#hit,0.5,yes,,,1.65,unassigned
+adam,0409 - all you got.wav,#hit,1.0,yes,,,1.1,unassigned
+adam,0410 - that all you got.wav,#hit,1.0,yes,,,1.35,unassigned
+adam,0411 - was downright impolite.wav,#hit #death,1.0,yes,,,1.7,unassigned
+adam,0412 - pay interest on that one.wav,#hit,1.0,yes,,,1.9,unassigned
+adam,0413 - that one woke me up.wav,#hit,1.0,yes,,,1.5,unassigned
+adam,0414 - the side I sleep on.wav,#hit,1.0,yes,,,1.8,unassigned
+adam,0415 - gonna leave a mark.wav,#hit,1.0,yes,,,1.65,unassigned
+adam,0416 - think I got him.wav,#hit_player #kill_player,1.0,yes,,,1.1,unassigned
+adam,0417 - got him.wav,#hit_player #kill_player,1.0,yes,,,0.95,unassigned
+adam,0418 - I hit him!.wav,#hit_player #kill_player,1.0,yes,,,0.9,existing
+adam,0419 - I shot him.wav,#hit_player #kill_player,1.0,yes,,,1.0,existing
+adam,0420 - still moving.wav,#hit_player,1.0,yes,,,1.3,unassigned
+adam,0421 - still moving.wav,#hit_player,1.0,yes,,,1.6,unassigned
+adam,0422 - winged him.wav,#hit_player,1.0,yes,,,1.1,unassigned
+adam,0423 - he's tougher than I thought.wav,#hit_player,1.0,yes,,,1.55,unassigned
+adam,0424 - tougher than I thought.wav,#hit_player,1.0,yes,,,1.2,existing
+adam,0425 - tougher than I thought.wav,#hit_player,1.0,yes,,,1.2,same wording
+adam,0426 - there's more where that came from.wav,#hit_player,1.0,yes,,,1.95,existing
+adam,0427 - more where that came from.wav,#hit_player,1.0,yes,,,1.8,unassigned
+adam,0428 - he does bleed.wav,#hit_player,1.0,yes,,,1.65,unassigned
+adam,0429 - that feel.wav,#hit_player,1.0,yes,,,1.1,unassigned
+adam,0430 - die already.wav,#hit_player,1.0,yes,,,1.5,unassigned
+adam,0431 - ain't going down without a fight.wav,#hit,1.0,yes,,,1.75,unassigned
+adam,0432 - stings don't it.wav,#hit_player,1.0,yes,,,1.25,existing
+adam,0433 - you got a boo boo.wav,#hit_player,1.0,yes,,,2.05,unassigned
+adam,0434 - ha ha ha ha! .wav,#hit_player #kill_player,1.0,yes,,,1.15,unassigned
+adam,0435 - ha ha ha gotcha! .wav,#hit_player #kill_player,1.0,yes,,,1.75,unassigned
+adam,0436 - I gotcha! ha ha ha.wav,#hit_player #kill_player,1.0,yes,,,2.85,unassigned
+adam,0437 - eyes open.wav,#investigate,1.0,yes,,,1.15,unassigned
+adam,0438 - I got bessie with me.wav,#investigate,1.0,yes,,,1.6,unassigned
+adam,0439 - nothing to worry about long as I got this.wav,#investigate,1.0,yes,,,2.6,unassigned
+adam,0440 - I'll go check.wav,#investigate,1.0,yes,,,1.05,existing
+adam,0442 - I'll go check.wav,#investigate,1.0,yes,,,1.1,same wording
+adam,0443 - maybe he ran away.wav,#lost_contact,1.0,yes,,,1.2,existing
+adam,0444 - maybe he ran away.wav,#lost_contact,1.0,yes,,,1.25,same wording
+adam,0445 - Ha! Chicken!.wav,#lost_contact,1.0,yes,,,1.4,existing
+adam,0446 - ha ha! chicken!.wav,#lost_contact,1.0,yes,,,1.85,unassigned
+adam,0447 - Maybe he went to church.wav,#lost_contact,1.0,yes,,,1.65,unassigned
+adam,0448 - Maybe he's gone to church.wav,#lost_contact,1.0,yes,,,1.9,existing
+adam,0449 - Think we can call that a victory.wav,#lost_contact,1.0,yes,,,1.7,existing
+adam,"0450 - He's not gone, he's thinking.wav",#lost_contact,1.0,yes,,,2.1,existing
+adam,"0451 - Oh, he's not done yet.wav",#lost_contact ,1.0,yes,,,1.7,unassigned
+adam,0452 - Watch your back. He ain't stupid.wav,#lost_contact,1.0,yes,,,2.05,unassigned
+adam,0453 - Where'd that little varmint scurry off to.wav,#lost_contact,1.0,yes,,,2.25,existing
+adam,0454 - I can smell your cowardice!.wav,#lost_contact,1.0,yes,,,2.05,existing
+adam,0455 - He vanished.wav,#lost_contact,1.0,yes,,,1.0,unassigned
+adam,0456 - Where'd he go.wav,#lost_contact,1.0,yes,,,1.05,existing
+adam,0457 - Where'd he go.wav,#lost_contact,1.0,yes,,,1.05,same wording
+adam,0458 - Now where'd he go.wav,#lost_contact,1.0,yes,,,1.15,unassigned
+adam,0459 - I lost him.wav,#lost_contact,1.0,yes,,,0.8,existing
+adam,0460 - I lost him.wav,#lost_contact,1.0,yes,,,1.05,same wording
+adam,0461 - Find him!.wav,#lost_contact,1.0,yes,,,0.9,existing
+adam,0462 - coward!.wav,#lost_contact  #player_cover,1.0,yes,,,0.85,unassigned
+adam,0463 - You're a coward!.wav,#lost_contact  #player_cover,1.0,yes,,,1.35,unassigned
+adam,0465 - Little wussy boy!.wav,#lost_contact #combat,1.0,yes,,,1.35,unassigned
+adam,0466 - Think you can hide.wav,#lost_contact  #player_cover,1.0,yes,,,1.45,unassigned
+adam,0467B - He thinks he can hide!.wav,#lost_contact  #player_cover,1.0,yes,,,1.64,existing
+adam,0467C - He thinks he can hide from me!.wav,#lost_contact #player_cover,1.0,yes,,,1.513,unassigned
+adam,0468B - little wussy boy thinks he can hide. .wav,#lost_contact #player_cover,1.0,yes,,,2.434,unassigned
+adam,0468C - ha! that little coward thinks he can hide from us! .wav,#lost_contact #player_cover,1.0,yes,,,2.648,unassigned
+adam,0469 - He thinks he can run away.wav,#lost_contact,1.0,yes,,,2.25,unassigned
+adam,0470 - You think you can just run away.wav,#lost_contact,1.0,yes,,,2.25,unassigned
+adam,"0471 - Oh, you've started it now. You can't just run away.wav",#lost_contact,1.0,yes,,,2.9,unassigned
+adam,0472 - He's a slippery fella.wav,#lost_contact,1.0,yes,,,1.75,existing
+adam,0473 - We got him pinned down.wav,#lost_contact #player_cover,1.0,yes,,,1.4,unassigned
+adam,0474 - Get him!.wav,#combat #player_reload,1.0,yes,,,0.95,same wording
+adam,0475 - Ha! He's empty.wav,#player_reload,1.0,yes,,,1.55,unassigned
+adam,0476 - He's empty.wav,#player_reload,1.0,yes,,,1.2,existing
+adam,"0477 - Empty, huh.wav",#player_reload,1.0,yes,,,1.2,unassigned
+adam,0478 - Now's our chance.wav,#player_reload,1.0,yes,,,1.2,existing
+adam,"0479 - hear that, move.wav",#player_reload,1.0,yes,,,1.5,existing
+adam,0480 - let's get him.wav,#player_reload #charge #combat #first_sighting #player_spotted,1.0,yes,,,1.0,unassigned
+adam,0481 - out of bullets.wav,#player_reload,1.0,yes,,,1.25,unassigned
+adam,0482 - of bullets.wav,#player_reload,1.0,yes,,,1.45,unassigned
+adam,0483 - you out of bullets.wav,#player_reload,1.0,yes,,,1.5,unassigned
+adam,0484 - yer out of bullets.wav,#player_reload,1.0,yes,,,1.95,unassigned
+adam,0485B - youre mine now.wav,#player_reload #combat,1.0,yes,,,1.176,existing
+adam,0485C -oh youre mine now.wav,#player_reload #combat,1.0,yes,,,1.179,unassigned
+adam,0486 - oh you're mine now.wav,#player_reload #combat,1.0,yes,,,1.35,unassigned
+adam,0487 - he's reloading.wav,#player_reload,1.0,yes,,,1.45,existing
+adam,0491 - he's reloading.wav,#player_reload,1.0,yes,,,0.95,same wording
+adam,"0492 - an opening, get him!.wav",#player_reload,1.0,yes,,,1.45,unassigned
+adam,0493 - oh you're dead now.wav,#player_reload #player_spotted #combat #ally_fall,1.0,yes,,,1.35,existing
+adam,0495 - know we're here.wav,#first_sighting,1.0,yes,,,1.05,unassigned
+adam,0496 - who's that.wav,#alert #first_sighting,1.0,yes,,,0.9,unassigned
+adam,0497 - get him.wav,#combat #player_reload,1.0,yes,,,0.7,same wording
+adam,0498 - get that sissy boy.wav,#player_spotted #combat,1.0,yes,,,1.3,unassigned
+adam,0499 - Yikes.wav,#combat #cover #player spotted,1.0,yes,,,0.85,existing
+adam,0501 - better go see what that was.wav,#investigate,1.0,yes,,,1.458,existing
+adam,0502 - bet it's that sheriff.wav,#investigate,1.0,yes,,,1.55,unassigned
+adam,0503 - bet it's that bounty hunter.wav,#investigate,1.0,yes,,,1.5,unassigned
+adam,0504 - bet it's that bounty hunter.wav,#investigate,1.0,yes,,,1.7,unassigned
+adam,0505B - I'll bet it's that bounty hunter.wav,#investigate,1.0,yes,,,1.495,existing
+adam,0506 - spread out.wav,#investigate,1.0,yes,,,0.9,existing
+adam,0507 - guys go check it out.wav,#investigate,1.0,yes,,,1.35,unassigned
+adam,0508 - go check it out.wav,#investigate,1.0,yes,,,1.05,unassigned
+adam,0509 - bastard.wav,#death,1.0,yes,,,0.85,existing
+adam,0510 - you bastard.wav,#death,1.0,no,,,1.426,unassigned
+adam,0512 - the gold is in the .wav,#death,0.5,no,,,3.3,unassigned
+adam,0513 - you suck.wav,#death,1.0,no,,,2.15,existing
+adam,0514 - dag nabbit.wav,#death ,1.0,yes,,,1.9,existing
+adam,0515 - can see the light.wav,#death,1.0,no,,,2.2,existing
+adam,0516 - can see the light.wav,#death,1.0,no,,,2.1,same wording
+adam,0517B - I'm coming mama .wav,#death,1.0,yes,,,1.53,existing
+adam,0517C - I'm coming mama .wav,#death,1.0,no,,,1.125,same wording
+adam,0517D - oh god it hurts.wav,#death #hit,1.0,yes,,,1.459,unassigned
+adam,0518 - mama told me not to come.wav,#death,1.0,no,,,1.75,unassigned
+adam,0519 - knew this job had drawbacks.wav,#death,1.0,no,,,2.25,script wording
+adam,0520 - I knew this job had drawbacks.wav,#death,1.0,no,,,2.2,existing
+adam,"0521 - Well played, you bastard.wav",#death,1.0,no,,,2.1,existing
+adam,0522 - Well played.wav,#death,1.0,no,,,1.3,unassigned
+adam,0523 - Reckon I've misjudged the odds.wav,#death,1.0,no,,,2.55,existing
+adam,0524 - Reckon I've misjudged the odds.wav,#death,1.0,no,,,2.6,same wording
+adam,0525 - Reckon I've misjudged the odds.wav,#death,1.0,no,,,2.4,same wording
+adam,0526 - Takes more than that to... Oh.wav,#death,1.0,no,,,2.35,unassigned
+adam,"0528 - Well, I'll be damned.wav",#death,1.0,no,,,1.75,existing
+adam,0529 - I'll be damned.wav,#death,1.0,no,,,1.25,unassigned
+adam,0530 - I'll be damned.wav,#death,1.0,no,,,1.9,unassigned
+adam,0531 - I'll be damned I.wav,#death #first_sighting #ally_fall,1.0,yes,,,1.8,unassigned
+adam,0532 - had so much promise.wav,#death,1.0,no,,,2.55,existing
+adam,0533 - had so much promise.wav,#death,1.0,no,,,1.55,same wording
+adam,0534 - tell the cook more gravy.wav,#death,1.0,no,,,2.8,existing
+adam,0535 - ain't paid enough to die I paid enough to die.wav,#death,1.0,no,,,4.75,unassigned
+adam,0536 - paid enough to die.wav,#death,1.0,no,,,1.9,unassigned
+adam,0537 - he's a straight shooter.wav,#death,1.0,no,,,1.842,existing
+adam,0538 - a straight shooter.wav,#death,1.0,no,,,1.65,unassigned
+adam,0539 - a straight shooter.wav,#death,1.0,no,,,1.5,unassigned
+adam,0540B - not so tough now are ya .wav,#victory,1.0,no,,,1.516,existing
+adam,0540C - not so tough now are ya .wav,#victory,1.0,no,,,1.679,same wording
+adam,0540D - not so tough now are ya .wav,#victory,1.0,no,,,1.93,same wording
+adam,0541 - I'm glad that's over.wav,#victory,1.0,no,,,1.45,unassigned
+adam,0542 - whoo glad that's over.wav,#victory,1.0,no,,,1.6,unassigned
+adam,0543 - his pockets.wav,#victory,1.0,no,,,1.1,unassigned
+adam,0544 - check his pockets.wav,#victory,1.0,no,,,0.908,existing
+adam,0544 - check his wallet.wav,#victory,1.0,no,,,0.697,unassigned
+adam,0545 - whoo that was close.wav,#victory #killed_player,1.0,no,,,1.45,unassigned
+adam,0546 - whoo.wav,#victory #killed_player,1.0,no,,,0.65,unassigned
+adam,0547 - whooweee.wav,#victory #killed_player,1.0,no,,,1.0,unassigned
+adam,0548 - whoo! that was close.wav,#victory #killed_player,1.0,no,,,1.7,unassigned
+adam,"0549 - well, that was easy.wav",#victory #killed_player,1.0,no,,,1.2,unassigned
+adam,0550 - that was easy.wav,#victory #killed_player,1.0,no,,,1.1,unassigned
+adam,0551 - well that was easy.wav,#victory #killed_player,1.0,no,,,1.4,unassigned
+adam,0552 - was easy.wav,#victory #killed_player,1.0,no,,,1.0,unassigned
+adam,0553 - that was too easy.wav,#victory,1.0,no,,,1.1,unassigned
+adam,0554 - i'll get a shovel.wav,#victory,1.0,no,,,1.05,existing
+adam,0555 - I'll get a shovel.wav,#victory,1.0,no,,,1.6,same wording
+adam,0556 - let the buzzards have him.wav,#victory,1.0,no,,,1.65,unassigned
+adam,0557 - let's let the buzzards have him.wav,#victory,1.0,no,,,1.55,existing
+adam,0558 - ha ha ha!.wav,#victory #killed_player,1.0,yes,,,1.6,existing
+adam,0575 - I get his gun!.wav,#victory #killed_player,1.0,no,,,1.15,existing
+adam,0576 - we whooped your ass.wav,#victory,1.0,no,,,2.15,unassigned
+adam,0577 - we whooped you good.wav,#victory,1.0,no,,,1.75,unassigned
+adam,0578 - We're getting pretty good at this.wav,#victory,1.0,no,,,1.95,existing
+adam,0579 - We're getting pretty good at this.wav,#victory,1.0,no,,,1.55,same wording
+adam,0580 - We're getting pretty good at this.wav,#victory,1.0,no,,,1.95,same wording
+adam,0581 - Bullseye!.wav,#victory #killed_player,1.0,no,,,1.25,existing
+adam,0582 - Bullseye!.wav,#victory #killed_player,1.0,no,,,0.95,same wording
+adam,0583 - That's what you get!.wav,#victory #killed_player,1.0,no,,,1.5,existing
+adam,0584 - That's what you get!.wav,#victory #killed_player,1.0,no,,,1.55,same wording
+adam,0585 - I get his hat!.wav,#victory,1.0,no,,,1.1,existing
+adam,0586 - Shoot! Where'd he go.wav,#lost_contact,1.0,no,,,1.4,existing
+adam,"0587 - oh shoot, where'd he go.wav",#lost_contact,1.0,no,,,1.75,unassigned
+adam,0591 - That's the law!.wav,#first_sighting,1.0,no,,,1.1,unassigned
+adam,0592 - It's that sheriff!.wav,#first_sighting,1.0,no,,,1.2,unassigned
+adam,0593 - ahh!.wav,#hit,1.0,yes,,,1.35,unassigned
+adam,0594 - whos that.wav,#first_sighting,1.0,no,,,0.8,unassigned
+adam,0595 - I see him.wav,#first_sighting #first_sighting,1.0,yes,,,1.0,unassigned
+adam,0596 - Rush him!.wav,#charge,1.0,no,,,0.85,existing
+adam,0597 - Rush him!.wav,#charge,1.0,no,,,1.0,same wording
+adam,0598 - get him!.wav,#combat #player_reload,1.0,no,,,0.85,same wording
+adam,0599 - get him!.wav,#combat #player_reload,1.0,no,,,0.8,same wording
+adam,0600 - there he is!.wav,#combat #first_sighting #player_spotted,1.0,yes,,,1.15,existing
+adam,0601 - there he is! .wav,#combat #first_sighting #player_spotted,1.0,yes,,,1.0,same wording
+adam,0602 - There he is!.wav,#combat #first_sighting #player_spotted,1.0,yes,,,0.945,same wording
+adam,0603 - he's over here!.wav,#combat #player_spotted,1.0,no,,,1.3,existing
+adam,0604 - its him!.wav,#combat #first_sighting,1.0,no,,,0.95,existing
+adam,0605 - I found him!.wav,#combat #first_sighting #player_spotted,1.0,no,,,1.0,existing
+adam,0606 - well look what the cat dragged in.wav,#first_sighting,1.0,no,,,2.65,unassigned
+adam,"0607 - Well, look what the cat dragged in.wav",#first_sighting,1.0,no,,,2.55,unassigned
+adam,"0610 - Sheriff's here, mind your manners.wav",#first_sighting,1.0,no,,,2.0,unassigned
+adam,0611 - There he is.wav,#combat #first_sighting #player_spotted,1.0,yes,,,1.05,same wording
+adam,0612 - Don't give him a clean shot.wav,#combat,1.0,no,,,1.5,existing
+adam,0613 - the jig is up!.wav,#combat,1.0,no,,,0.993,existing
+adam,0614B - you fixin to die!.wav,#combat,1.0,no,,,1.632,existing
+adam,0614C - yer fixin to die!.wav,#combat,1.0,no,,,1.644,unassigned
+adam,0615 - ill fill you full of lead.wav,#combat,1.0,no,,,1.9,existing
+adam,0616 - You're about to meet your maker.wav,#combat,1.0,no,,,1.65,existing
+adam,0617 - He's after our loot.wav,#combat,1.0,no,,,1.5,unassigned
+adam,0618 - dang it.wav,#ally_fall #hit #reload #death,1.0,yes,,,0.75,existing
+adam,0619 - Dang it.wav,#ally_fall #hit #reload #death,1.0,yes,,,0.7,same wording
+adam,0620 - I'm dry.wav,#reload,1.0,no,,,1.0,existing
+adam,0621 - Hold on now.wav,#reload #cover,1.0,no,,,1.05,existing
+adam,0622 - Hold on a second.wav,#reload #cover,1.0,no,,,1.6,existing
+adam,0623 - Time out.wav,#cover #reload,1.0,no,,,0.95,existing
+adam,0624 - Empty!.wav,#reload,1.0,no,,,0.993,existing
+adam,0624 - I'm Empty!.wav,#reload,1.0,no,,,0.864,existing
+adam,0625 - cover me.wav,#reload #combat,1.0,no,,,0.85,existing
+adam,0626 - Cover me while I reload.wav,#reload,1.0,no,,,1.55,unassigned
+adam,0627 - I'm dry!.wav,#reload,1.0,no,,,1.15,same wording
+adam,0628 - I'm Dry!.wav,#reload,1.0,no,,,0.85,same wording
+adam,0629 - gotta freshen up.wav,#reload,1.0,no,,,1.05,existing
+adam,0630 - Im out!.wav,#reload,1.0,no,,,0.79,existing
+adam,0630 - muh irons cold!.wav,#reload,1.0,no,,,1.616,unassigned
+adam,0631 - nobody shoot until I'm ready.wav,#reload,1.0,no,,,1.65,existing
+adam,0632 - I'm empty.wav,#reload,1.0,no,,,0.904,same wording
+adam,0634 - I'm empty.wav,#reload,1.0,no,,,0.85,same wording
+adam,0637 - Keep him busy.wav,#flank #reload,1.0,no,,,1.0,same wording
+adam,0638 - Running out of bullets.wav,#reload,1.0,no,,,1.4,unassigned
+adam,0639 - I ain't done with you yet.wav,#reload #player_cover #player_spotted,1.0,no,,,1.3,existing
+adam,0640 - Just a minute.wav,#reload,1.0,no,,,1.4,existing
+adam,0641 - Just a minute.wav,#reload,1.0,no,,,0.9,same wording
+adam,0642 - Come on out now.wav,#search #player_cover,1.0,no,,,1.3,unassigned
+adam,0643 - Come on out now.wav,#search #player_cover,1.0,no,,,1.6,unassigned
+adam,0647 - Cmon out.wav,#search,1.0,no,,,1.35,existing
+adam,0648 - I think I heard him.wav,#search,1.0,no,,,0.95,existing
+adam,0649 - I think I heard him!.wav,#search,1.0,no,,,1.1,same wording
+adam,0650 - I think he's this way!.wav,#search,1.0,no,,,1.3,existing
+adam,0651 - he went this way!.wav,#search,1.0,no,,,1.05,existing
+adam,0652 - Eyes peeled.wav,#search,1.0,no,,,1.35,unassigned
+adam,0653 - Keep your eyes peeled.wav,#search,1.0,no,,,1.2,existing
+adam,0654 - I'll cover you.wav,#cover,1.0,no,,,0.848,unassigned
+adam,0654 - Look out!.wav,#cover #ally_fall,1.0,yes,,,0.579,existing
+adam,0654 - Yikes.wav,#combat #cover,1.0,no,,,0.858,same wording
+adam,0655 - Oh!.wav,#hit,1.0,yes,,,0.65,unassigned
+adam,"0656 - now, time out.wav",#cover #reload,1.0,no,,,1.0,unassigned
+adam,0657 - hide me!.wav,#cover,1.0,no,,,1.15,existing
+adam,0658 - hide me!.wav,#cover,1.0,no,,,0.8,same wording
+adam,0659 - look out!.wav,#cover #reload #hit,1.0,no,,,0.85,same wording
+adam,0660 - take cover.wav,#cover,1.0,no,,,0.95,existing
+adam,0661 - Dumber than a sack of hammers!.wav,#taunt #victory #hit,1.0,no,,,1.95,script wording
+adam,0662 - Dumber than a sack of hammers!.wav,#taunt #victory #hit,1.0,no,,,2.05,script wording
+adam,"0663 - Boys, dumber than a sack of hammers!.wav",#taunt #victory #hit,1.0,no,,,2.15,unassigned
+adam,0664 - Couldn't hit the broadside of a barn! .wav,#taunt #victory #hit,1.0,no,,,2.315,script wording
+adam,0664 - You couldn't hit the broadside of a barn!.wav,#taunt #victory #hit,1.0,no,,,2.504,unassigned
+adam,0665 - You couldn't hit the broadside of a barn!.wav,#taunt #victory #hit,1.0,no,,,2.15,unassigned
+adam,0666A - you got no brains.wav,#taunt #victory,1.0,no,,,1.358,script wording
+adam,0666B - aint you got no brains.wav,#taunt #victory,1.0,no,,,1.804,unassigned
+adam,0666C - aint you got no brains.wav,#taunt #victory,1.0,no,,,1.727,unassigned
+adam,0667 - You're asking for a heap of trouble.wav,#taunt,1.0,no,,,1.95,script wording
+adam,0668 - boy you're asking for a heap of trouble.wav,#taunt,1.0,no,,,2.086,unassigned
+adam,0668 - you're asking for a heap of trouble boy.wav,#taunt,1.0,no,,,1.737,unassigned
+adam,0669 - this town ain't big enough for the two of us.wav,#taunt,1.0,no,,,2.1,script wording
+adam,0670 - this town ain't big enough for the two of us.wav,#taunt,1.0,no,,,2.3,script wording
+adam,0671 - make your peace with the Lord.wav,#taunt,1.0,no,,,1.85,script wording
+adam,0672 - you make your peace with the Lord.wav,#taunt,1.0,no,,,1.8,unassigned
+adam,0673 - you better make your peace with the Lord.wav,#taunt,1.0,no,,,2.15,unassigned
+adam,0674 - you're pushing your luck mister.wav,#taunt,1.0,no,,,1.686,script wording
+adam,0675 - you're pushing your luck mister.wav,#taunt,1.0,no,,,1.85,script wording
+adam,0676 - don't make me come over there.wav,#taunt,1.0,no,,,1.55,script wording
+adam,0679 - you're gonna be pushin up daisies.wav,#taunt,1.0,no,,,1.583,script wording
+adam,0680 - knock you into next Sunday.wav,#taunt,1.0,no,,,2.15,unassigned
+adam,0682A - you got a death wish.wav,#taunt,1.0,no,,,1.403,script wording
+adam,0682B - you got a death wish.wav,#taunt,1.0,no,,,1.616,script wording
+adam,0682C - you got a death wish.wav,#taunt,1.0,no,,,1.652,script wording
+adam,0683A - Them's fighting words!.wav,#taunt,1.0,no,,,1.487,script wording
+adam,0683B - Them's fighting words!.wav,#taunt,1.0,no,,,1.661,script wording
+adam,0684 - Them's fighting words.wav,#taunt,1.0,no,,,2.15,script wording
+adam,"0685 - You're barking at the wrong dog,.wav",#taunt,1.0,no,,,2.05,script wording
+adam,0686 - I'm all riled up!.wav,#taunt,1.0,no,,,1.3,script wording
+adam,"0687 - You're barking at the wrong dog,.wav",#taunt,1.0,no,,,2.05,script wording
+adam,0689A - all hat no cattle.wav,#taunt #victory #hit,1.0,no,,,1.555,script wording
+adam,0689B - all hat no cattle.wav,#taunt #victory #hit,1.0,no,,,1.553,script wording
+adam,0690A - That dog won't hunt.wav,#taunt #victory,1.0,no,,,1.157,script wording
+adam,0690B - That dog won't hunt.wav,#taunt #victory,1.0,no,,,0.989,script wording
+adam,0691 - hold your horses.wav,#taunt,1.0,no,,,1.6,script wording
+adam,0692 - hold your horses.wav,#taunt,1.0,no,,,1.45,script wording
+adam,0693 - This ain't my first rodeo.wav,#taunt #victory #hit,1.0,no,,,1.85,script wording
+adam,0694 - This ain't my first rodeo.wav,#taunt #victory #hit,1.0,no,,,1.75,script wording
+adam,0695 - This ain't my first rodeo.wav,#taunt #victory #hit,1.0,no,,,1.6,script wording
+adam,0696 - You're barking up the wrong tree.wav,#taunt,1.0,no,,,1.8,script wording
+adam,0697 - You're barking up the wrong tree.wav,#taunt,1.0,no,,,1.7,script wording
+adam,0702 - You got me madder than a wet hen.wav,#taunt,1.0,no,,,1.873,script wording
+adam,0703 - A few cards shy of a full deck.wav,#taunt #victory #hit,1.0,no,,,2.1,script wording
+adam,0704 - It's too big for his britches.wav,#taunt #victory #hit,1.0,no,,,1.75,unassigned
+adam,0705A - I'm between a rock a hard place.wav,#taunt,1.0,no,,,1.62,unassigned
+adam,0705B - got me between a rock a hard place.wav,#taunt,1.0,no,,,1.752,unassigned
+adam,0705C - we got you between a rock a hard place.wav,#taunt,1.0,no,,,2.005,unassigned
+adam,0705D - we got you between a rock a hard place.wav,#taunt,1.0,no,,,1.955,unassigned
+adam,0706A - Ain't worth a plug nickel .wav,#taunt #victory #hit,1.0,no,,,1.411,script wording
+adam,0706B - boy you Ain't worth a plug nickel .wav,#taunt #victory #hit,1.0,no,,,2.066,unassigned
+rowan,Rowan 0001 - What was that.wav,#hearing,1.0,no,,,2.12,existing
+rowan,Rowan 0002 - I heard a noise.wav,#hearing,1.0,no,,,1.22,unassigned
+rowan,Rowan 0003 - You better go check it out.wav,#hearing,1.0,no,,,1.5,unassigned
+rowan,Rowan 0004 - Who's there.wav,#hearing,1.0,no,,,0.9,unassigned
+rowan,Rowan 0005 - Something smells fishy.wav,#hearing,1.0,no,,,2.1,existing
+rowan,Rowan 0006 - I got a feeling we're being watched.wav,#hearing,1.0,no,,,2.08,existing
+rowan,Rowan 0007 - Shh!.wav,#hearing,1.0,yes,,,0.6,unassigned
+rowan,Rowan 0008 - Was that you.wav,#hearing,1.0,no,,,0.88,existing
+rowan,Rowan 0010 - Did you hear that.wav,#hearing,1.0,no,,,1.18,existing
+rowan,Rowan 0011 - What was that.wav,#hearing,1.0,no,,,0.96,same wording
+rowan,Rowan 0012 - I heard something.wav,#hearing,1.0,no,,,0.98,unassigned
+rowan,Rowan 0013 - That wasn't the wind.wav,#hearing,1.0,no,,,1.63,unassigned
+rowan,Rowan 0014 - Easy now.wav,#hearing,1.0,no,,,0.92,unassigned
+rowan,Rowan 0015 - Somebody's testing our patience.wav,#hearing,1.0,no,,,2.36,unassigned
+rowan,Rowan 0016 - Quiet.wav,#hearing,1.0,no,,,0.56,unassigned
+rowan,Rowan 0017 - Listen.wav,#hearing,1.0,no,,,0.58,unassigned
+rowan,"Rowan 0018 - Come out, come out, wherever you are.wav",#hearing #searching,1.0,yes,,,3.65,script wording
+rowan,Rowan 0019 - I smell a fight.wav,#shot,1.0,no,,,1.54,existing
+rowan,Rowan 0020 - I hear movement.wav,#hearing #searching,1.0,no,,,1.11,existing
+rowan,Rowan 0021 - I hear some footsteps.wav,#hearing #searching,1.0,no,,,1.61,unassigned
+rowan,Rowan 0022 - Sounds like trouble.wav,#shot,1.0,no,,,1.12,existing
+rowan,Rowan 0023 - We ain't alone anymore.wav,#hearing #shot,1.0,no,,,1.817,unassigned
+rowan,Rowan 0024 - That ain't good.wav,#shot #reloading #hit #ally_fall,1.0,yes,,,1.14,existing
+rowan,Rowan 0025 - We ain't alone.wav,#shot,1.0,no,,,1.14,existing
+rowan,Rowan 0026 - I reckon trouble's afoot.wav,#shot,1.0,no,,,1.83,existing
+rowan,Rowan 0027 - What's that ruckus.wav,#shot,1.0,no,,,1.3,existing
+rowan,Rowan 0028 - He's cutting us down!.wav,#ally_fall,1.0,no,,,1.38,unassigned
+rowan,Rowan 0029 - You'll pay for that!.wav,#ally_fall,1.0,no,,,1.59,existing
+rowan,Rowan 0030 - He shot Jed!.wav,#ally_fall,1.0,no,,,1.26,existing
+rowan,Rowan 0031 - Jed!.wav,#ally_fall,1.0,no,,,0.97,existing
+rowan,Rowan 0032 - Kenny!.wav,#ally_fall,1.0,no,,,1.12,existing
+rowan,Rowan 0033 - Carl!.wav,#ally_fall,1.0,no,,,1.2,existing
+rowan,Rowan 0034 - Billy Bob!.wav,#ally_fall,1.0,no,,,1.36,existing
+rowan,Rowan 0035 - Jim Bob!.wav,#ally_fall,1.0,no,,,0.66,existing
+rowan,Rowan 0036 - No!.wav,#ally_fall #death #reload #hit,1.0,yes,,,0.9,unassigned
+rowan,Rowan 0037 - He killed him!.wav,#ally_fall,1.0,yes,,,1.1,existing
+rowan,"Rowan 0038 - Just you and me now, boy.wav",#ally_fall,1.0,no,,,2.11,existing
+rowan,Rowan 0039 - I'll get you if that's the last thing I do.wav,#ally_fall,1.0,no,,,3.5,existing
+rowan,Rowan 0040 - You enjoying yourself.wav,#ally_fall,1.0,no,,,2.03,existing
+rowan,Rowan 0041 - I bet you're real proud of yourself.wav,#ally_fall,1.0,no,,,2.86,existing
+rowan,Rowan 0042 - Should have been more careful.wav,#ally_fall,1.0,no,,,1.69,unassigned
+rowan,Rowan 0043 - Get him!.wav,#combat #player_reload #player_spotted,1.0,yes,,,0.61,existing
+rowan,Rowan 0044 - I'm gonna put a hole in you.wav,#attacking #player_spotted,1.0,yes,,,1.96,existing
+rowan,Rowan 0045 - Fire!.wav,#attacking #player_spotted,1.0,yes,,,0.77,existing
+rowan,Rowan 0046 - Shoot him.wav,#attacking #player_spotted,1.0,yes,,,1.16,existing
+rowan,Rowan 0047 - kill him.wav,#attacking #player_spotted,1.0,yes,,,1.17,existing
+rowan,Rowan 0048 - take that.wav,#attacking,1.0,yes,,,1.43,existing
+rowan,Rowan 0049 - and that.wav,#reply_attack,1.0,yes,,,1.18,existing
+rowan,Rowan 0050 - Die already Get.wav,#player_hit,1.0,no,,,1.98,unassigned
+rowan,Rowan 0051 - get a rope.wav,#attacking,1.0,no,,,0.682,existing
+rowan,Rowan 0057 - Stick them!.wav,#attacking,1.0,no,,,1.3,unassigned
+rowan,Rowan 0058 - Stick them!.wav,#attacking,1.0,no,,,0.8,unassigned
+rowan,Rowan 0060 - Bang Bang.wav,#attacking,1.0,no,,,1.36,existing
+rowan,Rowan 0061 - Bang Bang.wav,#attacking,1.0,no,,,0.98,same wording
+rowan,"Rowan 0063 - Bang, bang, bang, bang,.wav",#attacking,1.0,no,,,1.61,unassigned
+rowan,"Rowan 0065 - Bang, bang!.wav",#attacking,1.0,no,,,1.09,same wording
+rowan,Rowan 0066 - I'm gonna put a hole in you.wav,#attacking,1.0,no,,,2.15,same wording
+rowan,Rowan 0067 - This one's got your name on it.wav,#attacking,1.0,no,,,2.86,existing
+rowan,Rowan 0068 - This one'll get him.wav,#attacking,1.0,no,,,1.25,unassigned
+rowan,Rowan 0069 - Watch this.wav,#attacking,1.0,no,,,1.88,existing
+rowan,Rowan 0070 - Watch this!.wav,#attacking,1.0,no,,,1.14,same wording
+rowan,Rowan 0071 - You want some of this.wav,#attacking,1.0,no,,,1.89,existing
+rowan,Rowan 0072 - You picked the wrong gang.wav,#attacking,1.0,no,,,2.79,existing
+rowan,Rowan 0073 - You picked the wrong gang.wav,#attacking,1.0,no,,,1.75,same wording
+rowan,Rowan 0074 -that cover won't last forever.wav,#player_cover,1.0,no,,,2.332,unassigned
+rowan,Rowan 0075 - stop hiding.wav,#player_cover,1.0,no,,,1.204,unassigned
+rowan,Rowan 0076 - I got a wagon load of whooping for you.wav,#attacking,1.0,no,,,2.319,unassigned
+rowan,Rowan 0077 - I got a wagon load of whooping.wav,#attacking,1.0,no,,,1.98,unassigned
+rowan,Rowan 0078 - you're softer than weak old biscuits.wav,#attacking,1.0,no,,,2.996,existing
+rowan,Rowan 0079 - I'm warning you.wav,#attacking,1.0,no,,,1.936,existing
+rowan,Rowan 0080 - hold still.wav,#attacking,1.0,no,,,1.302,existing
+rowan,Rowan 0081 - charge.wav,#charge,1.0,no,,,1.408,existing
+rowan,Rowan 0082 - charge.wav,#charge,1.0,no,,,1.364,same wording
+rowan,Rowan 0083 - charge.wav,#charge,1.0,no,,,1.16,same wording
+rowan,Rowan 0084 - Let's rush him.wav,#charge,1.0,no,,,1.266,existing
+rowan,Rowan 0085 - He's pinned close the distance.wav,#charge,1.0,no,,,2.556,existing
+rowan,Rowan 0086 - Enough dancing.wav,#charge,1.0,no,,,1.492,unassigned
+rowan,Rowan 0087 - finish it.wav,#charge,1.0,no,,,0.97,unassigned
+rowan,Rowan 0088 - I'm going for it.wav,#charge,1.0,no,,,1.558,existing
+rowan,Rowan 0089 - keep him busy. I'll go round.wav,#flank,1.0,no,,,2.594,existing
+rowan,Rowan 0090 - I'll get behind him.wav,#flank,1.0,no,,,1.113,existing
+rowan,Rowan 0092 - y'all keep on him.wav,#flank,1.0,no,,,0.899,unassigned
+rowan,Rowan 0093 - I'll shoot him in the back.wav,#flank,1.0,no,,,1.518,unassigned
+rowan,Rowan 0094 - You go that way. I'll go this way.wav,#flank,1.0,no,,,2.595,unassigned
+rowan,Rowan 0095 - I'm going around.wav,#flank,1.0,no,,,1.225,existing
+rowan,Rowan 0096 - I'm going around.wav,#flank,1.0,no,,,1.136,same wording
+rowan,Rowan 0097 - I'll go this way.wav,#flank,1.0,no,,,1.276,existing
+rowan,Rowan 0098 - You go that way.wav,#flank,1.0,no,,,1.01,existing
+rowan,Rowan 0099 - I'll go this way.wav,#flank,1.0,no,,,1.074,same wording
+rowan,Rowan 0100 - You go that way.wav,#flank,1.0,no,,,1.22,same wording
+rowan,Rowan 0101 - Get his attention.wav,#flank,1.0,no,,,0.981,existing
+rowan,Rowan 0102 - He can't shoot in two directions at once.wav,#flank,1.0,no,,,2.479,existing
+rowan,Rowan 0103 - He can't shoot in two directions at once.wav,#flank,1.0,no,,,2.47,same wording
+rowan,Rowan 0104 - I'll go around and flatten him.wav,#flank,1.0,no,,,2.179,existing
+rowan,Rowan 0105 - I'll go around and flatten him.wav,#flank,1.0,no,,,2.414,same wording
+rowan,Rowan 0106 - Keep him busy.wav,#flank #reload,1.0,no,,,1.099,existing
+rowan,"Rowan 0108 - ugh, ugh, screw this!.wav",#flee,1.0,no,,,2.169,unassigned
+rowan,Rowan 0109 - I'm outta here!.wav,#flee,1.0,no,,,1.097,unassigned
+rowan,"Rowan 0110 - MAMA, HELP!.wav",#flee,1.0,no,,,1.899,existing
+rowan,Rowan 0111 - I ain't paid enough for this.wav,#flee,1.0,no,,,2.03,existing
+rowan,"Rowan 0112 - MAMA, HELP!.wav",#flee,1.0,no,,,1.8,same wording
+rowan,"Rowan 0113 - Mama, Help me.wav",#flee,1.0,no,,,2.334,unassigned
+rowan,Rowan 0116 - screw this! Im outta here!.wav,#flee,1.0,no,,,2.395,existing
+rowan,Rowan 0118 - I ain't paid enough for this shit!.wav,#flee,1.0,no,,,2.52,unassigned
+rowan,Rowan 0119 - Skedaddle!.wav,#flee,1.0,no,,,0.99,unassigned
+rowan,"Rowan 0122 - skedaddle, that's what mama'd say.wav",#flee,1.0,no,,,2.84,existing
+rowan,Rowan 0123 - I resign!.wav,#flee,1.0,no,,,0.74,unassigned
+rowan,Rowan 0124 - I resign! Effective immediately!.wav,#flee,1.0,no,,,2.52,existing
+rowan,Rowan 0126 - I resign! Effective immediately!.wav,#flee,1.0,no,,,2.52,same wording
+rowan,"Rowan 0128 - this hands lost, I fold.wav",#flee,1.0,no,,,1.835,existing
+rowan,"Rowan 0130 - this hands lost, I fold.wav",#flee,1.0,no,,,1.674,same wording
+rowan,Rowan 0132 - that's it! I'm outta here!.wav,#flee,1.0,no,,,1.788,existing
+rowan,Rowan 0134 - You ain't worth the trouble.wav,#flee,1.0,no,,,1.888,existing
+rowan,Rowan 0135 - I've had enough.wav,#flee,1.0,no,,,1.324,existing
+rowan,Rowan 0136 - I've had enough.wav,#flee,1.0,no,,,1.68,same wording
+rowan,Rowan 0137 - You ain't worth the trouble.wav,#flee,1.0,no,,,2.274,same wording
+rowan,Rowan 0138 - That's it. I'm out of here.wav,#flee,1.0,no,,,3.002,unassigned
+rowan,"Rowan 0139 - this hands lost, I fold.wav",#flee,1.0,no,,,2.176,same wording
+rowan,Rowan 0141 - I resign effective immediately.wav,#flee,1.0,no,,,3.18,same wording
+rowan,Rowan 0142 - I've had enough.wav,#flee,1.0,no,,,1.794,same wording
+rowan,"Rowan 0150 - Maybe if I can't see him, he can't see me.wav",#hiding,1.0,no,,,3.136,unassigned
+rowan,Rowan 0151 - Let's ambush him.wav,#hiding,1.0,no,,,1.34,existing
+rowan,"Rowan 0154 - let him pass by, then we jump him.wav",#hiding,1.0,no,,,3.245,existing
+rowan,Rowan 0157 - I aint stickin my head out there.wav,#hiding,1.0,no,,,2.146,existing
+rowan,Rowan 0158 - I aint stickin my head out there.wav,#hiding,1.0,no,,,1.967,same wording
+rowan,Rowan 0160 - I'll wait for him to come to me.wav,#hiding,1.0,no,,,2.742,existing
+rowan,Rowan 0163 - I'll wait for him to come to me.wav,#hiding,1.0,no,,,2.434,same wording
+rowan,Rowan 0164 - this walls lucky I'm behind it.wav,#hiding,1.0,no,,,2.162,existing
+rowan,Rowan 0166 - This walls lucky. I'm behind it.wav,#hiding,1.0,no,,,2.718,same wording
+rowan,Rowan 0167 - ow ow ow ow ow.wav,#hit,1.0,yes,,,1.62,unassigned
+rowan,Rowan 0168 - ow.wav,#hit,1.0,yes,,,0.64,unassigned
+rowan,Rowan 0169 - owowowowow.wav,#hit,1.0,yes,,,1.3,unassigned
+rowan,Rowan 0170 - ow ow ow OW.wav,#hit,1.0,yes,,,1.7,existing
+rowan,Rowan 0176 - Dagnabbit!.wav,#ally_fall #death #hit #reload,1.0,yes,,,1.084,same wording
+rowan,Rowan 0177 - My mama made me this shirt!.wav,#hit,1.0,no,,,1.808,unassigned
+rowan,Rowan 0178 - Ow ow ow ow ow ow!.wav,#hit,1.0,yes,,,3.12,unassigned
+rowan,Rowan 0180 - Ugh!.wav,#hit,1.0,yes,,,0.5,unassigned
+rowan,Rowan 0181 - Owwww!.wav,#hit,1.0,yes,,,0.86,unassigned
+rowan,Rowan 0182 - Ugh!.wav,#hit,1.0,yes,,,1.1,unassigned
+rowan,"Rowan 0183 - Oh, that's gonna leave a mark!.wav",#hit,1.0,no,,,2.352,existing
+rowan,Rowan 0186 - Ugh!.wav,#hit,1.0,yes,,,0.58,unassigned
+rowan,Rowan 0187 - That's gonna leave a mark!.wav,#hit,1.0,no,,,1.6,existing
+rowan,Rowan 0188 - Ugh!.wav,#hit,1.0,yes,,,1.0,unassigned
+rowan,Rowan 0189 - That one tickled! .wav,#hit,1.0,no,,,1.72,existing
+rowan,Rowan 0194 - ow OW.wav,#hit,1.0,yes,,,1.189,unassigned
+rowan,Rowan 0195 - uck!.wav,#hit,1.0,yes,,,0.658,unassigned
+rowan,"Rowan 0196 - oh, ooh.wav",#hit,1.0,yes,,,1.63,unassigned
+rowan,Rowan 0197 - hurk!.wav,#hit,1.0,yes,,,0.488,unassigned
+rowan,Rowan 0198 - haak!.wav,#hit,1.0,yes,,,0.546,unassigned
+rowan,Rowan 0202 - My leg.wav,#hit,1.0,yes,,,0.896,existing
+rowan,Rowan 0203 - My arm.wav,#hit,1.0,yes,,,1.04,existing
+rowan,"Rowan 0204 - Oh, my arm.wav",#hit,1.0,yes,,,1.32,unassigned
+rowan,Rowan 0205 - My leg.wav,#hit,1.0,no,,,1.024,same wording
+rowan,Rowan 0209A - My leg!.wav,#hit,1.0,no,,,0.869,same wording
+rowan,Rowan 0209B - My arm!.wav,#hit,1.0,no,,,0.852,same wording
+rowan,Rowan 0209C - My leg!.wav,#hit,1.0,no,,,0.794,same wording
+rowan,Rowan 0210 - damn it.wav,#ally_fall #hit #reload,1.0,yes,,,0.906,unassigned
+rowan,Rowan 0213 - hugh!.wav,#hit,1.0,yes,,,0.54,unassigned
+rowan,Rowan 0214 - ow!.wav,#hit,1.0,yes,,,0.66,unassigned
+rowan,Rowan 0221 - Oh.wav,#hit,1.0,yes,,,0.369,unassigned
+rowan,Rowan 0228 - urg!.wav,#hit,1.0,yes,,,0.46,unassigned
+rowan,Rowan 0229 - urg!.wav,#hit,1.0,yes,,,0.592,unassigned
+rowan,Rowan 0245 - that smarts.wav,#hit,1.0,yes,,,1.045,existing
+rowan,Rowan 0247 - he got me.wav,#hit,1.0,yes,,,1.21,existing
+rowan,Rowan 0248 - I'm hit.wav,#hit,1.0,yes,,,1.224,existing
+rowan,Rowan 0249 - winged me.wav,#hit,1.0,yes,,,1.282,existing
+rowan,Rowan 0250 - now that was down.wav,#hit,1.0,no,,,1.548,unassigned
+rowan,Rowan 0250 - now that was downright impolite.wav,#hit,1.0,no,,,2.033,existing
+rowan,Rowan 0251 - he'll pay interest on that one.wav,#hit,1.0,no,,,2.51,unassigned
+rowan,Rowan 0252 - that all you got.wav,#hit,1.0,no,,,1.56,unassigned
+rowan,Rowan 0253 - guh!.wav,#hit,1.0,yes,,,0.42,existing
+rowan,"Rowan 0254 - That one tickled,.wav",#hit,1.0,no,,,1.18,same wording
+rowan,Rowan 0256 - that's gonna leave a mark.wav,#hit,1.0,no,,,1.989,same wording
+rowan,Rowan 0257 - Momma made this shirt!.wav,#hit,1.0,no,,,1.76,unassigned
+rowan,Rowan 0258 - my momma made me this shirt!.wav,#hit,1.0,no,,,2.2,unassigned
+rowan,"Rowan 0259 - Ah, ah,.wav",#hit,1.0,yes,,,0.62,unassigned
+rowan,"Rowan 0260 - ah,.wav",#hit,1.0,yes,,,0.68,unassigned
+rowan,"Rowan 0261 - ah, ah,.wav",#hit,1.0,yes,,,0.66,unassigned
+rowan,"Rowan 0262 - oh,.wav",#hit,1.0,yes,,,0.57,unassigned
+rowan,"Rowan 0263 - ah,.wav",#hit,1.0,yes,,,0.48,unassigned
+rowan,"Rowan 0264 - oh, oh,.wav",#hit,1.0,yes,,,0.47,unassigned
+rowan,"Rowan 0265 - oh, oh,.wav",#hit,1.0,yes,,,0.98,unassigned
+rowan,"Rowan 0266 - oh, oh, oh, oh, oh, oh, oh, dammit!.wav",#hit,1.0,yes,,,1.652,unassigned
+rowan,"Rowan 0267 - Mmm, my leg,.wav",#hit,1.0,yes,,,1.18,unassigned
+rowan,Rowan 0268 - my arm!.wav,#hit,1.0,yes,,,0.96,same wording
+rowan,"Rowan 0269 - Mama,.wav",#hit,1.0,yes,,,0.644,existing
+rowan,Rowan 0270 - he got me.wav,#hit,1.0,yes,,,0.668,same wording
+rowan,Rowan 0270 - that smarts.wav,#hit,1.0,yes,,,1.097,same wording
+rowan,Rowan 0271 - I'm hit.wav,#hit,1.0,yes,,,0.82,same wording
+rowan,"Rowan 0272 - Oh,.wav",#hit,1.0,yes,,,0.3,unassigned
+rowan,Rowan 0273 - he winged me.wav,#hit,1.0,no,,,1.12,unassigned
+rowan,Rowan 0274 - Now that was downright impolite.wav,#hit,1.0,no,,,1.96,same wording
+rowan,Rowan 0275 - You'll pay interest on that one.wav,#hit,1.0,no,,,2.58,existing
+rowan,Rowan 0276 - that all you got.wav,#hit,1.0,no,,,2.062,unassigned
+rowan,Rowan 0278 - Now that was downright impolite.wav,#hit,1.0,no,,,2.382,same wording
+rowan,Rowan 0279 - Now that was downright impolite.wav,#hit,1.0,no,,,2.588,same wording
+rowan,Rowan 0281 - Now that was downright impolite.wav,#hit,1.0,no,,,2.08,same wording
+rowan,Rowan 0282 - Ha!.wav,#player_hit,1.0,no,,,0.6,unassigned
+rowan,Rowan 0283 - That one woke me up.wav,#hit,1.0,no,,,1.54,unassigned
+rowan,Rowan 0284 - Oh!.wav,#hit,1.0,yes,,,0.68,unassigned
+rowan,Rowan 0285 - That one woke me up.wav,#hit,1.0,no,,,1.52,unassigned
+rowan,Rowan 0286 - Ha!.wav,#hit,1.0,yes,,,0.36,unassigned
+rowan,Rowan 0287 - That one woke me up.wav,#hit,1.0,no,,,1.06,unassigned
+rowan,Rowan 0288 - That's the side I sleep on.wav,#hit,1.0,no,,,1.624,existing
+rowan,Rowan 0289 - That's the side I sleep on.wav,#hit,1.0,no,,,1.84,same wording
+rowan,Rowan 0290 - That's the side I sleep on.wav,#hit,1.0,no,,,1.83,same wording
+rowan,Rowan 0291 - That's gonna leave a mark.wav,#hit,1.0,no,,,1.62,same wording
+rowan,Rowan 0295 - I think I got him.wav,#hit_player #kill_player,1.0,yes,,,1.18,existing
+rowan,Rowan 0296 - I got him.wav,#hit_player #kill_player,1.0,yes,,,0.82,existing
+rowan,Rowan 0297 - I hit him.wav,#hit_player #kill_player,1.0,yes,,,0.8,existing
+rowan,Rowan 0298 - I shot him.wav,#hit_player #kill_player,1.0,yes,,,0.884,existing
+rowan,Rowan 0299 - I hit him.wav,#hit_player #kill_player,1.0,yes,,,0.78,same wording
+rowan,Rowan 0300 - I got him.wav,#hit_player #kill_player,1.0,yes,,,0.8,same wording
+rowan,Rowan 0301 - I think I hit him.wav,#hit_player,1.0,yes,,,1.05,unassigned
+rowan,Rowan 0302 - I think I got him.wav,#hit_player #kill_player,1.0,yes,,,0.972,same wording
+rowan,Rowan 0303 - I got him.wav,#hit_player #kill_player,1.0,yes,,,0.836,same wording
+rowan,Rowan 0304 - I hit him.wav,#hit_player #kill_player,1.0,yes,,,0.96,same wording
+rowan,Rowan 0305 - Shot him.wav,#hit_player #kill_player,1.0,yes,,,0.66,unassigned
+rowan,Rowan 0306 - He's still moving.wav,#hit_player #kill_player,1.0,yes,,,1.16,existing
+rowan,Rowan 0307 - I winged him.wav,#hit_player,1.0,yes,,,0.86,existing
+rowan,Rowan 0308 - He's tougher than I thought.wav,#hit_player,1.0,no,,,1.5,unassigned
+rowan,Rowan 0309 - Tougher than I thought.wav,#hit_player,1.0,no,,,1.22,existing
+rowan,Rowan 0310 - There's more where that came from.wav,#hit_player,1.0,no,,,1.66,existing
+rowan,Rowan 0311 - So he does bleed.wav,#hit_player,1.0,no,,,2.02,existing
+rowan,Rowan 0312 - So he does bleed.wav,#hit_player,1.0,no,,,1.36,same wording
+rowan,Rowan 0313 - So he does bleed.wav,#hit_player,1.0,no,,,1.54,same wording
+rowan,Rowan 0314 - There's more where that came from.wav,#hit_player,1.0,no,,,1.92,same wording
+rowan,Rowan 0315 - How's that feel.wav,#hit_player,1.0,no,,,1.48,existing
+rowan,Rowan 0317 - Die already!.wav,#hit_player,1.0,no,,,1.48,unassigned
+rowan,Rowan 0318 - How's that feel.wav,#hit_player,1.0,no,,,1.79,same wording
+rowan,Rowan 0319 - So he does bleed.wav,#hit_player,1.0,no,,,2.044,same wording
+rowan,Rowan 0320 - I ain't going down without a fight.wav,#hit_player,1.0,no,,,2.26,unassigned
+rowan,Rowan 0321 - Stings don't it.wav,#hit_player,1.0,no,,,1.596,existing
+rowan,Rowan 0322 - Stings don't it.wav,#hit_player,1.0,no,,,1.47,same wording
+rowan,Rowan 0323 - I ain't going down without a fight.wav,#hit_player,1.0,no,,,2.73,unassigned
+rowan,"Rowan 0324 - Oh, you got a boo-boo.wav",#hit_player,1.0,no,,,2.51,unassigned
+rowan,"Rowan 0325 - Oh, baby's got a boo-boo.wav",#hit_player,1.0,no,,,2.78,unassigned
+rowan,"Rowan 0326 - Oh, Sheriff's got a little boo-boo.wav",#hit_player,1.0,no,,,2.68,unassigned
+rowan,"Rowan 0330 - Oh, you got a boo-boo.wav",#hit_player,1.0,no,,,2.61,unassigned
+rowan,"Rowan 0331 - Oh, got a boo-boo, Sheriff.wav",#hit_player,1.0,no,,,2.48,unassigned
+rowan,"Rowan 0332 - Oh, got a boo-boo, Sheriff.wav",#hit_player,1.0,no,,,2.23,unassigned
+rowan,Rowan 0333 - Keep your eyes open.wav,#investigate,1.0,no,,,1.55,existing
+rowan,Rowan 0335 - it... now I've got a gun you hear me.wav,#investigate,1.0,no,,,2.488,existing
+rowan,Rowan 0343 - what have I gotten myself into this time.wav,#investigate,1.0,no,,,3.475,unassigned
+rowan,Rowan 0345 - what have I gotten myself into.wav,#investigate,1.0,no,,,2.234,existing
+rowan,Rowan 0346 - I should've retired years ago.wav,#investigate,1.0,no,,,2.85,unassigned
+rowan,Rowan 0347 - What have I gotten myself into.wav,#investigate,1.0,no,,,2.284,same wording
+rowan,"Rowan 0348 - One more mission, they said.wav",#investigate,1.0,no,,,2.03,unassigned
+rowan,"Rowan 0349 - One more heist, they said.wav",#investigate,1.0,no,,,2.35,unassigned
+rowan,Rowan 0350 - I'll go check.wav,#investigate,1.0,no,,,0.94,existing
+rowan,Rowan 0351 - I'll go check it out.wav,#investigate,1.0,no,,,1.142,unassigned
+rowan,Rowan 0352 - Better go see what that was.wav,#investigate,1.0,no,,,1.934,existing
+rowan,Rowan 0353 - Better go see what that was.wav,#investigate,1.0,no,,,1.39,same wording
+rowan,Rowan 0354 - I bet its that sheriff.wav,#investigate,1.0,no,,,2.087,unassigned
+rowan,Rowan 0355 - I bet its that sheriff.wav,#investigate,1.0,no,,,2.075,unassigned
+rowan,Rowan 0357 - I bet its that sheriff.wav,#investigate,1.0,no,,,1.71,unassigned
+rowan,Rowan 0359 - I'll bet it's that bounty hunter.wav,#investigate,1.0,no,,,1.75,existing
+rowan,Rowan 0360 - I'll bet it's that bounty hunter.wav,#investigate,1.0,no,,,1.836,same wording
+rowan,Rowan 0361 - I'll bet it's a bounty hunter.wav,#investigate,1.0,no,,,1.8,unassigned
+rowan,Rowan 0362 - Spread out.wav,#investigate,1.0,no,,,0.68,existing
+rowan,Rowan 0364 - Spread out!.wav,#investigate,1.0,no,,,0.88,same wording
+rowan,"Rowan 0365 - shh, spread out.wav",#investigate,1.0,no,,,1.753,unassigned
+rowan,Rowan 0367 - You guys go check it out.wav,#investigate,1.0,no,,,1.444,existing
+rowan,Rowan 0368 - You guys go check it out.wav,#investigate,1.0,no,,,2.036,same wording
+rowan,Rowan 0369 - bastard!.wav,#death,1.0,yes,,,1.06,existing
+rowan,"Rowan 0372 - you suck,.wav",#death,1.0,no,,,2.22,existing
+rowan,"Rowan 0373 - uh,.wav",#hit,1.0,yes,,,0.53,unassigned
+rowan,Rowan 0374 - you suck.wav,#death,1.0,no,,,2.004,same wording
+rowan,"Rowan 0375 - The gold is, uh,.wav",#death,1.0,no,,,3.12,unassigned
+rowan,Rowan 0376 - bastard.wav,#death #ally_fall,1.0,yes,,,0.76,same wording
+rowan,Rowan 0377 - Dag nab bit.wav,#death,1.0,no,,,2.464,unassigned
+rowan,Rowan 0378 - dag nab it.wav,#death,1.0,no,,,1.598,unassigned
+rowan,Rowan 0379 - I can see the light.wav,#death,1.0,no,,,2.04,existing
+rowan,Rowan 0380 - I can see the light.wav,#death,1.0,no,,,2.07,same wording
+rowan,"Rowan 0381 - I'm coming, mama.wav",#death,1.0,no,,,1.69,existing
+rowan,"Rowan 0382 - I'm coming, Pa.wav",#death,1.0,no,,,1.62,unassigned
+rowan,"Rowan 0383 - I'm coming, Meemaw.wav",#death,1.0,no,,,1.79,unassigned
+rowan,Rowan 0384 - Tell mama I was mostly good.wav,#death,1.0,no,,,3.172,existing
+rowan,Rowan 0385 - Tell mama I was mostly good.wav,#death,1.0,no,,,2.16,same wording
+rowan,"Rowan 0389 - Well played, you bastard.wav",#death,1.0,no,,,3.288,existing
+rowan,Rowan 0392 - Reckon I misjudged the odds.wav,#death,1.0,no,,,2.4,existing
+rowan,Rowan 0393 - Takes more than that.wav,#death,1.0,no,,,1.814,unassigned
+rowan,Rowan 0396 - I'll be damned.wav,#death,1.0,no,,,1.16,unassigned
+rowan,Rowan 0397 - I'll be damned.wav,#death,1.0,no,,,1.85,unassigned
+rowan,Rowan 0399 - I had so much promise.wav,#death,1.0,no,,,3.08,existing
+rowan,Rowan 0400 - tell the cook more gravy.wav,#death,1.0,no,,,2.725,existing
+rowan,Rowan 0402 - tell the cook more gravy.wav,#death,1.0,no,,,2.746,same wording
+rowan,Rowan 0404 - I ain't paid enough to die.wav,#death,1.0,no,,,2.55,existing
+rowan,Rowan 0405 - I ain't paid enough to die.wav,#death,1.0,no,,,2.14,same wording
+rowan,Rowan 0406 - He's a straight shooter.wav,#death,1.0,no,,,1.812,existing
+rowan,Rowan 0407 - I can see the light.wav,#death,1.0,no,,,1.41,same wording
+rowan,Rowan 0408 - you suck.wav,#death,1.0,no,,,2.11,same wording
+rowan,"Rowan 0422 - Not so tough now, are ya.wav",#victory #kill_player,1.0,no,,,1.78,existing
+rowan,"Rowan 0423 - Not so tough now, are ya.wav",#victory #kill_player,1.0,no,,,2.06,same wording
+rowan,Rowan 0426 - Not so tough now are ya.wav,#victory #kill_player,1.0,no,,,2.44,same wording
+rowan,Rowan 0428 - Not so tough now are ya.wav,#victory #kill_player,1.0,no,,,2.61,same wording
+rowan,Rowan 0429 - Glad that's over.wav,#victory,1.0,no,,,1.61,existing
+rowan,Rowan 0430 - Glad that's over.wav,#victory,1.0,no,,,1.14,same wording
+rowan,Rowan 0431 - Glad that's over.wav,#victory,1.0,no,,,1.44,same wording
+rowan,Rowan 0432 - Check his pockets.wav,#victory,1.0,no,,,1.37,existing
+rowan,"Rowan 0433 - Oh, check his pockets.wav",#victory,1.0,no,,,1.652,unassigned
+rowan,Rowan 0434 - phew that was a close one!.wav,#victory #kill_player,1.0,no,,,2.452,unassigned
+rowan,Rowan 0438 - Well that was easy.wav,#victory #kill_player,1.0,no,,,1.24,unassigned
+rowan,Rowan 0439 - I'll get a shovel.wav,#victory,1.0,no,,,1.32,existing
+rowan,Rowan 0440 - Let the buzzards have them.wav,#victory,1.0,no,,,2.04,unassigned
+rowan,Rowan 0441 - HA HA HA HA HA HA.wav,#victory #kill_player,1.0,no,,,2.82,unassigned
+rowan,Rowan 0442 - HA HA.wav,#victory #kill_player,1.0,no,,,2.44,unassigned
+rowan,Rowan 0443 - HA HA HA HA HA.wav,#victory #kill_player,1.0,no,,,2.032,unassigned
+rowan,Rowan 0447 - ha ha ha ha ha ha ha.wav,#victory #kill_player,1.0,no,,,1.376,unassigned
+rowan,Rowan 0448 - I get his gun.wav,#victory,1.0,no,,,1.15,existing
+rowan,Rowan 0449 - We whooped your ass.wav,#victory ,1.0,no,,,2.12,unassigned
+rowan,Rowan 0450 - We whooped them.wav,#victory,1.0,no,,,1.3,unassigned
+rowan,Rowan 0451 - We whooped your ass.wav,#victory #kill_player,1.0,no,,,2.1,unassigned
+rowan,Rowan 0452 - We're getting pretty good at this.wav,#victory #kill_player,1.0,no,,,1.92,existing
+rowan,"Rowan 0453 - I say, we're getting good at this.wav",#victory #kill_player,1.0,no,,,2.3,unassigned
+rowan,Rowan 0454 - Bullseye.wav,#victory #kill_player,1.0,no,,,1.3,existing
+rowan,Rowan 0466 - That's what you get.wav,#victory #kill_player,1.0,no,,,1.28,existing
+rowan,Rowan 0467 - That's what you get.wav,#victory #kill_player,1.0,no,,,1.84,same wording
+rowan,Rowan 0469 - I get his hat.wav,#victory,1.0,no,,,1.09,existing
+rowan,Rowan 0470 - I get his boots.wav,#victory,1.0,no,,,1.16,unassigned
+rowan,Rowan 0473 - I get his spurs mine are wearing out.wav,#victory,1.0,no,,,2.329,unassigned
+rowan,Rowan 0475 - I get his boots.wav,#victory,1.0,no,,,1.18,unassigned
+rowan,Rowan 0476 - I get his gun.wav,#victory,1.0,no,,,1.04,same wording
+rowan,Rowan 0482 - I get his hat.wav,#victory,1.0,no,,,1.082,same wording
+rowan,Rowan 0483 - dibs on the hat.wav,#victory,1.0,no,,,1.422,unassigned
+rowan,Rowan 0484 - dibs on the boots.wav,#victory,1.0,no,,,1.68,unassigned
+rowan,Rowan 0485 - shoot where'd he go.wav,#lost_contact,1.0,no,,,2.0,existing
+rowan,Rowan 0525 - ha chicken.wav,#lost_contact,1.0,no,,,1.77,existing
+rowan,Rowan 0526 - he's gone to church.wav,#lost_contact,1.0,no,,,1.896,unassigned
+rowan,Rowan 0531 - maybe he ran away.wav,#lost_contact,1.0,no,,,1.802,existing
+rowan,Rowan 0534 - Think we can call that a victory.wav,#kill_player #victory,1.0,no,,,1.76,existing
+rowan,"Rowan 0535 - He's not gone, he's thinking.wav",#lost_contact,1.0,no,,,2.06,existing
+rowan,Rowan 0539 - I can smell your cowardice.wav,#lost_contact,1.0,no,,,2.36,existing
+rowan,Rowan 0540 - I can smell your cowardice.wav,#lost_contact,1.0,no,,,2.26,same wording
+rowan,Rowan 0541 - Where'd that little varmint scurry off to.wav,#lost_contact,1.0,no,,,2.42,existing
+rowan,Rowan 0544 - He vanished that's usually my trick.wav,#lost_contact,1.0,no,,,2.808,existing
+rowan,"Rowan 0546 - Ha chicken,.wav",#lost_contact,1.0,no,,,1.66,same wording
+rowan,Rowan 0547 - maybe he ran away.wav,#lost_contact,1.0,no,,,1.422,same wording
+rowan,Rowan 0548 - Maybe he's gone to church.wav,#lost_contact,1.0,no,,,1.772,existing
+rowan,Rowan 0549 - Think we can call that a victory.wav,#lost_contact,1.0,no,,,1.826,same wording
+rowan,Rowan 0550 - Where'd he go.wav,#lost_contact,1.0,no,,,0.922,existing
+rowan,Rowan 0551 - I lost him.wav,#lost_contact,1.0,no,,,1.093,existing
+rowan,Rowan 0552 - coward.wav,#lost_contact #player_cover,1.0,no,,,0.771,existing
+rowan,Rowan 0552 - he thinks he can hide!.wav,#lost_contact,1.0,no,,,1.689,existing
+rowan,Rowan 0555 - He thinks he can run.wav,#lost_contact,1.0,no,,,1.652,existing
+rowan,Rowan 0556 - He's a slippery little fella.wav,#lost_contact,1.0,no,,,1.94,unassigned
+rowan,"Rowan 0557 - He's a slippery little fella, ain't he.wav",#lost_contact,1.0,no,,,2.452,unassigned
+rowan,Rowan 0558 - He's pinned!.wav,#player_cover,1.0,no,,,0.98,existing
+rowan,Rowan 0559 - Coward!.wav,#lost_contact #player_cover,1.0,no,,,0.7,same wording
+rowan,Rowan 0560 - Get him!.wav,#combat #player_reload,1.0,no,,,0.62,same wording
+rowan,Rowan 0561 - He's empty!.wav,#player_reload,1.0,no,,,0.98,existing
+rowan,Rowan 0562 - Now's our chance!.wav,#player_reload,1.0,no,,,1.2,existing
+rowan,Rowan 0563 - Hear that.wav,#shot #player_reload,1.0,no,,,0.76,unassigned
+rowan,Rowan 0564 - Move!.wav,#player_reload #combat,1.0,no,,,0.62,unassigned
+rowan,"Rowan 0567 - Out of bullets, are we.wav",#player_reload,1.0,no,,,1.62,unassigned
+rowan,Rowan 0568 - Out of bullets.wav,#player_reload,1.0,no,,,1.38,unassigned
+rowan,Rowan 0569 - You're mine now.wav,#player_reload,1.0,no,,,1.78,existing
+rowan,Rowan 0570 - He's reloading.wav,#player_reload,1.0,no,,,1.02,existing
+rowan,Rowan 0571 - an opening! get him!.wav,#player_reload,1.0,no,,,1.369,existing
+rowan,Rowan 0573 - an opening! get him!.wav,#player_reload,1.0,no,,,1.404,same wording
+rowan,"Rowan 0575 - Oh, you're dead now.wav",#player_reload,1.0,no,,,1.86,existing
+rowan,Rowan 0576 - They know we're here.wav,#first_sighting,1.0,no,,,1.14,unassigned
+rowan,Rowan 0578 - Get him!.wav,#combat #player_reload,1.0,no,,,0.652,same wording
+rowan,Rowan 0579 - Get that sissy boy.wav,#combat,1.0,no,,,1.77,existing
+rowan,Rowan 0580 - Yikes.wav,#combat #cover,1.0,no,,,1.142,existing
+rowan,Rowan 0583 - Get that sissy boy. Get him.wav,#combat,1.0,no,,,2.312,unassigned
+rowan,Rowan 0584 - Who's that.wav, #first_sighting,1.0,no,,,1.01,unassigned
+rowan,Rowan 0585 - Who's that.wav, #first_sighting,1.0,no,,,0.884,unassigned
+rowan,Rowan 0587 - they know we're here!.wav, #first_sighting,1.0,no,,,1.077,unassigned
+rowan,"Rowan 0588 - It's the law,.wav", #first_sighting,1.0,no,,,1.086,unassigned
+rowan,Rowan 0589 - it's that sheriff.wav, #first_sighting,1.0,no,,,1.08,unassigned
+rowan,Rowan 0597 - Who's that.wav, #first_sighting,1.0,no,,,0.87,unassigned
+rowan,"Rowan 0598 - I see him,.wav",#first_sighting,1.0,yes,,,0.812,unassigned
+rowan,"Rowan 0600 - rush him,.wav",#combat,1.0,no,,,0.91,existing
+rowan,"Rowan 0601 - get him,.wav",#combat #player_reload,1.0,no,,,0.902,same wording
+rowan,"Rowan 0602 - there he is,.wav",#combat #first_sighting #player_spotted,1.0,yes,,,1.234,existing
+rowan,"Rowan 0603 - he's over there,.wav",#combat #player_spotted,1.0,yes,,,1.19,script wording
+rowan,"Rowan 0604 - he's over here,.wav",#combat #player_spotted,1.0,yes,,,1.16,existing
+rowan,"Rowan 0606 - I found him,.wav",#combat #first_sighting #player_spotted,1.0,yes,,,0.98,existing
+rowan,"Rowan 0607 - I found him,.wav",#combat #first_sighting #player_spotted,1.0,yes,,,1.33,same wording
+rowan,"Rowan 0608 - well look what the cat dragged in,.wav", #first_sighting,1.0,no,,,2.556,unassigned
+rowan,"Rowan 0609 - Sheriff's here, mind your manners,.wav", #first_sighting,1.0,no,,,2.24,unassigned
+rowan,Rowan 0610 - Sheriff's Mind your manners!.wav, #first_sighting,1.0,no,,,2.26,unassigned
+rowan,Rowan 0616 - It's him!.wav,#combat #first_sighting #player_spotted,1.0,yes,,,0.82,existing
+rowan,Rowan 0617 - I found him!.wav,#combat #first_sighting #player_spotted,1.0,yes,,,1.08,same wording
+rowan,"Rowan 0618 - Well, look what the cat dragged in.wav",#first_sighting,1.0,no,,,2.17,unassigned
+rowan,Rowan 0621 - There he is!.wav,#combat #first_sighting #player_spotted,1.0,yes,,,1.1,same wording
+rowan,Rowan 0622 - There he is!.wav,#combat #first_sighting #player_spotted,1.0,yes,,,1.66,same wording
+rowan,Rowan 0623 - There he is!.wav,#combat #first_sighting #player_spotted,1.0,yes,,,0.93,same wording
+rowan,Rowan 0624 - Don't give him a clean shot!.wav,#combat,1.0,no,,,1.59,existing
+rowan,Rowan 0625 - The jig is up.wav,#combat,1.0,no,,,0.932,existing
+rowan,Rowan 0628 - You fixin' to die.wav,#combat,1.0,no,,,1.44,existing
+rowan,Rowan 0629 - I'll fill you full of lead.wav,#combat,1.0,no,,,2.04,existing
+rowan,Rowan 0630 - You're about to meet your maker.wav,#combat,1.0,no,,,1.6,existing
+rowan,Rowan 0632 - He's after our loot!.wav,#combat #first_sighting ,1.0,no,,,1.324,unassigned
+rowan,Rowan 0633 - Dang it!.wav,#ally_fall #hit #reload,1.0,yes,,,0.6,existing
+rowan,Rowan 0634 - I'm dry!.wav,#reload,1.0,yes,,,0.98,existing
+rowan,Rowan 0635 - Hold on now.wav,#reload #cover,1.0,yes,,,0.92,existing
+rowan,Rowan 0636 - Hold on a second.wav,#reload #cover,1.0,yes,,,1.0,existing
+rowan,Rowan 0637 - Time out!.wav,#cover #reload,1.0,yes,,,0.88,existing
+rowan,Rowan 0638 - Time out!.wav,#cover #reload,1.0,yes,,,0.74,same wording
+rowan,Rowan 0639 - Empty.wav,#reload,1.0,yes,,,0.58,existing
+rowan,Rowan 0640 - Cover me.wav,#reload #combat,1.0,yes,,,0.7,existing
+rowan,Rowan 0641 - Empty!.wav,#reload,1.0,yes,,,0.76,same wording
+rowan,Rowan 0642 - Cover me!.wav,#reload #combat,1.0,yes,,,0.7,same wording
+rowan,Rowan 0643 - I'm dry.wav,#reload,1.0,yes,,,0.78,same wording
+rowan,Rowan 0644 - Gotta freshen up.wav,#reload,1.0,yes,,,1.02,existing
+rowan,Rowan 0647 - I'm out!.wav,#reload,1.0,yes,,,0.64,existing
+rowan,Rowan 0648 - Nobody shoot till I'm ready.wav,#reload,1.0,yes,,,1.7,existing
+rowan,Rowan 0649 - I'm empty!.wav,#reload,1.0,yes,,,0.98,existing
+rowan,Rowan 0650 - Keep him busy.wav,#flank #reload #combat,1.0,yes,,,0.94,same wording
+rowan,Rowan 0651 - I'm running out of bullets.wav,#reload,1.0,yes,,,1.4,existing
+rowan,Rowan 0652 - I ain't done with you yet.wav,#reload,1.0,yes,,,1.66,existing
+rowan,Rowan 0653 - Just a minute.wav,#reload,1.0,yes,,,0.68,existing
+rowan,Rowan 0654 - Come on out now.wav,#search #player_cover,1.0,yes,,,1.416,unassigned
+rowan,"Rowan 0657 - come on out,.wav",#search,1.0,yes,,,2.45,unassigned
+rowan,Rowan 0659 - Come on out. Out!.wav,#search,1.0,yes,,,2.43,unassigned
+rowan,Rowan 0660 - I think I heard him this way.wav,#search,1.0,yes,,,1.884,unassigned
+rowan,Rowan 0661 - I think he's this way.wav,#search,1.0,yes,,,1.22,existing
+rowan,Rowan 0662 - He went this way!.wav,#search,1.0,yes,,,1.174,existing
+rowan,Rowan 0663 - Keep your eyes peeled.wav,#search,1.0,yes,,,1.244,existing
+rowan,Rowan 0664 - Keep your eyes peeled.wav,#search,1.0,yes,,,1.36,same wording
+rowan,Rowan 0665 - I think he's this way.wav,#search,1.0,yes,,,1.16,same wording
+rowan,Rowan 0666 - I think I heard him.wav,#search,1.0,yes,,,1.042,existing
+rowan,Rowan 0667 - Look out!.wav,#cover,1.0,yes,,,0.78,existing
+rowan,Rowan 0668 - I'll cover you!.wav,#cover,1.0,yes,,,0.98,unassigned
+rowan,Rowan 0669 - Time out!.wav,#cover #reload,1.0,yes,,,1.06,same wording
+rowan,Rowan 0670 - Time out!.wav,#cover #reload,1.0,yes,,,0.84,same wording
+rowan,Rowan 0671 - Hide me!.wav,#cover,1.0,yes,,,0.8,existing
+rowan,Rowan 0672 - Look out!.wav,#cover,1.0,yes,,,0.7,same wording
+rowan,Rowan 0673 - Take cover!.wav,#cover,1.0,yes,,,0.78,existing
+rowan,Rowan 0674 - Look out!.wav,#cover,1.0,yes,,,0.66,same wording
+rowan,Rowan 0675 - Time out!.wav,#cover #reload,1.0,yes,,,0.76,same wording
+rowan,Rowan 0676 - I'll cover you!.wav,#player_cover,1.0,yes,,,0.98,unassigned
+rowan,Rowan 0691 - Dumber than a sack of hammers.wav,#taunt #victory #kill_player,1.0,no,,,2.04,script wording
+rowan,Rowan 0692 - Dumber than a sack of hammers!.wav,#taunt #victory #kill_player,1.0,no,,,1.96,script wording
+rowan,Rowan 0698 - You couldn't hit the broad side of a barn.wav,#taunt #victory #kill_player,1.0,no,,,2.77,unassigned
+rowan,Rowan 0700 - You're askin' for a heap of trouble.wav,#taunt,1.0,no,,,2.08,script wording
+rowan,Rowan 0701 - This town ain't big enough for the two of us.wav,#taunt,1.0,no,,,3.12,script wording
+rowan,Rowan 0702 - This town ain't big enough for the two of us.wav,#taunt,1.0,no,,,2.73,script wording
+rowan,Rowan 0705 - Make your peace with the Lord.wav,#taunt,1.0,no,,,2.008,script wording
+rowan,Rowan 0707 - You're pushing your luck mister.wav,#taunt,1.0,no,,,2.612,script wording
+rowan,Rowan 0708 - don't make me come over there.wav,#taunt,1.0,no,,,1.868,script wording
+rowan,Rowan 0709 - You're pushing your luck.wav,#taunt,1.0,no,,,1.9,unassigned
+rowan,Rowan 0710 - You're gonna be pushing up daisies.wav,#taunt,1.0,no,,,2.3,script wording
+rowan,Rowan 0713 - You got a death wish.wav,#taunt,1.0,no,,,1.66,script wording
+rowan,Rowan 0716 - Them's fighting words.wav,#taunt,1.0,no,,,1.54,script wording
+rowan,Rowan 0718 - You're barking at the wrong dog.wav,#taunt,1.0,no,,,2.44,script wording
+rowan,Rowan 0720 - I'm all riled up.wav,#taunt,1.0,no,,,1.8,script wording
+rowan,"Rowan 0722 - All hat, no cattle.wav",#taunt #victory #kill_player,1.0,no,,,2.05,script wording
+rowan,Rowan 0723 - I'm all riled up.wav,#taunt,1.0,no,,,1.94,script wording
+rowan,"Rowan 0724 - You got me all riled up, sheriff.wav",#taunt,1.0,no,,,2.934,unassigned
+rowan,"Rowan 0725 - All hat, no cattle.wav",#taunt #victory #kill_player,1.0,no,,,2.252,script wording
+rowan,Rowan 0726 - Some sheriff you are.wav,#taunt #victory #kill_player,1.0,no,,,2.1,unassigned
+rowan,Rowan 0728 - some sheriff.wav,#taunt #victory #kill_player,1.0,no,,,1.832,unassigned
+rowan,Rowan 0729 - that dog won't hunt.wav,#taunt #victory,1.0,no,,,1.758,script wording
+rowan,Rowan 0733 - hold your horses.wav,#taunt,1.0,no,,,1.592,script wording
+rowan,Rowan 0741 - You got me madder than a wet hen.wav,#taunt,1.0,no,,,2.26,script wording
+rowan,Rowan 0743 - This ain't my first rodeo!.wav,#taunt #victory #kill_player,1.0,no,,,1.752,script wording
+rowan,Rowan 0745 - Too big for his britches!.wav,#taunt #victory #kill_player,1.0,no,,,1.804,script wording
+rowan,Rowan 0757 - too big for his britches.wav,#taunt #victory #kill_player,1.0,no,,,2.158,script wording
+rowan,Rowan 0758 - between a rock and a hard place.wav,#taunt,1.0,no,,,2.38,script wording
+rowan,Rowan 0807 - Where are you rolling off to.wav,#player_roll,1.0,no,,,1.73,existing
+rowan,Rowan 0812 - Acting like a goddamn tumbleweed.wav,#player_roll,1.0,no,,,2.67,existing
+devin,1-12.100 - What was that.wav,#hearing,1.0,no,,,0.92,existing
+devin,1-14.436 - I heard a noise.wav,#hearing,1.0,no,,,1.024,unassigned
+devin,1-15.460 - You better go check it out.wav,#hearing #shot,1.0,no,,,1.18,unassigned
+devin,1-17.956 - Who's there.wav,#hearing,1.0,no,,,0.904,unassigned
+devin,1-19.620 - Something smells fishy.wav,#hearing,1.0,no,,,1.96,existing
+devin,1-22.464 - I got a feeling we're being watched.wav,#hearing,1.0,no,,,2.016,existing
+devin,1-33.479 - shh what was that_.wav,#hearing,1.0,no,,,1.8,existing
+devin,1-37.008 - was that you.wav,#hearing,1.0,no,,,1.372,existing
+devin,1-38.970 - did you hear that.wav,#hearing,1.0,no,,,0.833,existing
+devin,1-40.636 - what was that.wav,#hearing,1.0,no,,,1.184,same wording
+devin,1-50.498 - did you hear that.wav,#hearing,1.0,no,,,1.002,same wording
+devin,1-53.238 - What was that.wav,#hearing,1.0,no,,,0.722,same wording
+devin,1-55.310 - I heard something.wav,#hearing #shot,1.0,no,,,0.96,unassigned
+devin,"1-58.140 - Jumping Jehoshaphat wasn't a tarnation, what was that.wav",#shot,0.5,no,,,3.66,unassigned
+devin,10-04.520 - I think I got him!.wav,#hit_player #kill_player,1.0,yes,,,1.2,existing
+devin,10-07.290 - I got him!.wav,#hit_player #kill_player,1.0,yes,,,0.81,existing
+devin,10-08.260 - I hit him!.wav,#hit_player #kill_player,1.0,yes,,,0.86,existing
+devin,10-09.540 - I shot him!.wav,#hit_player #kill_player,1.0,yes,,,0.86,existing
+devin,10-11.230 - He's still moving!.wav,#hit_player,1.0,yes,,,1.23,existing
+devin,"10-13.480 - I winged him,.wav",#hit_player,1.0,yes,,,1.02,existing
+devin,"10-15.500 - tougher than I thought,.wav",#hit_player,1.0,yes,,,1.52,existing
+devin,"10-22.368 - There's more where that came from,.wav",#hit_player,1.0,yes,,,1.992,existing
+devin,10-25.700 - so he does bleed.wav,#hit_player,1.0,yes,,,1.54,existing
+devin,10-28.780 - How does that feel.wav,#hit_player,1.0,yes,,,1.0,unassigned
+devin,10-32.500 - Die already!.wav,#hit_player,1.0,yes,,,1.12,unassigned
+devin,10-35.308 - I ain't going down without a fight.wav,#hit_player #hit,1.0,yes,,,2.732,unassigned
+devin,10-38.736 - stings don't it.wav,#hit_player,1.0,no,,,2.564,existing
+devin,10-42.636 - oh You got a boo-boo.wav,#hit_player,1.0,no,,,1.914,unassigned
+devin,10-50.046 - keep yer eyes open.wav,#investigate,1.0,no,,,0.754,unassigned
+devin,10-52.320 - now. I've got a gun you hear me.wav,#investigate,1.0,no,,,2.22,existing
+devin,10-56.005 - what have I gotten myself into.wav,#investigate,1.0,no,,,1.961,existing
+devin,10-59.560 - I'll go check.wav,#investigate,1.0,no,,,1.32,existing
+devin,11-26.100 - better go see what that was.wav,#investigate,1.0,no,,,1.54,existing
+devin,11-28.520 - I bet that's that sheriff.wav,#investigate,1.0,no,,,1.58,unassigned
+devin,11-31.260 - I'll bet it's that sheriff.wav,#investigate,1.0,no,,,1.3,existing
+devin,11-33.964 - I bet it's that bounty hunter.wav,#investigate,1.0,no,,,1.496,existing
+devin,11-36.660 - Spread out.wav,#investigate,1.0,no,,,0.6,existing
+devin,11-38.156 - you guys go check it out .wav,#investigate,1.0,no,,,1.218,existing
+devin,11-55.900 - bastard the.wav,#death,1.0,no,,,1.77,unassigned
+devin,11-57.670 - gold is.wav,#death,1.0,no,,,1.29,unassigned
+devin,12-00.650 - You.wav,#death,1.0,no,,,0.96,unassigned
+devin,12-09.600 - I can see the light.wav,#death,1.0,no,,,1.92,existing
+devin,12-11.960 - I'm coming mama.wav,#death,1.0,no,,,1.54,existing
+devin,12-18.750 - Told mama I was mostly good.wav,#death,1.0,no,,,2.07,unassigned
+devin,12-22.520 - I knew this job had drawbacks.wav,#death,1.0,no,,,1.96,existing
+devin,"12-25.460 - Well played, you bastard.wav",#death,1.0,no,,,2.0,existing
+devin,12-33.748 - I reckon I misjudged the odds.wav,#death,1.0,no,,,2.072,existing
+devin,12-37.562 - takes more than that to oh.wav,#death,1.0,no,,,3.308,unassigned
+devin,"12-42.536 - Well, I'll be damned.wav",#death,1.0,no,,,2.144,existing
+devin,12-47.200 - I had so much promise.wav,#death,1.0,no,,,1.6,existing
+devin,12-54.023 - tell the cook more gravy.wav,#death,1.0,no,,,3.224,existing
+devin,12-58.710 - I ain't paid enough to die.wav,#death,1.0,no,,,2.45,existing
+devin,13-03.456 - He's a straight shooter.wav,#death,1.0,no,,,3.284,existing
+devin,13-10.010 - not so tough now are ya.wav,#victory #kill_player,1.0,no,,,2.61,existing
+devin,13-26.136 - glad that's over.wav,#victory #kill_player,1.0,no,,,1.404,existing
+devin,13-27.692 - check his pockets.wav,#victory,1.0,no,,,1.598,existing
+devin,13-30.030 - whoo that was close .wav,#victory #kill_player #hit_player,1.0,no,,,2.03,unassigned
+devin,13-32.436 - well that was easy.wav,#victory #kill_player #hit_player,1.0,no,,,1.104,unassigned
+devin,13-33.980 - I'll get a shovel.wav,#victory,1.0,no,,,1.08,existing
+devin,13-37.112 - Let's let the buzzards have him!.wav,#victory,1.0,no,,,2.508,existing
+devin,13-40.320 - HAHAHA!.wav,#victory #kill_player #hit_player,1.0,no,,,1.32,unassigned
+devin,13-42.920 - Get his gun!.wav,#victory,1.0,no,,,1.14,unassigned
+devin,13-45.310 - We whooped your ass!.wav,#victory,1.0,no,,,1.59,unassigned
+devin,13-47.540 - We're getting pretty good at this!.wav,#victory,1.0,no,,,1.66,existing
+devin,13-49.760 - Bullseye!.wav,#victory #kill_player,1.0,no,,,1.1,existing
+devin,13-51.900 - That was what you get!.wav,#kill_player,1.0,no,,,1.3,unassigned
+devin,"13-58.220 - Shoot, where'd he go.wav",#lost_contact,1.0,no,,,0.98,existing
+devin,14-08.360 - I get his hat.wav,#victory,1.0,no,,,1.2,existing
+devin,14-27.826 - Maybe he ran away.wav,#lost_contact,1.0,no,,,1.244,existing
+devin,14-29.669 - ha! chicken!.wav,#lost_contact #player_cover,1.0,no,,,1.077,existing
+devin,14-43.900 - Maybe he's gone to church.wav,#lost_contact,1.0,no,,,1.32,existing
+devin,14-56.830 - I think we can call that a victory.wav,#victory #kill_player,1.0,no,,,2.98,existing
+devin,15-05.774 - he's not gone he's thinking.wav,#lost_contact,1.0,no,,,1.756,existing
+devin,15-11.998 - check the high ground he ain't.wav,#lost_contact,1.0,no,,,3.202,unassigned
+devin,15-31.922 - where's that little varmit scurry off to.wav,#lost_contact,1.0,no,,,2.238,existing
+devin,15-39.910 - I could smell your cowardice.wav,#lost_contact,1.0,no,,,2.15,unassigned
+devin,15-53.200 - He vanished!.wav,#lost_contact,1.0,no,,,0.617,unassigned
+devin,15-56.696 - where'd he go.wav,#lost_contact,1.0,no,,,1.104,existing
+devin,15-58.030 - I lost him.wav,#lost_contact,1.0,no,,,1.09,existing
+devin,15-59.360 - find him.wav,#lost_contact,1.0,no,,,0.96,existing
+devin,16-00.730 - coward.wav,#lost_contact #player_cover,1.0,no,,,1.47,existing
+devin,16-02.800 - he thinks he can hide.wav,#lost_contact,1.0,no,,,1.91,existing
+devin,16-05.260 - he thinks he can run!.wav,#lost_contact,1.0,no,,,1.574,existing
+devin,16-11.032 - he's a slippery fella .wav,#lost_contact,1.0,no,,,1.383,existing
+devin,16-27.720 - He's pinned!.wav,#player_cover,1.0,no,,,1.0,existing
+devin,16-30.040 - Coward!.wav,#lost_contact #player_cover,1.0,no,,,0.8,same wording
+devin,16-32.060 - Get him!.wav,#combat #player_reload,1.0,no,,,0.68,existing
+devin,16-33.040 - He's empty!.wav,#player_reload,1.0,no,,,1.06,existing
+devin,16-34.640 - Now's our chance!.wav,#player_reload,1.0,no,,,1.46,existing
+devin,16-36.880 - Hear that.wav,,1.0,no,,,0.74,unassigned
+devin,16-37.700 - Move!.wav,,1.0,no,,,0.78,unassigned
+devin,16-39.040 - out of bullets.wav,#player_reload,1.0,no,,,1.38,unassigned
+devin,16-42.644 - You're mine now.wav,#player_reload,1.0,no,,,1.596,existing
+devin,16-45.530 - He's reloading.wav,#player_reload,1.0,no,,,1.068,existing
+devin,"16-47.353 - an opening, get him!.wav",#player_reload,1.0,no,,,1.344,existing
+devin,"16-49.212 - Oh, you're dead now.wav",#player_reload,1.0,no,,,1.988,existing
+devin,16-52.824 - They know we're here.wav,#first_sighting,1.0,no,,,1.278,unassigned
+devin,16-58.968 - Who's there.wav,#hearing,1.0,no,,,0.901,unassigned
+devin,17-01.240 - Get that sissy boy.wav,#combat,1.0,no,,,2.13,existing
+devin,17-04.002 - yikes.wav,#combat #cover #first_sighting,1.0,yes,,,2.138,existing
+devin,17-21.006 - It's the law.wav,#first_sighting,1.0,no,,,1.354,unassigned
+devin,17-22.448 - is that sheriff.wav,#first_sighting,1.0,no,,,1.513,unassigned
+devin,17-28.480 - ahh!.wav,#hit #first_sighting,1.0,yes,,,0.62,unassigned
+devin,17-30.216 - Who's that.wav,#first_sighting,1.0,no,,,1.004,unassigned
+devin,17-32.920 - Rush him.wav,#combat #charging,1.0,no,,,0.78,existing
+devin,17-34.340 - Get him.wav,#combat #player_reload,1.0,no,,,0.52,same wording
+devin,17-35.780 - There he is.wav,#combat #first_sighting,1.0,yes,,,0.98,existing
+devin,17-37.020 - He's over here.wav,#combat,1.0,no,,,1.12,existing
+devin,17-43.260 - I see him.wav,#first_sighting,1.0,yes,,,0.88,unassigned
+devin,17-49.060 - I found him!.wav,#combat #first_sighting,1.0,no,,,1.09,existing
+devin,"17-51.674 - Well, look what the cat dragged in!.wav",#first_sighting,1.0,no,,,2.316,unassigned
+devin,"17-55.695 - sheriffs here, mind your manners! .wav",#first_sighting,1.0,no,,,2.712,unassigned
+devin,18-04.640 - There he is!.wav,#combat #first_sighting,1.0,yes,,,1.11,same wording
+devin,18-06.578 - Don't give him a clean shot!.wav,#combat,1.0,no,,,1.602,existing
+devin,18-09.020 - The jig is up!.wav,#combat,1.0,no,,,1.24,existing
+devin,18-11.556 - You fixin' to die!.wav,#combat,1.0,no,,,1.784,existing
+devin,18-15.036 - I'll fill you full of lead!.wav,#combat,1.0,no,,,2.284,existing
+devin,18-18.968 - You're about to meet your maker!.wav,#combat,1.0,no,,,1.792,existing
+devin,18-24.616 - He's after our loot!.wav,#first_sighting #combat,1.0,no,,,1.484,unassigned
+devin,18-27.960 - Dangit!.wav,#ally_fall #hit #reload,1.0,yes,,,0.86,unassigned
+devin,18-29.760 - I'm dry!.wav,#reload,1.0,yes,,,0.98,existing
+devin,"18-31.700 - Hold on, Now!.wav",#reload,1.0,yes,,,1.22,existing
+devin,18-33.778 - hold on a second.wav,#reload,1.0,yes,,,2.142,existing
+devin,18-36.808 - time out time out.wav,#cover #reload,1.0,yes,,,1.992,unassigned
+devin,18-39.140 - time out.wav,#cover #reload,1.0,yes,,,1.99,existing
+devin,18-42.178 - empty.wav,#reload,1.0,yes,,,1.192,existing
+devin,18-43.618 - cover me.wav,#reload,1.0,yes,,,1.342,existing
+devin,18-45.550 - I'm dry.wav,#reload,1.0,yes,,,1.12,same wording
+devin,18-56.526 - I gotta freshen up.wav,#reload,1.0,yes,,,1.684,existing
+devin,18-58.618 - my irons cold.wav,#reload,1.0,yes,,,2.002,existing
+devin,19-01.190 - I'm out that's.wav,#reload,1.0,yes,,,2.42,unassigned
+devin,19-17.526 - nobody shoot till I'm ready.wav,#reload,1.0,yes,,,2.374,existing
+devin,19-20.530 - I'm empty.wav,#reload,1.0,yes,,,1.32,existing
+devin,19-22.350 - keep them busy.wav,#reload #flank,1.0,yes,,,1.97,unassigned
+devin,19-25.330 - I'm running out of bullets.wav,#reload,1.0,yes,,,1.77,existing
+devin,19-28.322 - I ain't done with you yet.wav,#reload,1.0,yes,,,2.888,existing
+devin,19-32.066 - just a minute.wav,#reload,1.0,yes,,,1.404,existing
+devin,19-37.670 - Come on out now.wav,#search,1.0,yes,,,2.64,unassigned
+devin,19-53.196 - I think I heard him.wav,#search,1.0,yes,,,1.564,existing
+devin,19-55.104 - I think he's this way.wav,#search,1.0,yes,,,1.296,existing
+devin,19-57.066 - He went this way.wav,#search,1.0,yes,,,1.214,existing
+devin,19-58.772 - Keep your eyes peeled.wav,#search,1.0,no,,,1.508,existing
+devin,2-05.880 - That weren't the wind.wav,#shot,1.0,no,,,1.17,existing
+devin,"2-07.860 - Easy now,.wav",#shot,1.0,no,,,0.78,unassigned
+devin,2-09.050 - someone's testing our patience.wav,#shot,1.0,no,,,1.73,unassigned
+devin,"2-11.340 - Quiet, listen.wav",#hearing #searching,1.0,no,,,1.2,existing
+devin,2-17.600 - come out come out wherever you are.wav,#hearing #searching,1.0,no,,,3.49,script wording
+devin,2-21.978 - I smell a fight.wav,#shot,1.0,no,,,1.602,existing
+devin,2-24.052 - I hear movement.wav,#hearing,1.0,no,,,1.218,existing
+devin,2-25.550 - sounds like trouble.wav,#shot,1.0,no,,,2.03,existing
+devin,2-28.500 - we ain't alone.wav,#shot,1.0,no,,,1.71,existing
+devin,2-30.522 - that ain't good.wav,#shot #ally_fall #reloading,1.0,yes,,,1.968,existing
+devin,2-33.410 - I reckon troubles afoot.wav,#shot,1.0,no,,,1.35,existing
+devin,2-36.414 - what's that ruckus.wav,#shot,1.0,no,,,1.206,existing
+devin,2-38.628 - he's cutting us down.wav,#ally_fall,1.0,no,,,2.162,unassigned
+devin,2-41.450 - you'll pay for that.wav,#ally_fall,1.0,no,,,1.79,existing
+devin,2-43.760 - he shot jed.wav,#ally_fall,1.0,no,,,1.5,existing
+devin,2-45.580 - jed.wav,#ally_fall,1.0,no,,,0.83,existing
+devin,2-46.562 - kenny.wav,#ally_fall,1.0,no,,,0.938,existing
+devin,2-47.620 - carl.wav,#ally_fall,1.0,no,,,1.08,existing
+devin,2-49.010 - billy bob.wav,#ally_fall,1.0,no,,,1.06,existing
+devin,2-50.280 - jim bob.wav,#ally_fall,1.0,no,,,1.03,existing
+devin,2-51.660 - he killed him.wav,#ally_fall,1.0,no,,,1.22,existing
+devin,2-55.032 - he's just you and me now boy.wav,#ally_fall,1.0,no,,,2.048,unassigned
+devin,20-04.100 - I'll cover you.wav,#cover #combat,1.0,yes,,,1.08,unassigned
+devin,20-06.120 - look out.wav,#cover #player_spotted,1.0,yes,,,0.673,existing
+devin,20-08.280 - yikes.wav,#combat #cover,1.0,yes,,,0.83,same wording
+devin,20-12.110 - Time out.wav,#cover #reload,1.0,yes,,,0.69,same wording
+devin,20-13.890 - Hide me.wav,#cover,1.0,yes,,,1.08,existing
+devin,20-15.310 - look out.wav,#cover,1.0,yes,,,1.01,same wording
+devin,20-16.530 - take cover.wav,#cover,1.0,yes,,,0.97,existing
+devin,20-37.300 - Dumber than a sack of hammers!.wav,#taunt #victory,1.0,no,,,1.81,script wording
+devin,20-47.140 - Couldn't hit the broadside of a barn!.wav,#taunt #victory,1.0,no,,,1.9,script wording
+devin,20-53.852 - You got no brains.wav,#taunt,1.0,no,,,1.468,script wording
+devin,21-11.180 - You're asking for a heap of trouble.wav,#taunt,1.0,no,,,1.98,script wording
+devin,21-16.708 - This town ain't big enough for the two of us.wav,#taunt,1.0,no,,,2.572,script wording
+devin,21-20.630 - make your peace with the Lord you're.wav,#taunt,1.0,no,,,2.7,unassigned
+devin,21-24.026 - pushing your luck mister.wav,#taunt,1.0,no,,,2.274,unassigned
+devin,21-26.676 - don't make me come over there.wav,#taunt,1.0,no,,,3.184,script wording
+devin,21-30.940 - you're gonna be pushing up daisies.wav,#taunt,1.0,no,,,2.47,script wording
+devin,21-34.042 - I'll knock you in the next Sunday.wav,#taunt,1.0,no,,,2.808,unassigned
+devin,21-39.294 - you got a death wish.wav,#taunt,1.0,no,,,2.026,script wording
+devin,21-41.824 - thems fighting words.wav,#taunt,1.0,no,,,1.566,script wording
+devin,21-44.572 - You're barkin' at the wrong dog!.wav,#taunt,1.0,no,,,2.188,script wording
+devin,21-47.340 - I'm all riled up!.wav,#taunt,1.0,no,,,1.38,script wording
+devin,"22-09.416 - all hat, no cattle,.wav",#taunt #victory,1.0,no,,,1.704,script wording
+devin,"22-14.180 - that dog won't hunt,.wav",#taunt #victory,1.0,no,,,1.182,script wording
+devin,"22-16.620 - hold your horses,.wav",#taunt,1.0,no,,,1.22,script wording
+devin,"22-18.940 - this ain't my first rodeo,.wav",#taunt #victory,1.0,no,,,2.22,script wording
+devin,"22-22.020 - you're barkin up the wrong tree,.wav",#taunt,1.0,no,,,1.732,script wording
+devin,22-26.660 - you got me madder than a wet hen.wav,#taunt,1.0,no,,,2.16,script wording
+devin,22-33.480 - few cards shy of a full deck.wav,#taunt #victory,1.0,no,,,2.9,script wording
+devin,22-37.458 - too big for his britches.wav,#taunt #victory,1.0,no,,,2.01,script wording
+devin,22-40.846 - between a rock and a hard place.wav,#taunt,1.0,no,,,2.754,script wording
+devin,22-44.456 - ain't worth a plug nickel a.wav,#taunt #victory,1.0,no,,,2.744,script wording
+devin,3-36.656 - I'll get you if the last thing I do.wav,#ally_fall,1.0,no,,,3.004,existing
+devin,3-40.420 - you Enjoying yourself.wav,#ally_fall,1.0,no,,,1.71,existing
+devin,3-45.452 - I bet you're real proud of yourself.wav,#ally_fall,1.0,no,,,2.528,existing
+devin,3-48.612 - you should have been more careful.wav,#ally_fall,1.0,no,,,2.478,unassigned
+devin,3-54.490 - get him.wav,#combat #player_reload #player_spotted #first_sighting,1.0,yes,,,0.78,same wording
+devin,3-55.486 - I'm gonna put a hole in you.wav,#attacking #player_spotted #combat,1.0,yes,,,1.954,existing
+devin,3-57.870 - fire .wav,#attacking,1.0,yes,,,0.789,existing
+devin,3-58.840 - shoot him!.wav,#attacking,1.0,yes,,,0.499,existing
+devin,3-59.764 - kill him.wav,#attacking,1.0,yes,,,0.926,existing
+devin,4-00.874 - take that.wav,#attacking,1.0,yes,,,1.166,existing
+devin,4-02.040 - and that.wav,#reply_attack,1.0,yes,,,1.5,existing
+devin,4-03.880 - die already.wav,#player_hit,1.0,yes,,,0.98,unassigned
+devin,4-06.292 - Get a rope! .wav,#attacking,1.0,yes,,,0.58,existing
+devin,4-30.308 - stick them.wav,#attacking,1.0,yes,,,0.982,unassigned
+devin,4-31.442 - sick them.wav,#attacking,1.0,yes,,,1.018,unassigned
+devin,4-32.810 - bang bang.wav,#attacking,1.0,yes,,,1.5,existing
+devin,4-48.472 - I'm gonna put a hole in you.wav,#attacking,1.0,yes,,,1.468,same wording
+devin,4-51.056 - This one's got your name on it!.wav,#attacking,1.0,yes,,,1.784,existing
+devin,4-53.920 - Just wanna get him.wav,#attacking,1.0,yes,,,1.26,unassigned
+devin,4-55.800 - Watch this!.wav,#attacking,1.0,yes,,,1.0,existing
+devin,4-57.480 - You want some of this.wav,#attacking,1.0,yes,,,1.28,existing
+devin,4-59.540 - You want some of this.wav,#attacking,1.0,yes,,,1.34,same wording
+devin,5-02.952 - You picked the wrong gang!.wav,#attacking,1.0,yes,,,1.828,existing
+devin,5-08.556 - That cover won't last forever!.wav,#attacking,1.0,yes,,,2.084,existing
+devin,5-13.904 - I got a whole wagon load of whoopin'!.wav,#attacking,1.0,yes,,,1.976,existing
+devin,5-18.180 - You're softer than weak old biscuits!.wav,#attacking,1.0,yes,,,2.24,existing
+devin,5-20.960 - I'm warnin' you!.wav,#attacking,1.0,yes,,,1.36,existing
+devin,5-23.140 - Hold still!.wav,#attacking,1.0,yes,,,0.98,existing
+devin,5-25.560 - Charge!.wav,#charge,1.0,yes,,,1.08,existing
+devin,5-26.880 - Let's rush him!.wav,#charge,1.0,yes,,,1.1,existing
+devin,5-28.460 - He's pinned!.wav,#player_cover,1.0,yes,,,0.88,same wording
+devin,5-29.420 - Close the distance!.wav,#charge,1.0,yes,,,1.2,unassigned
+devin,5-32.240 - Enough dancin'!.wav,#charge,1.0,yes,,,1.0,unassigned
+devin,5-33.340 - Finish it!.wav,#charge,1.0,yes,,,0.68,unassigned
+devin,5-35.140 - I'm goin' for it!.wav,#charge,1.0,yes,,,1.34,existing
+devin,5-39.448 - keep him busy. I'll go around.wav,#flank,1.0,yes,,,2.138,existing
+devin,5-58.310 - I'll get behind him.wav,#flank,1.0,yes,,,1.12,existing
+devin,"6-01.208 - Y'all keep on him, I'll shoot him in the back.wav",#flank,1.0,yes,,,2.852,existing
+devin,"6-04.960 - You go that way, I'll go this way.wav",#flank,1.0,yes,,,2.54,unassigned
+devin,6-12.336 - I'm going around.wav,#flank,1.0,yes,,,1.144,existing
+devin,6-13.980 - You distract him.wav,#flank,1.0,yes,,,1.08,existing
+devin,6-15.600 - Get his attention.wav,#flank,1.0,yes,,,1.08,existing
+devin,"6-18.832 - He can't shoot in two directions at once,.wav",#flank,1.0,yes,,,3.158,existing
+devin,6-22.686 - I'll go around and flatten him.wav,#flank,1.0,no,,,1.774,existing
+devin,6-26.766 - Keep him busy!.wav,#flank #reload,1.0,no,,,1.034,existing
+devin,6-39.280 - sniveling.wav,#hit #death,1.0,no,,,1.94,unassigned
+devin,6-42.413 - screw this im outta here!.wav,#flee,1.0,no,,,1.46,existing
+devin,"6-44.040 - Mama, help!.wav",#flee,1.0,no,,,1.12,existing
+devin,6-46.150 - I ain't paid enough for this!.wav,#flee,1.0,no,,,1.69,existing
+devin,6-47.980 - Skedaddle!.wav,#flee,1.0,no,,,0.78,unassigned
+devin,6-48.800 - That's what mama'd say!.wav,#flee,1.0,no,,,1.36,unassigned
+devin,7-00.308 - I resign effective immediately.wav,#flee,1.0,no,,,2.085,existing
+devin,"7-03.989 - this hands lost, I fold.wav",#flee,1.0,no,,,1.941,existing
+devin,7-10.440 - You ain't worth the trouble!.wav,#flee,1.0,no,,,1.48,existing
+devin,7-12.660 - I've had enough!.wav,#flee,1.0,no,,,1.14,existing
+devin,7-22.090 - Thats it Im outta here.wav,#flee,1.0,no,,,2.05,existing
+devin,7-28.470 - You ain't worth the trouble!.wav,#flee,1.0,no,,,1.79,same wording
+devin,7-31.100 - I've had enough!.wav,#flee,1.0,no,,,1.32,same wording
+devin,7-35.856 - if I can't see him maybe he can't see me.wav,#hiding,1.0,no,,,3.254,existing
+devin,7-39.838 - let him pass by then we jump him.wav,#hiding,1.0,no,,,2.272,existing
+devin,7-42.294 - let's ambush him.wav,#hiding,1.0,no,,,1.806,existing
+devin,7-59.802 - if I can't see him maybe he can't see me like.wav,#hiding,1.0,no,,,3.104,unassigned
+devin,8-22.872 - I ain't stickin' my head out there!.wav,#hiding,1.0,no,,,1.585,existing
+devin,8-27.716 - I'll wait for him to come to me!.wav,#hiding,1.0,no,,,1.824,existing
+devin,8-37.780 - This wall's lucky I'm behind it!.wav,#hiding,1.0,no,,,1.88,existing
+devin,8-40.920 - Ow!.wav,#hit,1.0,yes,,,0.3,unassigned
+devin,8-41.220 - Ow!.wav,#hit,1.0,yes,,,0.28,unassigned
+devin,8-41.500 - Ow!.wav,#hit,1.0,yes,,,0.62,unassigned
+devin,8-43.096 - My mama made this shirt!.wav,#hit,1.0,yes,,,1.544,existing
+devin,8-46.410 - ohh thats gonna leave a mark.wav,#hit,1.0,yes,,,1.986,existing
+devin,8-49.070 - That one tickled!.wav,#hit,1.0,yes,,,1.07,existing
+devin,8-50.660 - Gah!.wav,#hit,1.0,yes,,,0.37,unassigned
+devin,9-00.590 - Gah!.wav,#hit #killed,1.0,yes,,,0.77,unassigned
+devin,9-01.980 - Ow!.wav,#hit #killed,1.0,yes,,,0.6,unassigned
+devin,9-02.860 - Ouch!.wav,#hit,1.0,yes,,,0.76,existing
+devin,9-03.960 - Gah!.wav,#hit #killed,1.0,yes,,,0.51,unassigned
+devin,9-05.170 - Ouch!.wav,#hit,1.0,yes,,,0.77,same wording
+devin,9-06.612 - damn it.wav,#ally_fall #hit #reload #killed,1.0,yes,,,1.298,unassigned
+devin,9-10.360 - my leg.wav,#hit,1.0,yes,,,1.22,existing
+devin,9-11.860 - my arm.wav,#hit,1.0,yes,,,1.15,existing
+devin,9-13.220 - mama.wav,#hit,1.0,yes,,,1.47,existing
+devin,9-15.290 - that's smarts.wav,#hit,1.0,yes,,,1.426,unassigned
+devin,9-28.600 - He got me.wav,#hit #killed,1.0,yes,,,0.92,existing
+devin,9-30.400 - I'm hit.wav,#hit,1.0,yes,,,0.76,existing
+devin,9-31.400 - Winged me.wav,#hit,1.0,yes,,,0.8,existing
+devin,9-34.780 - Now that was downright impolite.wav,#hit,1.0,no,,,2.18,existing
+devin,9-39.308 - You'll pay interest on that one.wav,#hit,1.0,no,,,2.132,existing
+devin,9-50.420 - That all you got.wav,#hit,1.0,yes,,,1.2,unassigned
+devin,9-52.741 - ha! that one woke me up!.wav,#hit,1.0,no,,,1.485,unassigned
+devin,9-55.250 - That's the side I sleep on!.wav,#hit,1.0,no,,,1.63,existing
+devin,9-58.840 - That's gonna leave a mark.wav,#hit,1.0,no,,,1.44,existing

@@ -24,7 +24,7 @@ func _run() -> void:
 		elif String(footprint["id"]).contains("_dining"):
 			dining_count += 1
 	assert(barrel_count == 4 and crate_count == 4 and dining_count == 3)
-	assert(game.wanted_tally_title.text == "ROUND 1:\nKILL ALL THE GREENSHIRTS!")
+	assert(game.wanted_tally_title.text == "ROUND 1:\nKILL ALL THE OUTLAWS!")
 	assert(game.music_enabled and game.music_player.playing and game.clear_map_intro_music_active)
 	assert(not game.pause_round_timer_for_debug)
 	var before: float = game.combat_round_time_remaining
@@ -88,15 +88,14 @@ func _run() -> void:
 	game._begin_wanted_tally(true)
 	assert(game.wanted_tally_queue.size() == 2)
 	assert(game.wanted_tally_queue[0]["kind"] == "blood" and game.wanted_tally_queue[1]["kind"] == "blood")
-	# The actual fatal shot identifies its shooter on the loss board only.
+	# A fatal shot now holds the post-kill scene instead of fading to the loss board.
 	game._reset_combat_round()
 	game.player_states[5] = game.player_states[0].duplicate()
 	game.player_states[0]["health"] = 1
 	assert(game._apply_projectile_hit(0, Vector2.RIGHT, 5))
 	assert(game.clear_map_killer_index == 5)
 	game._advance_clear_map_finish(game.CLEAR_MAP_RESULT_FADE_SECONDS)
-	for player_index in range(1, 6):
-		assert(game.wanted_tally_posters[player_index]["killer_label"].visible == (player_index == 5))
+	assert(game.post_kill_active and game.clear_map_finish_pending and not game.clear_map_result_fade.visible)
 	game.combat_round_result = "YOU WIN!"
 	game._begin_wanted_tally(true)
 	assert(not game.wanted_tally_posters[5]["killer_label"].visible)
