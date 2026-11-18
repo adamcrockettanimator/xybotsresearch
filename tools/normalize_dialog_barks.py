@@ -4,7 +4,7 @@ import numpy as np
 
 root=Path.cwd().resolve()
 bank=json.loads((root/'assets/Audio/Dialog/bark_bank.json').read_text(encoding='utf8'))
-paths=sorted({(root / entry['path'].removeprefix('res://')).resolve() for voice in bank.values() for lines in voice.values() for entry in lines})
+paths=sorted({(root / entry['path'].removeprefix('res://')).with_suffix('.wav').resolve() for voice in bank.values() for lines in voice.values() for entry in lines})
 audio_root=(root/'assets/Audio/Dialog/Barks').resolve()
 if not all(p.is_relative_to(audio_root) and p.is_file() for p in paths):
  raise RuntimeError('All bark paths must exist inside the game bark directory')
@@ -69,3 +69,16 @@ with report.open('w',newline='',encoding='utf8') as output:
 levels=[r[2] for r in records if isinstance(r[2],float)]
 print('Normalized',len(paths),'files; active RMS percentiles:',np.percentile(levels,[0,10,50,90,100]).round(1).tolist(),flush=True)
 print('Below -26 dBFS:',sum(level < -26 for level in levels),'Report:',report,flush=True)
+
+# Rebuild the game-facing compressed copies and their scheduling durations.
+from optimize_dialog_audio import convert
+durations={}
+for path in paths:
+ result=convert(path)
+ durations['res://'+path.relative_to(root).with_suffix('.ogg').as_posix()]=result[4]
+for voice in bank.values():
+ for lines in voice.values():
+  for entry in lines:
+   entry['duration_seconds']=durations[entry['path']]
+(root/'assets/Audio/Dialog/bark_bank.json').write_text(json.dumps(bank,indent=2,ensure_ascii=False),encoding='utf8')
+print('Regenerated optimized dialogue copies and durations',flush=True)
