@@ -6014,8 +6014,11 @@ func _make_scoreboard_shop_label() -> RichTextLabel:
 	var shop := RichTextLabel.new()
 	shop.bbcode_enabled = true
 	shop.scroll_active = false
-	shop.add_theme_font_override("normal_font", ThemeDB.fallback_font)
-	shop.add_theme_font_size_override("normal_font_size", 18)
+	var shop_font: FontFile = preload("res://assets/Fonts/PressStart2P-Regular.ttf")
+	shop_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	shop.add_theme_font_override("normal_font", shop_font)
+	shop.add_theme_font_size_override("normal_font_size", 8)
+	shop.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	shop.add_theme_color_override("font_shadow_color", Color.BLACK)
 	shop.add_theme_constant_override("shadow_offset_x", 1)
 	shop.add_theme_constant_override("shadow_offset_y", 1)
@@ -6026,7 +6029,7 @@ func _make_scoreboard_shop_label() -> RichTextLabel:
 	backing.content_margin_top = 1.0
 	backing.content_margin_bottom = 1.0
 	shop.add_theme_stylebox_override("normal", backing)
-	shop.size = Vector2(200.0, 56.0)
+	shop.size = Vector2(100.0, 24.0)
 	shop.z_index = 521
 	shop.visible = false
 	return shop
@@ -6136,17 +6139,16 @@ func _update_combat_hud() -> void:
 			board.visible = board_visible
 			var shop := scoreboard_shop_labels[player_index]
 			var view_size: Vector2 = VIEWPORT_SIZE * viewport_node.scale
-			var hud_font_size := clampi(roundi(view_size.y * 0.024), 10, 32)
-			shop.add_theme_font_size_override("normal_font_size", hud_font_size)
-			shop.size = Vector2(hud_font_size * 11.5, hud_font_size * 2.75)
-			shop.position = viewport_node.position + Vector2(view_size.x * 0.27, view_size.y - shop.size.y - maxf(view_size.y * 0.012, 3.0))
-			shop.scale = Vector2.ONE
+			var hud_scale := clampf(roundf(view_size.y / 360.0), 1.0, 8.0)
+			shop.size = Vector2(100.0, 24.0)
+			shop.scale = Vector2.ONE * hud_scale
+			shop.position = viewport_node.position + Vector2(view_size.x * 0.27, view_size.y - shop.size.y * hud_scale - maxf(view_size.y * 0.012, 3.0))
 			shop.visible = player_index < player_joined.size() and player_joined[player_index] and not bool(state.get("is_dying", false)) and not combat_round_complete
 			if shop.visible:
 				var coins := int(state.get("coins", 0))
 				var heart_color := "#ffe25c" if coins >= 5 else "#dddddd"
 				var gun_color := "#ffe25c" if coins >= 10 else "#dddddd"
-				shop.text = "[color=%s]%s   5  HEART[/color]\n[color=%s]%s  10  PISTOLS[/color]" % [heart_color, "Q / LB" if _public_build() else "LB", gun_color, "E / RB" if _public_build() else "RB"]
+				shop.text = "[color=%s]%s 5 [img=8x8]res://assets/Items/Heart/heart.png[/img][/color]\n[color=%s]%s 10 [img=8x8]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if _public_build() else "LB", gun_color, "E/RB" if _public_build() else "RB"]
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
