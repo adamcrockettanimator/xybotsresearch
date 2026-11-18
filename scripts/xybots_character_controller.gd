@@ -2007,8 +2007,8 @@ func _build_pause_broadside() -> void:
 	var actions := ["Move / strafe", "Look", "Fire", "Crouch", "Dive roll", "Reload", "Buy heart", "Buy dual pistols", "Resume", "Main menu"]
 	var keys := ["WASD / LEFT STICK", "MOUSE / RIGHT STICK", "CLICK / RT", "SHIFT / LT", "SPACE / A", "R / X", "Q / LB", "E / RB", "ESC / SELECT", "M"]
 	if mobile_controls != null:
-		actions = ["Move", "Look", "Fire", "Crouch", "Dive roll", "Reload", "Buy heart", "Buy dual pistols", "Resume", "Main menu"]
-		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "TAP FIRE", "DUCK / 2X HOLD", "MOVE + ROLL", "RELOAD", "HEART 5", "GUN 10", "RESUME", "MENU"]
+		actions = ["Move", "Look", "Fire", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Move buttons", "Resume", "Main menu"]
+		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "TAP FIRE", "DUCK", "RELOAD", "HEART 5", "GUN 10", "LAYOUT", "RESUME", "MENU"]
 	elif not _public_build():
 		actions = ["Dive roll", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Close"]
 		keys = ["SPACE / A", "SHIFT / LT", "R / X", "LB", "RB", "SELECT / ESC"]
@@ -10289,7 +10289,7 @@ func _advance_dive_roll(player_index: int, delta: float, bound: bool) -> bool:
 		state["dive_bot_reason"] = reason
 	else:
 		var joy := _xbox_joypad_id_for_player(player_index)
-		pressed = (player_index == 0 and (_is_key_down(KEY_SPACE) or (mobile_controls != null and mobile_controls.take_roll()))) or (joy >= 0 and Input.is_joy_button_pressed(joy, JOY_BUTTON_A))
+		pressed = (player_index == 0 and _is_key_down(KEY_SPACE)) or (joy >= 0 and Input.is_joy_button_pressed(joy, JOY_BUTTON_A))
 		if bound:
 			var local := _read_movement()
 			direction = _view_right_vector() * local.x - _view_forward_vector() * local.y
