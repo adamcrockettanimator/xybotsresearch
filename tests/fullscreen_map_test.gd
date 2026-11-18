@@ -34,11 +34,21 @@ func _run() -> void:
 	game._update_match_minimap_overlay()
 	assert(map.get_node("Backdrop").visible)
 	assert(is_zero_approx(map.rotation))
-	assert(is_equal_approx(map.scale.x, 1.0))
-	assert(is_equal_approx(map.position.x, clip.size.x - game.MATCH_MINIMAP_SIZE - game.MATCH_MINIMAP_MARGIN))
+	var expected_side: float = minf(clip.size.y * 0.18, clip.size.x * 0.24)
+	assert(is_equal_approx(map.scale.x * game.MATCH_MINIMAP_SIZE, expected_side))
+	assert(is_equal_approx(map.position.x, clip.size.x - expected_side - maxf(clip.size.y * 0.012, 3.0)))
+	var original_side: float = map.scale.x * game.MATCH_MINIMAP_SIZE
+	var camera: Node2D = game.player_views[0]["maze_viewport"]
+	var original_scale := camera.scale
+	camera.scale *= 0.5
+	game._layout_match_map(game.player_views[0], camera)
+	assert(is_equal_approx(map.scale.x * game.MATCH_MINIMAP_SIZE, original_side * 0.5))
+	camera.scale = original_scale
+	game._layout_match_map(game.player_views[0], camera)
 	assert(game.map_display_button.text.contains("MINI-MAP"))
 	game._set_map_display_mode("fullscreen", false)
 	assert(game.map_display_button.text.contains("FULLSCREEN"))
 	print("Rotating overlay aligns with the player, clips to the view, and switches to the original minimap")
 	game.queue_free()
 	quit()
+
