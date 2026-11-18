@@ -6022,14 +6022,8 @@ func _make_scoreboard_shop_label() -> RichTextLabel:
 	shop.add_theme_color_override("font_shadow_color", Color.BLACK)
 	shop.add_theme_constant_override("shadow_offset_x", 1)
 	shop.add_theme_constant_override("shadow_offset_y", 1)
-	var backing := StyleBoxFlat.new()
-	backing.bg_color = Color(0.04, 0.03, 0.02, 0.82)
-	backing.content_margin_left = 2.0
-	backing.content_margin_right = 2.0
-	backing.content_margin_top = 1.0
-	backing.content_margin_bottom = 1.0
-	shop.add_theme_stylebox_override("normal", backing)
-	shop.size = Vector2(100.0, 24.0)
+	shop.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	shop.size = Vector2(100.0, 38.0)
 	shop.z_index = 521
 	shop.visible = false
 	return shop
@@ -6140,7 +6134,7 @@ func _update_combat_hud() -> void:
 			var shop := scoreboard_shop_labels[player_index]
 			var view_size: Vector2 = VIEWPORT_SIZE * viewport_node.scale
 			var hud_scale := clampf(roundf(view_size.y / 360.0), 1.0, 8.0)
-			shop.size = Vector2(100.0, 24.0)
+			shop.size = Vector2(100.0, 38.0)
 			shop.scale = Vector2.ONE * hud_scale
 			shop.position = viewport_node.position + Vector2(view_size.x * 0.27, view_size.y - shop.size.y * hud_scale - maxf(view_size.y * 0.012, 3.0))
 			shop.visible = player_index < player_joined.size() and player_joined[player_index] and not bool(state.get("is_dying", false)) and not combat_round_complete
@@ -6148,7 +6142,7 @@ func _update_combat_hud() -> void:
 				var coins := int(state.get("coins", 0))
 				var heart_color := "#ffe25c" if coins >= 5 else "#dddddd"
 				var gun_color := "#ffe25c" if coins >= 10 else "#dddddd"
-				shop.text = "[color=%s]%s 5 [img=8x8]res://assets/Items/Heart/heart.png[/img][/color]\n[color=%s]%s 10 [img=8x8]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if _public_build() else "LB", gun_color, "E/RB" if _public_build() else "RB"]
+				shop.text = "[color=%s]%s 5 [img=15x15]res://assets/Items/Heart/hud_heart_icon.tres[/img][/color]\n[color=%s]%s 10 [img=15x15]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if _public_build() else "LB", gun_color, "E/RB" if _public_build() else "RB"]
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
