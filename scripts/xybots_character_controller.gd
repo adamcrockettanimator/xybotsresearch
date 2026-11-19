@@ -9422,7 +9422,8 @@ func _render_live_semantic_floor_footprints() -> void:
 					var crate_right := _view_right_vector().normalized()
 					var crate_camera_origin: Vector2 = crate_renderer.call("_runtime_camera_origin", crate_forward, crate_right)
 					var crate_projection_offset := _semantic_legacy_projection_offset(crate_renderer)
-					crate_outline.set("daylight_enabled", outdoor_town and not town_has_roof(Vector2i(center.floor())))
+					var crate_haze: float = crate_renderer.town_outdoor_depth(crate_camera_origin, center, maxf((center - crate_camera_origin).dot(crate_forward), 0.0)) if outdoor_town else 0.0
+					crate_outline.set("town_haze_depth", crate_haze)
 					crate_outline.call("set_crate", center, float(footprint.get("side_length", 0.0)), float(footprint.get("depth", footprint.get("side_length", 0.0))), float(footprint.get("height", 0.0)), crate_camera_origin, crate_forward, crate_right, crate_projection_offset)
 			continue
 		if key.begins_with("barrel_gpu_lattice_instanced"):
@@ -9447,7 +9448,8 @@ func _render_live_semantic_floor_footprints() -> void:
 					var lattice_right := _view_right_vector().normalized()
 					var lattice_camera_origin: Vector2 = lattice_renderer.call("_runtime_camera_origin", lattice_forward, lattice_right)
 					var lattice_projection_offset := _semantic_legacy_projection_offset(lattice_renderer)
-					lattice_outline.set("daylight_enabled", outdoor_town and not town_has_roof(Vector2i(center.floor())))
+					var barrel_haze: float = lattice_renderer.town_outdoor_depth(lattice_camera_origin, center, maxf((center - lattice_camera_origin).dot(lattice_forward), 0.0)) if outdoor_town else 0.0
+					lattice_outline.set("town_haze_depth", barrel_haze)
 					lattice_outline.call("set_barrel", center, half_side, float(footprint.get("height", 0.0)), lattice_camera_origin, lattice_forward, lattice_right, lattice_projection_offset)
 			continue
 		if bool(footprint.get("cylinder", false)):

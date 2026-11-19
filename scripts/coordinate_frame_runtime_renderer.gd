@@ -119,6 +119,7 @@ var floor_source_image: Image
 var floor_source_texture: Texture2D
 var floor_mip_images: Array[Image] = []
 var town_fence_image: Image
+var town_roof_bounds := PackedVector4Array()
 var runtime_ceiling_layer: Node2D
 var ceiling_art_sprite: Sprite2D
 var ceiling_render_image: Image
@@ -408,12 +409,16 @@ func _initialize() -> void:
 	controller.environment_layer.add_child(runtime_black_backdrop)
 	if controller.outdoor_town:
 		town_fence_image = TOWN_FENCE.get_image()
+		for roof_start: Vector2i in controller.TOWN_BUILDING_ORIGINS:
+			var roof_end: Vector2i = roof_start + controller.TOWN_BUILDING_SIZE
+			town_roof_bounds.append(Vector4(roof_start.x, roof_start.y, roof_end.x, roof_end.y))
 		var sky_material := ShaderMaterial.new()
 		sky_material.shader = TOWN_HORIZON_SHADER
 		sky_material.set_shader_parameter("horizon_strip", TOWN_HORIZON)
 		sky_material.set_shader_parameter("canvas_size", VIEW_SIZE)
 		sky_material.set_shader_parameter("focal_length", FOCAL_LENGTH)
 		sky_material.set_shader_parameter("camera_height", VIRTUAL_CAMERA_HEIGHT)
+		_set_town_lighting(sky_material)
 		runtime_black_backdrop.material = sky_material
 	coordinate_background = Sprite2D.new()
 	coordinate_background.name = "CoordinateFrameBackground"
@@ -1062,6 +1067,9 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("cutaway_fade_width", float(entry.get("camera_cutaway_fade_width", 0.01)))
 		var use_gpu_mips := not fence and integer_uv_scale_snap_enabled and gpu_wall_base_mip_texture != null
 		material.set_shader_parameter("use_daylight", daylight)
+		_set_town_lighting(material)
+		if controller.outdoor_town:
+			material.set_shader_parameter("town_camera_origin", Vector2(entry["camera_origin"]))
 		material.set_shader_parameter("use_town_fence", fence)
 		material.set_shader_parameter("use_town_lintel", bool(entry.get("lintel", false)))
 		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips else source_texture)
@@ -1658,7 +1666,7 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("floor_light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
 		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
 		var daylight: bool = controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["cell"]))
-		material.set_shader_parameter("use_daylight", daylight)
+		_set_town_lighting(material)
 		material.set_shader_parameter("use_town_dirt", daylight)
 		material.set_shader_parameter("far_depth", _max_view_depth())
 		material.set_shader_parameter("use_semantic_floor_material", semantic_floor_material_enabled and active_floor_texture_label == "WoodFloor2")
@@ -1703,15 +1711,12 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 			var edge_margin := clampf(depth / FOCAL_LENGTH * float(FLOOR_EDGE_OVERDRAW_PIXELS + 1), 0.002, 0.05)
 			if uv.x < -edge_margin or uv.x > 1.0 + edge_margin or uv.y < -edge_margin or uv.y > 1.0 + edge_margin:
 				continue
-			if controller.outdoor_town and not controller.town_has_roof(cell):
-				floor_render_image.set_pixel(x, y, _daylight_color(Color(0.74, 0.55, 0.29), depth))
-				continue
-			var color := _sample_image_nearest(floor_source_image, uv.clamp(Vector2.ZERO, Vector2.ONE))
-			var light := _floor_depth_light(depth, Vector2(x, y))                                   # Dither only the depth-lighting threshold, never the texture or its cell ownership.
-			color.r *= light
-			color.g *= light
-			color.b *= light
-			floor_render_image.set_pixel(x, y, color)
+			var outdoor_depth := town_outdoor_depth(origin, world, depth)
+			var dirt: bool = controller.outdoor_town and not controller.town_has_roof(cell)
+			var color := Color(0.74, 0.55, 0.29) if dirt else _sample_image_nearest(floor_source_image, uv.clamp(Vector2.ZERO, Vector2.ONE))
+			var light := 1.0 if dirt else _floor_depth_light(depth - outdoor_depth, Vector2(x, y))
+			color = Color(color.r * light, color.g * light, color.b * light, color.a)
+			floor_render_image.set_pixel(x, y, _daylight_color(color, outdoor_depth))
 
 
 # _floor_depth_light: Retains the authored depth-light palette while replacing each hard horizontal boundary with a 2x2 ordered dither.
@@ -1883,6 +1888,7 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
 		material.set_shader_parameter("far_depth", _max_view_depth())
+		_set_town_lighting(material)
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT)
 	ceiling_art_sprite.visible = false
 	return entries.size()
@@ -1922,11 +1928,10 @@ func _rasterize_ceiling_cell(entry: Dictionary) -> void:
 			var color := _sample_ceiling_layers(uv, layer_offset, layer1_weight, layer2_weight)
 			if color.a <= 0.0:
 				continue
-			var light := _depth_light(depth)
-			color.r *= light
-			color.g *= light
-			color.b *= light
-			ceiling_render_image.set_pixel(x, y, color)
+			var outdoor_depth := town_outdoor_depth(origin, world, depth)
+			var light := _depth_light(depth - outdoor_depth)
+			color = Color(color.r * light, color.g * light, color.b * light, color.a)
+			ceiling_render_image.set_pixel(x, y, _daylight_color(color, outdoor_depth))
 
 
 func _sample_ceiling_layers(uv: Vector2, layer_offset: Vector2, layer1_weight: float, layer2_weight: float) -> Color:
@@ -1987,11 +1992,11 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 			if color.a <= 0.0:
 				continue
 			var depth := lerpf(depths.x, depths.y, uv.x)
-			if controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["facing_cell"])):
-				color = _daylight_color(color, depth)
-			else:
-				var light := _floor_depth_light(depth, Vector2(x, y))
-				color = Color(color.r * light, color.g * light, color.b * light, color.a)
+			var world := Vector2(entry["world_a"]).lerp(Vector2(entry["world_b"]), uv.x)
+			var outdoor_depth := town_outdoor_depth(Vector2(entry["camera_origin"]), world, depth)
+			var exterior: bool = controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["facing_cell"]))
+			var light := 1.0 if exterior else _floor_depth_light(depth - outdoor_depth, Vector2(x, y))
+			color = _daylight_color(Color(color.r * light, color.g * light, color.b * light, color.a), outdoor_depth)
 			color.a *= float(entry.get("camera_cutaway_opacity", 1.0))
 			if bool(entry.get("camera_cutaway_fade", false)):
 				var coverage := _camera_cutaway_pixel_coverage(entry, uv)
@@ -2873,7 +2878,36 @@ func _max_view_depth() -> float:
 	return TOWN_MAX_DEPTH if controller.outdoor_town else MAX_DEPTH
 
 
+func _set_town_lighting(material: ShaderMaterial) -> void:
+	if controller.outdoor_town:
+		material.set_shader_parameter("use_town_lighting", true)
+		material.set_shader_parameter("town_roof_bounds", town_roof_bounds)
+
+
+func town_outdoor_depth(origin: Vector2, target: Vector2, depth: float) -> float:
+	if town_roof_bounds.is_empty():
+		return 0.0
+	var delta := target - origin
+	var covered := 0.0
+	for bounds in town_roof_bounds:
+		var enter := 0.0
+		var exit := 1.0
+		for axis in range(2):
+			if absf(delta[axis]) < 0.00001:
+				if origin[axis] <= bounds[axis] or origin[axis] >= bounds[axis + 2]:
+					exit = 0.0
+			else:
+				var a := (bounds[axis] - origin[axis]) / delta[axis]
+				var b := (bounds[axis + 2] - origin[axis]) / delta[axis]
+				enter = maxf(enter, minf(a, b))
+				exit = minf(exit, maxf(a, b))
+		covered += maxf(exit - enter, 0.0)
+	return depth * clampf(1.0 - covered, 0.0, 1.0)
+
+
 func _daylight_color(color: Color, depth: float) -> Color:
+	if depth <= 0.85:
+		return color
 	# Match coordinate_frame_daylight.gdshaderinc in the CPU painter.
 	var dust := 1.0 - exp(-maxf(depth - 0.85, 0.0) * 0.16)
 	var luma := color.r * 0.299 + color.g * 0.587 + color.b * 0.114
@@ -3036,6 +3070,10 @@ func _update_coordinate_background() -> void:
 		var sky_material := runtime_black_backdrop.material as ShaderMaterial
 		sky_material.set_shader_parameter("projection_center", Vector2(VIEW_SIZE.x * 0.5, HORIZON_Y) + _overscan_projection_offset())
 		var forward: Vector2 = controller._view_forward_vector()
+		var right: Vector2 = controller._view_right_vector()
+		sky_material.set_shader_parameter("camera_origin", _runtime_camera_origin(forward, right))
+		sky_material.set_shader_parameter("camera_forward", forward)
+		sky_material.set_shader_parameter("camera_right", right)
 		sky_material.set_shader_parameter("camera_turn", atan2(forward.x, -forward.y) / TAU + 0.35)
 		coordinate_background.visible = false
 		coordinate_screen_overlay.visible = false

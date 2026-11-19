@@ -409,6 +409,7 @@ vec4 semantic_wall_material(vec2 source_uv, vec2 source_size, float x_texels_per
 	return vec4(mix(wallpaper_color, trim_shadow, top_trim_shadow * detail_fade), 1.0);
 }
 
+uniform vec2 town_camera_origin;
 uniform bool use_town_fence = false;
 uniform bool use_town_lintel = false;
 
@@ -420,6 +421,9 @@ void fragment() {
 	vec2 source_uv;
 	float ray_depth;
 	if (!wall_ray_uv(pixel, source_uv, ray_depth)) discard;
+	vec2 wall_world_position = mix(wall_world_a, wall_world_b, source_uv.x);
+	float outdoor_depth = use_town_lighting ? town_outdoor_depth(town_camera_origin, wall_world_position, ray_depth) : 0.0;
+	float indoor_depth = max(ray_depth - outdoor_depth, 0.0);
 	float mip_level = 0.0;
 	// Semantic features need the physical horizontal footprint even when the
 	// bitmap mip diagnostic is off, so derive these neighbors unconditionally.
@@ -462,7 +466,7 @@ void fragment() {
 		// wallpaper repeat and the vertical wooden panels.
 		float x_texels_per_logical_pixel = max(abs(uv_x.x - source_uv.x) * base_texture_size.x, 0.0001);
 		float y_texels_per_logical_pixel = max(abs(uv_y.y - source_uv.y) * base_texture_size.y, 0.0001);
-		result = semantic_wall_material(source_uv, base_texture_size, x_texels_per_logical_pixel, y_texels_per_logical_pixel, span_x, span_y, pixel, ray_depth);
+		result = semantic_wall_material(source_uv, base_texture_size, x_texels_per_logical_pixel, y_texels_per_logical_pixel, span_x, span_y, pixel, indoor_depth);
 	} else if (use_layer_parallax) {
 		vec4 bottom = nearest_sample(layer1_texture, source_uv + layer1_offset, layer_texture_size, clamp_layer_edges, mip_level);
 		vec4 top = nearest_sample(layer2_texture, source_uv + layer2_offset, layer_texture_size, clamp_layer_edges, mip_level);
@@ -499,7 +503,6 @@ void fragment() {
 		// The wall UV's horizontal axis follows its physical world segment. Fade
 		// from the nearest camera-fan contact span so the transition continues
 		// naturally over neighboring physical wall faces.
-		vec2 wall_world_position = mix(wall_world_a, wall_world_b, source_uv.x);
 		vec2 contact_segment = cutaway_contact_b - cutaway_contact_a;
 		float contact_length_squared = dot(contact_segment, contact_segment);
 		float contact_amount = contact_length_squared > 0.000001 ? clamp(dot(wall_world_position - cutaway_contact_a, contact_segment) / contact_length_squared, 0.0, 1.0) : 0.0;
@@ -507,11 +510,12 @@ void fragment() {
 		float dither_coverage = smoothstep(cutaway_inner_radius, cutaway_inner_radius + max(cutaway_fade_width, 0.0001), contact_distance);
 		cutaway_opacity *= step(bayer2_threshold(pixel), dither_coverage);
 	}
-	float dither_light = depth_light_dither(ray_depth, pixel);
-	float wall_light = use_depth_light_dither ? dither_light : depth_light(ray_depth);
+	float dither_light = depth_light_dither(indoor_depth, pixel);
+	float wall_light = use_depth_light_dither ? dither_light : depth_light(indoor_depth);
 	if (show_depth_light_dither_debug) {
 		COLOR = vec4(vec3(dither_light), result.a * cutaway_opacity);
 	} else {
-		COLOR = vec4(use_daylight ? daylight_color(result.rgb, ray_depth) : result.rgb * wall_light, result.a * cutaway_opacity);
+		vec3 shaded = result.rgb * (use_daylight ? 1.0 : wall_light);
+		COLOR = vec4(use_town_lighting ? daylight_color(shaded, outdoor_depth) : shaded, result.a * cutaway_opacity);
 	}
 }

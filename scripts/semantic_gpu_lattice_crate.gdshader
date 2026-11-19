@@ -334,6 +334,8 @@ vec4 fragment_raster_effect_colour() {
 
 #include "res://scripts/coordinate_frame_daylight.gdshaderinc"
 
+uniform float town_haze_depth = 0.0;
+
 void fragment() {
 	vec2 lattice_coord = face_uv();
 	if (face_index == 5) {
@@ -511,7 +513,7 @@ void fragment() {
 			} else discard;
 		}
 	}
-	if (use_daylight && face_index != 5) {
-		COLOR.rgb = daylight_color(COLOR.rgb, dot(crate_center - camera_origin, camera_forward));
+	if (town_haze_depth > 0.85 && face_index != 5) {
+		COLOR.rgb = daylight_color(COLOR.rgb, town_haze_depth);
 	}
 }

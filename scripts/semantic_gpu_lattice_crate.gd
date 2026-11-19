@@ -177,7 +177,7 @@ class CrateLogicalRasterOverlay extends Node2D:
 var viewport: SubViewport
 var root: Node2D
 var display: Sprite2D
-var daylight_enabled := false
+var town_haze_depth := 0.0
 var materials: Array[ShaderMaterial] = []
 var wireframe_overlay: CrateLatticeOverlay
 var logical_raster_overlay: CrateLogicalRasterOverlay
@@ -364,7 +364,7 @@ func set_crate(center: Vector2, width: float, depth: float, height: float, camer
 		material.set_shader_parameter("fragment_raster_lines_enabled", use_fragment_raster)
 		material.set_shader_parameter("final_edge_overlay_enabled", use_fragment_raster)
 		material.set_shader_parameter("authoring_lod_stage", authoring_lod_stage)
-		material.set_shader_parameter("use_daylight", daylight_enabled)
+		material.set_shader_parameter("town_haze_depth", town_haze_depth)
 		material.set_shader_parameter("camera_origin", camera_origin)
 		material.set_shader_parameter("camera_forward", camera_forward)
 		material.set_shader_parameter("camera_right", camera_right)

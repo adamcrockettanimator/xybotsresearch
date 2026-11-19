@@ -330,6 +330,8 @@ void fragment() {
 			mip_level = clamp(floor(log2(minor_footprint)), 0.0, 7.0);
 		}
 	}
+	float outdoor_depth = use_town_lighting ? town_outdoor_depth(camera_origin, cell_world + source_uv, depth) : 0.0;
+	float indoor_depth = max(depth - outdoor_depth, 0.0);
 	vec4 result;
 	if (use_town_dirt) {
 		vec2 texel = floor((cell_world + source_uv) * 64.0);
@@ -339,11 +341,11 @@ void fragment() {
 	} else if (use_semantic_floor_material) {
 		vec3 floor_color = semantic_floor_material(source_uv, span_x, span_y);
 		vec3 floor_average = vec3(118.0, 94.0, 71.0) / 255.0;
-		result = vec4(semantic_plane_distance_contrast(floor_color, floor_average, depth), 1.0);
+		result = vec4(semantic_plane_distance_contrast(floor_color, floor_average, indoor_depth), 1.0);
 	} else if (use_semantic_ceiling_material) {
 		vec3 ceiling_color = semantic_ceiling_material(source_uv, span_x, span_y);
 		vec3 ceiling_average = vec3(116.0, 93.0, 70.0) / 255.0;
-		result = vec4(semantic_plane_distance_contrast(ceiling_color, ceiling_average, depth), 1.0);
+		result = vec4(semantic_plane_distance_contrast(ceiling_color, ceiling_average, indoor_depth), 1.0);
 	} else if (use_layers) {
 		vec4 bottom = use_anisotropic_bottom_filter ? anisotropic_nearest_sample(layer1_texture, source_uv + layer1_offset, layer_texture_size, mip_level, uv_x + layer1_offset, uv_y + layer1_offset) : nearest_sample(layer1_texture, source_uv + layer1_offset, layer_texture_size, mip_level);
 		vec4 top = nearest_sample(layer2_texture, source_uv + layer2_offset, layer_texture_size, mip_level);
@@ -372,6 +374,7 @@ void fragment() {
 	// Clamp the contact seam itself to a dark value: AO must not turn into a
 	// bright texture-colored stripe when the underlying floor/ceiling texel is pale.
 	if (at_wall_plane_corner) result.rgb = min(result.rgb * 0.82, vec3(0.46));
-	float light = use_depth_light_dither ? depth_light_dither(depth, pixel) : depth_light(depth);
-	COLOR = vec4(use_daylight ? daylight_color(result.rgb, depth) : result.rgb * light, result.a);
+	float light = use_depth_light_dither ? depth_light_dither(indoor_depth, pixel) : depth_light(indoor_depth);
+	vec3 shaded = result.rgb * (use_town_dirt ? 1.0 : light);
+	COLOR = vec4(use_town_lighting ? daylight_color(shaded, outdoor_depth) : shaded, result.a);
 }
