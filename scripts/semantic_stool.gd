@@ -367,7 +367,11 @@ func _process(_delta: float) -> void:
 	var values := _style_values()
 	_style_dirty = style != null and values != _saved
 
-func set_stool(center: Vector2, camera_origin: Vector2, forward: Vector2, right: Vector2, offset: Vector2) -> void:
+var _floor_height := 0.0
+
+
+func set_stool(center: Vector2, camera_origin: Vector2, forward: Vector2, right: Vector2, offset: Vector2, floor_height := 0.0) -> void:
+	_floor_height = floor_height
 	current_camera_distance_readout = center.distance_to(camera_origin)
 	var leg_lod := _logical_pixel_lod(maximum_leg_pixels)
 	var leg_narrow_pixels: int = leg_lod["narrow_pixels"]
@@ -399,7 +403,7 @@ func set_stool(center: Vector2, camera_origin: Vector2, forward: Vector2, right:
 	# A camera has one global view direction for this small prop. Choose the
 	# two normal-owned leg materials once here; individual corners must not pick
 	# competing opposite sides simply because they lie across the stool centre.
-	var stool_to_camera := Vector3(camera_origin.x - center.x, 0.5, camera_origin.y - center.y)
+	var stool_to_camera := Vector3(camera_origin.x - center.x, 0.5 - _floor_height, camera_origin.y - center.y)
 	var camera_x_normal := Vector3.RIGHT if stool_to_camera.x >= 0.0 else Vector3.LEFT
 	var camera_z_normal := Vector3.BACK if stool_to_camera.z >= 0.0 else Vector3.FORWARD
 	var near_x := 1.0 if stool_to_camera.x >= 0.0 else -1.0
@@ -496,7 +500,7 @@ func _draw_camera_facing_leg_rectangles(footprint_corner: Vector3, height: float
 	var visible_top := visible_base + Vector3.UP * height
 	# The X face runs away from its shared edge along -Z normal; the Z face runs
 	# away along -X normal. This is true for every leg, including the far pair.
-	var camera_direction := Vector3(origin.x - center.x, 0.5, origin.y - center.y).normalized()
+	var camera_direction := Vector3(origin.x - center.x, 0.5 - _floor_height, origin.y - center.y).normalized()
 	var x_is_primary := x_normal.dot(camera_direction) >= z_normal.dot(camera_direction)
 	# A face is under the table only when its normal points from this corner
 	# back toward the footprint centre. Outside planes remain unshadowed.
@@ -585,7 +589,7 @@ func _draw_leg_face_rectangle(base: Vector3, top: Vector3, inward_world: Vector3
 func _leg_face_width_from_view_angle(face_normal: Vector3, center: Vector2, origin: Vector2, logical_width: int) -> int:
 	# Width is also camera-owned: all matching leg faces use the same integer
 	# plateau until the *camera* crosses the next angular threshold.
-	var to_camera := Vector3(origin.x - center.x, 0.5, origin.y - center.y)
+	var to_camera := Vector3(origin.x - center.x, 0.5 - _floor_height, origin.y - center.y)
 	if to_camera.length_squared() <= 0.0001:
 		return logical_width
 	var facing := clampf(face_normal.normalized().dot(to_camera.normalized()), 0.0, 1.0)
@@ -837,7 +841,7 @@ func _draw_box(vertices: Array[Vector3], cursor: int, center: Vector2, origin: V
 	return cursor
 
 func _face_visible(normal: Vector3, face_center: Vector3, center: Vector2, origin: Vector2) -> bool:
-	var camera := Vector3(origin.x - center.x, 0.5, origin.y - center.y)
+	var camera := Vector3(origin.x - center.x, 0.5 - _floor_height, origin.y - center.y)
 	return normal.dot(camera - face_center) > 0.0
 
 func _line_detail_fade(distance: float, full_distance: float, hidden_distance: float) -> float:
@@ -858,7 +862,7 @@ func _project(point: Vector3, center: Vector2, origin: Vector2, forward: Vector2
 	var depth := relative.dot(forward)
 	if depth <= 0.01:
 		return {"visible": false, "pixel": Vector2.ZERO, "depth": depth}
-	return {"visible": true, "pixel": Vector2(80.0 + relative.dot(right) / depth * 128.0, 31.5 + (0.5 - point.y) / depth * 128.0) + offset, "depth": depth}
+	return {"visible": true, "pixel": Vector2(80.0 + relative.dot(right) / depth * 128.0, 31.5 + (0.5 - _floor_height - point.y) / depth * 128.0) + offset, "depth": depth}
 
 func _load_style() -> void:
 	style = load(style_path)

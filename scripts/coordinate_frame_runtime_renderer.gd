@@ -10,7 +10,7 @@ var VIEW_SIZE := Vector2(160.0, 120.0)
 const OVERSCAN_SIZE := Vector2(320.0, 240.0)
 const OVERSCAN_STABLE_PATH := "res://assets/CoordinateFrames/coord_n_stable_overscan.png"
 # The green rectangle in the user-authored overscan sheet records the exact
-# legacy 160×120 coordinate frame.  Keeping this as the neutral crop makes the
+# legacy 160Ãƒâ€”120 coordinate frame.  Keeping this as the neutral crop makes the
 # test fully reversible: with no crop motion, the runtime projection is pixel
 # for pixel in its former place.
 const OVERSCAN_REFERENCE_CROP_ORIGIN := Vector2(80.0, 32.0)
@@ -58,10 +58,10 @@ const MAX_WALLS := 28
 const NEAR_CLIP := 0.075
 const MAX_DEPTH := 5.5
 const TOWN_MAX_DEPTH := 18.0
-const TOWN_FENCE = preload("res://assets/Environment/Outdoor/fence.png")
 const TOWN_HORIZON = preload("res://assets/Environment/Outdoor/day_horizon.png")
+const STOREFRONT_PLANE_SHADER = preload("res://scripts/town_storefront_plane.gdshader")
 const TOWN_HORIZON_SHADER = preload("res://scripts/coordinate_frame_day_horizon.gdshader")
-# Match the Blender reference camera exactly: 28.8 mm / 36 mm × 160 px.
+# Match the Blender reference camera exactly: 28.8 mm / 36 mm Ãƒâ€” 160 px.
 const FOCAL_LENGTH := 128.0
 const CAMERA_CUTAWAY_DITHER_HALF_WIDTH_PIXELS := 26.0
 const CAMERA_CUTAWAY_DITHER_INNER_PIXELS := 10.0
@@ -92,6 +92,8 @@ const TEMPLATE_CAMERA_REAR_OFFSET := 0.49
 # calibrated against the old corridor sprite sizes at useful mid-range depths,
 # but is now evaluated by the same perspective equation as the environment.
 const WORLD_ACTOR_HEIGHT := 0.36
+# Bottom rail offset, rail spacing, plank height, and post height.
+const TOWN_FENCE_HEIGHTS := Vector4(0.12, 0.308, 0.0, 0.55) * WORLD_ACTOR_HEIGHT
 # Character height comes directly from the camera perspective, except that the
 # current camera square is capped at this largest safe display height. This
 # prevents same-cell blowups without introducing visible LOD-size jumps.
@@ -118,8 +120,8 @@ var floor_render_texture: ImageTexture
 var floor_source_image: Image
 var floor_source_texture: Texture2D
 var floor_mip_images: Array[Image] = []
-var town_fence_image: Image
 var town_roof_bounds := PackedVector4Array()
+var storefront_planes: Array[ColorRect] = []
 var runtime_ceiling_layer: Node2D
 var ceiling_art_sprite: Sprite2D
 var ceiling_render_image: Image
@@ -408,10 +410,8 @@ func _initialize() -> void:
 	runtime_black_backdrop.z_index = -1
 	controller.environment_layer.add_child(runtime_black_backdrop)
 	if controller.outdoor_town:
-		town_fence_image = TOWN_FENCE.get_image()
-		for roof_start: Vector2i in controller.TOWN_BUILDING_ORIGINS:
-			var roof_end: Vector2i = roof_start + controller.TOWN_BUILDING_SIZE
-			town_roof_bounds.append(Vector4(roof_start.x, roof_start.y, roof_end.x, roof_end.y))
+		for roof: Rect2i in controller.town_roof_rects():
+			town_roof_bounds.append(Vector4(roof.position.x, roof.position.y, roof.end.x, roof.end.y))
 		var sky_material := ShaderMaterial.new()
 		sky_material.shader = TOWN_HORIZON_SHADER
 		sky_material.set_shader_parameter("horizon_strip", TOWN_HORIZON)
@@ -500,7 +500,7 @@ func _initialize() -> void:
 	_initialize_gpu_plane_renderer()
 	controller.environment_layer.add_child(runtime_wall_layer)
 
-	# The previous in-playfield caption was being scaled with the 160×120 view,
+	# The previous in-playfield caption was being scaled with the 160Ãƒâ€”120 view,
 	# making it blurry and colliding with the player.  Retain a status node for
 	# the renderer but keep it hidden; the readable CanvasLayer line below is the
 	# sole on-screen readout.
@@ -525,7 +525,7 @@ func _initialize() -> void:
 		tuning_readout.visible = false
 		controller.canvas_layer.add_child(tuning_readout)
 		dither_radial_menu = Label.new()
-		# The menu belongs to player one's 160×120 logical viewport, not the
+		# The menu belongs to player one's 160Ãƒâ€”120 logical viewport, not the
 		# shared screen.  A full-viewport centered label keeps it over the player
 		# regardless of split-screen scaling.
 		dither_radial_menu.position = Vector2.ZERO
@@ -835,6 +835,8 @@ func _rebuild() -> void:
 	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
 	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
 	_rebuild_runtime_wall_surfaces(entries)
+	if controller.outdoor_town:
+		_update_storefront_planes()
 	_update_debug_outlines(entries)
 	_update_camera_cutaway_view_debug(entries)
 	_update_world_footprint_view_debug()
@@ -908,7 +910,7 @@ func _set_wall_source_texture(path: String) -> void:
 	_refresh_runtime_status(last_wall_entries.size())
 
 
-# _load_runtime_wall_layers: Reads the two authored 128×88 surfaces once.  The
+# _load_runtime_wall_layers: Reads the two authored 128Ãƒâ€”88 surfaces once.  The
 # base layer is opaque; the front layer's alpha is preserved and composited only
 # after both images have received their individual view-dependent UV offsets.
 func _load_runtime_wall_layers() -> void:
@@ -939,7 +941,7 @@ func _load_runtime_wall_layers() -> void:
 	_rebuild_gpu_wall_sampling_textures()
 
 
-# _initialize_gpu_wall_renderer: Builds a shared 160×120 carrier texture and
+# _initialize_gpu_wall_renderer: Builds a shared 160Ãƒâ€”120 carrier texture and
 # loads the per-wall shader.  The carrier is only geometry; every actual wall
 # texel comes from a shader uniform, so the master source texture remains loaded
 # once and is shared by all visible projected walls.
@@ -990,6 +992,40 @@ func _set_gpu_wall_sprites_visible(visible: bool) -> void:
 # CPU compositor's draw order, while each shader discards pixels outside its own
 # homography, preserving wall occlusion without a CPU pixel loop.
 func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
+	var storefront_occluders := PackedVector4Array()
+	var storefront_heights := PackedVector4Array()
+	var storefront_occluder_count := 0
+	var porch_box_min := PackedVector3Array()
+	var porch_box_max := PackedVector3Array()
+	var porch_box_count := 0
+	if controller.outdoor_town:
+		for trim: Dictionary in controller.STOREFRONT_STYLE.trim_spans():
+			var thickness := float(trim.get("thickness", 0.0))
+			if thickness <= 0.0:
+				continue
+			var a: Vector2 = trim["a"]
+			var b: Vector2 = trim["b"]
+			var half_width := (b - a).orthogonal().normalized().abs() * (thickness * 0.5)
+			var lower := a.min(b) - half_width
+			var upper := a.max(b) + half_width
+			porch_box_min.append(Vector3(lower.x, lower.y, float(trim["bottom"])))
+			porch_box_max.append(Vector3(upper.x, upper.y, float(trim["height"])))
+		porch_box_count = porch_box_min.size()
+		porch_box_min.resize(6)
+		porch_box_max.resize(6)
+		# Four side spans, four doorway posts and two headers. Use exactly the
+		# projected wall cage, including the height of each sloped side.
+		for entry in entries:
+			if entry["storefront_paint"] != 1:
+				continue
+			var a: Vector2 = entry["world_a"]
+			var b: Vector2 = entry["world_b"]
+			var top: Vector2 = entry["face_top"]
+			storefront_occluders.append(Vector4(a.x, a.y, b.x, b.y))
+			storefront_heights.append(Vector4(top.x, top.y, entry["face_bottom"], float(entry["storefront_window"])))
+		storefront_occluder_count = storefront_occluders.size()
+		storefront_occluders.resize(10)
+		storefront_heights.resize(10)
 	if not _can_use_gpu_wall_renderer():
 		return 0
 	while gpu_wall_sprites.size() < entries.size():
@@ -1004,6 +1040,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		runtime_wall_layer.add_child(sprite)
 		gpu_wall_sprites.append(sprite)
 		gpu_wall_materials.append(material)
+	var painted_porch_caps := {}
 	for index in range(gpu_wall_sprites.size()):
 		var sprite := gpu_wall_sprites[index]
 		if not is_instance_valid(sprite):
@@ -1013,15 +1050,23 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		if not is_active:
 			continue
 		var entry := entries[index]
+		var fence: bool = controller.outdoor_town and _is_exterior_wall_entry(entry)
 		var quad: PackedVector2Array = entry["quad"]
 		var inverse := _inverse_homography(quad[0], quad[1], quad[2], quad[3])
-		if inverse.size() != 3:
+		var porch_cap: Rect2 = entry["porch_cap"]
+		var porch_box_key: String = entry["porch_box_key"]
+		var draw_porch_cap := porch_cap.has_area() and not painted_porch_caps.has(porch_box_key)
+		if not fence and not draw_porch_cap and inverse.size() != 3:
 			sprite.visible = false
 			continue
 		var material := gpu_wall_materials[index]
-		var fence: bool = controller.outdoor_town and _is_exterior_wall_entry(entry)
+		material.set_shader_parameter("draw_porch_cap", draw_porch_cap)
+		if draw_porch_cap:
+			painted_porch_caps[porch_box_key] = true
+			material.set_shader_parameter("porch_cap_rect", Vector4(porch_cap.position.x, porch_cap.position.y, porch_cap.end.x, porch_cap.end.y))
+		material.set_shader_parameter("use_projected_wall", inverse.size() == 3)
 		var daylight: bool = controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["facing_cell"]))
-		var source_texture: Texture2D = TOWN_FENCE if fence else wall_source_texture
+		var source_texture: Texture2D = wall_source_texture
 		var source_size: Vector2 = Vector2(source_texture.get_size()) if source_texture != null else Vector2.ONE
 		var use_layers := wall_parallax_enabled and wall_layer1_texture != null and wall_layer2_texture != null
 		# Wall-art props retain their own three-depth parallax even when the legacy
@@ -1031,9 +1076,10 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		var layer1_weight := (layer_movement_balance - 1.0) * 0.5
 		var layer2_weight := (layer_movement_balance + 1.0) * 0.5
 		material.set_shader_parameter("canvas_size", VIEW_SIZE)
-		material.set_shader_parameter("inverse_row0", inverse[0])
-		material.set_shader_parameter("inverse_row1", inverse[1])
-		material.set_shader_parameter("inverse_row2", inverse[2])
+		if inverse.size() == 3:
+			material.set_shader_parameter("inverse_row0", inverse[0])
+			material.set_shader_parameter("inverse_row1", inverse[1])
+			material.set_shader_parameter("inverse_row2", inverse[2])
 		material.set_shader_parameter("wall_local_a", Vector2(entry["first_local"]))
 		material.set_shader_parameter("wall_local_b", Vector2(entry["second_local"]))
 		material.set_shader_parameter("wall_depths", Vector2(entry["depths"]))
@@ -1048,7 +1094,45 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("window_asset_size", Vector2(36.0, 40.0))
 		material.set_shader_parameter("show_exterior_window", _wall_entry_gets_window(entry))
 		material.set_shader_parameter("camera_height", VIRTUAL_CAMERA_HEIGHT)
-		material.set_shader_parameter("wall_height", WALL_HEIGHT)
+		material.set_shader_parameter("face_top", entry["face_top"])
+		material.set_shader_parameter("face_bottom", float(entry["face_bottom"]))
+		material.set_shader_parameter("storefront_paint", int(entry["storefront_paint"]))
+		material.set_shader_parameter("storefront_window", bool(entry["storefront_window"]))
+		material.set_shader_parameter("storefront_glass_broken", bool(controller.storefront_glass_broken))
+		material.set_shader_parameter("storefront_open_leaf", bool(entry["storefront_open_leaf"]))
+		material.set_shader_parameter("storefront_awning_edge", bool(entry["storefront_awning_edge"]))
+		material.set_shader_parameter("storefront_front_door", bool(entry["storefront_front_door"]))
+		material.set_shader_parameter("porch_timber", entry["porch_timber"])
+		if controller.outdoor_town and (entry["storefront_open_leaf"] or entry["storefront_paint"] == 2):
+			material.set_shader_parameter("storefront_porch_box_count", porch_box_count)
+			material.set_shader_parameter("storefront_porch_box_min", porch_box_min)
+			material.set_shader_parameter("storefront_porch_box_max", porch_box_max)
+			material.set_shader_parameter("storefront_occluder_count", storefront_occluder_count)
+			material.set_shader_parameter("storefront_occluders", storefront_occluders)
+			material.set_shader_parameter("storefront_occluder_heights", storefront_heights)
+		if int(entry["storefront_paint"]) != 0:
+			var style: Resource = controller.STOREFRONT_STYLE
+			material.set_shader_parameter("storefront_siding", style.siding_color)
+			material.set_shader_parameter("storefront_trim", style.trim_color)
+			material.set_shader_parameter("storefront_face_tone", float(entry["storefront_face_tone"]))
+			material.set_shader_parameter("storefront_foundation", style.foundation_color)
+			material.set_shader_parameter("storefront_metal", style.roof_color)
+			var casing_ends: Vector2 = entry["door_casing_ends"]
+			material.set_shader_parameter("door_casing", Vector4(casing_ends.x, casing_ends.y, style.DOOR_TOP, style.door_casing_width))
+			if casing_ends != Vector2.ZERO:
+				var wall_start: Vector2 = entry["world_a"]
+				material.set_shader_parameter("door_frame_center", style.door_frame_center(is_equal_approx(wall_start.y, style.FOOTPRINT.position.y)))
+			material.set_shader_parameter("door_reveal_width", style.door_reveal_width)
+			material.set_shader_parameter("door_panel_depth", style.door_panel_depth)
+			var aperture: Rect2 = style.WINDOW_APERTURE
+			material.set_shader_parameter("storefront_window_aperture", Vector4(aperture.position.x, aperture.position.y, aperture.end.x, aperture.end.y))
+			material.set_shader_parameter("storefront_window_mullion", style.WINDOW_MULLION_HALF_SIZE)
+			if entry["storefront_window"]:
+				material.set_shader_parameter("storefront_window_recess", style.window_recess_depth)
+				material.set_shader_parameter("storefront_glass_tint", style.glass_tint)
+				material.set_shader_parameter("storefront_glass_shine", style.glass_shine)
+				material.set_shader_parameter("storefront_glass_shine_width", style.glass_shine_width)
+				material.set_shader_parameter("storefront_glass_fragment_reach", style.glass_fragment_reach)
 		material.set_shader_parameter("focal_length", FOCAL_LENGTH)
 		material.set_shader_parameter("horizon_y", HORIZON_Y)
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
@@ -1070,6 +1154,21 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		_set_town_lighting(material)
 		if controller.outdoor_town:
 			material.set_shader_parameter("town_camera_origin", Vector2(entry["camera_origin"]))
+			var style: Resource = controller.STOREFRONT_STYLE
+			var awning: Rect2 = style.porch_rect()
+			material.set_shader_parameter("storefront_awning_rect", Vector4(awning.position.x, awning.position.y, awning.end.x, awning.end.y))
+			material.set_shader_parameter("storefront_awning_heights", Vector2(style.AWNING_FRONT, style.AWNING_BACK))
+			material.set_shader_parameter("storefront_floor_height", style.porch_height)
+			material.set_shader_parameter("storefront_facade_base", style.ROOF_FRONT)
+			material.set_shader_parameter("timber_lighting", Vector3(style.timber_edge_highlight, style.ledge_shadow, style.awning_shadow))
+			if fence:
+				material.set_shader_parameter("fence_post", _town_fence_post(entry["world_a"], entry["world_b"]))
+				material.set_shader_parameter("fence_heights", _town_fence_heights())
+				material.set_shader_parameter("fence_post_half_width", style.fence_post_half_width)
+				material.set_shader_parameter("fence_rail_half_width", style.fence_rail_half_width)
+			if fence or draw_porch_cap:
+				material.set_shader_parameter("town_camera_forward", controller._view_forward_vector().normalized())
+				material.set_shader_parameter("town_camera_right", controller._view_right_vector().normalized())
 		material.set_shader_parameter("use_town_fence", fence)
 		material.set_shader_parameter("use_town_lintel", bool(entry.get("lintel", false)))
 		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips else source_texture)
@@ -1221,7 +1320,7 @@ func _refresh_dither_radial_menu() -> void:
 	var bayer2_marker := ">" if dither_menu_selection == 1 else " "
 	var bayer4_marker := ">" if dither_menu_selection == 2 else " "
 	var bayer8_marker := ">" if dither_menu_selection == 3 else " "
-	dither_radial_menu.text = "DEPTH DITHER\n\n        %s 2×2\n\n%s Smooth       %s 4×4\n\n        %s 8×8\n\nHold D-pad left · aim right stick · release" % [bayer2_marker, smooth_marker, bayer4_marker, bayer8_marker]
+	dither_radial_menu.text = "DEPTH DITHER\n\n        %s 2Ãƒâ€”2\n\n%s Smooth       %s 4Ãƒâ€”4\n\n        %s 8Ãƒâ€”8\n\nHold D-pad left Ã‚Â· aim right stick Ã‚Â· release" % [bayer2_marker, smooth_marker, bayer4_marker, bayer8_marker]
 	dither_radial_menu.visible = true
 
 
@@ -1238,7 +1337,7 @@ func set_depth_dither_matrix_size(matrix_size: int) -> void:
 	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
 	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
 	_refresh_runtime_status(last_wall_entries.size())
-	var label := "Smooth" if depth_dither_matrix_size == 0 else "Bayer %d×%d" % [depth_dither_matrix_size, depth_dither_matrix_size]
+	var label := "Smooth" if depth_dither_matrix_size == 0 else "Bayer %dÃƒâ€”%d" % [depth_dither_matrix_size, depth_dither_matrix_size]
 	_show_tuning_readout("Depth dither: %s" % label)
 
 
@@ -1424,7 +1523,7 @@ func runtime_wall_impact_layer(edge_key: String, projectile_direction: Vector2) 
 	return -1
 
 
-# runtime_wall_impact_colors: Samples a 2×2 texel patch around the real wall contact so splinters can use nearby wood-color variation.
+# runtime_wall_impact_colors: Samples a 2Ãƒâ€”2 texel patch around the real wall contact so splinters can use nearby wood-color variation.
 func runtime_wall_impact_colors(edge_key: String, hit_position: Vector2) -> Array[Color]:
 	var fallback_colors: Array[Color] = [Color(0.45, 0.28, 0.12, 1.0), Color(0.38, 0.22, 0.09, 1.0), Color(0.52, 0.33, 0.15, 1.0), Color(0.31, 0.18, 0.07, 1.0)] # Keep four usable wood tones while the runtime image is unavailable.
 	if wall_source_image == null:
@@ -1455,6 +1554,12 @@ func runtime_wall_impact_colors(edge_key: String, hit_position: Vector2) -> Arra
 # authored red dots are therefore a diagnostic of this data, not a fragile
 # requirement: cells touching the player or screen boundary remain valid even
 # when their corner dots lie offscreen or behind a nearer wall.
+func _floor_cell_height(cell: Vector2i) -> float:
+	if controller.outdoor_town and controller.STOREFRONT_STYLE.FOOTPRINT.has_point(cell):
+		return controller.STOREFRONT_STYLE.porch_height
+	return 0.0
+
+
 func _visible_floor_cells() -> Array[Dictionary]:
 	if controller == null:
 		return []
@@ -1465,6 +1570,7 @@ func _visible_floor_cells() -> Array[Dictionary]:
 	for y in range(int(controller.MAP_HEIGHT)):
 		for x in range(int(controller.MAP_WIDTH)):
 			var cell := Vector2i(x, y)
+			var floor_height := _floor_cell_height(cell)
 			var world_corners := [
 				Vector2(cell.x, cell.y),
 				Vector2(cell.x + 1, cell.y),
@@ -1480,7 +1586,7 @@ func _visible_floor_cells() -> Array[Dictionary]:
 				local_corners.append(local)
 				nearest_depth = minf(nearest_depth, local.y)
 				farthest_depth = maxf(farthest_depth, local.y)
-				quad.append(_project_view_point(local, 0.0))
+				quad.append(_project_view_point(local, floor_height))
 			# A cell wholly behind the level camera cannot contribute.  Do retain
 			# cells that cross the near plane: their visible part is reconstructed
 			# analytically in _rasterize_floor_cell instead of being dropped because
@@ -1675,7 +1781,7 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("semantic_plane_contrast_full_depth", semantic_plane_contrast_full_depth)
 		material.set_shader_parameter("semantic_plane_contrast_flat_depth", maxf(semantic_plane_contrast_flat_depth, semantic_plane_contrast_full_depth + 0.01))
 		material.set_shader_parameter("use_layers", false)
-		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT)
+		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT - _floor_cell_height(Vector2i(entry["cell"])))
 	floor_art_sprite.visible = false
 	return entries.size()
 
@@ -1698,7 +1804,7 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 		var vertical_screen_delta := float(y) - HORIZON_Y - projection_offset.y
 		if vertical_screen_delta <= 0.0001:
 			continue
-		var depth := VIRTUAL_CAMERA_HEIGHT * FOCAL_LENGTH / vertical_screen_delta
+		var depth := (VIRTUAL_CAMERA_HEIGHT - _floor_cell_height(cell)) * FOCAL_LENGTH / vertical_screen_delta
 		if depth <= 0.0 or depth > _max_view_depth():
 			continue
 		for x in range(min_x, max_x + 1):
@@ -1768,7 +1874,7 @@ func _visible_ceiling_cells() -> Array[Dictionary]:
 	for y in range(int(controller.MAP_HEIGHT)):
 		for x in range(int(controller.MAP_WIDTH)):
 			var cell := Vector2i(x, y)
-			if controller.outdoor_town and not controller.town_has_roof(cell):
+			if controller.outdoor_town and (not controller.town_has_roof(cell) or controller.STOREFRONT_STYLE.FOOTPRINT.has_point(cell)):
 				continue
 			var world_corners := [
 				Vector2(cell.x, cell.y),
@@ -1801,8 +1907,8 @@ func _visible_ceiling_cells() -> Array[Dictionary]:
 
 
 # _rebuild_runtime_ceiling_surfaces: Reconstructs an upper horizontal plane at
-# native resolution.  Wall/floor ordering is explicit: background → floor →
-# ceiling → vertical walls → player/debug.
+# native resolution.  Wall/floor ordering is explicit: background Ã¢â€ â€™ floor Ã¢â€ â€™
+# ceiling Ã¢â€ â€™ vertical walls Ã¢â€ â€™ player/debug.
 func _rebuild_runtime_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 	if ceiling_render_image == null or ceiling_render_texture == null or ceiling_layer1_image == null:
 		return 0
@@ -2045,8 +2151,15 @@ func _inverse_homography_uv(row0: Vector3, row1: Vector3, row2: Vector3, pixel: 
 func _sample_projected_wall(entry: Dictionary, row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, uv: Vector2) -> Color:
 	if bool(entry.get("lintel", false)):
 		return Color(0.34, 0.23, 0.14) if uv.y <= 0.17 else Color.TRANSPARENT
-	if town_fence_image != null and _is_exterior_wall_entry(entry):
-		return _sample_image_nearest(town_fence_image, Vector2(uv.x, (uv.y - 0.45) / 0.55)) if uv.y >= 0.45 else Color.TRANSPARENT
+	if controller.outdoor_town and _is_exterior_wall_entry(entry):
+		# The CPU diagnostic projects the same two rails on a flat face.
+		var height := (1.0 - uv.y) * WALL_HEIGHT
+		var heights := _town_fence_heights()
+		var near_post: bool = minf(uv.x, 1.0 - uv.x) <= controller.STOREFRONT_STYLE.fence_post_half_width
+		var rail_index := floori((height - heights.x) / heights.y)
+		var rail_top := heights.x + heights.y * rail_index + heights.z
+		var rail := rail_index >= 0 and rail_index < 2 and height <= rail_top
+		return Color(0.32, 0.235, 0.153) if (near_post and height <= heights.w) or rail else Color.TRANSPARENT
 	if wall_parallax_enabled and wall_layer1_image != null and wall_layer2_image != null:
 		var view_offset := _layer_parallax_uv_offset(entry)
 		# -1 = Layer 1 moves and Layer 2 stays; 0 = equal/opposite; +1 = Layer
@@ -2077,6 +2190,18 @@ func _layer_parallax_uv_offset(entry: Dictionary) -> Vector2:
 	)
 
 
+func _town_fence_heights() -> Vector4:
+	return TOWN_FENCE_HEIGHTS + Vector4(0.0, 0.0, controller.STOREFRONT_STYLE.fence_rail_height, 0.0)
+
+
+# Clockwise ownership gives every perimeter joint exactly one post,
+# including the four joints shared by perpendicular fence runs.
+func _town_fence_post(a: Vector2, b: Vector2) -> Vector2:
+	if is_equal_approx(a.y, b.y):
+		return a.min(b) if is_zero_approx(a.y) else a.max(b)
+	return a.min(b) if a.x > 0.0 else a.max(b)
+
+
 func _is_exterior_wall_entry(entry: Dictionary) -> bool:
 	var world_a: Vector2 = entry.get("world_a", Vector2.ZERO)
 	var world_b: Vector2 = entry.get("world_b", Vector2.ZERO)
@@ -2087,6 +2212,8 @@ func _is_exterior_wall_entry(entry: Dictionary) -> bool:
 
 
 func _wall_entry_gets_window(entry: Dictionary) -> bool:
+	if int(entry.get("storefront_paint", 0)) != 0:
+		return false
 	if controller.outdoor_town:
 		if controller.town_has_roof(Vector2i(entry["facing_cell"])) or _is_exterior_wall_entry(entry):
 			return false
@@ -2183,7 +2310,7 @@ func _mip_level_for_footprint(footprint: float, mip_chain: Array[Image]) -> int:
 
 
 # _rebuild_wall_mip_chain: Builds small CPU mip levels once per source-texture
-# change.  The 160×120 render then reads these prefiltered images instead of
+# change.  The 160Ãƒâ€”120 render then reads these prefiltered images instead of
 # averaging full-resolution texels every output pixel.
 func _rebuild_wall_mip_chain() -> void:
 	wall_mip_images = _build_mip_chain(wall_source_image)
@@ -2240,6 +2367,48 @@ func _build_mip_chain(source_image: Image) -> Array[Image]:
 		current = next
 	return mip_chain
 
+# Posts and rails keep their existing movement span. Paint the visible
+# faces of a rectangular cross section around that span.
+func _expand_storefront_box_faces(edges: Array, camera_origin: Vector2) -> Array:
+	var faces := []
+	for edge: Dictionary in edges:
+		var thickness := float(edge.get("thickness", 0.0))
+		if thickness <= 0.0:
+			faces.append(edge)
+			continue
+		var a: Vector2 = edge["a"]
+		var b: Vector2 = edge["b"]
+		var half_width := (b - a).orthogonal().normalized() * (thickness * 0.5)
+		var corners := [a + half_width, b + half_width, b - half_width, a - half_width]
+		var center := (a + b) * 0.5
+		var visible_faces: Array[bool] = []
+		for index in corners.size():
+			var midpoint: Vector2 = (corners[index] + corners[(index + 1) % 4]) * 0.5
+			visible_faces.append((camera_origin - midpoint).dot(midpoint - center) > 0.0)
+		for index in range(corners.size()):
+			if not visible_faces[index]:
+				continue
+			var start: Vector2 = corners[index]
+			var end: Vector2 = corners[(index + 1) % corners.size()]
+			var face := edge.duplicate()
+			face["a"] = start
+			face["b"] = end
+			face["key"] = "%s:face%d" % [edge["key"], index]
+			face["blocking_key"] = edge["key"]
+			face["porch_cap"] = Rect2(a.min(b) - half_width.abs(), (b - a).abs() + 2.0 * half_width.abs())
+			face["face_tone"] = 1.12 if index % 2 == 0 else 0.87
+			# Paint the shared corner only on its lit face so it stays one pixel wide.
+			var highlight_end := 0.0
+			if index % 2 == 0:
+				if visible_faces[(index + 3) % 4]:
+					highlight_end = -1.0
+				elif visible_faces[(index + 1) % 4]:
+					highlight_end = 1.0
+			face["porch_timber"] = Vector3(highlight_end, float(edge.get("overhang_height", 0.0)), 1.0)
+			faces.append(face)
+	return faces
+
+
 func _visible_wall_entries() -> Array[Dictionary]:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
@@ -2260,15 +2429,27 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	for physical_edge in controller._all_physical_wall_edges():
 		var first_candidate := _to_view(Vector2(physical_edge["a"]), camera_origin, forward, right)
 		var second_candidate := _to_view(Vector2(physical_edge["b"]), camera_origin, forward, right)
-		if _segment_intersects_view_frustum(first_candidate, second_candidate):
+		var margin := _town_edge_visibility_margin(physical_edge)
+		if _segment_intersects_view_frustum(first_candidate, second_candidate, margin):
 			edges_by_key[String(physical_edge["key"])] = physical_edge
 	var physical_edges: Array = edges_by_key.values()
 	if controller.outdoor_town:
 		for doorway: Array in controller.town_doorways:
+			if controller.STOREFRONT_STYLE.FOOTPRINT.has_point(doorway[0]):
+				continue
 			var a := Vector2(doorway[0])
 			if doorway[1].y > doorway[0].y:
 				a.y += 1.0
 			physical_edges.append({"key": "lintel:%s" % a, "a": a, "b": a + Vector2.RIGHT, "lintel": true})
+		var trim_index := 0
+		for trim: Dictionary in controller.STOREFRONT_STYLE.trim_spans():
+			if trim.get("partial", false):
+				continue
+			trim["key"] = "storefront_trim_%d" % trim_index
+			trim_index += 1
+			physical_edges.append(trim)
+	if controller.outdoor_town:
+		physical_edges = _expand_storefront_box_faces(physical_edges, camera_origin)
 	for edge in physical_edges:
 		# Keep the source wall's complete physical endpoints.  A ray-visible span
 		# may tell us that only half this wall is exposed, but shortening the quad
@@ -2276,9 +2457,23 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		# Canvas viewport naturally clips the projected offscreen portion instead.
 		var first_local := _to_view(Vector2(edge["a"]), camera_origin, forward, right)
 		var second_local := _to_view(Vector2(edge["b"]), camera_origin, forward, right)
-		if not _edge_can_be_seen(first_local, second_local):
+		if not _segment_intersects_view_frustum(first_local, second_local, _town_edge_visibility_margin(edge)):
 			continue
-		var quad := _project_wall_quad(first_local, second_local)
+		var face_top := Vector2.ONE * WALL_HEIGHT
+		var face_bottom := float(edge.get("bottom", 0.0))
+		var storefront_paint := 0
+		if controller.outdoor_town:
+			var style: Resource = controller.STOREFRONT_STYLE
+			var footprint: Rect2i = style.FOOTPRINT
+			var a := Vector2(edge["a"])
+			var b := Vector2(edge["b"])
+			if edge.has("height"):
+				face_top = Vector2.ONE * float(edge["height"])
+				storefront_paint = int(edge.get("paint", 1))
+			elif is_equal_approx(a.x, b.x) and (is_equal_approx(a.x, footprint.position.x) or is_equal_approx(a.x, footprint.end.x)) and minf(a.y, b.y) >= footprint.position.y and maxf(a.y, b.y) <= footprint.end.y:
+				face_top = Vector2(style.roof_height(a.y), style.roof_height(b.y))
+				storefront_paint = 1
+		var quad := _project_wall_quad(first_local, second_local, face_top, face_bottom)
 		var average_depth := (maxf(first_local.y, NEAR_CLIP) + maxf(second_local.y, NEAR_CLIP)) * 0.5
 		var facing_cell := _wall_facing_cell(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin)
 		var facing_center := Vector2(float(facing_cell.x) + 0.5, float(facing_cell.y) + 0.5)
@@ -2287,9 +2482,22 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		# neighbouring actor can be in front of this wall's endpoint while farther
 		# away diagonally; radial grouping incorrectly hid that actor.
 		var cell_draw_depth := maxf((facing_center - camera_origin).dot(forward), NEAR_CLIP)
+		var casing_ends: Vector2 = edge.get("door_casing_ends", Vector2.ZERO)
 		var projected_entry := {
 			"edge_key": String(edge["key"]),
+			"door_casing_ends": casing_ends,
 			"lintel": bool(edge.get("lintel", false)),
+			"face_top": face_top,
+			"face_bottom": face_bottom,
+			"storefront_paint": storefront_paint,
+			"storefront_window": bool(edge.get("window", false)),
+			"storefront_open_leaf": bool(edge.get("open_leaf", false)),
+			"storefront_awning_edge": bool(edge.get("awning_edge", false)),
+			"storefront_front_door": bool(edge.get("front_door", false)),
+			"porch_timber": edge.get("porch_timber", Vector3.ZERO),
+			"storefront_face_tone": float(edge.get("face_tone", 1.0)),
+			"porch_cap": edge.get("porch_cap", Rect2()),
+			"porch_box_key": String(edge.get("blocking_key", "")),
 			"camera_origin": camera_origin,
 			"world_a": Vector2(edge["a"]),
 			"world_b": Vector2(edge["b"]),
@@ -2301,9 +2509,9 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"cell_draw_depth": cell_draw_depth,
 			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
-			"corner_tone_a": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
-			"corner_tone_b": _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
-			"local_player_fan_contact": local_player_fan_keys.has(String(edge["key"])),
+			"corner_tone_a": 0.0 if casing_ends.x > 0.0 else _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
+			"corner_tone_b": 0.0 if casing_ends.y > 0.0 else _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
+			"local_player_fan_contact": local_player_fan_keys.has(String(edge.get("blocking_key", edge["key"]))),
 		}
 		# Fade outward from the actual camera-fan contact, not from the player's
 		# centre. That keeps a still-occluding wall clear after the player backs
@@ -2332,11 +2540,26 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	# compositing.  The previous one-step far-to-near sort accidentally kept the
 	# farthest entries first whenever the map grew past MAX_WALLS.
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) < float(b["depth"]))
-	if result.size() > MAX_WALLS:
-		result = result.slice(0, MAX_WALLS)
+	var wall_budget := MAX_WALLS
+	if controller.outdoor_town:
+		for entry in result:
+			# Keep perimeter spans connected when nearer building walls fill the budget.
+			wall_budget += int(entry["storefront_paint"] != 0 or _is_exterior_wall_entry(entry))
+	if result.size() > wall_budget:
+		result = result.slice(0, wall_budget)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	_assign_overlapping_wall_draw_layers(result)
 	_apply_local_player_fan_draw_layers(result)
+	if controller.outdoor_town:
+		var front: float = controller.STOREFRONT_STYLE.FOOTPRINT.position.y
+		if camera_origin.y < front:
+			# Leave a painter layer between the facade and the porch railing
+			# for props on the deck when both walls belong to the same cell.
+			for entry in result:
+				var a: Vector2 = entry["world_a"]
+				var b: Vector2 = entry["world_b"]
+				if int(entry["storefront_paint"]) in [1, 3] and is_equal_approx(a.y, front) and is_equal_approx(b.y, front) and not entry["local_player_fan_contact"]:
+					entry["wall_draw_layer"] -= 2
 	return result
 
 
@@ -2590,7 +2813,7 @@ func _point_to_segment_distance_squared(point: Vector2, a: Vector2, b: Vector2) 
 # cutaway-wall decision as this renderer's wall pass. Combat VFX calls this
 # instead of independently treating a locally hidden camera obstruction as
 # opaque, while every other real wall remains a visual blocker.
-func runtime_world_point_has_clear_camera_line_for_current_pose(target_world: Vector2) -> bool:
+func runtime_world_point_has_clear_camera_line_for_current_pose(target_world: Vector2, see_through_porch_rail := false, projectile_height := -1.0) -> bool:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
 	var camera_origin := _runtime_camera_origin(forward, right)
@@ -2602,10 +2825,14 @@ func runtime_world_point_has_clear_camera_line_for_current_pose(target_world: Ve
 	var ignored_obstruction_keys := _local_camera_obstruction_edge_keys(camera_origin)
 	var maximum_distance := maxf(target_distance - 0.002, 0.0)
 	for edge in controller._all_physical_wall_edges():
-		if ignored_obstruction_keys.has(String(edge["key"])):
+		if ignored_obstruction_keys.has(String(edge["key"])) or (see_through_porch_rail and edge.get("porch_rail", false)):
 			continue
 		var hit_distance: float = controller._ray_segment_hit_distance_limited(camera_origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance)
 		if hit_distance >= 0.0 and hit_distance < target_distance - 0.002:
+			if projectile_height >= 0.0:
+				var hit_height := lerpf(VIRTUAL_CAMERA_HEIGHT, projectile_height, hit_distance / target_distance)
+				if not controller._projectile_edge_blocks_at_height(edge, camera_origin + direction * hit_distance, hit_height):
+					continue
 			return false
 	return true
 
@@ -2641,10 +2868,17 @@ func _edge_can_be_seen(first: Vector2, second: Vector2) -> bool:
 	return _segment_intersects_view_frustum(first, second)
 
 
+# Keep the solid post in view when its owning fence span just misses the frustum.
+func _town_edge_visibility_margin(edge: Dictionary) -> float:
+	if not controller.outdoor_town:
+		return 0.0
+	return 0.065 if _is_exterior_wall_entry({"world_a": edge["a"], "world_b": edge["b"]}) else 0.0
+
+
 # _segment_intersects_view_frustum: Liang-Barsky-style interval clipping for a
 # world-space wall edge against the finite 2D camera cone.  The local view axes
 # are X = camera side and Y = camera depth.
-func _segment_intersects_view_frustum(first: Vector2, second: Vector2) -> bool:
+func _segment_intersects_view_frustum(first: Vector2, second: Vector2, margin := 0.0) -> bool:
 	var direction := second - first
 	var interval_start := 0.0
 	var interval_end := 1.0
@@ -2659,7 +2893,7 @@ func _segment_intersects_view_frustum(first: Vector2, second: Vector2) -> bool:
 	]
 	for plane in half_planes:
 		var normal: Vector2 = plane["normal"]
-		var limit: float = plane["limit"]
+		var limit: float = plane["limit"] + margin * normal.length()
 		var origin_value := normal.dot(first)
 		var slope := normal.dot(direction)
 		if absf(slope) < 0.000001:
@@ -2675,21 +2909,21 @@ func _segment_intersects_view_frustum(first: Vector2, second: Vector2) -> bool:
 			return false
 	return interval_end >= 0.0 and interval_start <= 1.0
 
-func _project_wall_quad(first: Vector2, second: Vector2) -> PackedVector2Array:
+func _project_wall_quad(first: Vector2, second: Vector2, top := Vector2(WALL_HEIGHT, WALL_HEIGHT), bottom := 0.0) -> PackedVector2Array:
 	# Vertex order follows the source wall texture: top-left, top-right,
 	# bottom-right, bottom-left.  Each projected world vertical stays vertical
 	# because yaw is the only camera rotation.
-	var top_a := _project_view_point(first, WALL_HEIGHT)
-	var top_b := _project_view_point(second, WALL_HEIGHT)
-	var bottom_b := _project_view_point(second, 0.0)
-	var bottom_a := _project_view_point(first, 0.0)
+	var top_a := _project_view_point(first, top.x)
+	var top_b := _project_view_point(second, top.y)
+	var bottom_b := _project_view_point(second, bottom)
+	var bottom_a := _project_view_point(first, bottom)
 	return PackedVector2Array([top_a, top_b, bottom_b, bottom_a])
 
 func _project_view_point(point: Vector2, world_height: float) -> Vector2:
 	return _project_view_point_unframed(point, world_height) + _overscan_projection_offset()
 
 
-# _project_view_point_unframed: The calibrated 160×120 projector before the
+# _project_view_point_unframed: The calibrated 160Ãƒâ€”120 projector before the
 # overscan window is applied.  The crop controller samples this once for the
 # local player's real world feet, then shifts the *whole* camera image by that
 # same amount.
@@ -2733,7 +2967,7 @@ func _overscan_crop_origin() -> Vector2:
 
 
 func _overscan_projection_offset() -> Vector2:
-	# Moving the output window across the 320×240 sheet is equivalent to a
+	# Moving the output window across the 320Ãƒâ€”240 sheet is equivalent to a
 	# principal-point translation. Do this after perspective projection so it
 	# affects every depth equally and cannot bend a projectile trajectory.
 	return OVERSCAN_REFERENCE_CROP_ORIGIN - _overscan_crop_origin()
@@ -2741,7 +2975,7 @@ func _overscan_projection_offset() -> Vector2:
 
 # _overscan_calibrated_camera_origin: Solves the physical camera point that
 # places the local player's feet at the corresponding point on the virtual
-# 320×240 overscan canvas. The resulting camera is used by every render and
+# 320Ãƒâ€”240 overscan canvas. The resulting camera is used by every render and
 # culling path; this is deliberately not a local-cowboy screen correction.
 func _overscan_calibrated_camera_origin(base_origin: Vector2, forward: Vector2, right: Vector2) -> Vector2:
 	if not coordinate_overscan_test_enabled or controller == null or not controller.has_method("_current_player_world_position"):
@@ -2756,11 +2990,11 @@ func _overscan_calibrated_camera_origin(base_origin: Vector2, forward: Vector2, 
 	var home_foot := _project_view_point_unframed(home_local, 0.0)
 	# Green is the zero-motion camera window. At the rear corners, the desired
 	# virtual foot shifts by exactly the green-to-magenta/blue crop displacement.
-	# After the selected 160×120 crop is removed, the cowboy remains in the same
+	# After the selected 160Ãƒâ€”120 crop is removed, the cowboy remains in the same
 	# safe on-screen presentation while the entire visible world shares the pan.
 	var virtual_target_foot := home_foot + (_overscan_crop_origin() - OVERSCAN_REFERENCE_CROP_ORIGIN)
 	if bool(controller.get("continuous_third_person_camera")):
-		# Place feet high enough that the upright 48×64 cowboy is visible from hat
+		# Place feet high enough that the upright 48Ãƒâ€”64 cowboy is visible from hat
 		# to boots at neutral/down look. The crop then supplies right-stick up/down
 		# presentation without applying a special transform to the cowboy alone.
 		virtual_target_foot = Vector2(VIEW_SIZE.x * 0.5, 112.0)
@@ -2845,8 +3079,9 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 	# Keep world movement continuous.  Discrete LOD bands affect only the source
 	# pixel grid; they must never make an opponent jog in place then lurch.
 	var display_local := Vector2(local.x, maxf(raw_depth, WORLD_ACTOR_PROTECTED_DISPLAY_DEPTH) if protect_near_display else raw_depth) # Keep actors stable in the protected near cell, but let explicitly world-space effects continue through it.
-	var feet := _project_view_point(display_local, 0.0)
-	var head := _project_view_point(display_local, object_height)
+	var walk_height: float = controller.town_walk_height(world_position)
+	var feet := _project_view_point(display_local, walk_height)
+	var head := _project_view_point(display_local, walk_height + object_height)
 	var visual_depth := maxf(raw_depth - TEMPLATE_CAMERA_REAR_OFFSET, 0.0)
 	var continuous_actor_height := maxf(absf(feet.y - head.y), 1.0)
 	var actor_height := WORLD_ACTOR_LOD_MAX_HEIGHT if raw_depth <= WORLD_ACTOR_NEAREST_CELL_DEPTH else continuous_actor_height
@@ -2876,6 +3111,50 @@ func runtime_project_world_effect_point_for_current_pose(world_position: Vector2
 
 func _max_view_depth() -> float:
 	return TOWN_MAX_DEPTH if controller.outdoor_town else MAX_DEPTH
+
+
+# The three world-space planes share the same logical camera as the wall cage.
+func _update_storefront_planes() -> void:
+	var style: Resource = controller.STOREFRONT_STYLE
+	var roof := Rect2(style.FOOTPRINT).grow(0.025)
+	var porch: Rect2 = style.porch_rect()
+	var bounds := [roof, porch, porch]
+	var heights := [
+		Vector2(style.roof_height(roof.position.y), style.roof_height(roof.end.y)),
+		Vector2.ONE * float(style.porch_height),
+		Vector2(style.AWNING_FRONT, style.AWNING_BACK),
+	]
+	var forward: Vector2 = controller._view_forward_vector().normalized()
+	var right: Vector2 = controller._view_right_vector().normalized()
+	var origin := _runtime_camera_origin(forward, right)
+	while storefront_planes.size() < bounds.size():
+		var plane := ColorRect.new()
+		plane.size = VIEW_SIZE
+		plane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		plane.z_index = 3
+		var material := ShaderMaterial.new()
+		material.shader = STOREFRONT_PLANE_SHADER
+		plane.material = material
+		controller.environment_layer.add_child(plane)
+		storefront_planes.append(plane)
+	for index in range(bounds.size()):
+		var material := storefront_planes[index].material as ShaderMaterial
+		var rect: Rect2 = bounds[index]
+		_set_town_lighting(material)
+		material.set_shader_parameter("bounds", Vector4(rect.position.x, rect.position.y, rect.end.x, rect.end.y))
+		material.set_shader_parameter("edge_heights", heights[index])
+		material.set_shader_parameter("camera_origin", origin)
+		material.set_shader_parameter("camera_forward", forward)
+		material.set_shader_parameter("camera_right", right)
+		material.set_shader_parameter("projection_center", Vector2(VIEW_SIZE.x * 0.5, HORIZON_Y) + _overscan_projection_offset())
+		material.set_shader_parameter("canvas_size", VIEW_SIZE)
+		material.set_shader_parameter("focal_length", FOCAL_LENGTH)
+		material.set_shader_parameter("camera_height", VIRTUAL_CAMERA_HEIGHT)
+		material.set_shader_parameter("far_depth", _max_view_depth())
+		material.set_shader_parameter("metal", index != 1)
+		material.set_shader_parameter("porch_slats", index != 0)
+		material.set_shader_parameter("ledge_shadow", style.ledge_shadow)
+		material.set_shader_parameter("surface_color", style.siding_color if index == 1 else style.roof_color)
 
 
 func _set_town_lighting(material: ShaderMaterial) -> void:
@@ -2953,9 +3232,9 @@ func _inverse_homography(p00: Vector2, p10: Vector2, p11: Vector2, p01: Vector2)
 	]
 
 func _pose_key() -> String:
-	if int(controller.turn_step) == 1: return "turn N→22.5°"
-	if int(controller.turn_step) == 2: return "turn NE 45°"
-	if int(controller.turn_step) == 3: return "turn NE→66.5°"
+	if int(controller.turn_step) == 1: return "turn NÃ¢â€ â€™22.5Ã‚Â°"
+	if int(controller.turn_step) == 2: return "turn NE 45Ã‚Â°"
+	if int(controller.turn_step) == 3: return "turn NEÃ¢â€ â€™66.5Ã‚Â°"
 	if int(controller.forward_step) == 1: return "forward quarter"
 	if int(controller.forward_step) == 2: return "forward half"
 	if int(controller.strafe_step) == 1: return "strafe quarter"
@@ -3384,4 +3663,4 @@ func _red_control_points(texture: Texture2D) -> Array[Vector2]:
 func _render_signature() -> String:
 	var continuous_world_position: Vector2 = controller._current_player_world_position() if controller.has_method("_current_player_world_position") else Vector2.ZERO
 	var continuous_yaw := float(controller.get("continuous_camera_yaw")) if bool(controller.get("continuous_third_person_camera")) else 0.0
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin(), continuous_world_position, continuous_yaw, bool(controller.get("walk_through_walls_cheat"))]
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin(), continuous_world_position, continuous_yaw, bool(controller.get("walk_through_walls_cheat"))] + "|%s|%s|%s" % [controller.storefront_open_doors.hash(), controller.storefront_glass_broken, controller.storefront_window_vaulted]

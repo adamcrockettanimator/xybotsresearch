@@ -10,16 +10,16 @@ class TestController extends "res://scripts/xybots_character_controller.gd":
 		pass
 	func _update_combat_hud() -> void:
 		pass
-	func _is_player_fire_pressed_for(_player_index: int) -> bool:
+	func _is_player_fire_pressed_for(_player_index: int, _consume_mobile := true) -> bool:
 		return false
-	func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float) -> float:
+	func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float, _glass_height := -1.0) -> float:
 		if is_inf(test_wall_y) or direction.y >= 0.0:
 			return maximum_distance + 1.0
 		var distance := (test_wall_y - origin.y) / direction.y
 		return distance if distance >= 0.0 and distance <= maximum_distance else maximum_distance + 1.0
-	func _nearest_projectile_wall_edge_key(_origin: Vector2, _direction: Vector2, _maximum_distance: float) -> String:
+	func _nearest_projectile_wall_edge_key(_origin: Vector2, _direction: Vector2, _maximum_distance: float, _glass_height := -1.0) -> String:
 		return "test_wall"
-	func _nearest_projectile_player_hit(_owner: int, _origin: Vector2, _direction: Vector2, _maximum_distance: float, _shot_crouched: bool) -> Dictionary:
+	func _nearest_projectile_player_hit(_owner: int, _origin: Vector2, _direction: Vector2, _maximum_distance: float, _shot_crouched: bool, _glass_height := -1.0) -> Dictionary:
 		return {}
 
 func _initialize() -> void:

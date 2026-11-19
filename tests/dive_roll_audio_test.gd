@@ -28,13 +28,13 @@ func _run() -> void:
 	game.held_keycodes[KEY_A] = true
 	game.held_keycodes[KEY_SPACE] = true
 	assert(game._advance_dive_roll(0, 0.1, true))
-	assert(not game.footstep_last_samples.has("0:Jump"))
+	assert(not game.footstep_last_samples.has("0:Wood:Jump"))
 	game.held_keycodes[KEY_SPACE] = false
 	assert(game._advance_dive_roll(0, 0.08, true))
-	assert(game.footstep_last_samples.has("0:Jump"))
-	assert(not game.footstep_last_samples.has("0:Drop"))
+	assert(game.footstep_last_samples.has("0:Wood:Jump"))
+	assert(not game.footstep_last_samples.has("0:Wood:Drop"))
 	assert(game._advance_dive_roll(0, 0.34, true))
-	assert(game.footstep_last_samples.has("0:Drop"))
+	assert(game.footstep_last_samples.has("0:Wood:Drop"))
 	for index in range(game.player_joined.size()):
 		game.player_joined[index] = index < 2
 	game.player_states[0]["world_position"] = Vector2(1.5, 1.5)
@@ -50,14 +50,14 @@ func _run() -> void:
 	game._reload_sound("Turn", 0)
 	var own_reload: AudioStreamPlayer = game.get_child(game.get_child_count() - 1)
 	assert(is_equal_approx(own_reload.volume_db, -4.0))
-	assert(game._play_wood_actor_sound(0, "Run"))
+	assert(game._play_actor_surface_sound(0, "Run"))
 	var own_steps: AudioStreamPlayer = game._footstep_channel(0)["player"]
 	assert(is_equal_approx(own_steps.volume_db, -4.0))
-	assert(game._play_wood_actor_sound(1, "Run"))
+	assert(game._play_actor_surface_sound(1, "Run"))
 	var npc_steps: AudioStreamPlayer = game._footstep_channel(1)["player"]
 	assert(is_equal_approx(npc_steps.volume_db, -21.0))
 	game.player_states[1]["world_position"] = Vector2(2.5, 1.5)
-	assert(game._play_wood_actor_sound(1, "Run"))
+	assert(game._play_actor_surface_sound(1, "Run"))
 	assert(is_equal_approx(npc_steps.volume_db, -15.0))
 	print("Roll audio frames, reload playback speeds and actor sound attenuation passed")
 	game.queue_free()

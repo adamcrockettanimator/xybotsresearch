@@ -134,3 +134,47 @@ the user needs art direction over it.
 
 Read the closest one before adding a new prop. Copy the architectural pattern,
 not the prop-specific numbers or names.
+
+## Storefront field notes
+
+- **Wood courses.** Use large blocks of nearby values so the boards read before
+  thin details resolve. Stagger an occasional join on long side walls. Run
+  porch and awning boards continuously from wall to edge. Anchor the courses in
+  world coordinates so they stay aligned across physical wall spans. Give both
+  exposed sides of a false front the outdoor siding material above the roof.
+- **Trim and lighting.** Give posts and rails narrow rectangular cross sections
+  with an intentional draw order at their intersections. Give one visible face
+  ownership of the shared corner highlight. Paint shadow immediately under
+  ledges and let the broad awning shadow fall from the front wall toward the
+  deck. On a doorway, use a single tone across the header and narrow the
+  darker jamb return as the view approaches head-on. Shade the closed leaf at
+  its perimeter and fade the recess shadow between the far panel edges as
+  the camera moves. Project the round brass knob and give it a single white
+  glint once it occupies enough logical pixels.
+- **Fence silhouette.** Two rails and a shared post per junction read well
+  with open space between the rails. Fade face shading before the silhouette
+  becomes too small for detail. At grazing angles, cover the rows crossed
+  across each logical column so a thin rail stays continuous.
+- **Dry grass.** Use world-rooted, one-logical-pixel strokes with varied heights,
+  lean, and a dark-to-light stem ramp. Place uneven clumps at foundation
+  corners and beside props. Keep entrances and deck approaches clear. Fit one
+  shader carrier tightly around each visible clump. Add extra stems up close
+  and drop them individually before reducing the base clump. Compare both
+  close and distant views, and measure frame cost in the running scene when
+  increasing coverage.
+- **Glass and collision.** Keep the physical opening bounds in the style
+  resource and pass them to the window shader. Center the intact cross, put
+  the diagonal reflection over a parallax sash shadow, and keep fragments
+  attached to the outer frame after shattering. In this storefront the inner
+  cross breaks with the glass so a standing follow-up shot clears the opening.
+  Carry the same world-space shot height through wall collision, aim assist,
+  hit confirmation, and tracer visibility. Check the shot itself when
+  confirming damage since the muzzle ray can clear a pane the body ray misses.
+  Keep movement rules independent. The fence still stops players, while
+  projectiles pass it and expire without spawning an impact in open air.
+
+The outdoor-town branch implements these examples in
+`scripts/town_storefront_style.gd`, `scripts/town_grass_strokes.gdshader`,
+`scripts/town_storefront_plane.gdshader`, and the coordinate-frame wall
+shader and renderer. `tests/town_storefront_test.gd` exercises the door,
+glass, dive-roll, footstep surface, and fence behavior.

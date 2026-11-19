@@ -61,7 +61,7 @@ func _run() -> void:
 	game._reload_sound("Turn", 1)
 	var reload: AudioStreamPlayer = game.get_child(game.get_child_count() - 1)
 	assert(reload.bus == pickup.bus and is_equal_approx(reload.volume_db + AudioServer.get_bus_volume_db(actor_bus), -16.0))
-	assert(game._play_wood_actor_sound(1, "Run"))
+	assert(game._play_actor_surface_sound(1, "Run"))
 	var footsteps: AudioStreamPlayer = game._footstep_channel(1)["player"]
 	assert(is_equal_approx(footsteps.volume_db + AudioServer.get_bus_volume_db(AudioServer.get_bus_index(footsteps.bus)), -20.0))
 	assert(is_equal_approx(_filter_for_bus(footsteps.bus).cutoff_hz, 1400.0))

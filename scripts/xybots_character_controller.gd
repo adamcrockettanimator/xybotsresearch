@@ -51,6 +51,8 @@ const OUTDOOR_MAP_SIZE := 12
 const TOWN_DRAW_DEPTH_RANGE := 19.0
 const TOWN_BUILDING_ORIGINS := [Vector2i(2, 2), Vector2i(7, 2), Vector2i(2, 7), Vector2i(7, 7)]
 const TOWN_BUILDING_SIZE := Vector2i(3, 3)
+const STOREFRONT_STYLE = preload("res://resources/town_storefront_style.tres")
+const TOWN_STOREFRONT_SLOT := Vector2i(2, 7)
 const TOWN_PLAYER_START := Vector2i(5, 11)
 
 var outdoor_town := false
@@ -981,6 +983,13 @@ var pending_grid_delta := Vector2i.ZERO                                         
 var last_blocked_direction := ""                                                            # Store the most recent blocked movement label for debug display.
 var wall_edges: Dictionary = {}                                                             # Store explicit thin-wall edge flags for each open cell.
 var physical_wall_edges_cache: Array = []                                                   # Retain immutable maze segments instead of rebuilding dictionaries for every actor visibility sample.
+var storefront_open_doors := {}
+var storefront_closing_doors := {}
+var storefront_glass_broken := false
+var storefront_window_vaulted := false
+var storefront_grass_layout: Array[Vector4] = []
+var storefront_grass_blades: Array[PackedVector4Array] = []
+var storefront_grass_detail_blades: Array[PackedVector4Array] = []
 var physical_wall_edges_cache_dirty := true                                                 # Mark the cached segment list stale only when a new maze topology is generated.
 var last_visible_wall_ids: Array[int] = []                                                   # Store the currently selected straight-wall ids for debug display.
 var was_left_turn_pressed := false                                                          # Track previous-frame left turn input so snapped turns only fire once per press.
@@ -1156,6 +1165,7 @@ var bot_damage_channels: Dictionary = {}
 var bot_damage_last_sample: Dictionary = {}
 
 const FOOTSTEP_ROOT := "res://assets/Audio/SFX/Footsteps/"
+const FOOTSTEP_KINDS := ["Walk", "Run", "Sneak", "Jump", "Drop"]
 const FOOTSTEP_RUN_SPEED := 0.55
 const FOOTSTEP_WALK_HEARING_RANGE := 2.5
 const FOOTSTEP_RUN_HEARING_RANGE := 4.0
@@ -1345,9 +1355,10 @@ func _setup_shared_audio() -> void:
 				AudioServer.register_stream_as_sample(stream)
 		# Spread short reload and footstep sample registration over frames so
 		# first use is less likely to decode during an action.
-		for kind in ["Walk", "Run", "Sneak", "Jump", "Drop"]:
-			for sample in range(1, 7):
-				mobile_sfx_warm_queue.append(FOOTSTEP_ROOT + "%s/Wood/WASD Sound Wood %s %02d.wav" % [kind, kind, sample])
+		for surface in (["Wood", "Dirt"] if outdoor_town else ["Wood"]):
+			for kind in FOOTSTEP_KINDS:
+				for sample in range(1, 7):
+					mobile_sfx_warm_queue.append(_footstep_sample_path(surface, kind, sample))
 		for sample in range(1, 6):
 			mobile_sfx_warm_queue.append("res://assets/Audio/SFX/Reloading and Weapons SFX/Revolver/Turn%d.wav" % sample)
 		for sample in range(1, 4):
@@ -1778,18 +1789,29 @@ func _footstep_channel(player_index: int) -> Dictionary:
 	return channel
 
 
-func _play_wood_actor_sound(player_index: int, kind: String) -> bool:
-	if player_index < 0 or player_index >= player_states.size() or kind not in ["Walk", "Run", "Sneak", "Jump", "Drop"]:
+func _footstep_sample_path(surface: String, kind: String, sample: int) -> String:
+	return FOOTSTEP_ROOT + "%s/%s/WASD Sound %s %s %02d.wav" % [kind, surface, surface, kind, sample]
+
+
+func _footstep_surface(position: Vector2) -> String:
+	if outdoor_town and not town_has_roof(Vector2i(position.floor())) and not STOREFRONT_STYLE.porch_rect().has_point(position):
+		return "Dirt"
+	return "Wood"
+
+
+func _play_actor_surface_sound(player_index: int, kind: String, contact_position := Vector2.INF) -> bool:
+	if player_index < 0 or player_index >= player_states.size() or kind not in FOOTSTEP_KINDS:
 		return false
-	var previous := int(footstep_last_samples.get("%d:%s" % [player_index, kind], 0))
+	var speaker := contact_position if contact_position.is_finite() else _player_state_world_position(player_states[player_index])
+	var surface := _footstep_surface(speaker)
+	var sample_key := "%d:%s:%s" % [player_index, surface, kind]
+	var previous := int(footstep_last_samples.get(sample_key, 0))
 	var sample := randi_range(1, 6)
 	if sample == previous:
 		sample = sample % 6 + 1
-	var path := FOOTSTEP_ROOT + "%s/Wood/WASD Sound Wood %s %02d.wav" % [kind, kind, sample]
-	var stream := load(path) as AudioStream
+	var stream := load(_footstep_sample_path(surface, kind, sample)) as AudioStream
 	if stream == null:
 		return false
-	var speaker := _player_state_world_position(player_states[player_index])
 	var nearest := INF
 	var listener := -1
 	for candidate in range(player_states.size()):
@@ -1816,7 +1838,7 @@ func _play_wood_actor_sound(player_index: int, kind: String) -> bool:
 	if _is_bot_controlled_slot(player_index) and kind in ["Walk", "Run", "Sneak"]:
 		player.volume_db -= 8.0 + minf(nearest, 8.0) # Quieter nearby and fades faster with distance.
 	player.play()
-	footstep_last_samples["%d:%s" % [player_index, kind]] = sample
+	footstep_last_samples[sample_key] = sample
 	return true
 
 
@@ -1897,7 +1919,7 @@ func _update_actor_footsteps(delta: float) -> void:
 				foot_down = accumulated >= stride
 				track["distance"] = fmod(accumulated, stride) if foot_down else accumulated
 			if foot_down:
-				_play_wood_actor_sound(player_index, kind)
+				_play_actor_surface_sound(player_index, kind)
 				_notify_bots_of_footstep(player_index, kind, position)
 		footstep_tracks[player_index] = track
 
@@ -4941,6 +4963,8 @@ func _reset_world_barrels() -> void:
 		# Two furnishings in each building, then four pairs around the streets.
 		candidates.clear()
 		for origin: Vector2i in TOWN_BUILDING_ORIGINS:
+			if origin == TOWN_STOREFRONT_SLOT:
+				continue
 			candidates.append(origin + Vector2i(0, 1))
 			candidates.append(origin + Vector2i(2, 1))
 		candidates.append_array([Vector2i(1, 4), Vector2i(1, 6), Vector2i(5, 2), Vector2i(6, 3), Vector2i(10, 7), Vector2i(10, 9), Vector2i(5, 10), Vector2i(6, 10)])
@@ -4993,7 +5017,44 @@ func _reset_world_barrels() -> void:
 	if semantic_typical_props_enabled and not outdoor_town:
 		_spawn_small_prop_cluster(candidates)
 	if semantic_typical_props_enabled and dining_cell.x >= 0:
-		_spawn_semantic_dining_set(dining_cell)
+		_spawn_semantic_dining_set(Vector2(dining_cell) + Vector2(0.5, 0.5))
+	if semantic_typical_props_enabled and outdoor_town:
+		_spawn_storefront_furnishings()
+
+
+func _spawn_storefront_furnishings() -> void:
+	var front_left := Vector2(STOREFRONT_STYLE.FOOTPRINT.position)
+	var bench := {
+		"id": "chair_semantic_bench_storefront",
+		"position": front_left + Vector2(0.235, -0.075),
+		"side_length": 0.33, "depth": 0.10, "height": 0.10,
+		"low_resolution_vector": true, "typical_spawn": true, "dining_set_spawn": true,
+	}
+	semantic_lod_floor_footprints.append(bench)
+	_register_semantic_gameplay_prop(bench)
+
+	var props := {
+		"barrel_gpu_lattice_instanced_storefront_rear": Vector2(0.135, 2.15),
+		"crate_gpu_fragment_raster_storefront_rear": Vector2(0.87, 2.15),
+		"crate_gpu_fragment_raster_storefront_west": Vector2(-0.12, 0.86),
+		"barrel_gpu_lattice_instanced_storefront_west": Vector2(-0.16, 1.09),
+		"barrel_gpu_lattice_instanced_storefront_east": Vector2(1.14, 1.27),
+		"crate_gpu_fragment_raster_storefront_east": Vector2(1.17, 1.51),
+	}
+	var width := gpu_lattice_barrel_radius * 2.0
+	for key: String in props:
+		var footprint := {
+			"id": key, "position": front_left + Vector2(props[key]),
+			"side_length": width, "depth": width,
+			"height": gpu_lattice_barrel_height if key.begins_with("barrel_") else width,
+			"low_resolution_vector": true, "typical_spawn": true,
+		}
+		semantic_lod_floor_footprints.append(footprint)
+		_register_semantic_gameplay_prop(footprint)
+
+	# Seat the full dinette against the west wall, between the door swings.
+	# Its east side leaves a passage between the front and rear doors.
+	_spawn_semantic_dining_set(front_left + Vector2(0.205, 1.0))
 
 
 # A small row in an open cell adds shared cover without sealing a corridor.
@@ -5058,8 +5119,8 @@ func _find_dining_set_room_cell() -> Vector2i:
 	return best_cell if best_openings >= 3 else Vector2i(-1, -1)
 
 
-func _spawn_semantic_dining_set(room_cell: Vector2i) -> void:
-	var center := Vector2(room_cell) + Vector2(0.5, 0.5)
+func _spawn_semantic_dining_set(center: Vector2) -> void:
+	var room_cell := Vector2i(center.floor())
 	center = _ensure_prop_wall_passage(center, Vector2(0.165, 0.27))
 	if not center.is_finite():
 		return
@@ -5145,10 +5206,10 @@ func _update_adaptive_music(delta: float) -> void:
 	music_player.call("set_music_mode", "combat" if music_combat_remaining > 0.0 else "menu")
 
 
-func _music_shot_threatens_enemy(owner: int, origin: Vector2, direction: Vector2, max_distance: float, height: float) -> bool:
+func _music_shot_threatens_enemy(owner: int, origin: Vector2, direction: Vector2, max_distance: float, height: float, glass_height := -1.0) -> bool:
 	if owner < 0 or owner >= player_states.size():
 		return false
-	var limit := minf(max_distance, _nearest_projectile_wall_distance(origin, direction, max_distance))
+	var limit := minf(max_distance, _nearest_projectile_wall_distance(origin, direction, max_distance, glass_height))
 	# A prop in the projectile path owns the shot, even if an enemy is beyond it.
 	var prop := _nearest_projectile_barrel_hit(origin, direction, limit, height)
 	if not prop.is_empty():
@@ -6459,7 +6520,7 @@ func _process_combat(delta: float) -> void:
 		var state := player_states[player_index]                                                   # Work from the saved shared state.
 		if bool(state.get("is_dying", false)):                                                   # Keep a defeated player frozen, untargetable, and unable to fire.
 			if String(state.get("death_phase", "")) == "fall" and not bool(state.get("death_ground_sound_played", false)) and float(state.get("death_timer", 0.0)) + delta >= DEATH_FALL_SECONDS:
-				_play_wood_actor_sound(player_index, "Drop")
+				_play_actor_surface_sound(player_index, "Drop")
 				state["death_ground_sound_played"] = true
 			if clear_the_map_mode:
 				# A cleared-map run has no respawns. Preserve the death fall at its
@@ -6507,8 +6568,9 @@ func _process_combat(delta: float) -> void:
 		var origin: Vector2 = shot["position"]                                                    # Read the current world position.
 		var direction: Vector2 = shot["direction"]                                                # Read its frozen launch direction.
 		var step_distance := PROJECTILE_SPEED * delta                                             # Convert the configured cells-per-second speed to this frame distance.
-		var wall_distance := _nearest_projectile_wall_distance(origin, direction, step_distance) # Find the first thin-wall collision in this short path.
-		var player_hit := _nearest_projectile_player_hit(int(shot["owner"]), origin, direction, step_distance, bool(shot.get("crouched", false))) # Check the target's current stance against the shot's firing stance.
+		var glass_height := float(shot.get("storefront_world_height", -1.0))
+		var wall_distance := _nearest_projectile_wall_distance(origin, direction, step_distance, glass_height) # Find the first thin-wall collision in this short path.
+		var player_hit := _nearest_projectile_player_hit(int(shot["owner"]), origin, direction, step_distance, bool(shot.get("crouched", false)), glass_height)
 		var barrel_hit := _nearest_projectile_barrel_hit(origin, direction, step_distance, float(shot.get("height", 0.72))) if bool(shot.get("crouched", false)) else {}
 		var hit_distance := wall_distance                                                          # Prefer wall collision unless a player is strictly closer.
 		var hit_player_index := -1                                                                 # Track whether this collision was a player.
@@ -6522,14 +6584,15 @@ func _process_combat(delta: float) -> void:
 			hit_barrel = true
 		if hit_distance <= step_distance:                                                         # Resolve any hit inside this frame's travel segment.
 			var impact_position := origin + direction * maxf(hit_distance, 0.0)                     # Place the explosion exactly at the contact point.
-			var wall_edge_key := _nearest_projectile_wall_edge_key(origin, direction, step_distance) if hit_player_index < 0 and not hit_barrel else ""
+			var wall_edge_key := _nearest_projectile_wall_edge_key(origin, direction, step_distance, glass_height) if hit_player_index < 0 and not hit_barrel else ""
 			var impact_height := minf(float(shot.get("height", 0.72)), BARREL_PROJECTILE_HEIGHT) if hit_barrel else float(shot.get("height", 0.72))
-			_spawn_impact(impact_position, direction, hit_player_index, wall_edge_key, impact_height, hit_barrel, int(barrel_hit.get("id", -1)))
+			if not _try_break_storefront_glass(wall_edge_key, impact_position, direction, glass_height):
+				_spawn_impact(impact_position, direction, hit_player_index, wall_edge_key, impact_height, hit_barrel, int(barrel_hit.get("id", -1)))
 			if hit_barrel:
 				_damage_barrel(int(barrel_hit["id"]), direction, impact_position, impact_height)
 			if hit_player_index >= 0:                                                               # Apply damage only for body collisions.
 				var target_was_dying := bool(player_states[hit_player_index].get("is_dying", false)) # Avoid treating a rejected hit against an already-defeated body as a new killing shot.
-				var damage_applied := _apply_projectile_hit(hit_player_index, direction, int(shot["owner"])) # Revalidate the complete owner-to-target path before changing health or emitting a confirmed-body effect.
+				var damage_applied := _apply_projectile_hit(hit_player_index, direction, int(shot["owner"]), shot, impact_position)
 				if damage_applied:                                                                     # Blood belongs only to a confirmed health-changing hit, never a blocked gameplay path.
 					var killing_shot := not target_was_dying and bool(player_states[hit_player_index].get("is_dying", false)) # Only the hit that actually starts death may leave persistent floor blood.
 					_spawn_blood_splatter(impact_position, direction, hit_player_index, killing_shot)  # Throw blood through the struck body only after the final authority accepts the hit.
@@ -6721,8 +6784,9 @@ func _spawn_pistol_shot(player_index: int) -> void:
 		body_origin = authored_muzzle.get("position", body_origin)                                # Authored anchor replaces the heuristic left/right body offset when available.
 	var muzzle_height := float(authored_muzzle.get("height", 0.72))                            # Carry the PNG vertical location as real raised-effect height for every camera.
 	var projectile_height := maxf(muzzle_height - CROUCH_PROJECTILE_HEIGHT_OFFSET, 0.0) if crouched else muzzle_height # Aim down from the authored muzzle over the existing body-to-projectile launch distance.
+	var glass_height := town_walk_height(_player_state_world_position(state)) + projectile_height * 0.36 if outdoor_town else -1.0
 	var desired_muzzle_distance := 0.34                                                          # Preserve the authored visual separation between body and pistol muzzle when the lane is clear.
-	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance) # Check the short body-to-muzzle segment before placing the bullet.
+	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance, glass_height) # Check the short body-to-muzzle segment before placing the bullet.
 	if crouched:
 		var near_barrel := _nearest_projectile_barrel_hit(body_origin, direction, desired_muzzle_distance, projectile_height)
 		if not near_barrel.is_empty():
@@ -6733,12 +6797,12 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	if _is_bot_controlled_slot(player_index):
 		direction = direction.rotated(deg_to_rad(randf_range(-BOT_SHOT_SPREAD_DEGREES, BOT_SHOT_SPREAD_DEGREES)))
 	elif aim_assist_enabled:
-		direction = _assisted_shot_direction(player_index, origin, direction, crouched)
+		direction = _assisted_shot_direction(player_index, origin, direction, crouched, glass_height)
 	var maximum_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME                               # Determine a stable visual end point for the complete projectile lifetime.
-	if _music_shot_threatens_enemy(player_index, origin, direction, maximum_distance, projectile_height):
+	if _music_shot_threatens_enemy(player_index, origin, direction, maximum_distance, projectile_height, glass_height):
 		music_combat_remaining = 8.0
-	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
-	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance, crouched) # Predict only players this shot can actually strike.
+	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance, glass_height), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
+	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance, crouched, glass_height)
 	var barrel_hit := _nearest_projectile_barrel_hit(origin, direction, maximum_distance, projectile_height) if crouched else {}
 	var visual_distance := wall_distance                                                           # Prefer the wall endpoint unless a body is closer.
 	var visual_target_player_index := -1                                                         # Preserve a direct incoming-shot relationship for per-camera visibility without changing collision.
@@ -6751,6 +6815,7 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	_spawn_muzzle_smoke_particles(smoke_origin, direction, player_index, dual_wield_barrel_sign, muzzle_hand, muzzle_height) # Emit shared-world black-powder smoke from the same authored map point.
 	var shot := {"id": next_combat_visual_id, "owner": player_index, "position": origin, "spawn_position": origin, "authored_muzzle_position": body_origin, "muzzle_height": muzzle_height, "visual_target_position": origin + direction * visual_distance, "visual_target_player_index": visual_target_player_index, "visual_total_distance": maxf(visual_distance, 0.001), "last_trail_distance": 0.0, "direction": direction, "height": projectile_height, "dual_wield_barrel_sign": dual_wield_barrel_sign, "muzzle_hand": muzzle_hand, "lifetime": PROJECTILE_LIFETIME} # Store one fixed start/end pair and its selected muzzle side so the rendered particle travels in a single straight line.
 	shot["crouched"] = crouched
+	shot["storefront_world_height"] = glass_height
 	next_combat_visual_id += 1                                                                  # Reserve the next unique visual key.
 	active_projectiles.append(shot)                                                            # Add it to shared world simulation.
 	if _is_bot_controlled_slot(player_index) and bool(bot_brains.get(player_index, {}).get("has_line_of_sight", false)):
@@ -6803,13 +6868,13 @@ func _spawn_muzzle_smoke_particles(smoke_origin: Vector2, direction: Vector2, ow
 
 
 # _nearest_projectile_wall_distance: Finds the first physical maze edge struck inside one projectile segment.
-func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float) -> float:
+func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float, glass_height := -1.0) -> float:
 	var nearest := maximum_distance + 1.0                                                       # Keep a clear-path sentinel safely beyond player-hit contact tolerance.
 	for edge in _all_physical_wall_edges():                                                    # Reuse the authoritative thin-wall collision geometry.
 		var distance := _ray_segment_hit_distance_limited(origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance) # Test the short segment.
-		if distance >= 0.0 and distance < nearest:                                                # Retain the closest edge only.
+		if distance >= 0.0 and distance < nearest and _projectile_edge_blocks_at_height(edge, origin + direction * distance, glass_height):
 			nearest = distance                                                                        # Update the nearest contact.
-	var topology_distance := _projectile_topology_wall_distance(origin, direction, maximum_distance) # Cross-check against the movement map's exact cell-edge ownership.
+	var topology_distance := _projectile_topology_wall_distance(origin, direction, maximum_distance, outdoor_town and glass_height >= 0.0)
 	nearest = minf(nearest, topology_distance)                                                  # Let either representation block the shot; topology closes endpoint/parallel-ray gaps.
 	return nearest                                                                              # Return greater than max when this path is clear.
 
@@ -6817,26 +6882,81 @@ func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maxi
 # _nearest_projectile_wall_edge_key: Identifies the physical edge selected by a wall impact.
 # The regular distance query also has a topology fallback for boundary robustness; this
 # key is visual metadata only, so an absent key simply uses the impact's point layer.
-func _nearest_projectile_wall_edge_key(origin: Vector2, direction: Vector2, maximum_distance: float) -> String:
+func _nearest_projectile_wall_edge_key(origin: Vector2, direction: Vector2, maximum_distance: float, glass_height := -1.0) -> String:
 	var nearest := maximum_distance + PROJECTILE_WALL_EPSILON                                  # Keep a clear-path sentinel beyond this frame's collision segment.
 	var nearest_key := ""                                                                       # Preserve the canonical edge key for the closest physical hit.
 	for edge in _all_physical_wall_edges():                                                     # Match the same authoritative thin-wall geometry used by the projectile.
 		var distance := _ray_segment_hit_distance_limited(origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance) # Test this candidate wall segment.
-		if distance >= 0.0 and distance < nearest:                                                # Retain the first surface struck by this projectile step.
+		if distance >= 0.0 and distance < nearest and _projectile_edge_blocks_at_height(edge, origin + direction * distance, glass_height):
 			nearest = distance                                                                        # Save its contact distance.
 			nearest_key = String(edge["key"])                                                       # Carry its stable key into the short-lived impact visual.
 	return nearest_key                                                                          # Empty means only the topology fallback found the collision.
 
 
+# The glass and inner cross share one breakable opening.
+func _is_storefront_pane(edge: Dictionary, world: Vector2, height: float) -> bool:
+	if not edge.get("window", false):
+		return false
+	var a: Vector2 = edge["a"]
+	var span := Vector2(edge["b"]) - a
+	var u := (world - a).dot(span) / span.length_squared()
+	return STOREFRONT_STYLE.window_has_opening(Vector2(u, height))
+
+
+func _projectile_edge_blocks_at_height(edge: Dictionary, world: Vector2, height: float) -> bool:
+	if not outdoor_town or height < 0.0:
+		return true
+	var a: Vector2 = edge["a"]
+	var b: Vector2 = edge["b"]
+	var on_fence := (a.x == b.x and (a.x == 0.0 or a.x == float(MAP_WIDTH))) or (a.y == b.y and (a.y == 0.0 or a.y == float(MAP_HEIGHT)))
+	if on_fence:
+		return false
+	if edge.has("height") and (height < float(edge.get("bottom", 0.0)) or height > float(edge["height"])):
+		return false
+	return not (storefront_glass_broken and _is_storefront_pane(edge, world, height))
+
+
+func _try_break_storefront_glass(edge_key: String, world: Vector2, direction: Vector2, height: float) -> bool:
+	if not outdoor_town or storefront_glass_broken or edge_key.is_empty() or height < 0.0:
+		return false
+	for edge: Dictionary in _all_physical_wall_edges():
+		if edge["key"] != edge_key or not _is_storefront_pane(edge, world, height):
+			continue
+		storefront_glass_broken = true
+		_spawn_storefront_glass_shards(world, direction, height)
+		return true
+	return false
+
+
+func _spawn_storefront_glass_shards(world: Vector2, direction: Vector2, height: float) -> void:
+	var frame_duration := 1.0 / WALL_DEBRIS_NEAR_VISUAL_FPS
+	var tangent := direction.orthogonal()
+	var start := world - direction * 0.018
+	# Debris heights are in normalized actor units and are projected from the
+	# ground at each shard's world position.
+	var debris_height := maxf(height - town_walk_height(start), 0.0) / 0.36
+	for index in range(10):
+		var velocity := -direction * randf_range(0.10, 0.36) + tangent * randf_range(-0.65, 0.65)
+		active_wall_debris.append({
+			"id": next_combat_visual_id, "position": start, "display_position": start,
+			"horizontal_velocity": velocity, "height": debris_height, "display_height": debris_height,
+			"visual_step_timer": frame_duration, "visual_frame_duration": frame_duration, "visual_frame": 0,
+			"vertical_velocity": randf_range(-0.22, 0.85), "rotation": randf_range(-PI, PI),
+			"angular_velocity": randf_range(-14.0, 14.0), "shape": "domino_v" if index % 3 == 0 else "dot",
+			"glass_fragment": true, "ground_fade_seconds": 0.22, "remaining_bounces": 0, "timer": 0.65,
+		})
+		next_combat_visual_id += 1
+
+
 # _projectile_topology_wall_distance: Walks the ray through maze cells so projectile blocking uses the same edge ownership as movement.
-func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float) -> float:
+func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float, allow_town_exit := false) -> float:
 	if maximum_distance <= 0.0 or direction.length_squared() <= 0.000001:                     # Avoid invalid DDA state for zero-length paths.
 		return maximum_distance + 1.0                                                             # Treat an empty path as clear.
 	var ray_direction := direction.normalized()                                                 # Make DDA distances world-unit distances.
 	var sample_origin := origin + ray_direction * 0.0001                                       # Bias inside the forward cell so a muzzle on an edge does not start ambiguously behind it.
 	var cell := Vector2i(floori(sample_origin.x), floori(sample_origin.y))                    # Identify the first movement cell traversed by the projectile.
 	if not _is_open_cell(cell):                                                                 # A shot starting outside the maze cannot enter through its boundary.
-		return 0.0                                                                                # Block immediately at the map boundary.
+		return maximum_distance + 1.0 if allow_town_exit else 0.0
 	var step_x := signi(ray_direction.x)                                                        # Record which vertical grid boundaries the ray crosses.
 	var step_y := signi(ray_direction.y)                                                        # Record which horizontal grid boundaries the ray crosses.
 	var t_delta_x := absf(1.0 / ray_direction.x) if step_x != 0 else INF                       # Measure distance between successive vertical crossings.
@@ -6848,7 +6968,7 @@ func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, max
 	while minf(t_max_x, t_max_y) <= maximum_distance + PROJECTILE_WALL_EPSILON:                # Visit every cell edge crossed inside this projectile segment.
 		if absf(t_max_x - t_max_y) <= PROJECTILE_WALL_EPSILON:                                   # A corner crossing touches both cell edges at the same instant.
 			var diagonal_distance := maxf(0.0, t_max_x + 0.0001)                                   # Convert the biased DDA distance back to a non-negative projectile distance.
-			if _has_wall_edge(cell, Vector2i(step_x, 0)) or _has_wall_edge(cell, Vector2i(0, step_y)): # A solid edge on either corner branch blocks the diagonal shot.
+			if _projectile_topology_edge_blocks(cell, Vector2i(step_x, 0), allow_town_exit) or _projectile_topology_edge_blocks(cell, Vector2i(0, step_y), allow_town_exit):
 				return diagonal_distance                                                               # Stop at the first blocked corner contact.
 			cell += Vector2i(step_x, step_y)                                                        # Advance through the open diagonal corner.
 			t_max_x += t_delta_x                                                                    # Schedule the next vertical crossing.
@@ -6856,18 +6976,24 @@ func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, max
 		elif t_max_x < t_max_y:                                                                   # The ray next crosses a vertical cell edge.
 			var horizontal_distance := maxf(0.0, t_max_x + 0.0001)                                 # Convert its DDA distance into projectile distance.
 			var horizontal_delta := Vector2i(step_x, 0)                                             # Express the crossed edge in movement-map coordinates.
-			if _has_wall_edge(cell, horizontal_delta):                                              # Use the same wall table as player movement.
+			if _projectile_topology_edge_blocks(cell, horizontal_delta, allow_town_exit):
 				return horizontal_distance                                                             # Stop at the first blocking vertical edge.
 			cell += horizontal_delta                                                                # Enter the next open cell.
 			t_max_x += t_delta_x                                                                    # Schedule the following vertical crossing.
 		else:                                                                                     # The ray next crosses a horizontal cell edge.
 			var vertical_distance := maxf(0.0, t_max_y + 0.0001)                                   # Convert its DDA distance into projectile distance.
 			var vertical_delta := Vector2i(0, step_y)                                               # Express the crossed edge in movement-map coordinates.
-			if _has_wall_edge(cell, vertical_delta):                                                # Use the same wall table as player movement.
+			if _projectile_topology_edge_blocks(cell, vertical_delta, allow_town_exit):
 				return vertical_distance                                                               # Stop at the first blocking horizontal edge.
 			cell += vertical_delta                                                                  # Enter the next open cell.
 			t_max_y += t_delta_y                                                                    # Schedule the following horizontal crossing.
+		if allow_town_exit and not _is_open_cell(cell):
+			break
 	return maximum_distance + 1.0                                                              # No blocking movement edge lies along this projectile segment.
+
+
+func _projectile_topology_edge_blocks(cell: Vector2i, delta: Vector2i, allow_town_exit: bool) -> bool:
+	return (not allow_town_exit or _is_open_cell(cell + delta)) and _has_wall_edge(cell, delta)
 
 
 # _ray_segment_hit_distance_limited: Variant of the visibility ray helper without its camera-distance cap.
@@ -6919,8 +7045,8 @@ func _box_ray_hit(origin: Vector2, direction: Vector2, center: Vector2, half_ext
 		var inside_normal := Vector2(signf(relative.x), 0.0) if gap_x < gap_y else Vector2(0.0, signf(relative.y))
 		if inside_normal == Vector2.ZERO:
 			inside_normal = -direction.normalized()
-		return {"distance": 0.0, "normal": inside_normal}
-	return {"distance": entry, "normal": normal}
+		return {"distance": 0.0, "normal": inside_normal, "exit_distance": exit}
+	return {"distance": entry, "normal": normal, "exit_distance": exit}
 
 
 func _ray_box_distance(origin: Vector2, direction: Vector2, center: Vector2, half_extents: Vector2) -> float:
@@ -7105,9 +7231,9 @@ func _dive_roll_invulnerable(state: Dictionary) -> bool:
 
 
 # _nearest_projectile_player_hit: Finds the closest eligible body intersected by this projectile path.
-func _assisted_shot_direction(owner: int, origin: Vector2, direction: Vector2, crouched: bool) -> Vector2:
+func _assisted_shot_direction(owner: int, origin: Vector2, direction: Vector2, crouched: bool, glass_height := -1.0) -> Vector2:
 	var max_distance := PROJECTILE_SPEED * PROJECTILE_LIFETIME
-	if not _nearest_projectile_player_hit(owner, origin, direction, max_distance, crouched).is_empty():
+	if not _nearest_projectile_player_hit(owner, origin, direction, max_distance, crouched, glass_height).is_empty():
 		return direction
 	var best_angle := deg_to_rad(AIM_ASSIST_ANGLE) + 0.00001
 	var best_direction := direction
@@ -7124,14 +7250,14 @@ func _assisted_shot_direction(owner: int, origin: Vector2, direction: Vector2, c
 		if correction >= best_angle:
 			continue
 		var candidate := direction.rotated(signf(center_angle) * correction)
-		var hit := _nearest_projectile_player_hit(owner, origin, candidate, max_distance, crouched)
+		var hit := _nearest_projectile_player_hit(owner, origin, candidate, max_distance, crouched, glass_height)
 		if int(hit.get("player_index", -1)) == target:
 			best_angle = correction
 			best_direction = candidate
 	return best_direction
 
 
-func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vector2, maximum_distance: float, shot_crouched: bool) -> Dictionary:
+func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vector2, maximum_distance: float, shot_crouched: bool, glass_height := -1.0) -> Dictionary:
 	var nearest_distance := maximum_distance + 0.001                                           # Keep the first body beyond any possible hit by default.
 	var nearest_player := -1                                                                    # Track which body owns that nearest intersection.
 	for player_index in range(player_states.size()):                                           # Check each currently active local player.
@@ -7146,7 +7272,7 @@ func _nearest_projectile_player_hit(owner: int, origin: Vector2, direction: Vect
 		var distance := _ray_circle_hit_distance(origin, direction, _player_state_world_position(player_states[player_index]), PROJECTILE_PLAYER_RADIUS) # Test the compact player body circle.
 		if distance < 0.0 or distance > maximum_distance:                                        # Ignore bodies that the projectile ray does not reach during this segment.
 			continue                                                                                   # Leave the candidate out of the nearest-hit test.
-		var wall_distance := _nearest_projectile_wall_distance(origin, direction, distance)       # Re-test the exact body-contact interval against every physical wall edge.
+		var wall_distance := _nearest_projectile_wall_distance(origin, direction, distance, glass_height)
 		if wall_distance <= distance + PROJECTILE_WALL_EPSILON:                                   # A wall at or before the body contact always owns this shot.
 			continue                                                                                   # Reject the body so neither immediate nor later simulation can damage through it.
 		if distance < nearest_distance:                                                            # Retain only a nearer, unobstructed body hit.
@@ -7310,7 +7436,7 @@ func _barrel_surface_colors_for_current_view(effect: Dictionary) -> Array[Color]
 
 
 # _projectile_owner_has_clear_path_to_player: Final gameplay authority for combat line-of-sight, using the same cell-edge wall ownership as movement.
-func _projectile_owner_has_clear_path_to_player(owner_index: int, target_index: int, record_debug := true) -> bool:
+func _projectile_owner_has_clear_path_to_player(owner_index: int, target_index: int, record_debug := true, shot: Dictionary = {}, impact_position := Vector2.ZERO) -> bool:
 	if owner_index < 0 or owner_index >= player_states.size() or target_index < 0 or target_index >= player_states.size(): # Reject malformed combat references defensively.
 		if record_debug: _set_projectile_hit_debug("P%s -> P%s  INVALID ACTOR INDEX  BLOCKED" % [owner_index + 1, target_index + 1]) # Preserve the actual final-gate reason for F3 inspection.
 		return false                                                                               # Invalid combat actors can never receive damage.
@@ -7321,13 +7447,18 @@ func _projectile_owner_has_clear_path_to_player(owner_index: int, target_index: 
 		return false                                                                               # Keep combat contained by the maze footprint.
 	var owner_world := _player_state_world_position(player_states[owner_index])                # Revalidate along the same real in-cell body path used when the projectile initially found this target.
 	var target_world := _player_state_world_position(player_states[target_index])              # Do not replace a visible corner-to-corner shot with a different cell-centre ray.
+	var glass_height := float(shot.get("storefront_world_height", -1.0))
+	if outdoor_town and glass_height >= 0.0:
+		# The real muzzle ray can clear a window that the body-center ray misses.
+		owner_world = shot.get("spawn_position", shot["position"])
+		target_world = impact_position
 	var path := target_world - owner_world                                                      # Build the top-down segment joining the two actual collision bodies.
 	var path_distance := path.length()                                                          # Preserve its real world length for the cell-edge trace.
 	if path_distance <= 0.000001:                                                               # Only coincident centers have no finite wall path.
 		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  OVERLAP  ALLOWED" % [owner_index + 1, owner_cell, target_index + 1, target_cell]) # Record the exceptional close-contact case.
 		return true                                                                                # Keep close-quarter combat responsive.
-	var target_contact_distance := path_distance                                               # Include the target center so a wall cannot lie inside its hit circle.
-	var wall_distance := _nearest_projectile_wall_distance(owner_world, path / path_distance, target_contact_distance) # Reuse the identical finite wall-segment test already used by the projectile's body collision.
+	var target_contact_distance := path_distance
+	var wall_distance := _nearest_projectile_wall_distance(owner_world, path / path_distance, target_contact_distance, glass_height)
 	if wall_distance <= target_contact_distance + PROJECTILE_WALL_EPSILON:                     # A crossed movement edge blocks the real body-to-body route.
 		if record_debug: _set_projectile_hit_debug("P%s %s -> P%s %s  TRACE %.3f/%.3f  WALL  BLOCKED" % [owner_index + 1, owner_cell, target_index + 1, target_cell, wall_distance, path_distance]) # Show whether the topological trace itself found a wall.
 		return false                                                                               # Reject the hit before any health mutation.
@@ -7576,11 +7707,11 @@ func _notify_bots_of_ally_fall(fallen_index: int) -> void:
 
 
 # _apply_projectile_hit: Damages one player, chooses authored hit side art, and begins a readable staged respawn at zero health.
-func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1) -> bool:
+func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_index := -1, shot: Dictionary = {}, impact_position := Vector2.ZERO) -> bool:
 	# Observation mode protects human players only; NPCs remain vulnerable.
 	if show_bot_navigation_debug and _is_human_controlled_slot(player_index):
 		return false
-	if owner_index >= 0 and not _projectile_owner_has_clear_path_to_player(owner_index, player_index): # Make wall blocking decisive at the final damage boundary.
+	if owner_index >= 0 and not _projectile_owner_has_clear_path_to_player(owner_index, player_index, true, shot, impact_position):
 		return false                                                                              # Do not permit health, score, death, or body-blood updates through a movement-blocking edge.
 	var state := player_states[player_index]                                                    # Read the target's current state.
 	if _dive_roll_invulnerable(state):
@@ -8397,6 +8528,8 @@ func _update_combat_view() -> void:
 			_render_calibration_primitive_sprite("calibration_sprite_%d" % int(primitive.get("id", -1)), primitive, used, barrel_lod_labels_used)
 	if calibration_sprite_gallery_enabled or semantic_typical_props_enabled:
 		_render_live_semantic_floor_footprints()
+	if outdoor_town:
+		_render_storefront_grass(used)
 	var coin_frame_index := _coin_animation_frame_index()                                      # Keep every coin on the same authored spin frame while allowing each depth to choose its own authored silhouette.
 	for coin in world_coins:                                                                    # Draw every remaining shared coin through the same camera projection as players and bullets.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                         # Read the shared Vector2 directly instead of reconstructing it from a Variant.
@@ -8486,20 +8619,25 @@ func _update_combat_view() -> void:
 	var projectile_hot_started_us := Time.get_ticks_usec()                                       # Time the live yellow/white/grey projectile vector.
 	for shot in active_projectiles:                                                              # Render the bullet and every attached tracer pixel from one shared, current projectile state.
 		var world_position: Vector2 = shot["position"]                                            # Read the authoritative collision point for this live projectile.
-		var normally_visible := _world_actor_overlaps_current_camera_fan(world_position, 0.06) and _world_point_has_clear_camera_line(world_position) # Retain strict ordinary world/fan culling for non-threatening side shots.
+		var glass_height := float(shot.get("storefront_world_height", -1.0))
+		var normally_visible := _world_actor_overlaps_current_camera_fan(world_position, 0.06) and _projectile_has_clear_camera_line(world_position, glass_height)
 		var aimed_at_current_viewer := int(shot.get("visual_target_player_index", -1)) == active_player_index # A real player-hit endpoint should remain readable even while its physical lead begins just outside the narrow camera fan.
 		var target_world_position: Vector2 = shot.get("visual_target_position", world_position)
-		if not normally_visible and (not aimed_at_current_viewer or not _world_point_has_clear_camera_line(target_world_position)):
+		if not normally_visible and (not aimed_at_current_viewer or not _projectile_has_clear_camera_line(target_world_position, glass_height)):
 			continue                                                                                   # Preserve wall occlusion; only retain an off-fan bullet when its known collision ray is truly coming into this viewer.
 		var head_projection := _opponent_projection_from_current_camera(world_position, true, true) # Project the head exactly once for this camera and live projectile.
 		var shot_id := int(shot.get("id", -1))                                                     # Keep each per-camera muzzle registration tied to this shared projectile ID.
 		var launch_cache_key := "%d:%d" % [active_player_index, shot_id]                           # Split-screen cameras need independent sprite-space origins for one physical shot.
 		var cached_launch: Variant = projectile_launch_render_cache.get(launch_cache_key, {})       # Retain the original player PNG placement even while the actor moves through the near field.
 		var projectile_height := float(shot.get("height", 0.72))
+		if glass_height >= 0.0:
+			projectile_height = (glass_height - town_walk_height(world_position)) / 0.36
 		var head_screen_position := Vector2(float(head_projection["screen_x"]), float(head_projection["feet_y"]) - float(head_projection.get("continuous_actor_height", head_projection.get("actor_height", 0.0))) * projectile_height).round() # Project the one shared physical position directly in this camera.
 		var shot_direction: Vector2 = shot.get("direction", Vector2.ZERO)
-		var probe_projection := _opponent_projection_from_current_camera(world_position - shot_direction * 0.04, true, true)
-		var raw_tail_screen_direction := (_projectile_screen_position_continuous(probe_projection, projectile_height) - _projectile_screen_position_continuous(head_projection, projectile_height)).normalized()
+		var probe_position := world_position - shot_direction * 0.04
+		var probe_projection := _opponent_projection_from_current_camera(probe_position, true, true)
+		var probe_height := (glass_height - town_walk_height(probe_position)) / 0.36 if glass_height >= 0.0 else projectile_height
+		var raw_tail_screen_direction := (_projectile_screen_position_continuous(probe_projection, probe_height) - _projectile_screen_position_continuous(head_projection, projectile_height)).normalized()
 		var projected_height := float(head_projection.get("continuous_actor_height", head_projection.get("actor_height", 0.0))) # Use the same continuous perspective scale that governs world-body apparent size.
 		var tail_length_pixels := clampi(roundi(projected_height / PROJECTILE_TRACER_LENGTH_HEIGHT_DIVISOR), 1, PROJECTILE_TRACER_MAX_LENGTH_PIXELS) # Keep a distant vector to one tail pixel, then lengthen only its aliased screen-space extent as it approaches.
 		var tracer_tail_points := _projectile_tracer_wu_points(head_screen_position, raw_tail_screen_direction, tail_length_pixels) # Rasterize the actual projected angle into anti-aliased coverage pairs without changing its physical direction or length.
@@ -8641,7 +8779,9 @@ func _update_combat_view() -> void:
 		debris_sprite.texture = _barrel_small_splinter_texture(debris_shape) if small_barrel_hit else _wall_debris_shape_texture(debris_shape)                           # Draw a generated dot, domino, block, or L mask with no authored texture asset.
 		debris_sprite.material = null                                                              # Preserve the sampled wall color exactly.
 		var wood_color := Color.WHITE
-		if not small_barrel_hit:
+		if debris.get("glass_fragment", false):
+			wood_color = Color("#d8edee") if (debris_id + debris_visual_frame) % 3 == 0 else Color("#91aeb1")
+		elif not small_barrel_hit:
 			var debris_color_cache_key := "%d:%d" % [active_player_index, int(debris.get("id", -1))]
 			var wood_colors: Array = wall_debris_color_cache.get(debris_color_cache_key, [])
 			if wood_colors.size() < 4:
@@ -8842,6 +8982,148 @@ func _gun_animation_texture() -> Texture2D:
 	return GUN_SPRITE_FRAMES.get_frame_texture(&"Gun", frame_index)                            # Return the current authored cowboy-gun angle.
 
 
+const STOREFRONT_GRASS_BLADE_COUNT := 4
+const STOREFRONT_GRASS_DETAIL_COUNT := 4
+const STOREFRONT_GRASS_MAX_BLADES := STOREFRONT_GRASS_BLADE_COUNT + STOREFRONT_GRASS_DETAIL_COUNT
+const STOREFRONT_GRASS_DETAIL_DEPTH := 2.15
+const STOREFRONT_GRASS_SPREAD := Vector2(0.12, 0.32)
+const STOREFRONT_GRASS_SHADER := preload("res://scripts/town_grass_strokes.gdshader")
+
+
+func _render_storefront_grass(used: Dictionary) -> void:
+	if active_player_index >= coordinate_renderers.size():
+		return
+	var renderer: Node = coordinate_renderers[active_player_index]
+	if not is_instance_valid(renderer):
+		return
+	if storefront_grass_layout != STOREFRONT_STYLE.grass_clumps:
+		storefront_grass_layout = STOREFRONT_STYLE.grass_clumps.duplicate()
+		_build_storefront_grass_blades()
+
+	var front_left := Vector2(STOREFRONT_STYLE.FOOTPRINT.position)
+	var visible_roots: Array[Vector2] = []
+	for index in storefront_grass_layout.size():
+		var cluster := storefront_grass_layout[index]
+		var center := front_left + Vector2(cluster.x, cluster.y)
+		var view: Dictionary = renderer.runtime_project_world_effect_point_for_current_pose(center)
+		if not view.get("visible", false):
+			continue
+		if not _world_actor_overlaps_current_camera_fan(center, STOREFRONT_GRASS_SPREAD.y * 0.65 * cluster.z):
+			continue
+		var half_size := (STOREFRONT_GRASS_SPREAD * 0.5 + Vector2.ONE * 0.035) * cluster.z
+		var footprint := {"shape": OcclusionFootprintShape.RECTANGLE, "position": center, "half_width": half_size.x, "half_depth": half_size.y}
+		if not _world_footprint_has_visible_camera_span(footprint):
+			continue
+
+		var origin: Vector2 = view["camera_origin"]
+		var forward: Vector2 = view["forward"]
+		var right: Vector2 = view["right"]
+		var projected_blades := PackedVector4Array()
+		var projected_bends := PackedVector4Array()
+		var minimum := Vector2(INF, INF)
+		var maximum := Vector2(-INF, -INF)
+		var blades := storefront_grass_blades[index]
+		var base_count := blades.size()
+		var depth: float = view["view_depth"]
+		if depth < STOREFRONT_GRASS_DETAIL_DEPTH:
+			blades = blades.duplicate()
+			blades.append_array(storefront_grass_detail_blades[index])
+		var detail_root_count := 0
+		for blade_index in blades.size():
+			var detail_opacity := 1.0
+			var is_detail := blade_index >= base_count
+			if is_detail:
+				var fade_end := STOREFRONT_GRASS_DETAIL_DEPTH - 0.14 * (blade_index - base_count)
+				detail_opacity = 1.0 - smoothstep(fade_end - 0.40, fade_end, depth)
+				if detail_opacity <= 0.0:
+					continue
+			var blade := blades[blade_index]
+			var offset := Vector2(blade.x, blade.y)
+			var root := center + offset
+			var lean := Vector2.from_angle(blade.w) * blade.z * 0.30
+			var root_local: Vector2 = renderer._to_view(root, origin, forward, right)
+			var tip_local: Vector2 = renderer._to_view(root + lean, origin, forward, right)
+			if minf(root_local.y, tip_local.y) < 0.075:
+				continue
+			var foot: Vector2 = renderer._project_view_point(root_local, 0.0)
+			var top: Vector2 = renderer._project_view_point(tip_local, blade.z)
+			var height := foot.y - top.y
+			var opacity := smoothstep(1.75, 3.5, height) * detail_opacity
+			if opacity <= 0.0:
+				continue
+			var root_pixel := foot.floor()
+			if visible_roots.any(func(other: Vector2) -> bool: return absf(other.x - root_pixel.x) < 2.0 and absf(other.y - root_pixel.y) <= 2.0):
+				continue
+			visible_roots.append(root_pixel)
+			if is_detail:
+				detail_root_count += 1
+			var bend: Vector2 = renderer._project_view_point(root_local.lerp(tip_local, 0.20), blade.z * 0.55)
+			bend.y = clampf(bend.y, top.y + height * 0.2, foot.y - height * 0.2)
+			# Bound the lean so a one-pixel stroke remains continuous row to row.
+			bend.x = foot.x + clampf(bend.x - foot.x, bend.y - foot.y, foot.y - bend.y)
+			top.x = bend.x + clampf(top.x - bend.x, top.y - bend.y, bend.y - top.y)
+			projected_blades.append(Vector4(foot.x, foot.y, top.x, top.y))
+			projected_bends.append(Vector4(bend.x, bend.y, opacity, 0.0))
+			minimum = minimum.min(foot).min(bend).min(top)
+			maximum = maximum.max(foot).max(bend).max(top)
+		# Close detail should not displace base stalks in neighboring clumps.
+		if detail_root_count > 0:
+			visible_roots.resize(visible_roots.size() - detail_root_count)
+		var blade_count := projected_blades.size()
+		if blade_count == 0:
+			continue
+		projected_blades.resize(STOREFRONT_GRASS_MAX_BLADES)
+		projected_bends.resize(STOREFRONT_GRASS_MAX_BLADES)
+		var box_start := minimum.floor()
+		var box_size := maximum.floor() + Vector2.ONE - box_start
+
+		var key := "storefront_grass_%d" % index
+		var sprite := _combat_sprite(key)
+		if sprite.material == null:
+			var stem_material := ShaderMaterial.new()
+			stem_material.shader = STOREFRONT_GRASS_SHADER
+			sprite.material = stem_material
+			sprite.texture = _projectile_pixel_texture()
+			sprite.centered = false
+		var material := sprite.material as ShaderMaterial
+		material.set_shader_parameter("blades", projected_blades)
+		material.set_shader_parameter("blade_count", blade_count)
+		material.set_shader_parameter("pixel_rect", Vector4(box_start.x, box_start.y, box_size.x, box_size.y))
+		material.set_shader_parameter("bends", projected_bends)
+		sprite.position = box_start
+		sprite.scale = box_size
+		sprite.z_index = _world_footprint_draw_layer(footprint)
+		sprite.visible = true
+		used[key] = true
+
+
+func _build_storefront_grass_blades() -> void:
+	storefront_grass_blades.clear()
+	storefront_grass_detail_blades.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261118
+	var detail_rng := RandomNumberGenerator.new()
+	detail_rng.seed = 20261119
+	for cluster: Vector4 in storefront_grass_layout:
+		var blades: Array[Vector4] = []
+		var count := STOREFRONT_GRASS_BLADE_COUNT if cluster.z >= 1.0 else STOREFRONT_GRASS_BLADE_COUNT - 1
+		for index in count:
+			var along := (float(index) + rng.randf_range(0.04, 0.96)) / count - 0.5
+			var offset := Vector2(rng.randf_range(-0.5, 0.5), along) * STOREFRONT_GRASS_SPREAD * cluster.z
+			var height := rng.randf_range(0.031, 0.102) * cluster.w
+			blades.append(Vector4(offset.x, offset.y, height, rng.randf_range(0.0, TAU)))
+		# When roots crowd into one screen cell, keep the taller stalk.
+		blades.sort_custom(func(a: Vector4, b: Vector4) -> bool: return a.z > b.z)
+		storefront_grass_blades.append(PackedVector4Array(blades))
+		var detail := PackedVector4Array()
+		for index in STOREFRONT_GRASS_DETAIL_COUNT:
+			var along := (float(index) + detail_rng.randf_range(0.04, 0.96)) / STOREFRONT_GRASS_DETAIL_COUNT - 0.5
+			var offset := Vector2(detail_rng.randf_range(-0.5, 0.5), along) * STOREFRONT_GRASS_SPREAD * cluster.z
+			var height := detail_rng.randf_range(0.042, 0.088) * cluster.w
+			detail.append(Vector4(offset.x, offset.y, height, detail_rng.randf_range(0.0, TAU)))
+		storefront_grass_detail_blades.append(detail)
+
+
 # _render_world_pickup: Shows one shared coin or machine gun in this camera without creating a second projection system.
 func _render_world_pickup(key: String, texture: Texture2D, world_position: Vector2, used: Dictionary, lift_fraction: float, size_multiplier := 1.0, use_authored_coin_lod := false, coin_frame_index := 0, use_authored_heart_lod := false, heart_frame_index := 0, extra_height := 0.0, footprint_kind := "coin") -> void:
 	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
@@ -9022,7 +9304,7 @@ func _register_semantic_gameplay_prop(footprint: Dictionary) -> void:
 	var is_barrel := key.begins_with("barrel_")
 	var width := float(footprint["side_length"])
 	var depth := float(footprint.get("depth", width))
-	var prop := {"id": next_combat_visual_id, "position": footprint["position"], "hits": 0, "footprint_key": key, "projectile_height": float(footprint.get("projectile_height", float(footprint["height"]) / 0.36))}
+	var prop := {"id": next_combat_visual_id, "position": footprint["position"], "hits": 0, "footprint_key": key, "vault_height": footprint["height"], "projectile_height": float(footprint.get("projectile_height", float(footprint["height"]) / 0.36))}
 	if is_barrel:
 		prop["projectile_radius"] = width * 0.6
 		prop["collision_radius"] = width * 0.6
@@ -9062,7 +9344,7 @@ func _refresh_dining_navigation_footprint(dining_set_id: String) -> void:
 		return
 	if not has_table:
 		return
-	world_barrels.append({"id": next_combat_visual_id, "position": (minimum + maximum) * 0.5, "half_extents": (maximum - minimum) * 0.5, "dining_set_id": dining_set_id, "dining_navigation_proxy": true, "movement_only": true})
+	world_barrels.append({"id": next_combat_visual_id, "position": (minimum + maximum) * 0.5, "half_extents": (maximum - minimum) * 0.5, "dining_set_id": dining_set_id, "dining_navigation_proxy": true, "movement_only": true, "vault_height": 0.13})
 	next_combat_visual_id += 1
 
 
@@ -9353,7 +9635,7 @@ func _migrate_live_room_barrels_to_gpu_cage() -> void:
 		if not bool(footprint.get("typical_spawn", false)) or bool(footprint.get("dining_set_spawn", false)) or bool(footprint.get("flat_faces", false)) or String(footprint.get("id", "")).begins_with("crate_"):
 			continue
 		var old_id := String(footprint.get("id", ""))
-		if old_id.begins_with(GPU_CAGE_PREFIX):
+		if old_id.begins_with("barrel_gpu_lattice_instanced_"):
 			continue
 		# Update an already-running normal match after a script reload.  Gallery
 		# fixtures are excluded above, so only ordinary gameplay barrels change.
@@ -9508,6 +9790,8 @@ func _render_live_semantic_floor_footprints() -> void:
 			continue
 		if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table"):
 			var dining_footprint := _dining_furniture_footprint(footprint)
+			# Let the wall painter occlude individual pixels through the balusters.
+			dining_footprint["see_through_porch_rail"] = outdoor_town and STOREFRONT_STYLE.porch_rect().has_point(center)
 			outline.z_index = _world_footprint_draw_layer(dining_footprint)
 			var dining_radius := Vector2(float(dining_footprint["half_width"]), float(dining_footprint["half_depth"])).length()
 			var dining_visible := complete and _world_actor_overlaps_current_camera_fan(center, dining_radius) and _world_footprint_has_visible_camera_span(dining_footprint)
@@ -9520,7 +9804,7 @@ func _render_live_semantic_floor_footprints() -> void:
 					stool_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
 				var stool_offset := _semantic_legacy_projection_offset(stool_renderer)
 				var stool_origin: Vector2 = stool_renderer.call("_runtime_camera_origin", stool_forward, stool_right) if stool_renderer != null and stool_renderer.has_method("_runtime_camera_origin") else _runtime_camera_origin_for_visibility()
-				outline.call("set_stool", center, stool_origin, stool_forward, stool_right, stool_offset)
+				outline.call("set_stool", center, stool_origin, stool_forward, stool_right, stool_offset, town_walk_height(center))
 				outline.visible = true
 			continue
 		if key.begins_with("chair_semantic_imported") or key.begins_with("chair_semantic_edges"):
@@ -9984,7 +10268,7 @@ func _footprint_cone_has_clear_interval(footprint: Dictionary, origin: Vector2, 
 				var hit := _ray_segment_hit_distance_limited(origin, ray, corners[side], corners[(side + 1) % corners.size()], 10000.0)
 				if hit >= 0.0 and (distance < 0.0 or hit < distance):
 					distance = hit
-		if distance >= 0.0 and _world_point_has_clear_camera_line(origin + ray * distance):
+		if distance >= 0.0 and _world_point_has_clear_camera_line(origin + ray * distance, bool(footprint.get("see_through_porch_rail", false))):
 			return true
 	return false
 
@@ -10297,6 +10581,80 @@ func _bot_dive_cover_goal(player_index: int, brain: Dictionary) -> Vector2:
 	return goal
 
 
+func _plan_dive_vault(origin: Vector2, direction: Vector2, remaining_distance: float) -> Dictionary:
+	var travel := direction * remaining_distance
+	var first_prop := _barrel_sweep_hit(origin, travel)
+	var vault := _dive_window_vault(origin, direction, remaining_distance) if outdoor_town else {}
+	var clear_distance := float(vault.get("clear_distance", 0.0))
+	var lift := 0.25 if not vault.is_empty() else 0.0
+	var props := []
+	while not first_prop.is_empty():
+		var entry := float(first_prop["time"]) * remaining_distance
+		if entry > maxf(clear_distance, 0.16):
+			break
+		var prop: Dictionary = first_prop["prop"]
+		var height := float(prop.get("vault_height", INF))
+		if height > 0.17:
+			return {}
+		var center: Vector2 = prop["position"]
+		var extent := Vector2(prop.get("half_extents", Vector2.ONE * float(prop.get("collision_radius", BARREL_COLLISION_RADIUS))))
+		var hit := _box_ray_hit(origin, direction, center, extent + Vector2.ONE * PLAYER_CAPSULE_RADIUS)
+		if hit.is_empty():
+			return {}
+		clear_distance = maxf(clear_distance, float(hit["exit_distance"]) + 0.025)
+		if clear_distance + 0.04 > remaining_distance:
+			return {}
+		lift = maxf(lift, height + 0.055)
+		props.append(prop["id"])
+		first_prop = _barrel_sweep_hit(origin, travel, props)
+	if clear_distance <= 0.0:
+		return {}
+
+	vault["props"] = props
+	var landing := origin + direction * clear_distance
+	var blocked := last_blocked_direction
+	var reached := _move_world_with_wall_slide(origin, landing - origin, "east", "west", "south", "north", false, vault)
+	last_blocked_direction = blocked
+	if reached.distance_to(landing) > 0.002:
+		return {}
+	vault["origin"] = origin
+	vault["clear_distance"] = clear_distance
+	vault["lift"] = lift
+	return vault
+
+
+func _dive_window_vault(origin: Vector2, direction: Vector2, remaining_distance: float) -> Dictionary:
+	if absf(direction.y) < 0.65:
+		return {}
+	for edge: Dictionary in _all_physical_wall_edges():
+		if not edge.get("window", false):
+			continue
+		var a: Vector2 = edge["a"]
+		var b: Vector2 = edge["b"]
+		var distance := (a.y - origin.y) / direction.y
+		var clearance := (PLAYER_CAPSULE_RADIUS + 0.02) / absf(direction.y)
+		if distance <= 0.0 or distance > 0.43 or distance + clearance + 0.04 > remaining_distance:
+			continue
+		var crossing := origin + direction * distance
+		var span := absf(a.x - b.x)
+		var margin := span * 0.22 + 0.065 + absf(direction.x) * clearance
+		if crossing.x < minf(a.x, b.x) + margin or crossing.x > maxf(a.x, b.x) - margin:
+			continue
+		return {"window": edge["key"], "crossing": crossing, "impact_distance": maxf(distance - clearance, 0.0), "clear_distance": distance + clearance}
+	return {}
+
+
+func _dive_vault_lift(state: Dictionary) -> float:
+	if not bool(state.get("dive_active", false)):
+		return 0.0
+	var vault: Dictionary = state.get("dive_vault", {})
+	if vault.is_empty():
+		return 0.0
+	var direction: Vector2 = state["dive_direction"]
+	var distance := (_player_state_world_position(state) - Vector2(vault["origin"])).dot(direction)
+	return float(vault["lift"]) * smoothstep(0.0, 0.095, distance) * (1.0 - smoothstep(float(vault["clear_distance"]) - 0.02, float(vault["clear_distance"]) + 0.07, distance))
+
+
 # A roll is a timed movement through the normal wall collision solver.
 func _advance_dive_roll(player_index: int, delta: float, bound: bool) -> bool:
 	var state: Dictionary = player_states[player_index]
@@ -10356,6 +10714,7 @@ func _advance_dive_roll(player_index: int, delta: float, bound: bool) -> bool:
 		state["dive_aim_vector"] = roll_art_facing
 		state["dive_direction"] = direction.normalized()
 		state["dive_elapsed"] = 0.0
+		state.erase("dive_vault")
 		state["dive_active"] = true
 		state["dive_cooldown"] = 1.8 if bot else 0.0
 	if not bool(state.get("dive_active", false)):
@@ -10371,16 +10730,30 @@ func _advance_dive_roll(player_index: int, delta: float, bound: bool) -> bool:
 	var distance := _dive_roll_distance_at_time(elapsed + duration) - _dive_roll_distance_at_time(elapsed)
 	if bot and state.has("dive_cover_goal"):
 		distance = minf(distance, origin.distance_to(Vector2(state["dive_cover_goal"])))
-	var moved := _move_world_with_wall_slide(origin, Vector2(state["dive_direction"]) * distance, "east", "west", "south", "north")
+	var roll_direction: Vector2 = state["dive_direction"]
+	var vault: Dictionary = state.get("dive_vault", {})
+	if not bot and vault.is_empty() and elapsed < 0.42:
+		vault = _plan_dive_vault(origin, roll_direction, _dive_roll_distance_at_time(13.0 / 12.0) - _dive_roll_distance_at_time(elapsed))
+		if not vault.is_empty():
+			state["dive_vault"] = vault
+	var crossing := vault
+	if not vault.is_empty() and (origin - Vector2(vault["origin"])).dot(roll_direction) >= float(vault["clear_distance"]):
+		crossing = {}
+	var moved := _move_world_with_wall_slide(origin, roll_direction * distance, "east", "west", "south", "north", true, crossing)
+	if vault.has("window") and not storefront_window_vaulted and (moved - Vector2(vault["origin"])).dot(roll_direction) >= float(vault["impact_distance"]):
+		storefront_window_vaulted = true
+		if not storefront_glass_broken:
+			storefront_glass_broken = true
+			_spawn_storefront_glass_shards(vault["crossing"], roll_direction, 0.33)
 	if bot:
 		moved = _bot_limit_actor_overlap(player_index, origin, moved)
 	state["dive_elapsed"] = elapsed + delta
 	state["world_position"] = moved
 	state["grid_position"] = Vector2i(floori(moved.x), floori(moved.y))
 	if elapsed < 2.0 / 12.0 and elapsed + duration >= 2.0 / 12.0:
-		_play_wood_actor_sound(player_index, "Jump")
+		_play_actor_surface_sound(player_index, "Jump", origin.lerp(moved, (2.0 / 12.0 - elapsed) / duration))
 	if elapsed < 6.0 / 12.0 and elapsed + duration >= 6.0 / 12.0:
-		_play_wood_actor_sound(player_index, "Drop")
+		_play_actor_surface_sound(player_index, "Drop", origin.lerp(moved, (6.0 / 12.0 - elapsed) / duration))
 	state["character_is_moving"] = true
 	state["world_run_dir"] = _direction_string_for_world_vector(Vector2(state["dive_direction"]))
 	state["character_is_crouching"] = bool(bot_inputs.get(player_index, {}).get("crouch", false)) if bot else _is_player_crouch_pressed_for(player_index)
@@ -10650,7 +11023,7 @@ func _process_continuous_third_person_input(delta: float) -> void:
 		world_run_dir = _direction_string_for_world_vector((right * movement.x - forward * movement.y).normalized())
 		_play_best_animation(true)
 		var world_delta := (right * movement.x - forward * movement.y) * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta
-		var moved := _move_world_with_wall_slide(player_world_position, world_delta, "right", "left", "back", "front") # Resolve one continuous input vector, preserving its tangent instead of repeatedly correcting an ordered X/Y pair at a wall.
+		var moved := _move_world_with_wall_slide(player_world_position, world_delta, "right", "left", "back", "front", true) # Resolve one continuous input vector, preserving its tangent instead of repeatedly correcting an ordered X/Y pair at a wall.
 		_set_player_world_position_for_current_view(moved)
 	else:
 		character_is_moving = false
@@ -10920,7 +11293,24 @@ func _process_pending_reload_barks() -> void:
 			break
 
 
+func _advance_storefront_doors(delta: float) -> void:
+	for door in storefront_open_doors.keys():
+		var swing := float(storefront_open_doors[door])
+		var target := 0.0 if storefront_closing_doors.has(door) else signf(swing)
+		var next := move_toward(swing, target, delta / 0.20)
+		if next == swing:
+			continue
+		if is_zero_approx(next):
+			storefront_open_doors.erase(door)
+			storefront_closing_doors.erase(door)
+		else:
+			storefront_open_doors[door] = next
+		physical_wall_edges_cache_dirty = true
+
+
 func _process(delta: float) -> void:                                                        # Declare this function.
+	if outdoor_town and not match_paused:
+		_advance_storefront_doors(delta)
 	_advance_world_sound_occlusion(delta)
 	if mobile_sample_audio:
 		_warm_next_mobile_sfx()
@@ -14667,6 +15057,19 @@ func _all_physical_wall_edges() -> Array:                                       
 					continue                                                                              # Continue to the next edge.
 				emitted_keys[key] = true                                                              # Mark this physical edge as emitted.
 				edges.append({"a": segment[0], "b": segment[1], "delta": delta, "key": key})          # Store this unique wall edge and its source orientation.
+	if outdoor_town:
+		var partial_walls: Array[Dictionary] = STOREFRONT_STYLE.door_spans()
+		partial_walls.append_array(STOREFRONT_STYLE.door_leaf_spans(storefront_open_doors))
+		for trim: Dictionary in STOREFRONT_STYLE.trim_spans():
+			if trim.get("partial", false):
+				partial_walls.append(trim)
+		for span in partial_walls:
+			var a: Vector2 = span["a"]
+			var b: Vector2 = span["b"]
+			span["key"] = _physical_edge_key(a, b)
+			span["delta"] = Vector2i.RIGHT if is_equal_approx(a.x, b.x) else Vector2i.UP
+			span["partial"] = true
+			edges.append(span)
 	physical_wall_edges_cache = edges                                                         # Keep the completed topology for every subsequent ray, projectile, and visibility test.
 	physical_wall_edges_cache_dirty = false                                                   # The cache remains valid until the maze is explicitly rebuilt.
 	return physical_wall_edges_cache                                                         # Return the full physical wall edge list.
@@ -15655,15 +16058,16 @@ func _can_cross_diagonal_corner(source_cell: Vector2i, x_edge: Vector2i, y_edge:
 # is deliberately not an X-then-Y correction: at an oblique contact, the
 # surviving tangent is applied in the same update so a held stick glides along
 # the wall without making the camera/world alternate around the contact point.
-func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Dictionary:
+func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2, ignored_props: Array = []) -> Dictionary:
 	var movement_length_squared := world_delta.length_squared()
 	if movement_length_squared <= 0.00000001:
 		return {}
 	var earliest_hit := 2.0                                                                    # Keep a no-hit sentinel outside the normalized sweep interval.
 	var hit_center := Vector2.ZERO
 	var hit_normal := Vector2.ZERO
+	var hit_prop: Dictionary = {}
 	for barrel in world_barrels:
-		if bool(barrel.get("skip_character_collision", false)):
+		if bool(barrel.get("skip_character_collision", false)) or ignored_props.has(barrel["id"]):
 			continue
 		var barrel_center: Vector2 = barrel.get("position", Vector2.ZERO)
 		if barrel.has("half_extents"):
@@ -15676,6 +16080,7 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 					earliest_hit = box_time
 					hit_center = barrel_center
 					hit_normal = box_normal
+					hit_prop = barrel
 			continue
 		var combined_radius := PLAYER_CAPSULE_RADIUS + float(barrel.get("collision_radius", BARREL_COLLISION_RADIUS))
 		var offset := world_position - barrel_center
@@ -15687,6 +16092,7 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 				earliest_hit = 0.0                                                                   # Resolve only an inward retained contact; outward motion must remain free.
 				hit_center = barrel_center
 				hit_normal = Vector2.ZERO
+				hit_prop = barrel
 			continue
 		if movement_toward_center >= 0.0:
 			continue                                                                              # A player already moving away cannot newly contact this barrel.
@@ -15698,9 +16104,10 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 			earliest_hit = hit_time
 			hit_center = barrel_center
 			hit_normal = Vector2.ZERO
+			hit_prop = barrel
 	if earliest_hit > 1.0:
 		return {}
-	return {"time": earliest_hit, "center": hit_center, "normal": hit_normal}
+	return {"time": earliest_hit, "center": hit_center, "normal": hit_normal, "prop": hit_prop}
 
 
 # _wall_endpoint_sweep_hit: Supplements the existing cardinal grid-edge
@@ -15708,16 +16115,38 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Diction
 # has two real endpoints; testing those caps closes convex corners even when a
 # player approaches from a neighboring open cell.  Returning the contact normal
 # lets the caller retain tangential motion instead of snagging on the vertex.
-func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2) -> Dictionary:
+func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vault_window := "") -> Dictionary:
 	var movement_length_squared := world_delta.length_squared()
 	if movement_length_squared <= 0.00000001:
 		return {}
 	var earliest_hit := 2.0
 	var hit_normal := Vector2.ZERO
+	var push_door := ""
+	var close_door := ""
 	var radius_squared := PLAYER_CAPSULE_RADIUS * PLAYER_CAPSULE_RADIUS
 	for edge: Dictionary in _all_physical_wall_edges():
+		if edge["key"] == vault_window:
+			continue
 		var edge_a: Vector2 = edge["a"]
 		var edge_b: Vector2 = edge["b"]
+		# Fractional storefront walls share the same capsule sweep as grid-wall
+		# corners. Test their flat span as well because the grid edge is open.
+		if edge.get("partial", false):
+			var segment := edge_b - edge_a
+			var normal := segment.orthogonal().normalized()
+			var offset := (world_position - edge_a).dot(normal)
+			if offset < 0.0:
+				normal = -normal
+				offset = -offset
+			var approach := -world_delta.dot(normal)
+			if approach > 0.00001:
+				var contact_time := maxf(0.0, (offset - PLAYER_CAPSULE_RADIUS) / approach)
+				var along := (world_position + world_delta * contact_time - edge_a).dot(segment)
+				if contact_time < earliest_hit and along >= 0.0 and along <= segment.length_squared():
+					earliest_hit = contact_time
+					hit_normal = normal
+					push_door = String(edge.get("push_door", ""))
+					close_door = String(edge.get("close_door", ""))
 		for endpoint: Vector2 in [edge_a, edge_b]:
 			var offset: Vector2 = world_position - endpoint
 			var movement_toward_endpoint: float = offset.dot(world_delta)
@@ -15739,12 +16168,14 @@ func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2) -> 
 			if endpoint_hit_time < earliest_hit:
 				earliest_hit = endpoint_hit_time
 				hit_normal = endpoint_normal
+				push_door = String(edge.get("push_door", ""))
+				close_door = String(edge.get("close_door", ""))
 	if earliest_hit > 1.0:
 		return {}
-	return {"time": earliest_hit, "normal": hit_normal}
+	return {"time": earliest_hit, "normal": hit_normal, "push_door": push_door, "close_door": close_door}
 
 
-func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, positive_x_label: String, negative_x_label: String, positive_y_label: String, negative_y_label: String) -> Vector2:
+func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, positive_x_label: String, negative_x_label: String, positive_y_label: String, negative_y_label: String, can_push_door := false, vault: Dictionary = {}) -> Vector2:
 	if walk_through_walls_cheat or world_delta.length_squared() <= 0.00000001:
 		return world_position + world_delta
 	var position := world_position
@@ -15784,15 +16215,27 @@ func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, 
 					hit_time = y_time
 					hit_x = false
 					hit_y = true
-		var barrel_hit := _barrel_sweep_hit(position, remaining)
+		var barrel_hit := _barrel_sweep_hit(position, remaining, vault.get("props", []))
 		var hit_barrel := not barrel_hit.is_empty() and float(barrel_hit["time"]) < hit_time
 		if hit_barrel:
 			hit_time = float(barrel_hit["time"])
 			hit_x = false
 			hit_y = false
-		var endpoint_hit := _wall_endpoint_sweep_hit(position, remaining)
+		var endpoint_hit := _wall_endpoint_sweep_hit(position, remaining, String(vault.get("window", "")))
 		var hit_endpoint := not endpoint_hit.is_empty() and float(endpoint_hit["time"]) < hit_time
 		if hit_endpoint:
+			var door := String(endpoint_hit["push_door"])
+			var open_leaf := String(endpoint_hit["close_door"])
+			var contact_normal: Vector2 = endpoint_hit["normal"]
+			# Both hinges are on the east jamb. Entering an open leaf from
+			# its east side pushes it toward the closed (west) position.
+			if can_push_door and not open_leaf.is_empty() and remaining.x < 0.0 and contact_normal.x > 0.5:
+				storefront_closing_doors[open_leaf] = true
+			if can_push_door and not door.is_empty() and absf(remaining.y) > 0.00001 and absf(Vector2(endpoint_hit["normal"]).y) > 0.00001:
+				storefront_open_doors[door] = 0.05 * signf(-float(Vector2(endpoint_hit["normal"]).y))
+				physical_wall_edges_cache_dirty = true
+				# Re-sweep this displacement against the leaf in its open position.
+				continue
 			hit_time = float(endpoint_hit["time"])
 			hit_x = false
 			hit_y = false
@@ -16004,7 +16447,9 @@ func _position_player() -> void:                                                
 		var truth_source_height := _standard_actor_body_height()                                 # Scale every authored character clip from one standing reference, never from its individual frame or animation bounds.
 		var truth_scale := truth_height / truth_source_height
 		var truth_screen_x := float(truth_projection.get("screen_x", VIEWPORT_SIZE.x * 0.5))   # Keep the actual projected world X; do not pin the player to a screen edge.
-		var truth_feet_y := float(truth_projection.get("feet_y", VIEWPORT_SIZE.y))              # Let the elevated-camera projection continue beneath the player instead of holding their feet at the bottom.
+		var truth_feet_y := float(truth_projection.get("feet_y", VIEWPORT_SIZE.y))
+		if active_player_index < player_states.size():
+			truth_feet_y -= _dive_vault_lift(player_states[active_player_index]) * projected_height / 0.36              # Let the elevated-camera projection continue beneath the player instead of holding their feet at the bottom.
 		player_sprite.scale = Vector2.ONE * truth_scale
 		var truth_center := Vector2(truth_screen_x, _sprite_center_y_for_feet(player_sprite, truth_feet_y, truth_scale)) # Build the unmodified billboard location from real world truth.
 		player_sprite.position = _near_view_retained_sprite_center(player_sprite, truth_center, truth_scale) # Optionally retain a small top/edge strip only after natural viewport travel would fully remove it.
@@ -16107,7 +16552,7 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 	var target_in_viewer_near_cell := use_near_cell_motion_envelope and not use_continuous_world_projection_for_near_actors and _world_position_is_in_active_player_cell(target_world) # Preserve the old envelope only when deliberately comparing it; Option 1 gives every same-cell actor the shared continuous point projection.
 	var projection := _near_cell_motion_projection(_near_cell_local_position_for_world(target_world)) if target_in_viewer_near_cell else _opponent_projection_from_current_camera(target_world, true, use_continuous_world_projection_for_near_actors) # Option 1 selects the unclamped effect projector for same-cell opponents, matching bullets and smoke exactly.
 	var screen_x := float(projection["screen_x"])                                               # Read the projected opponent x coordinate.
-	var feet_y := float(projection["feet_y"])                                                   # Read the projected opponent foot/shadow ground coordinate.
+	var feet_y := float(projection["feet_y"]) - _dive_vault_lift(other_state) * float(projection.get("continuous_actor_height", projection["actor_height"])) / 0.36
 	# NPCs use the same continuous world-perspective height as props and effects;
 	# never apply the retired protected-near actor scale band.
 	var actor_height := float(projection.get("continuous_actor_height", projection["actor_height"]))
@@ -16652,11 +17097,16 @@ func _world_position_is_in_active_player_cell(target_world: Vector2) -> bool:
 
 
 
-# _world_point_has_clear_camera_line: Tests a point-sized visual such as a
-# travelling bullet against the exact live camera point. Unlike body visibility,
-# a bullet needs only one ray and may be hidden as soon as a wall is between it
-# and this view.
-func _world_point_has_clear_camera_line(target_world: Vector2) -> bool:
+func _projectile_has_clear_camera_line(target_world: Vector2, projectile_height: float) -> bool:
+	if projectile_height >= 0.0 and active_player_index < coordinate_renderers.size():
+		var renderer: Node = coordinate_renderers[active_player_index]
+		if is_instance_valid(renderer):
+			return bool(renderer.runtime_world_point_has_clear_camera_line_for_current_pose(target_world, false, projectile_height))
+	return _world_point_has_clear_camera_line(target_world)
+
+
+# Point effects use the camera's exact ray instead of an actor's visibility fan.
+func _world_point_has_clear_camera_line(target_world: Vector2, see_through_porch_rail := false) -> bool:
 	# The third-person renderer may deliberately hide the single wall face between
 	# its rear camera and owning cowboy. Ask that exact renderer to apply the same
 	# exception here; bullets and muzzle smoke must not disappear behind a face
@@ -16668,7 +17118,7 @@ func _world_point_has_clear_camera_line(target_world: Vector2) -> bool:
 			if is_instance_valid(candidate_renderer) and candidate_renderer.has_method("runtime_world_point_has_clear_camera_line_for_current_pose"):
 				coordinate_renderer = candidate_renderer
 		if coordinate_renderer != null:
-			return bool(coordinate_renderer.call("runtime_world_point_has_clear_camera_line_for_current_pose", target_world))
+			return bool(coordinate_renderer.call("runtime_world_point_has_clear_camera_line_for_current_pose", target_world, see_through_porch_rail))
 	var origin := _runtime_camera_origin_for_visibility()
 	var to_target := target_world - origin
 	var target_distance := to_target.length()
@@ -16992,7 +17442,16 @@ func _show_dive_roll(sprite: AnimatedSprite2D, state: Dictionary, direction: Str
 		sprite.play(animation)
 	sprite.pause()
 	var elapsed := float(state.get("dive_elapsed", 0.0))
-	sprite.set_frame_and_progress(clampi(int(elapsed * 12.0), 0, 12), 0.0)
+	var frame := int(elapsed * 12.0)
+	var vault: Dictionary = state.get("dive_vault", {})
+	if vault.has("window"):
+		# Reach the existing tucked poses by the time the cowboy hits the sill.
+		var roll_direction: Vector2 = state["dive_direction"]
+		var distance := (_player_state_world_position(state) - Vector2(vault["origin"])).dot(roll_direction)
+		var sill_distance := (Vector2(vault["crossing"]) - Vector2(vault["origin"])).dot(roll_direction)
+		var progress := clampf(distance / maxf(sill_distance - 0.02, 0.05), 0.0, 1.0)
+		frame = maxi(frame, roundi(progress * 7.0))
+	sprite.set_frame_and_progress(clampi(frame, 0, 12), 0.0)
 	return true
 
 
@@ -18026,19 +18485,39 @@ func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:         
 
 
 
+func town_roof_rects() -> Array[Rect2i]:
+	var roofs: Array[Rect2i] = []
+	for origin: Vector2i in TOWN_BUILDING_ORIGINS:
+		roofs.append(STOREFRONT_STYLE.FOOTPRINT if origin == TOWN_STOREFRONT_SLOT else Rect2i(origin, TOWN_BUILDING_SIZE))
+	return roofs
+
+
 func town_has_roof(cell: Vector2i) -> bool:
 	if outdoor_town:
 		for origin: Vector2i in TOWN_BUILDING_ORIGINS:
-			if Rect2i(origin, TOWN_BUILDING_SIZE).has_point(cell):
+			var roof: Rect2i = STOREFRONT_STYLE.FOOTPRINT if origin == TOWN_STOREFRONT_SLOT else Rect2i(origin, TOWN_BUILDING_SIZE)
+			if roof.has_point(cell):
 				return true
 	return false
 
 
+func town_walk_height(world: Vector2) -> float:
+	if outdoor_town and (STOREFRONT_STYLE.porch_rect().has_point(world) or Rect2(STOREFRONT_STYLE.FOOTPRINT).has_point(world)):
+		return STOREFRONT_STYLE.porch_height
+	return 0.0
+
+
 func _build_outdoor_town_wall_edges() -> void:
+	storefront_open_doors.clear()
+	storefront_closing_doors.clear()
+	storefront_glass_broken = false
+	storefront_window_vaulted = false
 	town_doorways.clear()
-	for origin: Vector2i in TOWN_BUILDING_ORIGINS:
-		town_doorways.append([origin + Vector2i(1, 0), origin + Vector2i(1, -1)])
-		town_doorways.append([origin + Vector2i(1, 2), origin + Vector2i(1, 3)])
+	for roof: Rect2i in town_roof_rects():
+		var north := roof.position + Vector2i(roof.size.x / 2, 0)
+		var south := north + Vector2i(0, roof.size.y - 1)
+		town_doorways.append([north, north + Vector2i.UP])
+		town_doorways.append([south, south + Vector2i.DOWN])
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
 			var cell := Vector2i(x, y)
