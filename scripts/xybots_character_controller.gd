@@ -46,8 +46,20 @@ const STRAFE_LEFT_WALL_CONTACT_X := 0.0                                         
 const STRAFE_RIGHT_WALL_CONTACT_X := 1.0                                                    # Set the right tile-edge contact; camera clipping trims any body pixels beyond the frame.
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
-const MAP_WIDTH := 6                                                                        # Add one long-distance combat cell so the runtime depth treatment can be tested beyond the old compact arena.
-const MAP_HEIGHT := 6                                                                       # Keep the shared combat map square while exposing the renderer's deepest useful range.
+const INDOOR_MAP_SIZE := 6
+const OUTDOOR_MAP_SIZE := 12
+const TOWN_DRAW_DEPTH_RANGE := 19.0
+const TOWN_BUILDING_ORIGINS := [Vector2i(2, 2), Vector2i(7, 2), Vector2i(2, 7), Vector2i(7, 7)]
+const TOWN_BUILDING_SIZE := Vector2i(3, 3)
+const TOWN_PLAYER_START := Vector2i(5, 11)
+
+var outdoor_town := false
+var MAP_WIDTH: int:
+	get: return OUTDOOR_MAP_SIZE if outdoor_town else INDOOR_MAP_SIZE
+var MAP_HEIGHT: int:
+	get: return MAP_WIDTH
+var town_doorways: Array[Array] = []
+
 const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
 const TEMP_RANDOM_GRID_AUDIT := false                                                       # Keep the temporary one-player slot audit off while local multiplayer gameplay is active.
 const TEMP_GRID_AUDIT := TEMP_EMPTY_GRID_AUDIT or TEMP_RANDOM_GRID_AUDIT                    # Keep the temporary audit layout single-player and side-by-side in either test mode.
@@ -808,11 +820,11 @@ const TURN_45_OCCLUSION_BRANCHES := [                                           
 ]                                                                                           # Close the 45-degree occlusion branch table.
 
 const AUDIT_START_ENABLED := false                                                          # Start both players in ordinary opposite-corner gameplay spawns rather than a pinned audit frame.
-const AUDIT_P1_CELL := Vector2i(0, MAP_HEIGHT - 1)                                          # Match the left guide panel's player-one source-map cell.
+const AUDIT_P1_CELL := Vector2i(0, INDOOR_MAP_SIZE - 1)                                   # Match the left guide panel's player-one source-map cell.
 const AUDIT_P1_FACING := 0                                                                   # Point player one north before applying the temporary 45-degree turn.
 const AUDIT_P1_TURN_45_DIRECTION := 1                                                       # Stop player one on the NE halfway-turn audit view.
 const AUDIT_P1_LOCAL_POSITION := Vector2(0.63, 0.84)                                        # Match the player-one local position shown in gridCorrector.png.
-const AUDIT_P2_CELL := Vector2i(0, MAP_HEIGHT - 1)                                          # Match the right guide panel's player-two source-map cell.
+const AUDIT_P2_CELL := Vector2i(0, INDOOR_MAP_SIZE - 1)                                   # Match the right guide panel's player-two source-map cell.
 const AUDIT_P2_FACING := 0                                                                   # Keep player two on the cardinal north audit view.
 const AUDIT_P2_TURN_45_DIRECTION := 0                                                       # Keep player two out of the halfway-turn view for the right guide panel.
 const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                                        # Match the player-two local position shown in gridCorrector.png.
@@ -2148,7 +2160,7 @@ func _input(event: InputEvent) -> void:                                         
 		get_viewport().set_input_as_handled()
 		_open_feedback()
 		return
-	if _public_build():
+	if _public_build() or outdoor_town:
 		if mobile_controls == null and event is InputEventMouseMotion and not player_states.is_empty() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not match_paused and not clear_map_waiting_to_start:
 			player_states[0]["continuous_camera_yaw"] = wrapf(float(player_states[0].get("continuous_camera_yaw", 0.0)) + event.relative.x * 0.003, -PI, PI)
 		elif mobile_controls == null and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not match_paused and not debug_menu_open:
@@ -2814,7 +2826,7 @@ func _setup_local_multiplayer() -> void:                                        
 	if TEMP_GRID_AUDIT or barrel_authoring_single_player_mode:                                 # Keep focused audits and barrel paint authoring free of extra camera views.
 		player_views = [{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": null}] # Retain only player one's existing view nodes.
 		player_states.clear()
-		player_states.append(_make_player_state(0, Vector2i(4, 4), 0) if TEMP_GRID_AUDIT else _make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0)) # Preserve the audit start while the barrel gallery uses the normal P1 start.
+		player_states.append(_make_player_state(0, Vector2i(4, 4), 0) if TEMP_GRID_AUDIT else _make_player_state(0, TOWN_PLAYER_START if outdoor_town else Vector2i(0, MAP_HEIGHT - 1), 0)) # Preserve the audit start while the barrel gallery uses the normal P1 start.
 		_bind_player_context(0)                                                                   # Bind the sole test player into the legacy renderer globals.
 		return                                                                                    # Skip creating player two's view and opponent sprites.
 	status_label.visible = false                                                                  # The separate player windows use focused HUD elements instead of the old shared debug readout.
@@ -2960,7 +2972,7 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 			_make_audit_player_state(0, AUDIT_P1_CELL, AUDIT_P1_FACING, AUDIT_P1_TURN_45_DIRECTION, AUDIT_P1_LOCAL_POSITION), # Start player one on the NE guide panel state.
 			_make_audit_player_state(1, AUDIT_P2_CELL, AUDIT_P2_FACING, AUDIT_P2_TURN_45_DIRECTION, AUDIT_P2_LOCAL_POSITION), # Start player two on the north guide panel state.
 		]                                                                                         # Close the audit state list.
-	var states: Array[Dictionary] = [_make_player_state(0, Vector2i(0, MAP_HEIGHT - 1), 0)]
+	var states: Array[Dictionary] = [_make_player_state(0, TOWN_PLAYER_START if outdoor_town else Vector2i(0, MAP_HEIGHT - 1), 0)]
 	for player_index in range(1, player_joined.size()):
 		states.append(_make_player_state(player_index, _greenshirt_spawn_cell(player_index), 2 if _greenshirt_spawn_cell(player_index).y == 0 else 0))
 	return states
@@ -4856,8 +4868,8 @@ func _reset_combat_collectibles() -> void:
 	world_barrel_guns.clear()
 	_reset_world_barrels()                                                                     # Scatter normal props, or place the one centered review barrel.
 	_reset_combat_round()                                                                     # Restart the shared match clock and clear any prior frozen result with the new map.
-	if BARREL_LOD_REVIEW_LEVEL:
-		combat_total_coin_value = 0                                                             # Keep the focused review HUD honest: this map intentionally has no collectible objective.
+	if BARREL_LOD_REVIEW_LEVEL or outdoor_town:
+		combat_total_coin_value = 0                                                             # Exploration and visual review have no collectible objective.
 		machine_gun_pickup = {}                                                                  # Exclude every unrelated prop from the visual LOD review.
 		machine_gun_respawn_timer = 0.0
 		return                                                                                   # Leave the arena containing only its players and the one barrel.
@@ -4925,7 +4937,14 @@ func _reset_world_barrels() -> void:
 					break
 			if not occupied:
 				candidates.append(cell)
-	var dining_cell := _find_dining_set_room_cell()
+	if outdoor_town:
+		# Two furnishings in each building, then four pairs around the streets.
+		candidates.clear()
+		for origin: Vector2i in TOWN_BUILDING_ORIGINS:
+			candidates.append(origin + Vector2i(0, 1))
+			candidates.append(origin + Vector2i(2, 1))
+		candidates.append_array([Vector2i(1, 4), Vector2i(1, 6), Vector2i(5, 2), Vector2i(6, 3), Vector2i(10, 7), Vector2i(10, 9), Vector2i(5, 10), Vector2i(6, 10)])
+	var dining_cell := Vector2i(-1, -1) if outdoor_town else _find_dining_set_room_cell()
 	if semantic_typical_props_enabled and dining_cell.x >= 0:
 		# Keep the table cell and its immediate walking approaches clear of the
 		# ordinary barrel scatter, leaving actual circulation around the set.
@@ -4933,9 +4952,9 @@ func _reset_world_barrels() -> void:
 			if absi(candidates[index].x - dining_cell.x) <= 1 and absi(candidates[index].y - dining_cell.y) <= 1:
 				candidates.remove_at(index)
 	var cluster_cell := Vector2i(-1, -1)
-	for prop_index in range(mini(MAP_BARREL_COUNT, candidates.size())):
-		var chosen_index := randi() % candidates.size()
-		if prop_index % 2 == 1 and cluster_cell.x >= 0:
+	for prop_index in range(mini(16 if outdoor_town else MAP_BARREL_COUNT, candidates.size())):
+		var chosen_index := 0 if outdoor_town else randi() % candidates.size()
+		if not outdoor_town and prop_index % 2 == 1 and cluster_cell.x >= 0:
 			var best_distance := 999
 			for candidate_index in range(candidates.size()):
 				var candidate := candidates[candidate_index]
@@ -4971,7 +4990,7 @@ func _reset_world_barrels() -> void:
 				continue
 			world_barrels.append({"id": next_combat_visual_id, "position": position, "hits": 0})
 			next_combat_visual_id += 1                                                           # Give every prop a stable cache key across all player cameras.
-	if semantic_typical_props_enabled:
+	if semantic_typical_props_enabled and not outdoor_town:
 		_spawn_small_prop_cluster(candidates)
 	if semantic_typical_props_enabled and dining_cell.x >= 0:
 		_spawn_semantic_dining_set(dining_cell)
@@ -5333,6 +5352,8 @@ func _advance_combat_round(delta: float) -> void:
 
 # _spawn_machine_gun_pickup: Places the one contested pickup in a random non-occupied maze cell.
 func _spawn_machine_gun_pickup() -> void:
+	if outdoor_town:
+		return
 	var candidates: Array[Vector2i] = []                                                     # Build eligible cell choices rather than assuming a particular maze layout.
 	for y in range(MAP_HEIGHT):                                                               # Check every cell because all maze cells are traversable.
 		for x in range(MAP_WIDTH):                                                             # Add non-occupied cells to the spawn pool.
@@ -6115,7 +6136,7 @@ func _update_combat_hud() -> void:
 				var device_id := _xbox_joypad_id_for_player(player_index)
 				input_source = "PAD %d" % device_id if device_id >= 0 else "NO PAD"
 			name_label.text = "ROUNDS WON:%d" % clear_map_wins if clear_the_map_mode and player_index == 0 else "%s:%d [%s]" % [PLAYER_NAMES[player_index], int(state.get("kills", 0)), input_source]
-			name_label.visible = not (clear_the_map_mode and single_player_combat_view)
+			name_label.visible = not outdoor_town and not (clear_the_map_mode and single_player_combat_view)
 			var team_one_score := 0
 			var team_two_score := 0
 			for score_index in range(player_states.size()):
@@ -6125,7 +6146,7 @@ func _update_combat_hud() -> void:
 			team_label.position = viewport_node.position + Vector2(3.0, 12.0) * viewport_node.scale
 			team_label.scale = viewport_node.scale
 			team_label.text = "[color=#f2df47]KILL ALL THE OUTLAWS[/color]" if clear_the_map_mode and player_index == 0 else "[color=#b31973]Lawmen:%d[/color]  [color=#1b9e38]Outlaws:%d[/color]" % [team_one_score, team_two_score]
-			team_label.visible = not (clear_the_map_mode and single_player_combat_view)
+			team_label.visible = not outdoor_town and not (clear_the_map_mode and single_player_combat_view)
 			var board := scoreboard_labels[player_index]
 			var board_visible := not clear_the_map_mode and scoreboard_player_index == player_index
 			board.position = viewport_node.position + Vector2(2.0, 28.0) * viewport_node.scale
@@ -6224,7 +6245,7 @@ func _update_combat_hud() -> void:
 				if timer_view != null:
 					timer_label.position = timer_view.position + Vector2((VIEWPORT_SIZE.x * timer_view.scale.x - timer_label.size.x * timer_view.scale.x) * 0.5, 3.0)
 					timer_label.scale = timer_view.scale
-				if clear_the_map_mode:
+				if clear_the_map_mode or outdoor_town:
 					timer_label.visible = false
 					timer_label.text = ""
 				elif pause_round_timer_for_debug:
@@ -6299,7 +6320,7 @@ func _is_player_fire_pressed_for(player_index: int, consume_mobile := true) -> b
 		return false
 	if player_index == 0 and mobile_controls != null and (mobile_controls.take_fire() if consume_mobile else (mobile_controls.fire_pending or mobile_controls.pressed("fire"))):
 		return true
-	if player_index == 0 and _public_build() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if player_index == 0 and (_public_build() or outdoor_town) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		return true
 	var keyboard_fire: int = int([KEY_F, KEY_P, KEY_SLASH, KEY_KP_0][player_index])
 	if _is_key_down(keyboard_fire):
@@ -9401,6 +9422,7 @@ func _render_live_semantic_floor_footprints() -> void:
 					var crate_right := _view_right_vector().normalized()
 					var crate_camera_origin: Vector2 = crate_renderer.call("_runtime_camera_origin", crate_forward, crate_right)
 					var crate_projection_offset := _semantic_legacy_projection_offset(crate_renderer)
+					crate_outline.set("daylight_enabled", outdoor_town and not town_has_roof(Vector2i(center.floor())))
 					crate_outline.call("set_crate", center, float(footprint.get("side_length", 0.0)), float(footprint.get("depth", footprint.get("side_length", 0.0))), float(footprint.get("height", 0.0)), crate_camera_origin, crate_forward, crate_right, crate_projection_offset)
 			continue
 		if key.begins_with("barrel_gpu_lattice_instanced"):
@@ -9425,6 +9447,7 @@ func _render_live_semantic_floor_footprints() -> void:
 					var lattice_right := _view_right_vector().normalized()
 					var lattice_camera_origin: Vector2 = lattice_renderer.call("_runtime_camera_origin", lattice_forward, lattice_right)
 					var lattice_projection_offset := _semantic_legacy_projection_offset(lattice_renderer)
+					lattice_outline.set("daylight_enabled", outdoor_town and not town_has_roof(Vector2i(center.floor())))
 					lattice_outline.call("set_barrel", center, half_side, float(footprint.get("height", 0.0)), lattice_camera_origin, lattice_forward, lattice_right, lattice_projection_offset)
 			continue
 		if bool(footprint.get("cylinder", false)):
@@ -16232,7 +16255,7 @@ func _opponent_projection_from_current_camera(target_world: Vector2, draw_after_
 func _world_cell_draw_depth(world_position: Vector2, camera_origin: Vector2, forward: Vector2) -> float:
 	var cell := _world_cell_for_draw_depth(world_position, camera_origin)
 	var cell_center := Vector2(float(cell.x) + 0.5, float(cell.y) + 0.5)
-	return clampf((cell_center - camera_origin).dot(forward), 0.0, WORLD_DRAW_DEPTH_RANGE)
+	return clampf((cell_center - camera_origin).dot(forward), 0.0, TOWN_DRAW_DEPTH_RANGE if outdoor_town else WORLD_DRAW_DEPTH_RANGE)
 
 
 # _world_cell_for_draw_depth: Gives a point resting exactly on a thin grid wall
@@ -16379,7 +16402,9 @@ func _front_wall_height_at_view_depth(view_depth: float) -> float:              
 
 # _character_layer_for_view_depth: Places every projected world object on one shared back-to-front depth scale.
 func _character_layer_for_view_depth(view_depth: float) -> int:                             # Declare this function.
-	return roundi((WORLD_DRAW_DEPTH_RANGE - clampf(view_depth, 0.0, WORLD_DRAW_DEPTH_RANGE)) * WORLD_DRAW_DEPTH_SCALE) # Nearer geometry receives the later Canvas draw layer.
+	var draw_range := TOWN_DRAW_DEPTH_RANGE if outdoor_town else WORLD_DRAW_DEPTH_RANGE
+	var draw_scale := 200.0 if outdoor_town else WORLD_DRAW_DEPTH_SCALE
+	return roundi((draw_range - clampf(view_depth, 0.0, draw_range)) * draw_scale) # Nearer geometry receives the later Canvas draw layer.
 
 
 # _world_actor_draw_layer: Returns a wall-cell layer plus a bounded real-depth tie-breaker so bodies/props inside one cell paint in their actual front-to-back order.
@@ -17999,10 +18024,38 @@ func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:         
 
 
 
-# _build_random_maze_wall_edges: Builds a generated 4x4 thin-wall maze with closed outside borders.
+func town_has_roof(cell: Vector2i) -> bool:
+	if outdoor_town:
+		for origin: Vector2i in TOWN_BUILDING_ORIGINS:
+			if Rect2i(origin, TOWN_BUILDING_SIZE).has_point(cell):
+				return true
+	return false
+
+
+func _build_outdoor_town_wall_edges() -> void:
+	town_doorways.clear()
+	for origin: Vector2i in TOWN_BUILDING_ORIGINS:
+		town_doorways.append([origin + Vector2i(1, 0), origin + Vector2i(1, -1)])
+		town_doorways.append([origin + Vector2i(1, 2), origin + Vector2i(1, 3)])
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			var roofed := town_has_roof(cell)
+			var edges := {}
+			for direction: Vector2i in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+				var neighbor := cell + direction
+				var doorway := town_doorways.has([cell, neighbor]) or town_doorways.has([neighbor, cell])
+				edges[_edge_from_delta(direction)] = not _is_open_cell(neighbor) or (roofed != town_has_roof(neighbor) and not doorway)
+			wall_edges[cell] = edges
+	grid_position = TOWN_PLAYER_START
+
+
 func _build_random_maze_wall_edges() -> void:                                               # Declare this function.
 	physical_wall_edges_cache_dirty = true                                                    # A rerolled maze invalidates the retained unique physical wall list.
 	wall_edges.clear()                                                                         # Clear any previous map wall data before generating the maze.
+	if outdoor_town:
+		_build_outdoor_town_wall_edges()
+		return
 	for y in range(MAP_HEIGHT):                                                                # Iterate through every row in the 4x4 map.
 		for x in range(MAP_WIDTH):                                                               # Iterate through every column in the 4x4 map.
 			var cell := Vector2i(x, y)                                                              # Build the current map cell coordinate.

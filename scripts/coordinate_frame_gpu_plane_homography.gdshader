@@ -301,12 +301,17 @@ vec3 semantic_plane_distance_contrast(vec3 material_color, vec3 material_average
 	return mix(material_average, material_color, contrast);
 }
 
+#include "res://scripts/coordinate_frame_daylight.gdshaderinc"
+
+uniform float far_depth = 5.5;
+uniform bool use_town_dirt = false;
+
 void fragment() {
 	vec2 pixel = floor(UV * canvas_size) + vec2(0.5);
 	float screen_delta = pixel.y - horizon_y - projection_offset.y;
 	if (abs(screen_delta) < 0.00001) discard;
 	float depth = plane_height_delta * focal_length / screen_delta;
-	if (depth <= 0.0 || depth > 5.5) discard;
+	if (depth <= 0.0 || depth > far_depth) discard;
 	vec2 source_uv = plane_uv(pixel);
 	// The world-to-cell test is exact: only one plane cell owns a screen pixel.
 	// Do not overdraw and clamp neighboring floor cells here; that old CPU seam
@@ -326,7 +331,12 @@ void fragment() {
 		}
 	}
 	vec4 result;
-	if (use_semantic_floor_material) {
+	if (use_town_dirt) {
+		vec2 texel = floor((cell_world + source_uv) * 64.0);
+		float fleck = fract(sin(dot(texel, vec2(127.1, 311.7))) * 43758.5453);
+		float grain = (floor(fleck * 4.0) - 1.5) * 0.014 / (1.0 + depth * 0.25);
+		result = vec4(vec3(0.74, 0.55, 0.29) + grain, 1.0);
+	} else if (use_semantic_floor_material) {
 		vec3 floor_color = semantic_floor_material(source_uv, span_x, span_y);
 		vec3 floor_average = vec3(118.0, 94.0, 71.0) / 255.0;
 		result = vec4(semantic_plane_distance_contrast(floor_color, floor_average, depth), 1.0);
@@ -363,5 +373,5 @@ void fragment() {
 	// bright texture-colored stripe when the underlying floor/ceiling texel is pale.
 	if (at_wall_plane_corner) result.rgb = min(result.rgb * 0.82, vec3(0.46));
 	float light = use_depth_light_dither ? depth_light_dither(depth, pixel) : depth_light(depth);
-	COLOR = vec4(result.rgb * light, result.a);
+	COLOR = vec4(use_daylight ? daylight_color(result.rgb, depth) : result.rgb * light, result.a);
 }

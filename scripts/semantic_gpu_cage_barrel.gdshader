@@ -245,6 +245,8 @@ void vertex() {
 	cage_height = height_fraction;
 }
 
+#include "res://scripts/coordinate_frame_daylight.gdshaderinc"
+
 void fragment() {
 	float stave_visibility = distance_visibility(stave_detail_full_distance, stave_detail_hidden_distance);
 	float hoop_span = max(hoop_accent_hidden_distance - hoop_accent_full_distance, 0.01);
@@ -354,5 +356,8 @@ void fragment() {
 		// camera-facing centre catches the bright metal colour.
 		float side_to_side_light = pow(clamp(cage_facing, 0.0, 1.0), 3.0);
 		COLOR = mix(metal_dark, metal_light, side_to_side_light);
+	}
+	if (use_daylight && component != 2) {
+		COLOR.rgb = daylight_color(COLOR.rgb, dot(barrel_center - camera_origin, camera_forward));
 	}
 }

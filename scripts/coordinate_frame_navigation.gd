@@ -5,9 +5,18 @@ extends Node2D
 const ORIGINAL_GAME := preload("res://main.tscn")
 const RUNTIME_RENDERER := preload("res://scripts/coordinate_frame_runtime_renderer.gd")
 
+@export var outdoor_town := false
+
+
 func _ready() -> void:
 	var game := ORIGINAL_GAME.instantiate()
 	game.name = "CoordinateFrameGame"
+	if outdoor_town:
+		game.outdoor_town = true
+		game.clear_the_map_mode = false
+		game.single_player_sandbox_mode = true
+		game.combat_round_duration_seconds = 0.0
+		game.show_top_down_source_overlay = false
 	add_child(game)
 	# The controller creates its two local view contexts during _ready().  Wait one
 	# frame before attaching the coordinate compositors so each receives a stable,

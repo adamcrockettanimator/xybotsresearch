@@ -332,6 +332,8 @@ vec4 fragment_raster_effect_colour() {
 	return shadow > 0.001 ? vec4(inset_shadow_color.rgb, shadow) : vec4(0.0);
 }
 
+#include "res://scripts/coordinate_frame_daylight.gdshaderinc"
+
 void fragment() {
 	vec2 lattice_coord = face_uv();
 	if (face_index == 5) {
@@ -508,5 +510,8 @@ void fragment() {
 				COLOR = vec4(brace_paint, brace_alpha);
 			} else discard;
 		}
+	}
+	if (use_daylight && face_index != 5) {
+		COLOR.rgb = daylight_color(COLOR.rgb, dot(crate_center - camera_origin, camera_forward));
 	}
 }

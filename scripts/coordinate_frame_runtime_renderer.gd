@@ -57,6 +57,10 @@ const TEMPLATE_ROOT := "res://assets/CoordinateFrames/"
 const MAX_WALLS := 28
 const NEAR_CLIP := 0.075
 const MAX_DEPTH := 5.5
+const TOWN_MAX_DEPTH := 18.0
+const TOWN_FENCE = preload("res://assets/Environment/Outdoor/fence.png")
+const TOWN_HORIZON = preload("res://assets/Environment/Outdoor/day_horizon.png")
+const TOWN_HORIZON_SHADER = preload("res://scripts/coordinate_frame_day_horizon.gdshader")
 # Match the Blender reference camera exactly: 28.8 mm / 36 mm × 160 px.
 const FOCAL_LENGTH := 128.0
 const CAMERA_CUTAWAY_DITHER_HALF_WIDTH_PIXELS := 26.0
@@ -114,6 +118,7 @@ var floor_render_texture: ImageTexture
 var floor_source_image: Image
 var floor_source_texture: Texture2D
 var floor_mip_images: Array[Image] = []
+var town_fence_image: Image
 var runtime_ceiling_layer: Node2D
 var ceiling_art_sprite: Sprite2D
 var ceiling_render_image: Image
@@ -401,6 +406,15 @@ func _initialize() -> void:
 	runtime_black_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	runtime_black_backdrop.z_index = -1
 	controller.environment_layer.add_child(runtime_black_backdrop)
+	if controller.outdoor_town:
+		town_fence_image = TOWN_FENCE.get_image()
+		var sky_material := ShaderMaterial.new()
+		sky_material.shader = TOWN_HORIZON_SHADER
+		sky_material.set_shader_parameter("horizon_strip", TOWN_HORIZON)
+		sky_material.set_shader_parameter("canvas_size", VIEW_SIZE)
+		sky_material.set_shader_parameter("focal_length", FOCAL_LENGTH)
+		sky_material.set_shader_parameter("camera_height", VIRTUAL_CAMERA_HEIGHT)
+		runtime_black_backdrop.material = sky_material
 	coordinate_background = Sprite2D.new()
 	coordinate_background.name = "CoordinateFrameBackground"
 	coordinate_background.centered = false
@@ -1000,7 +1014,9 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 			sprite.visible = false
 			continue
 		var material := gpu_wall_materials[index]
-		var source_texture: Texture2D = wall_source_texture
+		var fence: bool = controller.outdoor_town and _is_exterior_wall_entry(entry)
+		var daylight: bool = controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["facing_cell"]))
+		var source_texture: Texture2D = TOWN_FENCE if fence else wall_source_texture
 		var source_size: Vector2 = Vector2(source_texture.get_size()) if source_texture != null else Vector2.ONE
 		var use_layers := wall_parallax_enabled and wall_layer1_texture != null and wall_layer2_texture != null
 		# Wall-art props retain their own three-depth parallax even when the legacy
@@ -1044,7 +1060,10 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("cutaway_contact_b", Vector2(entry.get("camera_cutaway_contact_b", Vector2.ZERO)))
 		material.set_shader_parameter("cutaway_inner_radius", float(entry.get("camera_cutaway_inner_radius", 0.0)))
 		material.set_shader_parameter("cutaway_fade_width", float(entry.get("camera_cutaway_fade_width", 0.01)))
-		var use_gpu_mips := integer_uv_scale_snap_enabled and gpu_wall_base_mip_texture != null
+		var use_gpu_mips := not fence and integer_uv_scale_snap_enabled and gpu_wall_base_mip_texture != null
+		material.set_shader_parameter("use_daylight", daylight)
+		material.set_shader_parameter("use_town_fence", fence)
+		material.set_shader_parameter("use_town_lintel", bool(entry.get("lintel", false)))
 		material.set_shader_parameter("base_texture", gpu_wall_base_mip_texture if use_gpu_mips else source_texture)
 		material.set_shader_parameter("base_texture_size", source_size)
 		material.set_shader_parameter("use_integer_uv_scale_snap", use_gpu_mips)
@@ -1458,7 +1477,7 @@ func _visible_floor_cells() -> Array[Dictionary]:
 			# cells that cross the near plane: their visible part is reconstructed
 			# analytically in _rasterize_floor_cell instead of being dropped because
 			# two authored dots are outside the frame.
-			if farthest_depth <= 0.0 or nearest_depth >= MAX_DEPTH:
+			if farthest_depth <= 0.0 or nearest_depth >= _max_view_depth():
 				continue
 			var bounds := _quad_bounds(quad)
 			if not bounds.intersects(Rect2(Vector2.ZERO, VIEW_SIZE)):
@@ -1469,7 +1488,7 @@ func _visible_floor_cells() -> Array[Dictionary]:
 				"origin": camera_origin,
 				"forward": forward,
 				"right": right,
-				"depth": clampf((maxf(nearest_depth, NEAR_CLIP) + maxf(farthest_depth, NEAR_CLIP)) * 0.5, NEAR_CLIP, MAX_DEPTH),
+				"depth": clampf((maxf(nearest_depth, NEAR_CLIP) + maxf(farthest_depth, NEAR_CLIP)) * 0.5, NEAR_CLIP, _max_view_depth()),
 			})
 	# Far-to-near retains predictable ownership at shared cell borders.
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
@@ -1638,6 +1657,10 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("floor_light_dither_near_half_width_pixels", depth_dither_near_half_width_pixels)
 		material.set_shader_parameter("floor_light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
 		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
+		var daylight: bool = controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["cell"]))
+		material.set_shader_parameter("use_daylight", daylight)
+		material.set_shader_parameter("use_town_dirt", daylight)
+		material.set_shader_parameter("far_depth", _max_view_depth())
 		material.set_shader_parameter("use_semantic_floor_material", semantic_floor_material_enabled and active_floor_texture_label == "WoodFloor2")
 		material.set_shader_parameter("use_semantic_ceiling_material", false)
 		_apply_semantic_plane_ewa_tuning_to_material(material)
@@ -1668,7 +1691,7 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 		if vertical_screen_delta <= 0.0001:
 			continue
 		var depth := VIRTUAL_CAMERA_HEIGHT * FOCAL_LENGTH / vertical_screen_delta
-		if depth <= 0.0 or depth > MAX_DEPTH:
+		if depth <= 0.0 or depth > _max_view_depth():
 			continue
 		for x in range(min_x, max_x + 1):
 			var side := (float(x) - VIEW_SIZE.x * 0.5 - projection_offset.x) * depth / FOCAL_LENGTH
@@ -1679,6 +1702,9 @@ func _rasterize_floor_cell(entry: Dictionary) -> void:
 			# the GPU wall pass, while the wall itself remains the visible owner.
 			var edge_margin := clampf(depth / FOCAL_LENGTH * float(FLOOR_EDGE_OVERDRAW_PIXELS + 1), 0.002, 0.05)
 			if uv.x < -edge_margin or uv.x > 1.0 + edge_margin or uv.y < -edge_margin or uv.y > 1.0 + edge_margin:
+				continue
+			if controller.outdoor_town and not controller.town_has_roof(cell):
+				floor_render_image.set_pixel(x, y, _daylight_color(Color(0.74, 0.55, 0.29), depth))
 				continue
 			var color := _sample_image_nearest(floor_source_image, uv.clamp(Vector2.ZERO, Vector2.ONE))
 			var light := _floor_depth_light(depth, Vector2(x, y))                                   # Dither only the depth-lighting threshold, never the texture or its cell ownership.
@@ -1737,6 +1763,8 @@ func _visible_ceiling_cells() -> Array[Dictionary]:
 	for y in range(int(controller.MAP_HEIGHT)):
 		for x in range(int(controller.MAP_WIDTH)):
 			var cell := Vector2i(x, y)
+			if controller.outdoor_town and not controller.town_has_roof(cell):
+				continue
 			var world_corners := [
 				Vector2(cell.x, cell.y),
 				Vector2(cell.x + 1, cell.y),
@@ -1751,7 +1779,7 @@ func _visible_ceiling_cells() -> Array[Dictionary]:
 				nearest_depth = minf(nearest_depth, local.y)
 				farthest_depth = maxf(farthest_depth, local.y)
 				quad.append(_project_view_point(local, WALL_HEIGHT))
-			if farthest_depth <= 0.0 or nearest_depth >= MAX_DEPTH:
+			if farthest_depth <= 0.0 or nearest_depth >= _max_view_depth():
 				continue
 			if not _quad_bounds(quad).intersects(Rect2(Vector2.ZERO, VIEW_SIZE)):
 				continue
@@ -1761,7 +1789,7 @@ func _visible_ceiling_cells() -> Array[Dictionary]:
 				"origin": camera_origin,
 				"forward": forward,
 				"right": right,
-				"depth": clampf((maxf(nearest_depth, NEAR_CLIP) + maxf(farthest_depth, NEAR_CLIP)) * 0.5, NEAR_CLIP, MAX_DEPTH),
+				"depth": clampf((maxf(nearest_depth, NEAR_CLIP) + maxf(farthest_depth, NEAR_CLIP)) * 0.5, NEAR_CLIP, _max_view_depth()),
 			})
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	return result
@@ -1854,6 +1882,7 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("semantic_plane_contrast_flat_depth", maxf(semantic_plane_contrast_flat_depth, semantic_plane_contrast_full_depth + 0.01))
 		material.set_shader_parameter("layer1_offset", layer_offset * layer1_weight)
 		material.set_shader_parameter("layer2_offset", layer_offset * layer2_weight)
+		material.set_shader_parameter("far_depth", _max_view_depth())
 		material.set_shader_parameter("plane_height_delta", VIRTUAL_CAMERA_HEIGHT - WALL_HEIGHT)
 	ceiling_art_sprite.visible = false
 	return entries.size()
@@ -1882,7 +1911,7 @@ func _rasterize_ceiling_cell(entry: Dictionary) -> void:
 		if absf(vertical_screen_delta) <= 0.0001:
 			continue
 		var depth := height_delta * FOCAL_LENGTH / vertical_screen_delta
-		if depth <= 0.0 or depth > MAX_DEPTH:
+		if depth <= 0.0 or depth > _max_view_depth():
 			continue
 		for x in range(min_x, max_x + 1):
 			var side := (float(x) - VIEW_SIZE.x * 0.5 - projection_offset.x) * depth / FOCAL_LENGTH
@@ -1957,10 +1986,12 @@ func _rasterize_wall_entry(entry: Dictionary) -> void:
 			var color := _sample_projected_wall(entry, row0, row1, row2, Vector2(x, y), uv)
 			if color.a <= 0.0:
 				continue
-			var light := _floor_depth_light(lerpf(depths.x, depths.y, uv.x), Vector2(x, y))
-			color.r *= light
-			color.g *= light
-			color.b *= light
+			var depth := lerpf(depths.x, depths.y, uv.x)
+			if controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["facing_cell"])):
+				color = _daylight_color(color, depth)
+			else:
+				var light := _floor_depth_light(depth, Vector2(x, y))
+				color = Color(color.r * light, color.g * light, color.b * light, color.a)
 			color.a *= float(entry.get("camera_cutaway_opacity", 1.0))
 			if bool(entry.get("camera_cutaway_fade", false)):
 				var coverage := _camera_cutaway_pixel_coverage(entry, uv)
@@ -2007,6 +2038,10 @@ func _inverse_homography_uv(row0: Vector3, row1: Vector3, row2: Vector3, pixel: 
 # it.  Their relative UV shift is driven solely by view obliqueness, not a
 # height field, so an artist can control relief directly in the two bitmaps.
 func _sample_projected_wall(entry: Dictionary, row0: Vector3, row1: Vector3, row2: Vector3, pixel: Vector2, uv: Vector2) -> Color:
+	if bool(entry.get("lintel", false)):
+		return Color(0.34, 0.23, 0.14) if uv.y <= 0.17 else Color.TRANSPARENT
+	if town_fence_image != null and _is_exterior_wall_entry(entry):
+		return _sample_image_nearest(town_fence_image, Vector2(uv.x, (uv.y - 0.45) / 0.55)) if uv.y >= 0.45 else Color.TRANSPARENT
 	if wall_parallax_enabled and wall_layer1_image != null and wall_layer2_image != null:
 		var view_offset := _layer_parallax_uv_offset(entry)
 		# -1 = Layer 1 moves and Layer 2 stays; 0 = equal/opposite; +1 = Layer
@@ -2047,6 +2082,12 @@ func _is_exterior_wall_entry(entry: Dictionary) -> bool:
 
 
 func _wall_entry_gets_window(entry: Dictionary) -> bool:
+	if controller.outdoor_town:
+		if controller.town_has_roof(Vector2i(entry["facing_cell"])) or _is_exterior_wall_entry(entry):
+			return false
+		var a := Vector2i(entry["world_a"])
+		var b := Vector2i(entry["world_b"])
+		return posmod(mini(a.x, b.x) + mini(a.y, b.y), 2) == 0
 	if not _is_exterior_wall_entry(entry):
 		return false
 	# Alternate by the physical segment's map position, rather than a hash: this
@@ -2217,6 +2258,12 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		if _segment_intersects_view_frustum(first_candidate, second_candidate):
 			edges_by_key[String(physical_edge["key"])] = physical_edge
 	var physical_edges: Array = edges_by_key.values()
+	if controller.outdoor_town:
+		for doorway: Array in controller.town_doorways:
+			var a := Vector2(doorway[0])
+			if doorway[1].y > doorway[0].y:
+				a.y += 1.0
+			physical_edges.append({"key": "lintel:%s" % a, "a": a, "b": a + Vector2.RIGHT, "lintel": true})
 	for edge in physical_edges:
 		# Keep the source wall's complete physical endpoints.  A ray-visible span
 		# may tell us that only half this wall is exposed, but shortening the quad
@@ -2237,6 +2284,7 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var cell_draw_depth := maxf((facing_center - camera_origin).dot(forward), NEAR_CLIP)
 		var projected_entry := {
 			"edge_key": String(edge["key"]),
+			"lintel": bool(edge.get("lintel", false)),
 			"camera_origin": camera_origin,
 			"world_a": Vector2(edge["a"]),
 			"world_b": Vector2(edge["b"]),
@@ -2303,6 +2351,8 @@ func _cell_wall_edge_mask(cell: Vector2i, camera_origin: Vector2) -> Vector4:
 
 func _cell_has_camera_facing_wall_edge(cell: Vector2i, delta: Vector2i, camera_origin: Vector2) -> float:
 	if controller == null or not controller._has_wall_edge(cell, delta):
+		return 0.0
+	if controller.outdoor_town and not controller._is_open_cell(cell + delta):
 		return 0.0
 	var segment: Array = controller._physical_cell_edge_segment(cell, delta)
 	return 1.0 if _wall_facing_cell(Vector2(segment[0]), Vector2(segment[1]), camera_origin) == cell else 0.0
@@ -2598,7 +2648,7 @@ func _segment_intersects_view_frustum(first: Vector2, second: Vector2) -> bool:
 	var active_fov_ratio := maxf(FOV_RATIO, VIEW_SIZE.x * 0.5 / FOCAL_LENGTH + 0.05)
 	var half_planes := [
 		{"normal": Vector2(0.0, -1.0), "limit": -NEAR_CLIP},
-		{"normal": Vector2(0.0, 1.0), "limit": MAX_DEPTH},
+		{"normal": Vector2(0.0, 1.0), "limit": _max_view_depth()},
 		{"normal": Vector2(1.0, -active_fov_ratio), "limit": 0.0},
 		{"normal": Vector2(-1.0, -active_fov_ratio), "limit": 0.0},
 	]
@@ -2796,7 +2846,7 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 	var continuous_actor_height := maxf(absf(feet.y - head.y), 1.0)
 	var actor_height := WORLD_ACTOR_LOD_MAX_HEIGHT if raw_depth <= WORLD_ACTOR_NEAREST_CELL_DEPTH else continuous_actor_height
 	return {
-		"visible": (allow_protected_near_debug or raw_depth >= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH) and raw_depth <= MAX_DEPTH + 0.75,
+		"visible": (allow_protected_near_debug or raw_depth >= WORLD_ACTOR_NEAR_VISIBILITY_DEPTH) and raw_depth <= _max_view_depth() + 0.75,
 		"screen_x": feet.x,
 		"feet_y": feet.y,
 		"head_x": head.x,
@@ -2818,6 +2868,15 @@ func runtime_project_world_point_for_current_pose(world_position: Vector2, objec
 func runtime_project_world_effect_point_for_current_pose(world_position: Vector2) -> Dictionary:
 	return runtime_project_world_point_for_current_pose(world_position, WORLD_ACTOR_HEIGHT, false, false) # Preserve the same camera, walls, and far clip while allowing a bullet/trail to cross the local cell continuously.
 
+
+func _max_view_depth() -> float:
+	return TOWN_MAX_DEPTH if controller.outdoor_town else MAX_DEPTH
+
+
+func _daylight_color(color: Color, depth: float) -> Color:
+	var dust := 1.0 - exp(-maxf(depth - 0.85, 0.0) * 0.19)
+	var luminance := Color(color.get_luminance(), color.get_luminance(), color.get_luminance(), color.a)
+	return color.lerp(luminance, dust * 0.56).lerp(Color(0.89, 0.75, 0.55, color.a), dust)
 
 func _depth_light(depth: float) -> float:
 	# Deep extra bands make the extended sixth-cell combat test visibly recede before the 5.5 depth clip.
@@ -2969,6 +3028,14 @@ func _update_diagonal_forward_animation(delta: float) -> void:
 			diagonal_transition_flip_h = false
 
 func _update_coordinate_background() -> void:
+	if controller.outdoor_town:
+		var sky_material := runtime_black_backdrop.material as ShaderMaterial
+		sky_material.set_shader_parameter("projection_center", Vector2(VIEW_SIZE.x * 0.5, HORIZON_Y) + _overscan_projection_offset())
+		var forward: Vector2 = controller._view_forward_vector()
+		sky_material.set_shader_parameter("camera_turn", atan2(forward.x, -forward.y) / TAU + 0.35)
+		coordinate_background.visible = false
+		coordinate_screen_overlay.visible = false
+		return
 	# Public gameplay uses procedural surfaces; coordinate guides are local diagnostics.
 	if OS.has_feature("web") or bool(get_tree().get_meta("grudge_public_build", false)):
 		coordinate_background.visible = false

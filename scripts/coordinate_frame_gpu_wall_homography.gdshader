@@ -56,6 +56,7 @@ uniform vec2 cell_world = vec2(0.0);
 uniform vec2 window_parallax_offset = vec2(0.0);
 uniform vec2 window_asset_size = vec2(36.0, 40.0);
 uniform bool show_exterior_window = false;
+#include "res://scripts/coordinate_frame_daylight.gdshaderinc"
 uniform vec2 layer1_offset = vec2(0.0);
 uniform vec2 layer2_offset = vec2(0.0);
 uniform vec2 wall_depths = vec2(1.0);
@@ -250,7 +251,7 @@ vec4 window_asset_sample(sampler2D asset, vec2 wall_texel) {
 }
 
 vec3 semantic_window_over_wall(vec3 wall_color, vec2 source_uv, vec2 source_size) {
-	if (!show_exterior_window || !is_exterior_wall()) return wall_color;
+	if (!show_exterior_window || (!use_daylight && !is_exterior_wall())) return wall_color;
 	vec2 texel = source_uv * source_size;
 	// Each real PNG has its own depth: frame nearest, glass mid, shadow farthest.
 	vec4 shadow = window_asset_sample(window_shadow_texture, texel - window_parallax_offset * source_size * 1.10);
@@ -408,6 +409,9 @@ vec4 semantic_wall_material(vec2 source_uv, vec2 source_size, float x_texels_per
 	return vec4(mix(wallpaper_color, trim_shadow, top_trim_shadow * detail_fade), 1.0);
 }
 
+uniform bool use_town_fence = false;
+uniform bool use_town_lintel = false;
+
 void fragment() {
 	vec2 pixel = UV * canvas_size;
 	if (quantize_logical_pixels) {
@@ -434,7 +438,26 @@ void fragment() {
 		mip_level = clamp(floor(log2(minor_footprint)), 0.0, 7.0);
 	}
 	vec4 result;
-	if (use_semantic_wall_material) {
+	if (use_town_fence) {
+		// The fence occupies the bottom 55 percent of a full-height wall.
+		if (source_uv.y < 0.45) discard;
+		result = texture(base_texture, vec2(source_uv.x, (source_uv.y - 0.45) / 0.55));
+	} else if (use_town_lintel) {
+		if (source_uv.y > 0.17) discard;
+		result = vec4(0.34, 0.23, 0.14, 1.0);
+	} else if (use_daylight) {
+		float plank = source_uv.y * 11.0;
+		float row = floor(plank);
+		float variation = fract(sin(row * 7.17 + dot(cell_world, vec2(1.2, 3.1))) * 217.9);
+		float line_width = max(abs(uv_y.y - source_uv.y) * 11.0, 0.01);
+		float seam = (1.0 - smoothstep(0.0, line_width, fract(plank))) * (1.0 - smoothstep(0.25, 0.6, line_width));
+		vec3 wood = mix(vec3(0.40, 0.27, 0.16), vec3(0.58, 0.41, 0.25), variation);
+		wood *= 1.0 - seam * 0.32;
+		if (source_uv.y < 0.09 || source_uv.y > 0.94 || source_uv.x < 0.035 || source_uv.x > 0.965) {
+			wood = vec3(0.30, 0.20, 0.12);
+		}
+		result = vec4(semantic_window_over_wall(wood, source_uv, base_texture_size), 1.0);
+	} else if (use_semantic_wall_material) {
 		// Horizontal texel coverage is the relevant projected measure for the
 		// wallpaper repeat and the vertical wooden panels.
 		float x_texels_per_logical_pixel = max(abs(uv_x.x - source_uv.x) * base_texture_size.x, 0.0001);
@@ -463,11 +486,11 @@ void fragment() {
 	// flickering bands instead of a single logical-pixel line.
 	float endpoint_width = max(abs(corner_uv_x.x - source_uv.x), 0.000001);
 	float corner_tone = source_uv.x <= endpoint_width ? endpoint_corner_tones.x : (source_uv.x >= 1.0 - endpoint_width ? endpoint_corner_tones.y : 0.0);
-	if (corner_tone > 0.0) {
+	if (!use_town_fence && !use_town_lintel && corner_tone > 0.0) {
 		// Preserve the brighter exposed-edge read without allowing a light wall
 		// texel to bloom into a white accidental line.
 		result.rgb = min(result.rgb * convex_highlight_factor, vec3(0.82));
-	} else if (corner_tone < 0.0) {
+	} else if (!use_town_fence && !use_town_lintel && corner_tone < 0.0) {
 		// AO is a dark mark, never a multiply of an already-bright wallpaper texel.
 		result.rgb = min(result.rgb * 0.82, vec3(0.46));
 	}
@@ -489,6 +512,6 @@ void fragment() {
 	if (show_depth_light_dither_debug) {
 		COLOR = vec4(vec3(dither_light), result.a * cutaway_opacity);
 	} else {
-		COLOR = vec4(result.rgb * wall_light, result.a * cutaway_opacity);
+		COLOR = vec4(use_daylight ? daylight_color(result.rgb, ray_depth) : result.rgb * wall_light, result.a * cutaway_opacity);
 	}
 }
