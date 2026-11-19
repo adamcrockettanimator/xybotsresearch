@@ -2874,9 +2874,13 @@ func _max_view_depth() -> float:
 
 
 func _daylight_color(color: Color, depth: float) -> Color:
-	var dust := 1.0 - exp(-maxf(depth - 0.85, 0.0) * 0.19)
-	var luminance := Color(color.get_luminance(), color.get_luminance(), color.get_luminance(), color.a)
-	return color.lerp(luminance, dust * 0.56).lerp(Color(0.89, 0.75, 0.55, color.a), dust)
+	# Match coordinate_frame_daylight.gdshaderinc in the CPU painter.
+	var dust := 1.0 - exp(-maxf(depth - 0.85, 0.0) * 0.16)
+	var luma := color.r * 0.299 + color.g * 0.587 + color.b * 0.114
+	var neutral := Color(luma, luma, luma, color.a)
+	var horizon := Color(218.0 / 255.0, 171.0 / 255.0, 109.0 / 255.0, color.a)
+	return color.lerp(neutral, dust * 0.14).lerp(horizon, dust)
+
 
 func _depth_light(depth: float) -> float:
 	# Deep extra bands make the extended sixth-cell combat test visibly recede before the 5.5 depth clip.
