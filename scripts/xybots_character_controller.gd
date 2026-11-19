@@ -5613,7 +5613,9 @@ func _setup_combat_hud() -> void:
 		var coin_label := Label.new()                                                            # Create the matching collected/total readout.
 		coin_label.name = "CombatCoinScoreP%d" % (player_index + 1)                            # Keep the UI easy to inspect in the remote scene tree.
 		coin_label.add_theme_font_override("font", pixel_hud_font)                             # Keep score digits deliberately aliased.
-		coin_label.add_theme_font_size_override("font_size", 5)
+		coin_label.add_theme_font_size_override("font_size", 6)
+		coin_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		coin_label.add_theme_constant_override("outline_size", 1)
 		coin_label.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST                            # Render score glyphs with the same hard sampling as their coin icon.
 		coin_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.22, 1.0))        # Give the objective a clear gold arcade color.
 		coin_label.add_theme_color_override("font_shadow_color", Color.BLACK)                 # Keep numbers readable over bright floors.
@@ -6012,13 +6014,16 @@ func _make_scoreboard_shop_label() -> RichTextLabel:
 	var shop := RichTextLabel.new()
 	shop.bbcode_enabled = true
 	shop.scroll_active = false
-	shop.add_theme_font_override("normal_font", pixel_hud_font)
-	shop.add_theme_font_size_override("normal_font_size", 3)
+	var shop_font: FontFile = preload("res://assets/Fonts/PressStart2P-Regular.ttf")
+	shop_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	shop.add_theme_font_override("normal_font", shop_font)
+	shop.add_theme_font_size_override("normal_font_size", 8)
+	shop.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	shop.add_theme_color_override("font_shadow_color", Color.BLACK)
 	shop.add_theme_constant_override("shadow_offset_x", 1)
 	shop.add_theme_constant_override("shadow_offset_y", 1)
-	shop.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	shop.size = Vector2(34.0, 10.0)
+	shop.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	shop.size = Vector2(100.0, 38.0)
 	shop.z_index = 521
 	shop.visible = false
 	return shop
@@ -6127,14 +6132,17 @@ func _update_combat_hud() -> void:
 			board.scale = viewport_node.scale
 			board.visible = board_visible
 			var shop := scoreboard_shop_labels[player_index]
-			shop.position = viewport_node.position + Vector2(60.0, VIEWPORT_SIZE.y - 12.0) * viewport_node.scale # Center the compact A/B purchase cues in the open bottom-HUD space between health and ammunition.
-			shop.scale = viewport_node.scale
+			var view_size: Vector2 = VIEWPORT_SIZE * viewport_node.scale
+			var hud_scale := clampf(roundf(view_size.y / 360.0), 1.0, 8.0)
+			shop.size = Vector2(100.0, 38.0)
+			shop.scale = Vector2.ONE * hud_scale
+			shop.position = viewport_node.position + Vector2(view_size.x * 0.27, view_size.y - shop.size.y * hud_scale - maxf(view_size.y * 0.012, 3.0))
 			shop.visible = player_index < player_joined.size() and player_joined[player_index] and not bool(state.get("is_dying", false)) and not combat_round_complete
 			if shop.visible:
 				var coins := int(state.get("coins", 0))
-				var heart_color := "#ffffff" if coins >= 5 else "#5c5c5c"
-				var gun_color := "#ffffff" if coins >= 10 else "#5c5c5c"
-				shop.text = "[color=%s]%s:[img=5x5]res://assets/Items/Heart/heart.png[/img][/color] [color=%s]%s:[img=5x5]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if _public_build() else "LB", gun_color, "E/RB" if _public_build() else "RB"] # Keep the controller cues compact while reusing the crisp heart and gun HUD art.
+				var heart_color := "#ffe25c" if coins >= 5 else "#dddddd"
+				var gun_color := "#ffe25c" if coins >= 10 else "#dddddd"
+				shop.text = "[color=%s]%s 5 [img=15x15]res://assets/Items/Heart/hud_heart_icon.tres[/img][/color]\n[color=%s]%s 10 [img=15x15]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if _public_build() else "LB", gun_color, "E/RB" if _public_build() else "RB"]
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -11961,10 +11969,14 @@ func _layout_match_map(view: Dictionary, camera: Node2D) -> void:
 	clip.position = camera.position
 	clip.size = VIEWPORT_SIZE * camera.scale
 	if map_display_mode == "minimap":
-		var compact_scale := 2.0 if mobile_controls != null and single_player_combat_view else 1.0
+		# The map belongs to the camera rectangle, not to fixed desktop pixels.
+		# Limit its footprint on narrow or split-screen views.
+		var map_side := minf(clip.size.y * 0.18, clip.size.x * 0.24)
+		var compact_scale := maxf(map_side / MATCH_MINIMAP_SIZE, 0.25)
+		var margin := maxf(clip.size.y * 0.012, 3.0)
 		map.rotation = 0.0
 		map.scale = Vector2.ONE * compact_scale
-		map.position = Vector2(clip.size.x - MATCH_MINIMAP_SIZE * compact_scale - MATCH_MINIMAP_MARGIN, MATCH_MINIMAP_MARGIN)
+		map.position = Vector2(clip.size.x - MATCH_MINIMAP_SIZE * compact_scale - margin, margin)
 	else:
 		map.scale = Vector2.ONE * maxf(camera.scale.x * 1.5, 1.0)
 
@@ -12107,7 +12119,7 @@ func _setup_match_minimap_overlay() -> void:
 	map_backing.name = "Backdrop"                                                              # Keep the readability layer easy to identify in the scene tree.
 	map_backing.position = Vector2.ZERO                                                        # Cover the map from its local upper-left corner.
 	map_backing.size = Vector2(MATCH_MINIMAP_SIZE, MATCH_MINIMAP_SIZE)                         # Match the compact square map footprint exactly.
-	map_backing.color = Color(0.12, 0.12, 0.12, 0.5)                                           # Use the requested 50% transparent charcoal gray.
+	map_backing.color = Color(0.05, 0.05, 0.05, 0.82)                                           # Keep walls legible against patterned scenery.
 	map_backing.mouse_filter = Control.MOUSE_FILTER_IGNORE                                     # Never let the HUD backing intercept game input.
 	map_backing.z_index = -1                                                                   # Draw the backing behind walls and player arrows.
 	match_minimap_overlay.add_child(map_backing)                                               # Put the backdrop under the rest of the map artwork.

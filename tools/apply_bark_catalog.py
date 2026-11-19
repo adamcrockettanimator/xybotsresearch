@@ -135,6 +135,7 @@ if errors:
  print('\n'.join(errors[:50]));raise SystemExit(f'{len(errors)} catalog error(s); bank not changed')
 print(f'Validated {len(parsed)} recordings; {sum(bool(r[2]) for r in parsed)} tagged, {sum(not r[2] for r in parsed)} unassigned.')
 if '--check' in sys.argv:raise SystemExit(0)
+from optimize_dialog_audio import convert, bounds
 new={a:{} for a in seed};copied=0
 for actor,file,tags,weight,repeat,min_override,max_override,duration in parsed:
  if not tags:continue
@@ -143,7 +144,14 @@ for actor,file,tags,weight,repeat,min_override,max_override,duration in parsed:
  else:
   digest=hashlib.sha256(file.encode('utf8')).hexdigest()[:16];dest=PROJECT/'assets/Audio/Dialog/Barks'/actor/('catalog_'+digest+'.wav')
   if not dest.exists():normalize_copy(source,dest);copied+=1
-  path='res://'+dest.relative_to(PROJECT).as_posix()
+  result=convert(dest)
+  path='res://'+dest.with_suffix('.ogg').relative_to(PROJECT).as_posix()
+  duration=result[4]
+ if old and path.endswith('.wav'):
+  wav=PROJECT/path.removeprefix('res://')
+  result=convert(wav) if not wav.with_suffix('.ogg').exists() else None
+  path=path[:-4]+'.ogg'
+  duration=result[4] if result is not None else round(bounds(wav)[1]-bounds(wav)[0],4)
  spoken=clean(Path(file).stem.split(' - ',1)[-1]);line_id=old.get('id',spoken) if old else spoken
  for tag in tags:
   previous=prior.get((actor,file,tag),{})

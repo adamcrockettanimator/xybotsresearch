@@ -54,3 +54,7 @@ The real duration in the generated file comes from the catalog; this example ill
 Hit and death reactions are immediate and can overlap another character. First sight and the killer's reaction are also mandatory, but wait if the same actor is already delivering a higher-priority hit or death. Tactical and combat callouts use a short, ranked queue; the event can expire if the situation changes. Initial hearing and investigation lines are suppressed once combat has begun. A last enemy's death has a gentler length penalty so a longer line can occasionally play.
 
 On a clear-the-map loss, survivors approach the body without shooting and take turns using `#victory` lines near it. The scene stays visible until Start, X, or the touch Continue control skips directly into a fresh round.
+
+## Game audio format
+
+The original normalized WAV game copies remain alongside the exported dialogue. Game playback and the Web export use mono 32 kHz Ogg Vorbis copies. The catalog builder makes these copies for newly tagged lines; it needs FFmpeg (set `GRUDGE_FFMPEG` to the executable if the existing local path is unavailable). `tools/optimize_dialog_audio.py` uses a conservative -65 dBFS boundary and 150 ms padding; review speech and breaths when changing its settings. The source clip recordings and the verified pre-optimization audio archive remain separate.
