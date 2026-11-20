@@ -13,6 +13,7 @@ func _ready() -> void:
 	game.name = "CoordinateFrameGame"
 	if outdoor_town:
 		game.outdoor_town = true
+		game.music_enabled = false
 		game.clear_the_map_mode = false
 		game.single_player_sandbox_mode = true
 		game.combat_round_duration_seconds = 0.0

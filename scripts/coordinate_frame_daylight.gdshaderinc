@@ -2,6 +2,9 @@ uniform bool use_daylight = false;
 uniform bool use_town_lighting = false;
 uniform vec4 town_roof_bounds[4];
 
+// Horizontal direction toward the west sun in the town grid.
+const vec2 TOWN_SUN_DIRECTION = vec2(-1.0, 0.0);
+
 // Clip the camera-to-surface segment to each building's floor plan. The
 // covered fraction subtracts from the forward depth used by the dust painter.
 float town_outdoor_depth(vec2 origin, vec2 target, float depth) {

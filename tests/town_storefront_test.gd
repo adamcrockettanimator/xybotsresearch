@@ -52,6 +52,28 @@ func _run() -> void:
 	_test_footstep_surfaces(game)
 	var renderer: Node = game.get_node("CoordinateFrameRuntimeRendererP1")
 	assert(renderer.storefront_planes.size() == 3)
+	var floor_material: ShaderMaterial = renderer.storefront_planes[1].material
+	assert(floor_material.get_shader_parameter("use_semantic_floor_material"))
+	var floor: Rect2 = style.floor_rect()
+	assert(floor_material.get_shader_parameter("bounds") == Vector4(floor.position.x, floor.position.y, floor.end.x, floor.end.y))
+	assert(floor_material.get_shader_parameter("edge_heights") == Vector2.ONE * style.porch_height)
+	var rail_spans: Array[Dictionary] = style.trim_spans().filter(func(span: Dictionary) -> bool: return span.get("porch_rail", false))
+	assert(rail_spans.size() == 1)
+	var rail_start: Vector2 = rail_spans[0]["a"]
+	assert(is_equal_approx(rail_start.x, style.FOOTPRINT.end.x - style.FRONT_DOOR.y))
+	var porch: Rect2 = style.porch_rect()
+	var posts: Array[Dictionary] = style.trim_spans().filter(func(span: Dictionary) -> bool: return span.get("partial", false) and span.get("overhang_height") == style.AWNING_FRONT)
+	assert(posts.size() == 2)
+	var outer_corners: Array[Vector2] = []
+	for post in posts:
+		var start: Vector2 = post["a"]
+		var end: Vector2 = post["b"]
+		var front_y := start.y - float(post["thickness"]) * 0.5
+		var outer_x := maxf(start.x, end.x) if start.x > porch.get_center().x else minf(start.x, end.x)
+		outer_corners.append(Vector2(outer_x, front_y))
+	assert(outer_corners[0].is_equal_approx(Vector2(porch.end.x, porch.position.y)))
+	assert(outer_corners[1].is_equal_approx(porch.position))
+	assert(_move(game, Vector2(style.door_frame_center(true).x, 7.3), Vector2.DOWN * 0.4, false).y > 7.67)
 	_test_fence(game, renderer)
 	print("Storefront checks passed")
 	quit()
@@ -204,7 +226,7 @@ func _test_window(game: Node) -> void:
 	target["health"] = 3
 	var shooter := Vector2(2.273, 7.75)
 	var standing_shot := _spawn_standing_shot(game, shooter, PI)
-	assert(absf(float(standing_shot["storefront_world_height"]) - 0.345) < 0.012)
+	assert(absf(float(standing_shot["storefront_world_height"]) - game.town_walk_height(shooter) - 0.31) < 0.012)
 	game._process_combat(0.1)
 	assert(game.storefront_glass_broken and int(game.player_states[1]["health"]) == 3)
 	assert(game.active_wall_debris.any(func(shard: Dictionary) -> bool: return shard.get("glass_fragment", false)))
@@ -220,8 +242,10 @@ func _test_window(game: Node) -> void:
 	assert(game._nearest_projectile_wall_distance(frame_lane, Vector2.DOWN, 0.6, height) < 0.6)
 	assert(game._nearest_projectile_wall_distance(pane_lane, Vector2.DOWN, 0.6, 0.18) < 0.6)
 	var porch_lane := Vector2(2.23, 7.3)
-	assert(game._nearest_projectile_wall_distance(porch_lane, Vector2.DOWN, 0.6, 0.30) > 0.6)
-	assert(game._nearest_projectile_wall_distance(porch_lane, Vector2.DOWN, 0.6, 0.25) < 0.6)
+	var style: Resource = game.STOREFRONT_STYLE
+	var rail_top: float = style.porch_rail_top()
+	assert(game._nearest_projectile_wall_distance(porch_lane, Vector2.DOWN, 0.6, rail_top + 0.02) > 0.6)
+	assert(game._nearest_projectile_wall_distance(porch_lane, Vector2.DOWN, 0.6, rail_top - style.porch_handrail_section.y * 0.5) < 0.6)
 	assert(_move(game, pane_lane, Vector2(0.0, 0.6), false).y < 8.0)
 
 

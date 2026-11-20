@@ -52,6 +52,7 @@ const TOWN_DRAW_DEPTH_RANGE := 19.0
 const TOWN_BUILDING_ORIGINS := [Vector2i(2, 2), Vector2i(7, 2), Vector2i(2, 7), Vector2i(7, 7)]
 const TOWN_BUILDING_SIZE := Vector2i(3, 3)
 const STOREFRONT_STYLE = preload("res://resources/town_storefront_style.tres")
+const STOREFRONT_DEBUG_VIEW = preload("res://scripts/town_storefront_debug_view.gd")
 const TOWN_STOREFRONT_SLOT := Vector2i(2, 7)
 const TOWN_PLAYER_START := Vector2i(5, 11)
 
@@ -1192,6 +1193,9 @@ var debug_menu_right_panel: PanelContainer                                      
 var debug_barrel_layers_panel: PanelContainer                                                # Store the F3 Canvas-barrel painter-order inspector separately from general debug toggles.
 var debug_barrel_layers_content: VBoxContainer                                               # Rebuild the layer rows when visibility or painter order changes.
 var debug_menu_canvas: CanvasLayer                                                           # Keep the F3 controls on their own highest-priority canvas instead of whichever player HUD is currently bound.
+var storefront_debug_view: Control
+var show_storefront_cage := false
+var show_storefront_masks := false
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_tuning_spins: Dictionary = {}                                                 # Store live near-view SpinBoxes so F3 tuning never depends on the Remote debugger.
 var debug_menu_layer_tuning_spins: Dictionary = {}                                           # Store runtime wall/ceiling layer SpinBoxes in the same F3 menu.
@@ -2200,6 +2204,12 @@ func _input(event: InputEvent) -> void:                                         
 		_set_debug_option(not show_dive_roll_debug, "dive_roll")
 		get_viewport().set_input_as_handled()
 		return
+	if outdoor_town and not _public_build() and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F9 or event.keycode == KEY_F10:
+			var option := "storefront_cage" if event.keycode == KEY_F9 else "storefront_masks"
+			_set_debug_option(not _debug_option_value(option), option)
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventKey and not event.echo:                                             # Only handle real keyboard press/release events once.
 		held_keycodes[int(event.keycode)] = event.pressed                                       # Store whether this logical key is currently held.
 		if event.physical_keycode != 0:                                                         # Preserve physical key bindings when Godot supplies them.
@@ -2273,6 +2283,9 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "dive_roll", "Roll I-Frames (F6)")
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "barrel_lod_visualizer", "Barrel LOD Labels")             # Keep the currently selected static barrel LOD readable while moving through depth bands.
+	if outdoor_town:
+		_add_debug_menu_check(content, "storefront_cage", "Storefront Cage (F9)")
+		_add_debug_menu_check(content, "storefront_masks", "Storefront Masks (F10)")
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
 	_add_debug_menu_tuning_spin(content, "rear_exit", "Rear exit", 0.0, 48.0, 1.0)            # Tune the south-edge partial body exit without changing the fixed camera or wireframe geometry.
 	_add_debug_menu_tuning_spin(content, "rear_side_exit", "Rear side exit", 0.0, 48.0, 1.0) # Tune only the south-west/south-east corner flare of the near-cell body path.
@@ -2680,6 +2693,10 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
 		"barrel_lod_visualizer":
 			return show_barrel_lod_visualizer
+		"storefront_cage":
+			return show_storefront_cage
+		"storefront_masks":
+			return show_storefront_masks
 		"pause_round_timer":
 			return pause_round_timer_for_debug                                                     # Return the independent debug pause state for the shared match clock.
 		"slot_grid":
@@ -2766,6 +2783,10 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 				muzzle_anchor_debug_markers.clear()                                                  # Remove lingering snapshots immediately when the diagnostic closes.
 		"barrel_lod_visualizer":
 			show_barrel_lod_visualizer = enabled                                                   # F3's existing diagnostic menu owns this visual-only barrel LOD readout.
+		"storefront_cage":
+			show_storefront_cage = enabled
+		"storefront_masks":
+			show_storefront_masks = enabled
 		"pause_round_timer":
 			pause_round_timer_for_debug = enabled                                                  # Leave all diagnostics and simulation live; pause only the one shared round countdown.
 		"slot_grid":
@@ -9001,6 +9022,10 @@ func _render_storefront_grass(used: Dictionary) -> void:
 		_build_storefront_grass_blades()
 
 	var front_left := Vector2(STOREFRONT_STYLE.FOOTPRINT.position)
+	var floor: Rect2 = STOREFRONT_STYLE.floor_rect()
+	var floor_bounds := Vector4(floor.position.x, floor.position.y, floor.end.x, floor.end.y)
+	var eye_height: float = renderer.VIRTUAL_CAMERA_HEIGHT
+	var projection_center: Vector2 = renderer._project_view_point(Vector2(0.0, 1.0), eye_height)
 	var visible_roots: Array[Vector2] = []
 	for index in storefront_grass_layout.size():
 		var cluster := storefront_grass_layout[index]
@@ -9020,6 +9045,7 @@ func _render_storefront_grass(used: Dictionary) -> void:
 		var right: Vector2 = view["right"]
 		var projected_blades := PackedVector4Array()
 		var projected_bends := PackedVector4Array()
+		var inverse_depths := PackedVector2Array()
 		var minimum := Vector2(INF, INF)
 		var maximum := Vector2(-INF, -INF)
 		var blades := storefront_grass_blades[index]
@@ -9040,6 +9066,8 @@ func _render_storefront_grass(used: Dictionary) -> void:
 			var blade := blades[blade_index]
 			var offset := Vector2(blade.x, blade.y)
 			var root := center + offset
+			if floor.has_point(root):
+				continue
 			var lean := Vector2.from_angle(blade.w) * blade.z * 0.30
 			var root_local: Vector2 = renderer._to_view(root, origin, forward, right)
 			var tip_local: Vector2 = renderer._to_view(root + lean, origin, forward, right)
@@ -9057,13 +9085,15 @@ func _render_storefront_grass(used: Dictionary) -> void:
 			visible_roots.append(root_pixel)
 			if is_detail:
 				detail_root_count += 1
-			var bend: Vector2 = renderer._project_view_point(root_local.lerp(tip_local, 0.20), blade.z * 0.55)
+			var bend_local := root_local.lerp(tip_local, 0.20)
+			var bend: Vector2 = renderer._project_view_point(bend_local, blade.z * 0.55)
 			bend.y = clampf(bend.y, top.y + height * 0.2, foot.y - height * 0.2)
 			# Bound the lean so a one-pixel stroke remains continuous row to row.
 			bend.x = foot.x + clampf(bend.x - foot.x, bend.y - foot.y, foot.y - bend.y)
 			top.x = bend.x + clampf(top.x - bend.x, top.y - bend.y, bend.y - top.y)
 			projected_blades.append(Vector4(foot.x, foot.y, top.x, top.y))
-			projected_bends.append(Vector4(bend.x, bend.y, opacity, 0.0))
+			projected_bends.append(Vector4(bend.x, bend.y, opacity, 1.0 / bend_local.y))
+			inverse_depths.append(Vector2(1.0 / root_local.y, 1.0 / tip_local.y))
 			minimum = minimum.min(foot).min(bend).min(top)
 			maximum = maximum.max(foot).max(bend).max(top)
 		# Close detail should not displace base stalks in neighboring clumps.
@@ -9074,6 +9104,7 @@ func _render_storefront_grass(used: Dictionary) -> void:
 			continue
 		projected_blades.resize(STOREFRONT_GRASS_MAX_BLADES)
 		projected_bends.resize(STOREFRONT_GRASS_MAX_BLADES)
+		inverse_depths.resize(STOREFRONT_GRASS_MAX_BLADES)
 		var box_start := minimum.floor()
 		var box_size := maximum.floor() + Vector2.ONE - box_start
 
@@ -9090,6 +9121,13 @@ func _render_storefront_grass(used: Dictionary) -> void:
 		material.set_shader_parameter("blade_count", blade_count)
 		material.set_shader_parameter("pixel_rect", Vector4(box_start.x, box_start.y, box_size.x, box_size.y))
 		material.set_shader_parameter("bends", projected_bends)
+		material.set_shader_parameter("inverse_depths", inverse_depths)
+		material.set_shader_parameter("floor_bounds", floor_bounds)
+		material.set_shader_parameter("floor_height", STOREFRONT_STYLE.porch_height)
+		material.set_shader_parameter("camera_origin", origin)
+		material.set_shader_parameter("camera_forward", forward)
+		material.set_shader_parameter("camera_right", right)
+		material.set_shader_parameter("projection", Vector4(projection_center.x, projection_center.y, renderer.FOCAL_LENGTH, eye_height))
 		sprite.position = box_start
 		sprite.scale = box_size
 		sprite.z_index = _world_footprint_draw_layer(footprint)
@@ -11055,9 +11093,14 @@ func _render_bound_player_context() -> void:                                    
 			perspective_extents_overlay.visible = false
 		# Build this view's wall layers before placing world sprites into the same
 		# back-to-front Canvas draw scale.
+		coordinate_renderer.begin_view_visibility()
 		coordinate_renderer.render_bound_player_context(get_process_delta_time())
+		if active_player_index == 0 and outdoor_town and is_instance_valid(debug_menu_canvas):
+			_update_storefront_debug_view(coordinate_renderer)
 		var player_started_us := Time.get_ticks_usec()
 		_position_player()                                                                        # Keep the active player's sprite synchronized with movement and authored transition frames.
+		# Player positioning can change the sprite scale that defines the cutaway fan.
+		coordinate_renderer.begin_view_visibility()
 		var player_elapsed_us := Time.get_ticks_usec() - player_started_us
 		var opponents_started_us := Time.get_ticks_usec()
 		_position_opponent_sprite()                                                               # Keep the opponent in the shared local view without invoking legacy wall visibility work.
@@ -11072,6 +11115,7 @@ func _render_bound_player_context() -> void:                                    
 		var map_elapsed_us := Time.get_ticks_usec() - map_started_us
 		if show_pickup_range_debug or show_bot_navigation_debug or (is_instance_valid(view_slot_overlay) and view_slot_overlay.has_meta("bot_label_canvas")): # Also clear labels when diagnostics are disabled.
 			_update_view_slot_debug_overlay()
+		coordinate_renderer.end_view_visibility()
 		if coordinate_renderer.has_method("record_legacy_render_breakdown"):
 			coordinate_renderer.record_legacy_render_breakdown(player_elapsed_us, opponents_elapsed_us, combat_elapsed_us, map_elapsed_us)
 			if coordinate_renderer.has_method("record_combat_vfx_breakdown"):
@@ -11113,6 +11157,18 @@ func _render_bound_player_context() -> void:                                    
 
 
 # _render_all_player_views: Redraws every local player view after setup or a map reset.
+func _update_storefront_debug_view(renderer: Node) -> void:
+	var enabled := show_storefront_cage or show_storefront_masks
+	if not enabled and storefront_debug_view == null:
+		return
+	if storefront_debug_view == null:
+		storefront_debug_view = STOREFRONT_DEBUG_VIEW.new()
+		debug_menu_canvas.add_child(storefront_debug_view)
+	storefront_debug_view.visible = enabled
+	if enabled:
+		storefront_debug_view.update_view(renderer, maze_viewport, maze_content, show_storefront_cage, show_storefront_masks)
+
+
 func _render_all_player_views() -> void:                                                   # Declare this function.
 	for player_index in range(player_states.size()):                                          # Visit each local player.
 		if single_player_combat_view and player_index > 0:
@@ -17003,7 +17059,7 @@ func _world_footprint_draw_layer(footprint: Dictionary) -> int:
 	var foreground_limit := 4096
 	var background_limit := -4096
 	for entry in renderer.last_wall_entries:
-		var contacts: Array = renderer.call("_segment_contact_points_in_cutaway_fan", Vector2(entry["world_a"]), Vector2(entry["world_b"]), origin, left, right)
+		var contacts: Array = renderer.call("_segment_contact_points_in_cutaway_fan", Vector2(entry["world_a"]), Vector2(entry["world_b"]), origin, left, right, false)
 		var wall_layer := int(entry.get("wall_draw_layer", layer))
 		if contacts.is_empty():
 			if _wall_is_adjacent_behind_footprint(Vector2(entry["world_a"]), Vector2(entry["world_b"]), footprint, origin):
@@ -18502,7 +18558,7 @@ func town_has_roof(cell: Vector2i) -> bool:
 
 
 func town_walk_height(world: Vector2) -> float:
-	if outdoor_town and (STOREFRONT_STYLE.porch_rect().has_point(world) or Rect2(STOREFRONT_STYLE.FOOTPRINT).has_point(world)):
+	if outdoor_town and STOREFRONT_STYLE.floor_rect().has_point(world):
 		return STOREFRONT_STYLE.porch_height
 	return 0.0
 

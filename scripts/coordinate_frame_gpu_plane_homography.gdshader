@@ -20,19 +20,10 @@ uniform bool use_depth_light_dither = false;
 // Procedural reconstructions of the current WoodFloor2 and two-layer ceiling.
 uniform bool use_semantic_floor_material = false;
 uniform bool use_semantic_ceiling_material = false;
-uniform bool use_semantic_plane_anisotropic_filter = true;
-uniform float semantic_floor_ewa_min_major_footprint = 1.25;
-uniform float semantic_floor_ewa_min_anisotropy = 1.50;
-uniform float semantic_floor_ewa_flat_start_footprint = 8.0;
-uniform float semantic_floor_ewa_flat_end_footprint = 24.0;
 uniform float semantic_ceiling_ewa_min_major_footprint = 12.0;
 uniform float semantic_ceiling_ewa_min_anisotropy = 1.50;
 uniform float semantic_ceiling_ewa_flat_start_footprint = 24.0;
 uniform float semantic_ceiling_ewa_flat_end_footprint = 48.0;
-// The EWA gate is a continuous coverage rather than an on/off threshold.
-// These spans describe how far past each minimum it takes to reach full EWA.
-uniform float semantic_plane_ewa_blend_footprint = 3.0;
-uniform float semantic_plane_ewa_blend_anisotropy = 0.50;
 // Fade the procedural palette's deviation from its material mean by world
 // depth. This is intentionally independent of the EWA footprint: a distant
 // plane can become calm even where its projected texels happen to be sharp.
@@ -166,65 +157,7 @@ float depth_light_dither(float depth, vec2 pixel) {
 	return 0.10;
 }
 
-float semantic_hash(vec2 p) {
-	p = fract(p * vec2(0.1031, 0.11369));
-	p += dot(p, p.yx + 19.19);
-	return fract((p.x + p.y) * p.x);
-}
-
-vec3 semantic_floor_board_color(vec2 source_uv) {
-	// One source texel wide, lengthwise strips. Every lane has its own cycle
-	// length, phase, and split point. Avoiding a shared 12-texel cycle prevents
-	// separated lanes from reconverging into a visible cross-floor seam.
-	vec2 floor_texel = (cell_world + source_uv) * base_texture_size;
-	float lane = floor(floor_texel.x);
-	float cycle_length = 11.0 + floor(semantic_hash(vec2(lane, 19.0)) * 5.0);
-	float lane_phase = floor(semantic_hash(vec2(lane, 71.0)) * cycle_length);
-	float staggered_y = floor(floor_texel.y) + lane_phase;
-	float block = floor(staggered_y / cycle_length);
-	float within_block = mod(staggered_y, cycle_length);
-	float first_board_length = 5.0 + floor(semantic_hash(vec2(lane, block + 313.0)) * 3.0);
-	first_board_length = min(first_board_length, cycle_length - 4.0);
-	float segment = block * 2.0 + (within_block >= first_board_length ? 1.0 : 0.0);
-	float distribution = semantic_hash(vec2(lane * 1.37, segment * 3.19));
-	vec3 dark = vec3(101.0, 81.0, 60.0) / 255.0;
-	vec3 middle = vec3(118.0, 94.0, 71.0) / 255.0;
-	vec3 light = vec3(135.0, 108.0, 81.0) / 255.0;
-	return distribution < 0.333333 ? dark : (distribution < 0.666667 ? middle : light);
-}
-
-vec3 ewa_floor_material(vec2 source_uv, vec2 span_x, vec2 span_y) {
-	// Gaussian footprint in the procedural board field. The 9 samples mirror
-	// the wall EWA layout and are evaluated only once perspective is elongated.
-	vec3 center = semantic_floor_board_color(source_uv) * 0.28;
-	vec3 axial = semantic_floor_board_color(source_uv + span_x * 0.5)
-		+ semantic_floor_board_color(source_uv - span_x * 0.5)
-		+ semantic_floor_board_color(source_uv + span_y * 0.5)
-		+ semantic_floor_board_color(source_uv - span_y * 0.5);
-	vec2 diagonal_a = (span_x + span_y) * 0.35;
-	vec2 diagonal_b = (span_x - span_y) * 0.35;
-	vec3 diagonal = semantic_floor_board_color(source_uv + diagonal_a)
-		+ semantic_floor_board_color(source_uv - diagonal_a)
-		+ semantic_floor_board_color(source_uv + diagonal_b)
-		+ semantic_floor_board_color(source_uv - diagonal_b);
-	vec3 gaussian_color = center + axial * 0.10 + diagonal * 0.08;
-	float major_footprint = max(length(span_x), length(span_y));
-	vec3 average = vec3(118.0, 94.0, 71.0) / 255.0;
-	return mix(gaussian_color, average, smoothstep(semantic_floor_ewa_flat_start_footprint, max(semantic_floor_ewa_flat_end_footprint, semantic_floor_ewa_flat_start_footprint + 0.01), major_footprint));
-}
-
-vec3 semantic_floor_material(vec2 source_uv, vec2 span_x, vec2 span_y) {
-	float major_footprint = max(length(span_x), length(span_y));
-	float minor_footprint = max(0.001, min(length(span_x), length(span_y)));
-	vec3 unfiltered = semantic_floor_board_color(source_uv);
-	if (!use_semantic_plane_anisotropic_filter) return unfiltered;
-	float footprint_coverage = smoothstep(semantic_floor_ewa_min_major_footprint, semantic_floor_ewa_min_major_footprint + max(semantic_plane_ewa_blend_footprint, 0.01), major_footprint);
-	float anisotropy = major_footprint / minor_footprint;
-	float anisotropy_coverage = smoothstep(semantic_floor_ewa_min_anisotropy, semantic_floor_ewa_min_anisotropy + max(semantic_plane_ewa_blend_anisotropy, 0.01), anisotropy);
-	float ewa_coverage = footprint_coverage * anisotropy_coverage;
-	if (ewa_coverage <= 0.0) return unfiltered;
-	return mix(unfiltered, ewa_floor_material(source_uv, span_x, span_y), ewa_coverage);
-}
+#include "res://scripts/coordinate_frame_semantic_floor.gdshaderinc"
 
 float ceiling_beam_coverage(vec2 ceiling_texel) {
 	// The source beam is 14 pixels wide, centered on every 64-pixel repeat.
@@ -305,6 +238,9 @@ vec3 semantic_plane_distance_contrast(vec3 material_color, vec3 material_average
 
 uniform float far_depth = 5.5;
 uniform bool use_town_dirt = false;
+uniform bool storefront_shadow_enabled = false;
+uniform vec4 storefront_shadow_rect;
+uniform vec2 storefront_shadow_tuning;
 
 void fragment() {
 	vec2 pixel = floor(UV * canvas_size) + vec2(0.5);
@@ -333,13 +269,28 @@ void fragment() {
 	float outdoor_depth = use_town_lighting ? town_outdoor_depth(camera_origin, cell_world + source_uv, depth) : 0.0;
 	float indoor_depth = max(depth - outdoor_depth, 0.0);
 	vec4 result;
+	bool in_foundation_shadow = false;
 	if (use_town_dirt) {
 		vec2 texel = floor((cell_world + source_uv) * 64.0);
 		float fleck = fract(sin(dot(texel, vec2(127.1, 311.7))) * 43758.5453);
 		float grain = (floor(fleck * 4.0) - 1.5) * 0.014 / (1.0 + depth * 0.25);
 		result = vec4(vec3(0.74, 0.55, 0.29) + grain, 1.0);
+		if (storefront_shadow_enabled) {
+			float reach = storefront_shadow_tuning.x;
+			vec2 ground_point = cell_world + source_uv;
+			// Stretch the contact shadow a little farther away from the west sun.
+			vec2 cast = ground_point + (TOWN_SUN_DIRECTION * 0.22 + vec2(0.0, 0.29)) * reach;
+			vec2 outside = max(max(storefront_shadow_rect.xy - cast, cast - storefront_shadow_rect.zw), vec2(0.0));
+			// Sample a single hard shadow at the logical pixel center.
+			vec2 normalized_edge = outside / vec2(0.28, 0.50);
+			in_foundation_shadow = dot(normalized_edge, normalized_edge) <= reach * reach;
+			if (in_foundation_shadow) {
+				result.rgb *= mix(vec3(1.0), vec3(0.36, 0.29, 0.23), storefront_shadow_tuning.y);
+			}
+		}
 	} else if (use_semantic_floor_material) {
-		vec3 floor_color = semantic_floor_material(source_uv, span_x, span_y);
+		// Preserve the original cell renderer's wider filter tap spacing.
+		vec3 floor_color = semantic_floor_material((cell_world + source_uv) * base_texture_size, span_x, span_y, base_texture_size);
 		vec3 floor_average = vec3(118.0, 94.0, 71.0) / 255.0;
 		result = vec4(semantic_plane_distance_contrast(floor_color, floor_average, indoor_depth), 1.0);
 	} else if (use_semantic_ceiling_material) {
@@ -373,7 +324,9 @@ void fragment() {
 		(wall_edge_mask.w > 0.5 && crosses_west);
 	// Clamp the contact seam itself to a dark value: AO must not turn into a
 	// bright texture-colored stripe when the underlying floor/ceiling texel is pale.
-	if (at_wall_plane_corner) {
+	// The footprint already shades this contact. A second grid-edge mark
+	// would draw a dark stripe through the cast shadow.
+	if (at_wall_plane_corner && !in_foundation_shadow) {
 		if (use_town_dirt) {
 			// Multiply the ochre rather than clamping its brightest channel.
 			// The old neutral cap shifted the ground contact toward olive.

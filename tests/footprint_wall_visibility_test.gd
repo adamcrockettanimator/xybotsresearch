@@ -8,7 +8,7 @@ class TestController extends "res://scripts/xybots_character_controller.gd":
 	func _world_actor_draw_layer(_position: Vector2) -> int:
 		return 200
 
-	func _world_point_has_clear_camera_line(target: Vector2) -> bool:
+	func _world_point_has_clear_camera_line(target: Vector2, _see_through_porch_rail := false) -> bool:
 		var distance := target.length()
 		for edge in _all_physical_wall_edges():
 			var hit := _ray_segment_hit_distance_limited(Vector2.ZERO, target / distance, edge["a"], edge["b"], distance - 0.001)
@@ -37,6 +37,10 @@ func _initialize() -> void:
 	renderer.last_wall_entries.clear()
 	renderer.last_wall_entries.append({"world_a": Vector2(1, 2), "world_b": Vector2(2, 2), "wall_draw_layer": 100})
 	assert(game._world_footprint_draw_layer(circle) == game._world_footprint_near_draw_layer(circle), "wall outside cone must not change object layer")
+	renderer.last_wall_entries.clear()
+	renderer.last_wall_entries.append({"world_a": Vector2(-1, 5), "world_b": Vector2(1, 5), "wall_draw_layer": 300})
+	assert(game._world_footprint_draw_layer(rectangle) == 301, "the wall behind the crate must paint first even beyond the footprint")
+	assert(renderer._segment_contact_points_in_cutaway_fan(Vector2(-1, 5), Vector2(1, 5), Vector2.ZERO, Vector2(-0.4, 4), Vector2(0.4, 4)).is_empty(), "player cutaway cone must still stop at the player")
 	# A wall touching the side or back of furniture is inside its triangular
 	# support cone, but lies behind the first visible footprint surface.
 	var touching_box := {"shape": game.OcclusionFootprintShape.RECTANGLE, "position": Vector2(1.165, 2.0), "half_width": 0.165, "half_depth": 0.27}

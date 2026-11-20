@@ -137,44 +137,109 @@ not the prop-specific numbers or names.
 
 ## Storefront field notes
 
-- **Wood courses.** Use large blocks of nearby values so the boards read before
-  thin details resolve. Stagger an occasional join on long side walls. Run
-  porch and awning boards continuously from wall to edge. Anchor the courses in
-  world coordinates so they stay aligned across physical wall spans. Give both
-  exposed sides of a false front the outdoor siding material above the roof.
-- **Trim and lighting.** Give posts and rails narrow rectangular cross sections
-  with an intentional draw order at their intersections. Give one visible face
-  ownership of the shared corner highlight. Paint shadow immediately under
-  ledges and let the broad awning shadow fall from the front wall toward the
-  deck. On a doorway, use a single tone across the header and narrow the
-  darker jamb return as the view approaches head-on. Shade the closed leaf at
-  its perimeter and fade the recess shadow between the far panel edges as
-  the camera moves. Project the round brass knob and give it a single white
-  glint once it occupies enough logical pixels.
-- **Fence silhouette.** Two rails and a shared post per junction read well
-  with open space between the rails. Fade face shading before the silhouette
-  becomes too small for detail. At grazing angles, cover the rows crossed
-  across each logical column so a thin rail stays continuous.
-- **Dry grass.** Use world-rooted, one-logical-pixel strokes with varied heights,
-  lean, and a dark-to-light stem ramp. Place uneven clumps at foundation
-  corners and beside props. Keep entrances and deck approaches clear. Fit one
-  shader carrier tightly around each visible clump. Add extra stems up close
-  and drop them individually before reducing the base clump. Compare both
-  close and distant views, and measure frame cost in the running scene when
-  increasing coverage.
-- **Glass and collision.** Keep the physical opening bounds in the style
-  resource and pass them to the window shader. Center the intact cross, put
-  the diagonal reflection over a parallax sash shadow, and keep fragments
-  attached to the outer frame after shattering. In this storefront the inner
-  cross breaks with the glass so a standing follow-up shot clears the opening.
-  Carry the same world-space shot height through wall collision, aim assist,
-  hit confirmation, and tracer visibility. Check the shot itself when
-  confirming damage since the muzzle ray can clear a pane the body ray misses.
-  Keep movement rules independent. The fence still stops players, while
-  projectiles pass it and expire without spawning an impact in open air.
+### Footprint and rendering
 
-The outdoor-town branch implements these examples in
-`scripts/town_storefront_style.gd`, `scripts/town_grass_strokes.gdshader`,
-`scripts/town_storefront_plane.gdshader`, and the coordinate-frame wall
-shader and renderer. `tests/town_storefront_test.gd` exercises the door,
-glass, dive-roll, footstep surface, and fence behavior.
+- Use the four world-space footprint corners as the exterior shell's
+  placement. Derive wall segments and elevations, then let the GPU paint
+  continuous walls and mask door, window, and trim details in world-aligned
+  face coordinates. Grid boundaries alone do not require rendered seams.
+  Keep physical doorway spans, collision, moving doors, and local cutaways
+  on their established paths.
+- Use one raised rectangular plane for the room and porch at their common
+  elevation. The plane samples the same world-rooted staggered procedural
+  WoodFloor2 material as the cell renderer. Its board lanes, ends, and palette
+  vary procedurally. Retain the bitmap comparison where the texture selector
+  needs it. Filter projected texel footprints near grazing angles and keep
+  the facade contact shadow and doorway spill tied to the shared plane.
+- Distinguish the top-down footprint, GPU carrier geometry, shader paint,
+  and CPU visibility and layer work. An overlay line identifies a construction
+  edge or a mask boundary. Measure the relevant passes at a matched camera
+  pose with debug overlays disabled when comparing CPU and GPU frame cost.
+
+### Siding, lettering, and lighting
+
+- Use continuous world-height courses, a fixed board pitch, and one stable
+  tone variation per board. Keep the established storefront free of staggered
+  vertical joints and alternating brick-like blocks. Shade each lap with a
+  broad gradient and a hard, dark underside. The first two courses can hold a
+  one-logical-pixel underside, the higher boards show more underside, and
+  the courses above the porch roof cap it at three logical pixels.
+- On a receding wall, show the siding thickness at the far jamb or corner
+  post. The near post covers the return. Let the bright lower lip project
+  past the dark recessed edge.
+- Set the siding detail blend once per building from the camera's nearest
+  footprint distance. Keep both ends of the wall at the same detail level.
+  Fade the ramps and lap shadows into stronger flat per-board shades so
+  distant walls still read as paneling. Preserve the author-approved near
+  look and adjust the fade range independently of board spacing.
+- Paint lettering such as COFFEE as ink within the siding material. Anchor
+  the glyphs to the full facade so a physical wall span cannot break them.
+  Use simple block strokes with room between letters. Set the near weight
+  in face coordinates and use the projected footprint to keep strokes
+  legible at roughly one logical pixel farther away. Apply the same siding
+  gradients, lap shadows, face light, and haze to the near-black ink.
+- The town sun is in the west, which is negative world X. Shade fixed world
+  faces accordingly. West is brightest, east darkest, and north and south
+  sit between them. Give the roof top its own tone. Keep the hard foundation
+  contact shadow tucked close to the raised base, with a small eastward
+  extension. Keep foot trim and cast shadows visually distinct.
+
+### Roofing and joinery
+
+- Paint corrugation on the roof and awning planes. The current storefront
+  uses 18 fine ribs with linear ramps, a darker slope on one side, and a
+  brighter slope on the other. Use crisp, close-only one-pixel crest and
+  crevice accents at restrained contrast. Crossfade into broader light and
+  dark pairs anchored to every other crest when the 18 ribs become too
+  small. Let the broader pattern lose contrast gradually. Check angle and
+  projected spacing as well as distance.
+- Start galvanized metal gray. Add muted brown oxide streaks along the sheet
+  and fade their fine variation as projected texels become too small. Keep
+  the oxidation scale independent of corrugation density. Use the nearby
+  metal highlights to convey form, with rust providing color variation.
+- Put the porch beam between the posts and below the awning plane. Paint a
+  roof shadow on the upper face, and check oblique views for floating strips
+  or roof overlap. Give the front cornice a lit lip, dark groove, beveled face,
+  and lower bead. Keep rear trim slim, close to the wall, with a shadow below.
+  Keep porch posts at the outer corners and the rail gap aligned with the door.
+- Give the door header a continuous tone and the visible jamb a return that
+  narrows head-on. Use a thin full-height side return on the window and keep
+  its head and sill lighting. Treat the center cross as one piece by shading
+  the four pane borders and stopping those edge accents at the intersection.
+  Use the near-only glint on the brass knob when it can resolve.
+- Keep the window opening bounds shared with gameplay. The intact cross and
+  pane reflections can use a parallax sash shadow. After breakage, keep
+  fragments on the outer frame and clear the cross. When touching these
+  paths, verify real shots at the appropriate height through collision, aim
+  assist, hit confirmation, and tracer placement. Preserve fence movement
+  blocking and projectile pass-through.
+
+### Occlusion and verification
+
+- Keep the local player's wall cutaway triangle bounded by the silhouette.
+  For footprint draw ordering, test the entire angular cone. A wall behind
+  a prop can overlap it in projection and must contribute a background
+  constraint. Reserve a Canvas layer between a town background wall and
+  the player so a crate can draw between them. Reproduce the camera pose and
+  check layer numbers alongside the pixels. Crate, grass, and player overlaps
+  can use different sorting paths.
+- Dry grass uses a tight carrier per clump, world-rooted one-logical-pixel
+  stems, and a separate fade for extra close blades. The clump cone checks
+  visibility and sorts against walls. Compare each grass pixel's depth with
+  the shared raised floor to hide stems behind the deck and room floor.
+  Grass and actors can still overlap imperfectly when a whole clump straddles
+  the actor's depth. Check a reproduced pose before changing the layer rules.
+  Fence rails also need grazing-angle checks so thin rails remain continuous.
+- Inspect the running scene head-on, at a grazing angle, and progressively
+  farther away. Include west and east views for world lighting and an interior
+  view for floor and cutaway changes. For layering, confirm both a wall behind
+  a prop and a wall legitimately in front. Use the existing storefront and
+  footprint smoke tests in addition to the player-view captures.
+
+The storefront examples live in `scripts/town_storefront_style.gd`,
+`scripts/town_storefront_plane.gdshader`,
+`scripts/coordinate_frame_semantic_floor.gdshaderinc`,
+`scripts/town_grass_strokes.gdshader`, and the coordinate-frame wall shader
+and renderer. `tests/town_storefront_test.gd` and
+`tests/footprint_wall_visibility_test.gd` cover the relevant gameplay and
+ordering rules.

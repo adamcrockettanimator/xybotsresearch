@@ -61,3 +61,18 @@ evidence, not decorative outlines.
    suppression, a logical-pixel width transition, or mask order.
 4. Fix the named component or its mask. Do not hide the symptom by adding
    unrelated geometry.
+
+## Storefront diagnostics
+
+- **F9** toggles the cage. **F10** toggles semantic mask guides. The live
+  legend in `scripts/town_storefront_debug_view.gd` identifies the stroke
+  families. Cyan represents projected carrier edges. A shader-painted
+  gradient or variation can be visible between the analytic mask guides.
+  The guides do not show CPU time or GPU time.
+- **F3 → Fan Draw Order** shows the local player and wall contact spans and
+  the resulting above/below-player layers. Use it for player versus wall
+  problems. For crates and grass, also inspect the footprint layer and the
+  active wall entries. Verify grass against the raised floor separately.
+- Capture the same camera pose with and without the guide. Match camera
+  distance and angle when comparing LOD, and use the unadorned capture to
+  judge one-logical-pixel shading and seams.
