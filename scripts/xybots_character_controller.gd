@@ -47,20 +47,24 @@ const STRAFE_RIGHT_WALL_CONTACT_X := 1.0                                        
 const FORWARD_WALL_CONTACT_Y := 0.56                                                        # Set the closest blocked-wall contact position in front of the viewer.
 const BACKWARD_WALL_CONTACT_Y := 0.84                                                       # Set the closest blocked-wall contact position behind the viewer.
 const INDOOR_MAP_SIZE := 6
-const OUTDOOR_MAP_SIZE := 12
+const OUTDOOR_MAP_WIDTH := 10
+const OUTDOOR_MAP_HEIGHT := 9
+const TOWN_STREET_Y := 4.5
 const TOWN_DRAW_DEPTH_RANGE := 19.0
-const TOWN_BUILDING_ORIGINS := [Vector2i(2, 2), Vector2i(7, 2), Vector2i(2, 7), Vector2i(7, 7)]
-const TOWN_BUILDING_SIZE := Vector2i(3, 3)
 const STOREFRONT_STYLE = preload("res://resources/town_storefront_style.tres")
+const TOWN_BUILDINGS := [
+	preload("res://resources/town_store_style.tres"),
+	preload("res://resources/town_hotel_style.tres"),
+	preload("res://resources/town_bank_style.tres"),
+]
 const STOREFRONT_DEBUG_VIEW = preload("res://scripts/town_storefront_debug_view.gd")
-const TOWN_STOREFRONT_SLOT := Vector2i(2, 7)
-const TOWN_PLAYER_START := Vector2i(5, 11)
+const TOWN_PLAYER_START := Vector2i(4, 8)
 
 var outdoor_town := false
 var MAP_WIDTH: int:
-	get: return OUTDOOR_MAP_SIZE if outdoor_town else INDOOR_MAP_SIZE
+	get: return OUTDOOR_MAP_WIDTH if outdoor_town else INDOOR_MAP_SIZE
 var MAP_HEIGHT: int:
-	get: return MAP_WIDTH
+	get: return OUTDOOR_MAP_HEIGHT if outdoor_town else INDOOR_MAP_SIZE
 var town_doorways: Array[Array] = []
 
 const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
@@ -987,6 +991,9 @@ var physical_wall_edges_cache: Array = []                                       
 var storefront_open_doors := {}
 var storefront_closing_doors := {}
 var storefront_glass_broken := false
+var town_broken_windows := {}
+var town_window_edges := {}
+var town_partition_edges := {}
 var storefront_window_vaulted := false
 var storefront_grass_layout: Array[Vector4] = []
 var storefront_grass_blades: Array[PackedVector4Array] = []
@@ -1798,7 +1805,7 @@ func _footstep_sample_path(surface: String, kind: String, sample: int) -> String
 
 
 func _footstep_surface(position: Vector2) -> String:
-	if outdoor_town and not town_has_roof(Vector2i(position.floor())) and not STOREFRONT_STYLE.porch_rect().has_point(position):
+	if outdoor_town and not town_has_roof(Vector2i(position.floor())) and town_walk_height(position) == 0.0:
 		return "Dirt"
 	return "Wood"
 
@@ -4981,14 +4988,16 @@ func _reset_world_barrels() -> void:
 			if not occupied:
 				candidates.append(cell)
 	if outdoor_town:
-		# Two furnishings in each building, then four pairs around the streets.
+		# Leave the street and each central doorway lane clear.
 		candidates.clear()
-		for origin: Vector2i in TOWN_BUILDING_ORIGINS:
-			if origin == TOWN_STOREFRONT_SLOT:
-				continue
-			candidates.append(origin + Vector2i(0, 1))
-			candidates.append(origin + Vector2i(2, 1))
-		candidates.append_array([Vector2i(1, 4), Vector2i(1, 6), Vector2i(5, 2), Vector2i(6, 3), Vector2i(10, 7), Vector2i(10, 9), Vector2i(5, 10), Vector2i(6, 10)])
+		for building in TOWN_BUILDINGS:
+			var lot: Rect2i = building.footprint
+			var rear_y := lot.position.y - 1 if building.faces_south else lot.end.y
+			candidates.append(Vector2i(lot.position.x, rear_y))
+			if lot.size.x > 2:
+				candidates.append(Vector2i(lot.end.x - 1, rear_y))
+			else:
+				candidates.append(Vector2i(lot.end.x, lot.end.y - 1))
 	var dining_cell := Vector2i(-1, -1) if outdoor_town else _find_dining_set_room_cell()
 	if semantic_typical_props_enabled and dining_cell.x >= 0:
 		# Keep the table cell and its immediate walking approaches clear of the
@@ -5076,6 +5085,41 @@ func _spawn_storefront_furnishings() -> void:
 	# Seat the full dinette against the west wall, between the door swings.
 	# Its east side leaves a passage between the front and rear doors.
 	_spawn_semantic_dining_set(front_left + Vector2(0.205, 1.0))
+	for building in TOWN_BUILDINGS:
+		var deck: Rect2 = building.porch()
+		# Leave the deck clear on both sides of each vaultable window.
+		var lot: Rect2i = building.footprint
+		var bench_position := Vector2(lot.end.x + 0.30, lot.get_center().y + 0.22)
+		var town_bench := bench.duplicate()
+		town_bench["id"] = "chair_semantic_bench_" + building.sign_text.to_lower()
+		town_bench["position"] = bench_position
+		semantic_lod_floor_footprints.append(town_bench)
+		_register_semantic_gameplay_prop(town_bench)
+		if building.balcony:
+			_spawn_semantic_dining_set(Vector2(deck.position.x + 1.42, lot.get_center().y))
+		var cover: PackedVector2Array = building.cover.duplicate()
+		# Keep the rear entrance and the route along the fence clear.
+		var rear_offset: float = building.rear_wall_y() - lot.position.y - building.direction() * 0.25
+		cover.append(Vector2(0.44, rear_offset))
+		var rear_right := lot.size.x - 0.39
+		if absf(lot.position.x + rear_right - building.door_x()) < TownBuildingStyle.DOOR_HALF_WIDTH + 0.22:
+			rear_right = 0.78
+		cover.append(Vector2(rear_right, rear_offset))
+		for index in cover.size():
+			var barrel := index % 2 != 0
+			var center := Vector2(lot.position) + cover[index]
+			center = _ensure_prop_wall_passage(center, Vector2.ONE * width * 0.58)
+			if not center.is_finite():
+				continue
+			var prefix := "barrel_gpu_lattice_instanced" if barrel else "crate_gpu_fragment_raster"
+			var prop := {
+				"id": "%s_%s_cover_%d" % [prefix, building.sign_text.to_lower(), index],
+				"position": center, "side_length": width, "depth": width,
+				"height": gpu_lattice_barrel_height if barrel else width,
+				"low_resolution_vector": true, "typical_spawn": true, "town_cover": true,
+			}
+			semantic_lod_floor_footprints.append(prop)
+			_register_semantic_gameplay_prop(prop)
 
 
 # A small row in an open cell adds shared cover without sealing a corridor.
@@ -5156,6 +5200,7 @@ func _spawn_semantic_dining_set(center: Vector2) -> void:
 		piece["typical_spawn"] = true
 		piece["dining_set_spawn"] = true
 		piece["dining_set_id"] = dining_set_id
+		piece["id"] += "_" + dining_set_id
 		# Furniture must catch normal standing shots despite its intentionally
 		# low visual proportions in the shared semantic viewport.
 		piece["projectile_height"] = 1.0
@@ -6592,7 +6637,7 @@ func _process_combat(delta: float) -> void:
 		var glass_height := float(shot.get("storefront_world_height", -1.0))
 		var wall_distance := _nearest_projectile_wall_distance(origin, direction, step_distance, glass_height) # Find the first thin-wall collision in this short path.
 		var player_hit := _nearest_projectile_player_hit(int(shot["owner"]), origin, direction, step_distance, bool(shot.get("crouched", false)), glass_height)
-		var barrel_hit := _nearest_projectile_barrel_hit(origin, direction, step_distance, float(shot.get("height", 0.72))) if bool(shot.get("crouched", false)) else {}
+		var barrel_hit := _projectile_cover_hit(origin, direction, step_distance, float(shot.get("height", 0.72)), bool(shot.get("crouched", false)), glass_height)
 		var hit_distance := wall_distance                                                          # Prefer wall collision unless a player is strictly closer.
 		var hit_player_index := -1                                                                 # Track whether this collision was a player.
 		var hit_barrel := false
@@ -6808,10 +6853,9 @@ func _spawn_pistol_shot(player_index: int) -> void:
 	var glass_height := town_walk_height(_player_state_world_position(state)) + projectile_height * 0.36 if outdoor_town else -1.0
 	var desired_muzzle_distance := 0.34                                                          # Preserve the authored visual separation between body and pistol muzzle when the lane is clear.
 	var muzzle_wall_distance := _nearest_projectile_wall_distance(body_origin, direction, desired_muzzle_distance, glass_height) # Check the short body-to-muzzle segment before placing the bullet.
-	if crouched:
-		var near_barrel := _nearest_projectile_barrel_hit(body_origin, direction, desired_muzzle_distance, projectile_height)
-		if not near_barrel.is_empty():
-			muzzle_wall_distance = minf(muzzle_wall_distance, float(near_barrel["distance"]))
+	var near_barrel := _projectile_cover_hit(body_origin, direction, desired_muzzle_distance, projectile_height, crouched, glass_height)
+	if not near_barrel.is_empty():
+		muzzle_wall_distance = minf(muzzle_wall_distance, float(near_barrel["distance"]))
 	var muzzle_distance := minf(desired_muzzle_distance, maxf(muzzle_wall_distance - PROJECTILE_WALL_EPSILON, 0.0)) # Clamp the muzzle just in front of a wall instead of spawning a shot on its far side.
 	var origin := body_origin + direction * muzzle_distance                                      # Start the projectile at the safe, wall-bounded muzzle point.
 	var smoke_origin := body_origin + direction * minf(muzzle_distance, .2)                    # Anchor smoke halfway down the gameplay muzzle segment so it reads at the visible raised barrel rather than in front of the projectile.
@@ -6824,7 +6868,7 @@ func _spawn_pistol_shot(player_index: int) -> void:
 		music_combat_remaining = 8.0
 	var wall_distance := minf(_nearest_projectile_wall_distance(origin, direction, maximum_distance, glass_height), maximum_distance) # Stop the planned visual path at the first static wall, or at max range.
 	var player_hit := _nearest_projectile_player_hit(player_index, origin, direction, maximum_distance, crouched, glass_height)
-	var barrel_hit := _nearest_projectile_barrel_hit(origin, direction, maximum_distance, projectile_height) if crouched else {}
+	var barrel_hit := _projectile_cover_hit(origin, direction, maximum_distance, projectile_height, crouched, glass_height)
 	var visual_distance := wall_distance                                                           # Prefer the wall endpoint unless a body is closer.
 	var visual_target_player_index := -1                                                         # Preserve a direct incoming-shot relationship for per-camera visibility without changing collision.
 	if not player_hit.is_empty() and float(player_hit.get("distance", maximum_distance)) < visual_distance:
@@ -6895,7 +6939,7 @@ func _nearest_projectile_wall_distance(origin: Vector2, direction: Vector2, maxi
 		var distance := _ray_segment_hit_distance_limited(origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance) # Test the short segment.
 		if distance >= 0.0 and distance < nearest and _projectile_edge_blocks_at_height(edge, origin + direction * distance, glass_height):
 			nearest = distance                                                                        # Update the nearest contact.
-	var topology_distance := _projectile_topology_wall_distance(origin, direction, maximum_distance, outdoor_town and glass_height >= 0.0)
+	var topology_distance := _projectile_topology_wall_distance(origin, direction, maximum_distance, outdoor_town and glass_height >= 0.0, glass_height)
 	nearest = minf(nearest, topology_distance)                                                  # Let either representation block the shot; topology closes endpoint/parallel-ray gaps.
 	return nearest                                                                              # Return greater than max when this path is clear.
 
@@ -6924,9 +6968,22 @@ func _is_storefront_pane(edge: Dictionary, world: Vector2, height: float) -> boo
 	return STOREFRONT_STYLE.window_has_opening(Vector2(u, height))
 
 
+func town_window_has_opening(edge: Dictionary, world: Vector2, height: float) -> bool:
+	var window: Dictionary = edge.get("town_window", {})
+	if not window.is_empty():
+		return _town_variant_window_has_opening(window, world, height)
+	return _is_storefront_pane(edge, world, height)
+
+
+func _town_variant_window_has_opening(window: Dictionary, world: Vector2, height: float) -> bool:
+	return Rect2(window["aperture"]).has_point(Vector2(world[int(window["axis"])], height))
+
+
 func _projectile_edge_blocks_at_height(edge: Dictionary, world: Vector2, height: float) -> bool:
-	if not outdoor_town or height < 0.0:
+	if not outdoor_town:
 		return true
+	if height < 0.0:
+		return not edge.get("projectile_only", false)
 	var a: Vector2 = edge["a"]
 	var b: Vector2 = edge["b"]
 	var on_fence := (a.x == b.x and (a.x == 0.0 or a.x == float(MAP_WIDTH))) or (a.y == b.y and (a.y == 0.0 or a.y == float(MAP_HEIGHT)))
@@ -6934,19 +6991,37 @@ func _projectile_edge_blocks_at_height(edge: Dictionary, world: Vector2, height:
 		return false
 	if edge.has("height") and (height < float(edge.get("bottom", 0.0)) or height > float(edge["height"])):
 		return false
+	var window: Dictionary = edge.get("town_window", {})
+	if not window.is_empty():
+		return not (town_broken_windows.has(window["id"]) and _town_variant_window_has_opening(window, world, height))
 	return not (storefront_glass_broken and _is_storefront_pane(edge, world, height))
 
 
 func _try_break_storefront_glass(edge_key: String, world: Vector2, direction: Vector2, height: float) -> bool:
-	if not outdoor_town or storefront_glass_broken or edge_key.is_empty() or height < 0.0:
+	if not outdoor_town or edge_key.is_empty() or height < 0.0:
 		return false
+	var window: Dictionary = town_window_edges.get(edge_key, {})
+	if not window.is_empty():
+		if not _town_variant_window_has_opening(window, world, height):
+			return false
+		return _break_town_window(window["id"], world, direction, height)
 	for edge: Dictionary in _all_physical_wall_edges():
-		if edge["key"] != edge_key or not _is_storefront_pane(edge, world, height):
-			continue
-		storefront_glass_broken = true
-		_spawn_storefront_glass_shards(world, direction, height)
-		return true
+		if edge["key"] == edge_key and _is_storefront_pane(edge, world, height):
+			return _break_town_window("", world, direction, height)
 	return false
+
+
+func _break_town_window(id: String, world: Vector2, direction: Vector2, height: float) -> bool:
+	if id.is_empty():
+		if storefront_glass_broken:
+			return false
+		storefront_glass_broken = true
+	else:
+		if town_broken_windows.has(id):
+			return false
+		town_broken_windows[id] = true
+	_spawn_storefront_glass_shards(world, direction, height)
+	return true
 
 
 func _spawn_storefront_glass_shards(world: Vector2, direction: Vector2, height: float) -> void:
@@ -6970,7 +7045,7 @@ func _spawn_storefront_glass_shards(world: Vector2, direction: Vector2, height: 
 
 
 # _projectile_topology_wall_distance: Walks the ray through maze cells so projectile blocking uses the same edge ownership as movement.
-func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float, allow_town_exit := false) -> float:
+func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, maximum_distance: float, allow_town_exit := false, glass_height := -1.0) -> float:
 	if maximum_distance <= 0.0 or direction.length_squared() <= 0.000001:                     # Avoid invalid DDA state for zero-length paths.
 		return maximum_distance + 1.0                                                             # Treat an empty path as clear.
 	var ray_direction := direction.normalized()                                                 # Make DDA distances world-unit distances.
@@ -6989,7 +7064,7 @@ func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, max
 	while minf(t_max_x, t_max_y) <= maximum_distance + PROJECTILE_WALL_EPSILON:                # Visit every cell edge crossed inside this projectile segment.
 		if absf(t_max_x - t_max_y) <= PROJECTILE_WALL_EPSILON:                                   # A corner crossing touches both cell edges at the same instant.
 			var diagonal_distance := maxf(0.0, t_max_x + 0.0001)                                   # Convert the biased DDA distance back to a non-negative projectile distance.
-			if _projectile_topology_edge_blocks(cell, Vector2i(step_x, 0), allow_town_exit) or _projectile_topology_edge_blocks(cell, Vector2i(0, step_y), allow_town_exit):
+			if _projectile_topology_edge_blocks(cell, Vector2i(step_x, 0), allow_town_exit, origin + ray_direction * diagonal_distance, glass_height) or _projectile_topology_edge_blocks(cell, Vector2i(0, step_y), allow_town_exit, origin + ray_direction * diagonal_distance, glass_height):
 				return diagonal_distance                                                               # Stop at the first blocked corner contact.
 			cell += Vector2i(step_x, step_y)                                                        # Advance through the open diagonal corner.
 			t_max_x += t_delta_x                                                                    # Schedule the next vertical crossing.
@@ -6997,14 +7072,14 @@ func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, max
 		elif t_max_x < t_max_y:                                                                   # The ray next crosses a vertical cell edge.
 			var horizontal_distance := maxf(0.0, t_max_x + 0.0001)                                 # Convert its DDA distance into projectile distance.
 			var horizontal_delta := Vector2i(step_x, 0)                                             # Express the crossed edge in movement-map coordinates.
-			if _projectile_topology_edge_blocks(cell, horizontal_delta, allow_town_exit):
+			if _projectile_topology_edge_blocks(cell, horizontal_delta, allow_town_exit, origin + ray_direction * horizontal_distance, glass_height):
 				return horizontal_distance                                                             # Stop at the first blocking vertical edge.
 			cell += horizontal_delta                                                                # Enter the next open cell.
 			t_max_x += t_delta_x                                                                    # Schedule the following vertical crossing.
 		else:                                                                                     # The ray next crosses a horizontal cell edge.
 			var vertical_distance := maxf(0.0, t_max_y + 0.0001)                                   # Convert its DDA distance into projectile distance.
 			var vertical_delta := Vector2i(0, step_y)                                               # Express the crossed edge in movement-map coordinates.
-			if _projectile_topology_edge_blocks(cell, vertical_delta, allow_town_exit):
+			if _projectile_topology_edge_blocks(cell, vertical_delta, allow_town_exit, origin + ray_direction * vertical_distance, glass_height):
 				return vertical_distance                                                               # Stop at the first blocking horizontal edge.
 			cell += vertical_delta                                                                  # Enter the next open cell.
 			t_max_y += t_delta_y                                                                    # Schedule the following horizontal crossing.
@@ -7013,8 +7088,15 @@ func _projectile_topology_wall_distance(origin: Vector2, direction: Vector2, max
 	return maximum_distance + 1.0                                                              # No blocking movement edge lies along this projectile segment.
 
 
-func _projectile_topology_edge_blocks(cell: Vector2i, delta: Vector2i, allow_town_exit: bool) -> bool:
-	return (not allow_town_exit or _is_open_cell(cell + delta)) and _has_wall_edge(cell, delta)
+func _projectile_topology_edge_blocks(cell: Vector2i, delta: Vector2i, allow_town_exit: bool, hit_world: Vector2, glass_height: float) -> bool:
+	if (allow_town_exit and not _is_open_cell(cell + delta)) or not _has_wall_edge(cell, delta):
+		return false
+	if allow_town_exit:
+		var segment := _physical_cell_edge_segment(cell, delta)
+		var window: Dictionary = town_window_edges.get(_physical_edge_key(segment[0], segment[1]), {})
+		if not window.is_empty() and town_broken_windows.has(window["id"]):
+			return not _town_variant_window_has_opening(window, hit_world, glass_height)
+	return true
 
 
 # _ray_segment_hit_distance_limited: Variant of the visibility ray helper without its camera-distance cap.
@@ -7075,7 +7157,15 @@ func _ray_box_distance(origin: Vector2, direction: Vector2, center: Vector2, hal
 	return float(hit.get("distance", -1.0))
 
 
-func _nearest_projectile_barrel_hit(origin: Vector2, direction: Vector2, maximum_distance: float, height: float) -> Dictionary:
+func _projectile_cover_hit(origin: Vector2, direction: Vector2, distance: float, height: float, crouched: bool, world_height: float) -> Dictionary:
+	if crouched:
+		return _nearest_projectile_barrel_hit(origin, direction, distance, height)
+	if outdoor_town and world_height >= 0.0:
+		return _nearest_projectile_barrel_hit(origin, direction, distance, height, world_height)
+	return {}
+
+
+func _nearest_projectile_barrel_hit(origin: Vector2, direction: Vector2, maximum_distance: float, height: float, standing_world_height := -1.0) -> Dictionary:
 	if height < 0.0:
 		return {}
 	var nearest_distance := maximum_distance + 1.0
@@ -7083,8 +7173,10 @@ func _nearest_projectile_barrel_hit(origin: Vector2, direction: Vector2, maximum
 	for barrel in world_barrels:
 		if bool(barrel.get("movement_only", false)):
 			continue
-		var prop_height := float(barrel.get("projectile_height", BARREL_PROJECTILE_HEIGHT + BARREL_PROJECTILE_TOP_MARGIN))
-		if height > prop_height:
+		if standing_world_height >= 0.0:
+			if standing_world_height > float(barrel.get("projectile_top_world", -1.0)):
+				continue
+		elif height > float(barrel.get("projectile_height", BARREL_PROJECTILE_HEIGHT + BARREL_PROJECTILE_TOP_MARGIN)):
 			continue
 		var center := Vector2(barrel.get("position", Vector2.ZERO))
 		var distance := _ray_box_distance(origin, direction, center, Vector2(barrel["half_extents"])) if barrel.has("half_extents") else _ray_circle_hit_distance(origin, direction, center, float(barrel.get("projectile_radius", BARREL_PROJECTILE_RADIUS)))
@@ -9017,18 +9109,34 @@ func _render_storefront_grass(used: Dictionary) -> void:
 	var renderer: Node = coordinate_renderers[active_player_index]
 	if not is_instance_valid(renderer):
 		return
-	if storefront_grass_layout != STOREFRONT_STYLE.grass_clumps:
-		storefront_grass_layout = STOREFRONT_STYLE.grass_clumps.duplicate()
-		_build_storefront_grass_blades()
-
 	var front_left := Vector2(STOREFRONT_STYLE.FOOTPRINT.position)
-	var floor: Rect2 = STOREFRONT_STYLE.floor_rect()
-	var floor_bounds := Vector4(floor.position.x, floor.position.y, floor.end.x, floor.end.y)
+	var clumps: Array[Vector4] = STOREFRONT_STYLE.grass_clumps.duplicate()
+	var floor_rects: Array[Rect2] = []
+	floor_rects.resize(clumps.size())
+	floor_rects.fill(STOREFRONT_STYLE.floor_rect())
+	for building in TOWN_BUILDINGS:
+		var side: Rect2 = Rect2(building.footprint)
+		for x in [side.position.x - 0.13, side.end.x + 0.13]:
+			for y in [side.position.y + 0.17, side.get_center().y, side.end.y - 0.24]:
+				var offset := Vector2(x, y) - front_left
+				clumps.append(Vector4(offset.x, offset.y, 0.92, 1.12))
+				floor_rects.append(building.floor_bounds())
+		var rear: float = building.rear_wall_y() - building.direction() * 0.19
+		for x in [side.position.x + 0.16, side.end.x - 0.15]:
+			var offset := Vector2(x, rear) - front_left
+			clumps.append(Vector4(offset.x, offset.y, 0.78, 0.92))
+			floor_rects.append(building.floor_bounds())
+	if storefront_grass_layout != clumps:
+		storefront_grass_layout = clumps
+		_build_storefront_grass_blades()
 	var eye_height: float = renderer.VIRTUAL_CAMERA_HEIGHT
 	var projection_center: Vector2 = renderer._project_view_point(Vector2(0.0, 1.0), eye_height)
 	var visible_roots: Array[Vector2] = []
 	for index in storefront_grass_layout.size():
 		var cluster := storefront_grass_layout[index]
+		var floor := floor_rects[index]
+		var floor_bounds := Vector4(floor.position.x, floor.position.y, floor.end.x, floor.end.y)
+		var grass_floor_height: float = STOREFRONT_STYLE.porch_height if index < STOREFRONT_STYLE.grass_clumps.size() else TownBuildingStyle.FLOOR_HEIGHT
 		var center := front_left + Vector2(cluster.x, cluster.y)
 		var view: Dictionary = renderer.runtime_project_world_effect_point_for_current_pose(center)
 		if not view.get("visible", false):
@@ -9123,7 +9231,7 @@ func _render_storefront_grass(used: Dictionary) -> void:
 		material.set_shader_parameter("bends", projected_bends)
 		material.set_shader_parameter("inverse_depths", inverse_depths)
 		material.set_shader_parameter("floor_bounds", floor_bounds)
-		material.set_shader_parameter("floor_height", STOREFRONT_STYLE.porch_height)
+		material.set_shader_parameter("floor_height", grass_floor_height)
 		material.set_shader_parameter("camera_origin", origin)
 		material.set_shader_parameter("camera_forward", forward)
 		material.set_shader_parameter("camera_right", right)
@@ -9343,6 +9451,8 @@ func _register_semantic_gameplay_prop(footprint: Dictionary) -> void:
 	var width := float(footprint["side_length"])
 	var depth := float(footprint.get("depth", width))
 	var prop := {"id": next_combat_visual_id, "position": footprint["position"], "hits": 0, "footprint_key": key, "vault_height": footprint["height"], "projectile_height": float(footprint.get("projectile_height", float(footprint["height"]) / 0.36))}
+	if footprint.get("town_cover", false):
+		prop["projectile_top_world"] = town_walk_height(footprint["position"]) + float(footprint["height"])
 	if is_barrel:
 		prop["projectile_radius"] = width * 0.6
 		prop["collision_radius"] = width * 0.6
@@ -9446,6 +9556,11 @@ func _semantic_lod_floor_outline(key: String) -> Node2D:
 		node.name = "SemanticBenchNear" if key.begins_with("chair_semantic_stool") else ("SemanticBenchOpposite" if key.begins_with("chair_semantic_bench") else ("SemanticTable" if key.begins_with("chair_semantic_table") else ("SemanticImportedChairEdges" if key.begins_with("chair_semantic_edges") else ("SemanticImportedChair" if key.begins_with("chair_semantic_imported") else ("CrateGpuFragmentRaster" if key.begins_with("crate_gpu_fragment_raster") else ("CrateGpuCage" if key.begins_with("crate_gpu_cage") else "SemanticLodFloorOutline_%s" % key))))))
 		if key.begins_with("chair_semantic_table"):
 			node.set("style_path", "res://resources/semantic_table_style.tres")
+		if outdoor_town:
+			if outline_script == SEMANTIC_GPU_CAGE_CRATE_SCRIPT or outline_script == SEMANTIC_GPU_LATTICE_BARREL_SCRIPT:
+				node.set("use_town_lighting", true)
+			elif outline_script == SEMANTIC_STOOL_SCRIPT:
+				node.modulate = Color(0.99, 1.023, 0.99) * Color(0.85, 0.85, 0.85)
 		node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var layer: Node2D = view.get("combat_layer", null)
 		if layer != null:
@@ -9728,10 +9843,10 @@ func _render_live_semantic_floor_footprints() -> void:
 			crate_outline.set("authoring_lod_stage", int(footprint.get("authoring_lod_stage", -1)))
 			crate_outline.set("line_raster_backend", 1 if key.begins_with("crate_gpu_fragment_raster") else 0)
 			var crate_footprint := {"shape": OcclusionFootprintShape.RECTANGLE, "position": center, "half_width": half_side, "half_depth": half_depth}
-			crate_outline.z_index = _world_footprint_draw_layer(crate_footprint)
 			var crate_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(crate_footprint)
 			crate_outline.visible = crate_visible
 			if crate_visible:
+				crate_outline.z_index = _world_footprint_draw_layer(crate_footprint)
 				var crate_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
 				if crate_renderer == null or not crate_renderer.has_method("_runtime_camera_origin"):
 					crate_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
@@ -9754,10 +9869,12 @@ func _render_live_semantic_floor_footprints() -> void:
 			var lattice_outline := _semantic_lod_floor_outline(key)
 			if lattice_outline == null:
 				continue
-			lattice_outline.z_index = _world_footprint_draw_layer({"shape": OcclusionFootprintShape.CIRCLE, "position": center, "radius": half_side})
-			var lattice_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(_world_item_footprint("barrel", center))
+			var lattice_footprint := _world_item_footprint("barrel", center)
+			lattice_footprint["radius"] = half_side
+			var lattice_visible := _world_actor_overlaps_current_camera_fan(center, maxf(half_side, half_depth)) and _world_footprint_has_visible_camera_span(lattice_footprint)
 			lattice_outline.visible = lattice_visible
 			if lattice_visible:
+				lattice_outline.z_index = _world_footprint_draw_layer(lattice_footprint)
 				var lattice_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
 				if lattice_renderer == null or not lattice_renderer.has_method("_runtime_camera_origin"):
 					lattice_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
@@ -9774,6 +9891,28 @@ func _render_live_semantic_floor_footprints() -> void:
 			continue
 		if bool(footprint.get("cylinder", false)):
 			_render_semantic_cylinder(key, center, half_side, float(footprint.get("height", 0.0)))
+			continue
+		if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table"):
+			var dining_footprint := _dining_furniture_footprint(footprint)
+			# Let the wall painter occlude individual pixels through the balusters.
+			dining_footprint["see_through_porch_rail"] = outdoor_town and town_walk_height(center) > 0.026
+			var dining_radius := Vector2(float(dining_footprint["half_width"]), float(dining_footprint["half_depth"])).length()
+			var dining_visible := _world_actor_overlaps_current_camera_fan(center, dining_radius) and _world_footprint_has_visible_camera_span(dining_footprint)
+			var outline := _semantic_lod_floor_outline(key)
+			if outline == null:
+				continue
+			outline.visible = dining_visible
+			if dining_visible:
+				outline.z_index = _world_footprint_draw_layer(dining_footprint)
+				var stool_forward := _view_forward_vector().normalized()
+				var stool_right := _view_right_vector().normalized()
+				var stool_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
+				if stool_renderer == null:
+					stool_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
+				var stool_offset := _semantic_legacy_projection_offset(stool_renderer)
+				var stool_origin: Vector2 = stool_renderer.call("_runtime_camera_origin", stool_forward, stool_right) if stool_renderer != null and stool_renderer.has_method("_runtime_camera_origin") else _runtime_camera_origin_for_visibility()
+				outline.call("set_stool", center, stool_origin, stool_forward, stool_right, stool_offset, town_walk_height(center))
+				outline.visible = true
 			continue
 		var world_corners := [
 			center + Vector2(-half_side, -half_depth),
@@ -9825,25 +9964,6 @@ func _render_live_semantic_floor_footprints() -> void:
 			if complete:
 				var mesh_camera_origin := _runtime_camera_origin_for_visibility()
 				outline.visible = bool(outline.call("set_barrel", projected_corners, mesh_camera_origin, _view_forward_vector(), _view_right_vector(), center))
-			continue
-		if key.begins_with("chair_semantic_stool") or key.begins_with("chair_semantic_bench") or key.begins_with("chair_semantic_table"):
-			var dining_footprint := _dining_furniture_footprint(footprint)
-			# Let the wall painter occlude individual pixels through the balusters.
-			dining_footprint["see_through_porch_rail"] = outdoor_town and STOREFRONT_STYLE.porch_rect().has_point(center)
-			outline.z_index = _world_footprint_draw_layer(dining_footprint)
-			var dining_radius := Vector2(float(dining_footprint["half_width"]), float(dining_footprint["half_depth"])).length()
-			var dining_visible := complete and _world_actor_overlaps_current_camera_fan(center, dining_radius) and _world_footprint_has_visible_camera_span(dining_footprint)
-			outline.visible = dining_visible
-			if dining_visible:
-				var stool_forward := _view_forward_vector().normalized()
-				var stool_right := _view_right_vector().normalized()
-				var stool_renderer: Node = coordinate_renderers[active_player_index] if active_player_index >= 0 and active_player_index < coordinate_renderers.size() else null
-				if stool_renderer == null:
-					stool_renderer = get_node_or_null("CoordinateFrameRuntimeRenderer")
-				var stool_offset := _semantic_legacy_projection_offset(stool_renderer)
-				var stool_origin: Vector2 = stool_renderer.call("_runtime_camera_origin", stool_forward, stool_right) if stool_renderer != null and stool_renderer.has_method("_runtime_camera_origin") else _runtime_camera_origin_for_visibility()
-				outline.call("set_stool", center, stool_origin, stool_forward, stool_right, stool_offset, town_walk_height(center))
-				outline.visible = true
 			continue
 		if key.begins_with("chair_semantic_imported") or key.begins_with("chair_semantic_edges"):
 			if complete:
@@ -10279,6 +10399,10 @@ func _world_footprint_has_visible_camera_span(footprint: Dictionary) -> bool:
 # stable wall coverage. Test each interval against all physical edges, including
 # offscreen edges, through the renderer's existing cutaway-aware ray check.
 func _footprint_cone_has_clear_interval(footprint: Dictionary, origin: Vector2, direction: Vector2, supports: Array) -> bool:
+	var see_through_rail := bool(footprint.get("see_through_porch_rail", false))
+	var center_distance := _footprint_ray_entry(footprint, origin, direction)
+	if center_distance >= 0.0 and _world_point_has_clear_camera_line(origin + direction * center_distance, see_through_rail):
+		return true
 	var angles: Array[float] = []
 	for point in supports:
 		var relative := Vector2(point) - origin
@@ -10286,29 +10410,37 @@ func _footprint_cone_has_clear_interval(footprint: Dictionary, origin: Vector2, 
 	angles.sort()
 	var minimum: float = angles.front()
 	var maximum: float = angles.back()
+	var broad_radius := 0.0
+	for point in supports:
+		broad_radius = maxf(broad_radius, origin.distance_to(point))
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.CIRCLE:
+		broad_radius = origin.distance_to(footprint["position"]) + float(footprint["radius"])
+	var radius_squared := broad_radius * broad_radius
+	var fan_left := direction.rotated(minimum)
+	var fan_right := direction.rotated(maximum)
 	for edge in _all_physical_wall_edges():
 		for endpoint in [edge["a"], edge["b"]]:
 			var relative := Vector2(endpoint) - origin
-			var angle := atan2(direction.cross(relative), direction.dot(relative))
-			if angle > minimum and angle < maximum:
-				angles.append(angle)
+			if relative.length_squared() > radius_squared or fan_left.cross(relative) <= 0.0 or fan_right.cross(relative) >= 0.0:
+				continue
+			angles.append(atan2(direction.cross(relative), direction.dot(relative)))
 	angles.sort()
 	for index in range(angles.size() - 1):
 		if angles[index + 1] - angles[index] <= 0.000001:
 			continue
 		var ray := direction.rotated((angles[index] + angles[index + 1]) * 0.5)
-		var distance := -1.0
-		if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.CIRCLE:
-			distance = _ray_circle_hit_distance(origin, ray, Vector2(footprint["position"]), float(footprint["radius"]))
-		else:
-			var corners := _rectangle_footprint_corners(footprint)
-			for side in range(corners.size()):
-				var hit := _ray_segment_hit_distance_limited(origin, ray, corners[side], corners[(side + 1) % corners.size()], 10000.0)
-				if hit >= 0.0 and (distance < 0.0 or hit < distance):
-					distance = hit
-		if distance >= 0.0 and _world_point_has_clear_camera_line(origin + ray * distance, bool(footprint.get("see_through_porch_rail", false))):
+		var distance := _footprint_ray_entry(footprint, origin, ray)
+		if distance >= 0.0 and _world_point_has_clear_camera_line(origin + ray * distance, see_through_rail):
 			return true
 	return false
+
+
+func _footprint_ray_entry(footprint: Dictionary, origin: Vector2, ray: Vector2) -> float:
+	var center: Vector2 = footprint["position"]
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.CIRCLE:
+		return _ray_circle_hit_distance(origin, ray, center, float(footprint["radius"]))
+	var extent := Vector2(float(footprint["half_width"]), float(footprint["half_depth"]))
+	return _ray_box_distance(origin, ray, center, extent)
 
 
 func _rectangle_footprint_corners(footprint: Dictionary) -> Array[Vector2]:
@@ -10622,9 +10754,9 @@ func _bot_dive_cover_goal(player_index: int, brain: Dictionary) -> Vector2:
 func _plan_dive_vault(origin: Vector2, direction: Vector2, remaining_distance: float) -> Dictionary:
 	var travel := direction * remaining_distance
 	var first_prop := _barrel_sweep_hit(origin, travel)
-	var vault := _dive_window_vault(origin, direction, remaining_distance) if outdoor_town else {}
+	var vault := _dive_town_edge_vault(origin, direction, remaining_distance) if outdoor_town else {}
 	var clear_distance := float(vault.get("clear_distance", 0.0))
-	var lift := 0.25 if not vault.is_empty() else 0.0
+	var lift := float(vault.get("lift", 0.0))
 	var props := []
 	while not first_prop.is_empty():
 		var entry := float(first_prop["time"]) * remaining_distance
@@ -10661,25 +10793,48 @@ func _plan_dive_vault(origin: Vector2, direction: Vector2, remaining_distance: f
 	return vault
 
 
-func _dive_window_vault(origin: Vector2, direction: Vector2, remaining_distance: float) -> Dictionary:
-	if absf(direction.y) < 0.65:
-		return {}
+func _dive_town_edge_vault(origin: Vector2, direction: Vector2, remaining_distance: float) -> Dictionary:
+	var nearest := INF
+	var vault := {}
 	for edge: Dictionary in _all_physical_wall_edges():
-		if not edge.get("window", false):
+		var window: Dictionary = edge.get("town_window", {})
+		var rail: bool = edge.get("porch_rail", false)
+		if window.is_empty() and not rail and not edge.get("window", false):
 			continue
 		var a: Vector2 = edge["a"]
 		var b: Vector2 = edge["b"]
-		var distance := (a.y - origin.y) / direction.y
-		var clearance := (PLAYER_CAPSULE_RADIUS + 0.02) / absf(direction.y)
-		if distance <= 0.0 or distance > 0.43 or distance + clearance + 0.04 > remaining_distance:
+		var axis := 1 if is_equal_approx(a.x, b.x) else 0
+		var normal_axis := 1 - axis
+		if absf(direction[normal_axis]) < 0.65:
+			continue
+		var distance := (a[normal_axis] - origin[normal_axis]) / direction[normal_axis]
+		var half_thickness := 0.0
+		if rail:
+			half_thickness = float(edge.get("thickness", TownBuildingStyle.RAIL_WIDTH)) * 0.5
+		var clearance := (PLAYER_CAPSULE_RADIUS + half_thickness + 0.02) / absf(direction[normal_axis])
+		if distance <= 0.0 or distance >= nearest or distance > 0.43 or distance + clearance + 0.04 > remaining_distance:
 			continue
 		var crossing := origin + direction * distance
-		var span := absf(a.x - b.x)
-		var margin := span * 0.22 + 0.065 + absf(direction.x) * clearance
-		if crossing.x < minf(a.x, b.x) + margin or crossing.x > maxf(a.x, b.x) - margin:
+		var low := minf(a[axis], b[axis])
+		var high := maxf(a[axis], b[axis])
+		var margin := PLAYER_CAPSULE_RADIUS + 0.02 + absf(direction[axis]) * clearance
+		if not rail and window.is_empty():
+			margin = (high - low) * 0.22 + 0.065 + absf(direction[axis]) * clearance
+		if not window.is_empty():
+			var aperture: Rect2 = window["aperture"]
+			low = aperture.position.x
+			high = aperture.end.x
+		if crossing[axis] < low + margin or crossing[axis] > high - margin:
 			continue
-		return {"window": edge["key"], "crossing": crossing, "impact_distance": maxf(distance - clearance, 0.0), "clear_distance": distance + clearance}
-	return {}
+		nearest = distance
+		vault = {
+			"edge": edge["key"], "crossing": crossing, "clear_distance": distance + clearance,
+			"lift": float(edge["height"]) - town_walk_height(origin) + 0.055 if rail else 0.25,
+		}
+		if not rail:
+			vault["window_id"] = window.get("id", "")
+			vault["impact_distance"] = maxf(distance - clearance, 0.0)
+	return vault
 
 
 func _dive_vault_lift(state: Dictionary) -> float:
@@ -10778,11 +10933,11 @@ func _advance_dive_roll(player_index: int, delta: float, bound: bool) -> bool:
 	if not vault.is_empty() and (origin - Vector2(vault["origin"])).dot(roll_direction) >= float(vault["clear_distance"]):
 		crossing = {}
 	var moved := _move_world_with_wall_slide(origin, roll_direction * distance, "east", "west", "south", "north", true, crossing)
-	if vault.has("window") and not storefront_window_vaulted and (moved - Vector2(vault["origin"])).dot(roll_direction) >= float(vault["impact_distance"]):
-		storefront_window_vaulted = true
-		if not storefront_glass_broken:
-			storefront_glass_broken = true
-			_spawn_storefront_glass_shards(vault["crossing"], roll_direction, 0.33)
+	if vault.has("window_id") and (moved - Vector2(vault["origin"])).dot(roll_direction) >= float(vault["impact_distance"]):
+		var window_id: String = vault["window_id"]
+		if window_id.is_empty():
+			storefront_window_vaulted = true
+		_break_town_window(window_id, vault["crossing"], roll_direction, 0.33)
 	if bot:
 		moved = _bot_limit_actor_overlap(player_index, origin, moved)
 	state["dive_elapsed"] = elapsed + delta
@@ -10967,7 +11122,7 @@ func _process_bot_world_context(delta: float) -> void:
 	# Human movement converts its local half-tile controls through
 	# LOCAL_TILE_WORLD_HALF_EXTENT. Match that world speed exactly; the old bot
 	# path omitted the factor and made greenshirts run twice as fast as Bart.
-	var moved := _move_world_with_wall_slide(origin, desired * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta, "east", "west", "south", "north")
+	var moved := _move_world_with_wall_slide(origin, desired * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(character_is_crouching) * delta, "east", "west", "south", "north", outdoor_town)
 	moved = _bot_limit_actor_overlap(active_player_index, origin, moved)
 	var actual_delta := moved - origin
 	if actual_delta.length_squared() > 0.00000001:
@@ -11015,7 +11170,7 @@ func _process_virtual_bot_world_context(player_index: int, delta: float) -> void
 		player_states[player_index] = state
 		_sync_actor_sprite_view(player_index)
 		return
-	var moved := _move_world_with_wall_slide(origin, desired.normalized() * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(bool(state["character_is_crouching"])) * delta, "east", "west", "south", "north")
+	var moved := _move_world_with_wall_slide(origin, desired.normalized() * LOCAL_TILE_WORLD_HALF_EXTENT * MOVE_UNITS_PER_SECOND * _movement_speed_multiplier(bool(state["character_is_crouching"])) * delta, "east", "west", "south", "north", outdoor_town)
 	moved = _bot_limit_actor_overlap(player_index, origin, moved)
 	var actual_delta := moved - origin
 	state["character_is_moving"] = actual_delta.length_squared() > 0.00000001
@@ -15041,7 +15196,7 @@ func _visible_physical_wall_edges_for_basis(origin: Vector2, forward: Vector2, r
 # _raycast_visibility_samples_for_basis: Casts the full view fan and records each ray's first hit or max-distance endpoint.
 func _raycast_visibility_samples_for_basis(origin: Vector2, forward: Vector2, right: Vector2) -> Array: # Declare this function.
 	var samples := []                                                                          # Store every ray sample for renderer visibility and debug drawing.
-	var all_edges := _all_physical_wall_edges()                                                # Gather unique wall segments from the thin-wall map.
+	var all_edges := _all_physical_wall_edges().filter(func(edge: Dictionary) -> bool: return not edge.get("projectile_only", false))
 	for ray_index in range(VISIBILITY_RAY_COUNT):                                             # Cast a fixed fan of rays across the view cone.
 		var ratio := 0.0 if VISIBILITY_RAY_COUNT == 1 else float(ray_index) / float(VISIBILITY_RAY_COUNT - 1) # Convert ray index to 0..1 across the fan.
 		var angle := deg_to_rad(lerpf(-VISIBILITY_RAY_HALF_ANGLE_DEGREES, VISIBILITY_RAY_HALF_ANGLE_DEGREES, ratio)) # Convert this ray's fan angle to radians.
@@ -15070,7 +15225,7 @@ func _raycast_visibility_samples_for_basis(origin: Vector2, forward: Vector2, ri
 # _raycast_wall_hit_samples_for_basis: Casts the full view fan and records every wall intersection along each ray.
 func _raycast_wall_hit_samples_for_basis(origin: Vector2, forward: Vector2, right: Vector2) -> Array: # Declare this function.
 	var samples := []                                                                          # Store every wall hit sample across the ray fan.
-	var all_edges := _all_physical_wall_edges()                                                # Gather unique wall segments from the thin-wall map.
+	var all_edges := _all_physical_wall_edges().filter(func(edge: Dictionary) -> bool: return not edge.get("projectile_only", false))
 	for ray_index in range(VISIBILITY_RAY_COUNT):                                             # Cast a fixed fan of rays across the view cone.
 		var ratio := 0.0 if VISIBILITY_RAY_COUNT == 1 else float(ray_index) / float(VISIBILITY_RAY_COUNT - 1) # Convert ray index to 0..1 across the fan.
 		var angle := deg_to_rad(lerpf(-VISIBILITY_RAY_HALF_ANGLE_DEGREES, VISIBILITY_RAY_HALF_ANGLE_DEGREES, ratio)) # Convert this ray's fan angle to radians.
@@ -15112,13 +15267,39 @@ func _all_physical_wall_edges() -> Array:                                       
 				if emitted_keys.has(key):                                                             # Skip duplicate shared walls.
 					continue                                                                              # Continue to the next edge.
 				emitted_keys[key] = true                                                              # Mark this physical edge as emitted.
-				edges.append({"a": segment[0], "b": segment[1], "delta": delta, "key": key})          # Store this unique wall edge and its source orientation.
+				var edge := {"a": segment[0], "b": segment[1], "delta": delta, "key": key}
+				if outdoor_town and town_window_edges.has(key):
+					edge["town_window"] = town_window_edges[key]
+				if outdoor_town and town_partition_edges.has(key):
+					edge["town_partition"] = town_partition_edges[key]
+				edges.append(edge)          # Store this unique wall edge and its source orientation.
 	if outdoor_town:
 		var partial_walls: Array[Dictionary] = STOREFRONT_STYLE.door_spans()
 		partial_walls.append_array(STOREFRONT_STYLE.door_leaf_spans(storefront_open_doors))
 		for trim: Dictionary in STOREFRONT_STYLE.trim_spans():
 			if trim.get("partial", false):
 				partial_walls.append(trim)
+		for building in TOWN_BUILDINGS:
+			var lot: Rect2i = building.footprint
+			var x: float = building.door_x()
+			for y in [float(lot.position.y), float(lot.end.y)]:
+				# Both entrances share the same usable opening. The full facade
+				# carrier paints these jambs in the wall pass.
+				for extent: Vector2 in [Vector2(-0.5, -building.DOOR_HALF_WIDTH), Vector2(building.DOOR_HALF_WIDTH, 0.5)]:
+					partial_walls.append({"a": Vector2(x + extent.x, y), "b": Vector2(x + extent.y, y), "variant_collision_only": true})
+				partial_walls.append({
+					"a": Vector2(x - building.DOOR_HALF_WIDTH, y), "b": Vector2(x + building.DOOR_HALF_WIDTH, y),
+					"bottom": building.DOOR_HEIGHT, "height": building.eave,
+					"projectile_only": true, "variant_collision_only": true,
+				})
+			partial_walls.append_array(building.door_leaf_spans(storefront_open_doors))
+			for rail in building.porch_rail_spans():
+				if Vector2(rail["a"]).is_equal_approx(rail["b"]):
+					continue
+				rail["variant_collision_only"] = true
+				rail["height"] = building.RAIL_TOP
+				rail["porch_rail"] = true
+				partial_walls.append(rail)
 		for span in partial_walls:
 			var a: Vector2 = span["a"]
 			var b: Vector2 = span["b"]
@@ -16171,7 +16352,7 @@ func _barrel_sweep_hit(world_position: Vector2, world_delta: Vector2, ignored_pr
 # has two real endpoints; testing those caps closes convex corners even when a
 # player approaches from a neighboring open cell.  Returning the contact normal
 # lets the caller retain tangential motion instead of snagging on the vertex.
-func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vault_window := "") -> Dictionary:
+func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vault_edge := "") -> Dictionary:
 	var movement_length_squared := world_delta.length_squared()
 	if movement_length_squared <= 0.00000001:
 		return {}
@@ -16179,9 +16360,10 @@ func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vau
 	var hit_normal := Vector2.ZERO
 	var push_door := ""
 	var close_door := ""
+	var hinge_side := 1.0
 	var radius_squared := PLAYER_CAPSULE_RADIUS * PLAYER_CAPSULE_RADIUS
 	for edge: Dictionary in _all_physical_wall_edges():
-		if edge["key"] == vault_window:
+		if edge["key"] == vault_edge or edge.get("projectile_only", false):
 			continue
 		var edge_a: Vector2 = edge["a"]
 		var edge_b: Vector2 = edge["b"]
@@ -16203,6 +16385,7 @@ func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vau
 					hit_normal = normal
 					push_door = String(edge.get("push_door", ""))
 					close_door = String(edge.get("close_door", ""))
+					hinge_side = float(edge.get("hinge_side", 1.0))
 		for endpoint: Vector2 in [edge_a, edge_b]:
 			var offset: Vector2 = world_position - endpoint
 			var movement_toward_endpoint: float = offset.dot(world_delta)
@@ -16226,9 +16409,19 @@ func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vau
 				hit_normal = endpoint_normal
 				push_door = String(edge.get("push_door", ""))
 				close_door = String(edge.get("close_door", ""))
+			hinge_side = float(edge.get("hinge_side", 1.0))
 	if earliest_hit > 1.0:
 		return {}
-	return {"time": earliest_hit, "normal": hit_normal, "push_door": push_door, "close_door": close_door}
+	return {"time": earliest_hit, "normal": hit_normal, "push_door": push_door, "close_door": close_door, "hinge_side": hinge_side}
+
+
+func _player_edge_blocks_vault(cell: Vector2i, delta: Vector2i, vault: Dictionary) -> bool:
+	if _can_player_cross_edge(cell, delta):
+		return false
+	if vault.has("edge"):
+		var segment := _physical_cell_edge_segment(cell, delta)
+		return _physical_edge_key(segment[0], segment[1]) != vault["edge"]
+	return true
 
 
 func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, positive_x_label: String, negative_x_label: String, positive_y_label: String, negative_y_label: String, can_push_door := false, vault: Dictionary = {}) -> Vector2:
@@ -16253,7 +16446,7 @@ func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, 
 			# clearance. Treat that as a zero-time collision instead of letting its
 			# negative travel time bypass the edge on the next update.
 			var x_time := maxf(0.0, (x_safe - position.x) / remaining.x)
-			if x_time <= hit_time and not _can_player_cross_edge(Vector2i(x_cell, floori(position.y)), Vector2i(x_step, 0)):
+			if x_time <= hit_time and _player_edge_blocks_vault(Vector2i(x_cell, floori(position.y)), Vector2i(x_step, 0), vault):
 				hit_time = x_time
 				hit_x = true
 		if not is_zero_approx(remaining.y):
@@ -16264,7 +16457,7 @@ func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, 
 			# Match the X sweep: an already-touching Y wall blocks immediately,
 			# while the other axis remains available as the slide tangent.
 			var y_time := maxf(0.0, (y_safe - position.y) / remaining.y)
-			if y_time <= hit_time and not _can_player_cross_edge(Vector2i(floori(position.x), y_cell), Vector2i(0, y_step)):
+			if y_time <= hit_time and _player_edge_blocks_vault(Vector2i(floori(position.x), y_cell), Vector2i(0, y_step), vault):
 				if is_equal_approx(y_time, hit_time):
 					hit_y = true
 				else:
@@ -16277,15 +16470,15 @@ func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, 
 			hit_time = float(barrel_hit["time"])
 			hit_x = false
 			hit_y = false
-		var endpoint_hit := _wall_endpoint_sweep_hit(position, remaining, String(vault.get("window", "")))
+		var endpoint_hit := _wall_endpoint_sweep_hit(position, remaining, String(vault.get("edge", "")))
 		var hit_endpoint := not endpoint_hit.is_empty() and float(endpoint_hit["time"]) < hit_time
 		if hit_endpoint:
 			var door := String(endpoint_hit["push_door"])
 			var open_leaf := String(endpoint_hit["close_door"])
 			var contact_normal: Vector2 = endpoint_hit["normal"]
-			# Both hinges are on the east jamb. Entering an open leaf from
-			# its east side pushes it toward the closed (west) position.
-			if can_push_door and not open_leaf.is_empty() and remaining.x < 0.0 and contact_normal.x > 0.5:
+			# A push from the hinged side swings an open leaf back toward its jamb.
+			var hinge_side := float(endpoint_hit["hinge_side"])
+			if can_push_door and not open_leaf.is_empty() and remaining.x * hinge_side < 0.0 and contact_normal.x * hinge_side > 0.5:
 				storefront_closing_doors[open_leaf] = true
 			if can_push_door and not door.is_empty() and absf(remaining.y) > 0.00001 and absf(Vector2(endpoint_hit["normal"]).y) > 0.00001:
 				storefront_open_doors[door] = 0.05 * signf(-float(Vector2(endpoint_hit["normal"]).y))
@@ -17069,6 +17262,23 @@ func _world_footprint_draw_layer(footprint: Dictionary) -> int:
 			foreground_limit = mini(foreground_limit, wall_layer - 1)
 		else:
 			background_limit = maxi(background_limit, wall_layer + 1)
+	if outdoor_town and footprint.get("kind", "") == "dining_furniture":
+		var player := _current_player_world_position()
+		if center.distance_squared_to(player) < 0.64:
+			var forward := _view_forward_vector().normalized()
+			var extents := Vector2(float(footprint["half_width"]), float(footprint["half_depth"]))
+			var player_depth := (player - origin).dot(forward)
+			var near_depth := offset.dot(forward) - forward.abs().dot(extents)
+			var player_ray := player - origin
+			if player_depth > 0.0 and player_ray.length_squared() > 0.000001:
+				# Use the visible table depth on the player's anchor ray when
+				# they overlap. Grid-cell ownership can flip during a turn.
+				var ray := player_ray.normalized()
+				var hit := _ray_box_distance(origin, ray, center, extents)
+				if hit >= 0.0:
+					near_depth = hit * ray.dot(forward)
+				var player_layer := _world_actor_draw_layer(player)
+				layer = mini(layer, player_layer - 1) if near_depth >= player_depth else maxi(layer, player_layer + 1)
 	# A foreground wall wins if two whole-object painter constraints conflict.
 	return mini(maxi(layer, background_limit), foreground_limit)
 
@@ -17500,12 +17710,12 @@ func _show_dive_roll(sprite: AnimatedSprite2D, state: Dictionary, direction: Str
 	var elapsed := float(state.get("dive_elapsed", 0.0))
 	var frame := int(elapsed * 12.0)
 	var vault: Dictionary = state.get("dive_vault", {})
-	if vault.has("window"):
-		# Reach the existing tucked poses by the time the cowboy hits the sill.
+	if vault.has("edge"):
+		# Reach the tucked pose before crossing the sill or handrail.
 		var roll_direction: Vector2 = state["dive_direction"]
 		var distance := (_player_state_world_position(state) - Vector2(vault["origin"])).dot(roll_direction)
-		var sill_distance := (Vector2(vault["crossing"]) - Vector2(vault["origin"])).dot(roll_direction)
-		var progress := clampf(distance / maxf(sill_distance - 0.02, 0.05), 0.0, 1.0)
+		var crossing_distance := (Vector2(vault["crossing"]) - Vector2(vault["origin"])).dot(roll_direction)
+		var progress := clampf(distance / maxf(crossing_distance - 0.02, 0.05), 0.0, 1.0)
 		frame = maxi(frame, roundi(progress * 7.0))
 	sprite.set_frame_and_progress(clampi(frame, 0, 12), 0.0)
 	return true
@@ -18542,24 +18752,33 @@ func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:         
 
 
 func town_roof_rects() -> Array[Rect2i]:
-	var roofs: Array[Rect2i] = []
-	for origin: Vector2i in TOWN_BUILDING_ORIGINS:
-		roofs.append(STOREFRONT_STYLE.FOOTPRINT if origin == TOWN_STOREFRONT_SLOT else Rect2i(origin, TOWN_BUILDING_SIZE))
+	var roofs: Array[Rect2i] = [STOREFRONT_STYLE.FOOTPRINT]
+	for building in TOWN_BUILDINGS:
+		roofs.append(building.footprint)
 	return roofs
 
 
 func town_has_roof(cell: Vector2i) -> bool:
-	if outdoor_town:
-		for origin: Vector2i in TOWN_BUILDING_ORIGINS:
-			var roof: Rect2i = STOREFRONT_STYLE.FOOTPRINT if origin == TOWN_STOREFRONT_SLOT else Rect2i(origin, TOWN_BUILDING_SIZE)
-			if roof.has_point(cell):
-				return true
+	if not outdoor_town:
+		return false
+	if STOREFRONT_STYLE.FOOTPRINT.has_point(cell):
+		return true
+	for building in TOWN_BUILDINGS:
+		if building.footprint.has_point(cell):
+			return true
 	return false
 
 
 func town_walk_height(world: Vector2) -> float:
-	if outdoor_town and STOREFRONT_STYLE.floor_rect().has_point(world):
+	if not outdoor_town:
+		return 0.0
+	if STOREFRONT_STYLE.floor_rect().has_point(world):
 		return STOREFRONT_STYLE.porch_height
+	for building in TOWN_BUILDINGS:
+		if building.floor_bounds().has_point(world):
+			return building.FLOOR_HEIGHT
+		if building.step_bounds().has_point(world):
+			return 0.026
 	return 0.0
 
 
@@ -18568,7 +18787,23 @@ func _build_outdoor_town_wall_edges() -> void:
 	storefront_closing_doors.clear()
 	storefront_glass_broken = false
 	storefront_window_vaulted = false
+	town_broken_windows.clear()
+	town_window_edges.clear()
+	town_partition_edges.clear()
 	town_doorways.clear()
+	for building in TOWN_BUILDINGS:
+		var lot: Rect2i = building.footprint
+		for face in ["front", "west", "east"]:
+			var windows: Array[Rect2] = building.ground_windows(face)
+			for index in windows.size():
+				var aperture := windows[index].grow(-TownBuildingStyle.WINDOW_TRIM)
+				var along := floorf(aperture.get_center().x)
+				var axis := 0 if face == "front" else 1
+				var start := Vector2(along, building.frontage()) if axis == 0 else Vector2(lot.position.x if face == "west" else lot.end.x, along)
+				var end := start + (Vector2.RIGHT if axis == 0 else Vector2.DOWN)
+				town_window_edges[_physical_edge_key(start, end)] = {
+					"aperture": aperture, "axis": axis, "id": building.window_id(index, face),
+				}
 	for roof: Rect2i in town_roof_rects():
 		var north := roof.position + Vector2i(roof.size.x / 2, 0)
 		var south := north + Vector2i(0, roof.size.y - 1)
@@ -18584,6 +18819,13 @@ func _build_outdoor_town_wall_edges() -> void:
 				var doorway := town_doorways.has([cell, neighbor]) or town_doorways.has([neighbor, cell])
 				edges[_edge_from_delta(direction)] = not _is_open_cell(neighbor) or (roofed != town_has_roof(neighbor) and not doorway)
 			wall_edges[cell] = edges
+	for building in TOWN_BUILDINGS:
+		for partition: Vector4i in building.partition_edges():
+			var cell := Vector2i(partition.x, partition.y)
+			var direction := Vector2i(partition.z, partition.w)
+			_set_wall_between(cell, direction, true)
+			var segment := _physical_cell_edge_segment(cell, direction)
+			town_partition_edges[_physical_edge_key(segment[0], segment[1])] = building
 	grid_position = TOWN_PLAYER_START
 
 

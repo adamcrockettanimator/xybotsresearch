@@ -9,9 +9,27 @@ float storefront_plane_depth(vec2 origin, vec2 ray, float eye_height, float scre
 	return depth;
 }
 
+float town_plane_depth(vec2 origin, vec2 ray, float eye_height, float screen_slope, vec4 rect, vec2 heights, bool along_x) {
+	if (along_x) return storefront_plane_depth(origin.yx, ray.yx, eye_height, screen_slope, rect.yxwz, heights);
+	return storefront_plane_depth(origin, ray, eye_height, screen_slope, rect, heights);
+}
+
+// Match the standard ground-floor ceiling pass before drawing any surface
+// behind it. The first roof bound is Coffee, whose shed roof is exposed.
+bool town_ceiling_precedes(vec2 origin, vec2 ray, float eye_height, float screen_slope, float hit_depth, vec4 rooms[4], float ceiling_height) {
+	if (screen_slope >= 0.0) return false;
+	float ceiling_depth = (eye_height - ceiling_height) / screen_slope;
+	if (ceiling_depth <= 0.075 || ceiling_depth >= hit_depth - 0.001) return false;
+	vec2 hit = origin + ray * ceiling_depth;
+	for (int i = 1; i < 4; i++) {
+		if (all(greaterThanEqual(hit, rooms[i].xy)) && all(lessThan(hit, rooms[i].zw))) return true;
+	}
+	return false;
+}
+
 // World axes are street X, street Y, and height. Return forward depth
-// and a fixed face tone so the solids keep their shape as the camera turns.
-vec2 town_wood_box_hit(vec3 origin, vec3 ray, vec3 lower, vec3 upper) {
+// and the signed face axis. The sign is positive on the upper bounds.
+vec2 town_wood_box_surface(vec3 origin, vec3 ray, vec3 lower, vec3 upper) {
 	float enter = -1e10;
 	float exit = 1e10;
 	int enter_axis = 0;
@@ -34,5 +52,12 @@ vec2 town_wood_box_hit(vec3 origin, vec3 ray, vec3 lower, vec3 upper) {
 	}
 	if (exit < max(enter, 0.005)) return vec2(-1.0);
 	int face = enter >= 0.005 ? enter_axis : exit_axis;
-	return vec2(enter >= 0.005 ? enter : exit, face == 2 ? 1.20 : (face == 0 ? 0.89 : 1.05));
+	float side = sign(ray[face]) * (enter >= 0.005 ? -1.0 : 1.0);
+	return vec2(enter >= 0.005 ? enter : exit, side * float(face + 1));
+}
+
+vec2 town_wood_box_hit(vec3 origin, vec3 ray, vec3 lower, vec3 upper) {
+	vec2 hit = town_wood_box_surface(origin, ray, lower, upper);
+	float axis = abs(hit.y);
+	return vec2(hit.x, axis == 3.0 ? 1.20 : (axis == 1.0 ? 0.89 : 1.05));
 }

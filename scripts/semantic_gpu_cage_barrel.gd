@@ -142,6 +142,7 @@ var logical_root: Node2D
 var display: Sprite2D
 var wireframe: FullResolutionLatticeOverlay
 var town_haze_depth := 0.0
+var use_town_lighting := false
 var materials: Array[ShaderMaterial] = []
 var barrel_style: Resource
 var _last_saved_style_values: Dictionary = {}
@@ -275,6 +276,7 @@ func set_barrel(center: Vector2, radius: float, height: float, camera_origin: Ve
 	current_camera_distance_readout = camera_distance
 	for material in materials:
 		material.set_shader_parameter("town_haze_depth", town_haze_depth)
+		material.set_shader_parameter("use_town_lighting", use_town_lighting)
 		material.set_shader_parameter("camera_origin", camera_origin)
 		material.set_shader_parameter("camera_forward", camera_forward)
 		material.set_shader_parameter("camera_right", camera_right)

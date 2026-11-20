@@ -240,6 +240,8 @@ uniform float far_depth = 5.5;
 uniform bool use_town_dirt = false;
 uniform bool storefront_shadow_enabled = false;
 uniform vec4 storefront_shadow_rect;
+uniform vec4 town_cast_shadow_length;
+uniform float town_street_y;
 uniform vec2 storefront_shadow_tuning;
 
 void fragment() {
@@ -275,9 +277,22 @@ void fragment() {
 		float fleck = fract(sin(dot(texel, vec2(127.1, 311.7))) * 43758.5453);
 		float grain = (floor(fleck * 4.0) - 1.5) * 0.014 / (1.0 + depth * 0.25);
 		result = vec4(vec3(0.74, 0.55, 0.29) + grain, 1.0);
+		vec2 ground_point = cell_world + source_uv;
+		// Compacted dirt through the middle, with rougher shoulders near the lots.
+		float shoulder = abs(ground_point.y - town_street_y) + fleck * 0.28;
+		float worn = 1.0 - smoothstep(1.05, 2.40, shoulder);
+		result.rgb = mix(result.rgb, result.rgb * vec3(0.95, 0.94, 0.90), worn);
+		float shade = 0.0;
+		for (int i = 0; i < 4; i++) {
+			vec4 body = town_roof_bounds[i];
+			float length = town_cast_shadow_length[i];
+			vec2 end_shadow = body.zw - TOWN_SUN_DIRECTION * length;
+			if (length > 0.0 && ground_point.x >= body.z && ground_point.x <= end_shadow.x &&
+				ground_point.y >= body.y && ground_point.y <= body.w) shade = 0.19;
+		}
+		result.rgb *= 1.0 - shade;
 		if (storefront_shadow_enabled) {
 			float reach = storefront_shadow_tuning.x;
-			vec2 ground_point = cell_world + source_uv;
 			// Stretch the contact shadow a little farther away from the west sun.
 			vec2 cast = ground_point + (TOWN_SUN_DIRECTION * 0.22 + vec2(0.0, 0.29)) * reach;
 			vec2 outside = max(max(storefront_shadow_rect.xy - cast, cast - storefront_shadow_rect.zw), vec2(0.0));

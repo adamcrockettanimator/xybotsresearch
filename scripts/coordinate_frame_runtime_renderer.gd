@@ -59,6 +59,7 @@ const NEAR_CLIP := 0.075
 const MAX_DEPTH := 5.5
 const TOWN_MAX_DEPTH := 18.0
 const TOWN_HORIZON = preload("res://assets/Environment/Outdoor/day_horizon.png")
+const TOWN_TIMBER_SHADER = preload("res://scripts/town_porch_timber.gdshader")
 const STOREFRONT_PLANE_SHADER = preload("res://scripts/town_storefront_plane.gdshader")
 const TOWN_HORIZON_SHADER = preload("res://scripts/coordinate_frame_day_horizon.gdshader")
 # Match the Blender reference camera exactly: 28.8 mm / 36 mm Ãƒâ€” 160 px.
@@ -121,7 +122,14 @@ var floor_source_image: Image
 var floor_source_texture: Texture2D
 var floor_mip_images: Array[Image] = []
 var town_roof_bounds := PackedVector4Array()
+var town_cast_shadow_length := Vector4.ZERO
 var storefront_planes: Array[ColorRect] = []
+var town_variant_planes: Array[ColorRect] = []
+var town_variant_plane_specs: Array[Dictionary] = []
+var town_variant_plane_bounds := PackedVector4Array()
+var town_variant_plane_heights := PackedVector4Array()
+var town_variant_walls: Dictionary = {}
+var town_variant_porch_faces: Array[Dictionary] = []
 var runtime_ceiling_layer: Node2D
 var ceiling_art_sprite: Sprite2D
 var ceiling_render_image: Image
@@ -417,6 +425,9 @@ func _initialize() -> void:
 	if controller.outdoor_town:
 		for roof: Rect2i in controller.town_roof_rects():
 			town_roof_bounds.append(Vector4(roof.position.x, roof.position.y, roof.end.x, roof.end.y))
+		for index in controller.TOWN_BUILDINGS.size():
+			var building: TownBuildingStyle = controller.TOWN_BUILDINGS[index]
+			town_cast_shadow_length[index + 1] = (building.eave + building.rise * 0.35) * 0.53
 		var sky_material := ShaderMaterial.new()
 		sky_material.shader = TOWN_HORIZON_SHADER
 		sky_material.set_shader_parameter("horizon_strip", TOWN_HORIZON)
@@ -1038,6 +1049,16 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		runtime_wall_layer.add_child(sprite)
 		gpu_wall_sprites.append(sprite)
 		gpu_wall_materials.append(material)
+	var porch_runs := {}
+	for index in entries.size():
+		var entry: Dictionary = entries[index]
+		var batch: Dictionary = entry.get("timber_batch", {})
+		if batch.is_empty():
+			continue
+		var style: TownBuildingStyle = entry["variant"]["style"]
+		if not porch_runs.has(style):
+			porch_runs[style] = []
+		porch_runs[style].append({"index": index, "entry": entry})
 	var painted_porch_caps := {}
 	for index in range(gpu_wall_sprites.size()):
 		var sprite := gpu_wall_sprites[index]
@@ -1053,6 +1074,20 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		var porch_box_key: String = entry["porch_box_key"]
 		var draw_porch_cap := porch_cap.has_area() and not painted_porch_caps.has(porch_box_key)
 		var material := gpu_wall_materials[index]
+		var batch: Dictionary = entry.get("timber_batch", {})
+		if not batch.is_empty():
+			if material.shader != TOWN_TIMBER_SHADER:
+				material.shader = TOWN_TIMBER_SHADER
+			_bind_town_timber_batch(material, entry, batch, index, porch_runs[entry["variant"]["style"]])
+			sprite.z_index = entry["wall_draw_layer"]
+			continue
+		if material.shader != gpu_wall_shader:
+			material.shader = gpu_wall_shader
+		var variant: Dictionary = entry.get("variant", {})
+		material.set_shader_parameter("town_variant_role", int(variant.get("role", 0)))
+		material.set_shader_parameter("town_wallpaper_enabled", not variant.is_empty())
+		if not variant.is_empty():
+			_bind_town_building_wall(material, variant["style"], entry)
 		material.set_shader_parameter("draw_porch_cap", draw_porch_cap)
 		if draw_porch_cap:
 			painted_porch_caps[porch_box_key] = true
@@ -1096,21 +1131,24 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 			var shell_style: Resource = controller.STOREFRONT_STYLE
 			material.set_shader_parameter("storefront_roof_heights", Vector3(shell_style.ROOF_FRONT, shell_style.ROOF_REAR, shell_style.FACADE_TOP))
 			material.set_shader_parameter("storefront_doorways", Vector4(shell_style.FRONT_DOOR.x, shell_style.FRONT_DOOR.y, shell_style.REAR_DOOR.x, shell_style.REAR_DOOR.y))
-		if int(entry["storefront_paint"]) != 0:
+		if int(entry["storefront_paint"]) != 0 or not variant.is_empty():
 			var style: Resource = controller.STOREFRONT_STYLE
-			material.set_shader_parameter("storefront_siding", style.siding_color)
 			if entry["storefront_paint"] == 1:
 				var sign_rect: Rect2 = style.coffee_lettering_rect
 				material.set_shader_parameter("coffee_lettering_rect", Vector4(sign_rect.position.x, sign_rect.position.y, sign_rect.size.x, sign_rect.size.y))
 				material.set_shader_parameter("coffee_letter_ink", style.coffee_letter_ink)
 			material.set_shader_parameter("storefront_exterior_light", style.exterior_wall_light)
-			material.set_shader_parameter("storefront_trim", style.trim_color)
+			material.set_shader_parameter("storefront_trim", style.wood_color)
 			material.set_shader_parameter("storefront_face_tone", float(entry["storefront_face_tone"]))
-			material.set_shader_parameter("storefront_foundation", style.foundation_color)
 			material.set_shader_parameter("storefront_trim_bands", Vector2(style.FOUNDATION_BAND_HEIGHT, style.WALL_TOP_TRIM_DEPTH))
 			material.set_shader_parameter("storefront_siding_course_height", siding_course_height)
 			material.set_shader_parameter("storefront_siding_light", style.siding_face_light)
-			material.set_shader_parameter("storefront_siding_detail", siding_detail)
+			var detail := siding_detail
+			if not variant.is_empty():
+				var lot := Rect2(variant["style"].footprint)
+				var origin: Vector2 = entry["camera_origin"]
+				detail = 1.0 - smoothstep(1.65, 4.6, origin.distance_to(origin.clamp(lot.position, lot.end)))
+			material.set_shader_parameter("storefront_siding_detail", detail)
 			material.set_shader_parameter("storefront_siding_distant_variation", style.siding_distant_variation)
 			material.set_shader_parameter("storefront_siding_upper_shadow_fraction", style.siding_upper_shadow_fraction)
 			var casing_ends: Vector2 = entry["door_casing_ends"]
@@ -1127,6 +1165,7 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 			material.set_shader_parameter("storefront_window_mullion", style.WINDOW_MULLION_HALF_SIZE)
 			if entry["storefront_window"]:
 				material.set_shader_parameter("storefront_window_recess", style.window_recess_depth)
+			if entry["storefront_window"] or int(variant.get("role", 0)) in [1, 3]:
 				material.set_shader_parameter("storefront_glass_tint", style.glass_tint)
 				material.set_shader_parameter("storefront_glass_shine", style.glass_shine)
 				material.set_shader_parameter("storefront_glass_shine_width", style.glass_shine_width)
@@ -1167,6 +1206,11 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 				material.set_shader_parameter("fence_heights", _town_fence_heights())
 				material.set_shader_parameter("fence_post_half_width", style.fence_post_half_width)
 				material.set_shader_parameter("fence_rail_half_width", style.fence_rail_half_width)
+			_prepare_town_building_planes()
+			material.set_shader_parameter("town_variant_plane_bounds", town_variant_plane_bounds)
+			material.set_shader_parameter("town_variant_plane_heights", town_variant_plane_heights)
+			material.set_shader_parameter("town_variant_plane_count", town_variant_plane_specs.size())
+			material.set_shader_parameter("town_ceiling_height", WALL_HEIGHT)
 			if fence or draw_porch_cap:
 				material.set_shader_parameter("town_camera_forward", controller._view_forward_vector().normalized())
 				material.set_shader_parameter("town_camera_right", controller._view_right_vector().normalized())
@@ -1193,6 +1237,56 @@ func _rebuild_gpu_wall_surfaces(entries: Array[Dictionary]) -> int:
 		sprite.z_index = int(entry.get("wall_draw_layer", (controller._character_layer_for_view_depth(float(entry["cell_draw_depth"])) + 1) if controller != null else index))
 	wall_art_sprite.visible = false
 	return entries.size()
+
+
+func _bind_town_timber_batch(material: ShaderMaterial, entry: Dictionary, batch: Dictionary, index: int, runs: Array) -> void:
+	var building: TownBuildingStyle = entry["variant"]["style"]
+	material.set_shader_parameter("canvas_size", VIEW_SIZE)
+	material.set_shader_parameter("projection_center", Vector2(VIEW_SIZE.x * 0.5, HORIZON_Y) + _overscan_projection_offset())
+	material.set_shader_parameter("camera_origin", entry["camera_origin"])
+	material.set_shader_parameter("camera_forward", controller._view_forward_vector().normalized())
+	material.set_shader_parameter("camera_right", controller._view_right_vector().normalized())
+	material.set_shader_parameter("eye_height", VIRTUAL_CAMERA_HEIGHT)
+	material.set_shader_parameter("ceiling_height", WALL_HEIGHT)
+	material.set_shader_parameter("focal_length", FOCAL_LENGTH)
+	material.set_shader_parameter("timber_color", building.timber)
+	var coffee: Resource = controller.STOREFRONT_STYLE
+	material.set_shader_parameter("timber_lighting", Vector2(coffee.timber_edge_highlight, coffee.ledge_shadow))
+	material.set_shader_parameter("eave_height", minf(building.awning_heights().x, building.awning_heights().y))
+	var geometry: Dictionary = batch["geometry"]
+	material.set_shader_parameter("group_lower", geometry["minimum"])
+	material.set_shader_parameter("group_upper", geometry["maximum"])
+	material.set_shader_parameter("member_count", geometry["counts"])
+	material.set_shader_parameter("member_lower", geometry["lower"])
+	material.set_shader_parameter("member_upper", geometry["upper"])
+	material.set_shader_parameter("run_index", batch["run"])
+	var occluding_runs := 0
+	var cutaway_contacts := PackedVector4Array()
+	var cutaway_ranges := PackedVector2Array()
+	cutaway_contacts.resize(4)
+	cutaway_ranges.resize(4)
+	var bounds: Rect2 = entry["quad_bounds"]
+	for run: Dictionary in runs:
+		var other: Dictionary = run["entry"]
+		var other_index: int = run["index"]
+		var other_layer: int = other["wall_draw_layer"]
+		var run_index: int = other["timber_batch"]["run"]
+		if other.get("camera_cutaway_fade", false):
+			var a: Vector2 = other["camera_cutaway_contact_a"]
+			var b: Vector2 = other["camera_cutaway_contact_b"]
+			cutaway_contacts[run_index] = Vector4(a.x, a.y, b.x, b.y)
+			cutaway_ranges[run_index] = Vector2(other["camera_cutaway_inner_radius"], other["camera_cutaway_fade_width"])
+		if other_layer < entry["wall_draw_layer"] or (other_layer == entry["wall_draw_layer"] and other_index < index):
+			if bounds.intersects(other["quad_bounds"]):
+				occluding_runs |= 1 << run_index
+	material.set_shader_parameter("occluding_runs", occluding_runs)
+	material.set_shader_parameter("cutaway_contacts", cutaway_contacts)
+	material.set_shader_parameter("cutaway_ranges", cutaway_ranges)
+	_prepare_town_building_planes()
+	material.set_shader_parameter("plane_bounds", town_variant_plane_bounds)
+	material.set_shader_parameter("plane_heights", town_variant_plane_heights)
+	material.set_shader_parameter("plane_count", town_variant_plane_specs.size())
+	_set_town_lighting(material)
 
 
 # _load_runtime_ceiling_layers: Read the independently-authored ceiling base
@@ -1624,6 +1718,7 @@ func _visible_floor_cells() -> Array[Dictionary]:
 func _assign_overlapping_wall_draw_layers(entries: Array[Dictionary]) -> void:
 	for index in range(entries.size()):
 		var entry: Dictionary = entries[index]
+		entry["quad_bounds"] = _quad_bounds(entry.get("quad", PackedVector2Array()))
 		var cell_depth: float = float(entry.get("cell_draw_depth", entry.get("depth", 0.0)))
 		entry["wall_draw_layer"] = int(controller._character_layer_for_view_depth(cell_depth)) + 1 if controller != null else index
 	for nearer_index in range(1, entries.size()):
@@ -1632,12 +1727,13 @@ func _assign_overlapping_wall_draw_layers(entries: Array[Dictionary]) -> void:
 		if nearer_quad.size() != 4:
 			continue
 		var nearer_layer: int = nearer["wall_draw_layer"]
+		var nearer_bounds := _quad_bounds(nearer_quad)
 		for farther_index in range(nearer_index):
 			var farther: Dictionary = entries[farther_index]
 			if int(farther["wall_draw_layer"]) <= nearer_layer:
 				continue
 			var farther_quad: PackedVector2Array = farther["quad"]
-			if farther_quad.size() == 4 and _wall_quads_overlap(farther_quad, nearer_quad):
+			if farther_quad.size() == 4 and nearer_bounds.intersects(farther["quad_bounds"]) and _wall_quads_overlap(farther_quad, nearer_quad):
 				farther["wall_draw_layer"] = nearer_layer
 
 
@@ -1662,6 +1758,46 @@ func _apply_local_player_fan_draw_layers(entries: Array[Dictionary]) -> void:
 			# Leave a layer for a town prop between the player and this background wall.
 			var background_gap := 2 if controller.outdoor_town else 1
 			entry["wall_draw_layer"] = min(wall_layer, player_layer - background_gap)
+
+
+# A ray from the street meets porch timber before crossing its facade plane.
+# The far-to-near centre sort can reverse that order on a strongly oblique
+# view. Keep the glass, its reflection, and the casing together behind it.
+func _order_town_porch_against_facade(entries: Array[Dictionary], origin: Vector2) -> void:
+	var frontages: Dictionary = {}
+	for entry in entries:
+		var variant: Dictionary = entry["variant"]
+		if variant.is_empty() or (variant["role"] != 1 and variant["role"] != 6):
+			continue
+		var building: TownBuildingStyle = variant["style"]
+		if not is_equal_approx(Vector2(entry["world_a"]).y, building.frontage()) or not is_equal_approx(Vector2(entry["world_b"]).y, building.frontage()):
+			continue
+		if not frontages.has(building):
+			frontages[building] = []
+		frontages[building].append(entry)
+	for timber in entries:
+		if timber["timber_batch"].is_empty():
+			continue
+		var building: TownBuildingStyle = timber["variant"]["style"]
+		if (origin.y - building.frontage()) * building.direction() <= 0.0 or not frontages.has(building):
+			continue
+		var bounds: Rect2 = timber["quad_bounds"]
+		for wall: Dictionary in frontages[building]:
+			if bounds.intersects(wall["quad_bounds"]):
+				wall["wall_draw_layer"] = mini(wall["wall_draw_layer"], timber["wall_draw_layer"] - 1)
+
+
+func _project_town_timber_bounds(lower: Vector3, upper: Vector3, origin: Vector2, forward: Vector2, right: Vector2) -> PackedVector2Array:
+	var minimum := Vector2.INF
+	var maximum := -Vector2.INF
+	for x: float in [lower.x, upper.x]:
+		for y: float in [lower.y, upper.y]:
+			var local := _to_view(Vector2(x, y), origin, forward, right)
+			var top := _project_view_point(local, upper.z)
+			var bottom := _project_view_point(local, lower.z)
+			minimum = minimum.min(top)
+			maximum = maximum.max(bottom)
+	return PackedVector2Array([minimum, Vector2(maximum.x, minimum.y), maximum, Vector2(minimum.x, maximum.y)])
 
 
 func _wall_quads_overlap(first: PackedVector2Array, second: PackedVector2Array) -> bool:
@@ -1796,12 +1932,23 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		if controller.outdoor_town:
 			var cell_rect := Rect2(Vector2(entry["cell"]), Vector2.ONE)
 			var near_foundation := cell_rect.intersects(shadow_bounds)
+			var active_shadow := shadow_rect
+			if not near_foundation:
+				for building in controller.TOWN_BUILDINGS:
+					var bounds: Rect2 = building.floor_bounds()
+					if cell_rect.intersects(bounds.grow(style.foundation_shadow_reach * 1.5)):
+						active_shadow = _town_rect_vector(bounds)
+						near_foundation = true
+						break
 			ground = ground or style.FOOTPRINT.has_point(Vector2i(entry["cell"]))
 			material.set_shader_parameter("storefront_shadow_enabled", ground and near_foundation)
 			if ground and near_foundation:
-				material.set_shader_parameter("storefront_shadow_rect", shadow_rect)
+				material.set_shader_parameter("storefront_shadow_rect", active_shadow)
 				material.set_shader_parameter("storefront_shadow_tuning", shadow_tuning)
 		material.set_shader_parameter("use_town_dirt", ground)
+		if ground:
+			material.set_shader_parameter("town_cast_shadow_length", town_cast_shadow_length)
+			material.set_shader_parameter("town_street_y", controller.TOWN_STREET_Y)
 		material.set_shader_parameter("far_depth", _max_view_depth())
 		material.set_shader_parameter("use_semantic_floor_material", semantic_floor_material_enabled and active_floor_texture_label == "WoodFloor2")
 		material.set_shader_parameter("use_semantic_ceiling_material", false)
@@ -2240,7 +2387,7 @@ func _is_exterior_wall_entry(entry: Dictionary) -> bool:
 
 
 func _wall_entry_gets_window(entry: Dictionary) -> bool:
-	if int(entry.get("storefront_paint", 0)) != 0:
+	if int(entry.get("storefront_paint", 0)) != 0 or not entry.get("variant", {}).is_empty():
 		return false
 	if controller.outdoor_town:
 		if controller.town_has_roof(Vector2i(entry["facing_cell"])) or _is_exterior_wall_entry(entry):
@@ -2454,6 +2601,128 @@ func _initialize_storefront_footprint(physical_edges: Array) -> void:
 				storefront_physical_face_indices[edge["key"]] = index
 
 
+func _initialize_town_building_walls(physical: Array) -> void:
+	for definition in controller.TOWN_BUILDINGS:
+		var building: TownBuildingStyle = definition
+		var roof_top := building.eave + building.rise
+		for entry: Dictionary in physical:
+			var role := building.wall_role(entry["a"], entry["b"])
+			if role != 0 and not entry.has("variant_style") and not entry.get("variant_collision_only", false):
+				var top := maxf(building.facade_height + 0.22, roof_top + 0.03) if role == 1 else (roof_top if role == 2 else building.eave)
+				town_variant_walls[entry["key"]] = {"style": building, "role": role, "top": top}
+		var lot := building.footprint
+		var x := floorf(building.door_x())
+		for y in [float(lot.position.y), float(lot.end.y)]:
+			var a := Vector2(x, y)
+			var role := building.wall_role(a, a + Vector2.RIGHT)
+			var top := maxf(building.facade_height + 0.22, roof_top + 0.03) if role == 1 else roof_top
+			town_variant_walls["lintel:%s" % a] = {"style": building, "role": role, "top": top}
+		_append_town_timber_batches(building)
+		var porch := building.porch_faces()
+		var rails := building.porch_rail_spans()
+		var details: Array[Dictionary] = []
+		for index in rails.size():
+			var span := rails[index]
+			if Vector2(span["a"]).is_equal_approx(span["b"]):
+				continue
+			var face := porch[0 if index < 2 else index - 1].duplicate()
+			face["a"] = span["a"]
+			face["b"] = span["b"]
+			face["physical"] = true
+			details.append(face)
+		var gate := porch[0].duplicate()
+		gate["a"] = rails[0]["b"]
+		gate["b"] = rails[1]["a"]
+		details.append(gate)
+		var step := building.step_bounds()
+		var step_y := step.end.y if building.faces_south else step.position.y
+		details.append({"a": Vector2(step.position.x, step_y), "b": Vector2(step.end.x, step_y), "top": 0.026, "role": 7})
+		for geometry in details:
+			var index := town_variant_porch_faces.size()
+			var key := "town_porch_%d" % index
+			if geometry.get("physical", false):
+				key = controller._physical_edge_key(geometry["a"], geometry["b"])
+			town_variant_porch_faces.append({
+				"key": key, "a": geometry["a"], "b": geometry["b"],
+				"variant": {"style": building, "role": geometry["role"], "top": geometry["top"]},
+			})
+
+
+# Keep the depth-correct timber cage as four short runs per porch, rather than
+# expanding every baluster into independent wall faces and painter constraints.
+func _append_town_timber_batches(building: TownBuildingStyle) -> void:
+	var porch := building.porch()
+	var edge := building.frontage() + building.direction() * building.porch_depth
+	var groups: Array[Array] = [[], [], [], []]
+	var geometry := {}
+	var all_lower := PackedVector4Array()
+	var all_upper := PackedVector4Array()
+	var minimums := PackedVector3Array()
+	var maximums := PackedVector3Array()
+	var counts := Vector4i.ZERO
+	all_lower.resize(4 * 48)
+	all_upper.resize(4 * 48)
+	minimums.resize(4)
+	maximums.resize(4)
+	for member in building.porch_members():
+		var a: Vector2 = member["a"]
+		var b: Vector2 = member["b"]
+		var center := (a + b) * 0.5
+		var side := absf(a.y - b.y) > absf(a.x - b.x)
+		var right := center.x > porch.get_center().x
+		var group := (2 if side else 0) + int(right)
+		groups[group].append(member)
+	for group_index in groups.size():
+		var group := groups[group_index]
+		if group.is_empty():
+			continue
+		var count := group.size()
+		assert(count <= 48)
+		var group_min := Vector3.INF
+		var group_max := -Vector3.INF
+		for index in count:
+			var member: Dictionary = group[index]
+			var a: Vector2 = member["a"]
+			var b: Vector2 = member["b"]
+			var padding := (b - a).orthogonal().normalized().abs() * float(member["thickness"]) * 0.5
+			var first := a.min(b) - padding
+			var last := a.max(b) + padding
+			var bottom: float = member["bottom"]
+			var top: float = member["variant"]["top"]
+			var slope := Vector2.ZERO
+			if member.has("brace"):
+				var ramp: Vector2 = member["brace"]
+				var run := b - a
+				slope = run * ((ramp.y - ramp.x) / run.length_squared())
+				var ramp_half := float(member.get("ramp_half", 0.023))
+				bottom = ramp.x + slope.dot(first - a) - ramp_half
+				top = bottom + ramp_half * 2.0
+			var rise := slope * (last - first)
+			var minimum_z := bottom + minf(rise.x, 0.0) + minf(rise.y, 0.0)
+			var maximum_z := top + maxf(rise.x, 0.0) + maxf(rise.y, 0.0)
+			group_min = group_min.min(Vector3(first.x, first.y, minimum_z))
+			group_max = group_max.max(Vector3(last.x, last.y, maximum_z))
+			all_lower[group_index * 48 + index] = Vector4(first.x, first.y, bottom, slope.x)
+			all_upper[group_index * 48 + index] = Vector4(last.x, last.y, top, slope.y)
+		minimums[group_index] = group_min
+		maximums[group_index] = group_max
+		counts[group_index] = count
+		var index := town_variant_porch_faces.size()
+		var across := group_index < 2
+		var a := Vector2(group_min.x, edge) if across else Vector2((group_min.x + group_max.x) * 0.5, group_min.y)
+		var b := Vector2(group_max.x, edge) if across else Vector2(a.x, group_max.y)
+		town_variant_porch_faces.append({
+			"key": "town_timber_run_%d" % index, "a": a, "b": b,
+			"variant": {"style": building, "role": 9, "top": group_max.z},
+			"timber_batch": {"geometry": geometry, "run": group_index, "count": count, "minimum": group_min, "maximum": group_max},
+		})
+	geometry["lower"] = all_lower
+	geometry["upper"] = all_upper
+	geometry["minimum"] = minimums
+	geometry["maximum"] = maximums
+	geometry["counts"] = counts
+
+
 func _visible_wall_entries() -> Array[Dictionary]:
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
@@ -2476,11 +2745,14 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	# every authoritative map edge that geometrically intersects the same frustum.
 	var edges_by_key := {}
 	var ray_visible_edge_keys := {}
-	for ray_visible_edge in controller._visible_physical_wall_edges_for_basis(camera_origin, forward, right):
-		var ray_visible_key := String(ray_visible_edge["key"])
-		ray_visible_edge_keys[ray_visible_key] = true
-		if not use_footprint or not storefront_physical_face_indices.has(ray_visible_key):
-			edges_by_key[ray_visible_key] = ray_visible_edge
+	# Semantic town faces and the fence use their own edge shading. Their
+	# continuous frustum test below already supplies every usable carrier.
+	if not controller.outdoor_town or not _can_use_gpu_wall_renderer():
+		for ray_visible_edge in controller._visible_physical_wall_edges_for_basis(camera_origin, forward, right):
+			var ray_visible_key := String(ray_visible_edge["key"])
+			ray_visible_edge_keys[ray_visible_key] = true
+			if not use_footprint or not storefront_physical_face_indices.has(ray_visible_key):
+				edges_by_key[ray_visible_key] = ray_visible_edge
 	for physical_edge in all_physical_edges:
 		if use_footprint and storefront_physical_face_indices.has(physical_edge["key"]):
 			continue
@@ -2490,6 +2762,10 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		if _segment_intersects_view_frustum(first_candidate, second_candidate, margin):
 			edges_by_key[String(physical_edge["key"])] = physical_edge
 	var physical_edges: Array = edges_by_key.values()
+	if controller.outdoor_town and _can_use_gpu_wall_renderer():
+		if town_variant_walls.is_empty():
+			_initialize_town_building_walls(all_physical_edges)
+		physical_edges.append_array(town_variant_porch_faces)
 	if use_footprint:
 		physical_edges.append_array(storefront_footprint_faces)
 	if controller.outdoor_town:
@@ -2511,6 +2787,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	if controller.outdoor_town:
 		physical_edges = _expand_storefront_box_faces(physical_edges, camera_origin)
 	for edge in physical_edges:
+		if edge.get("variant_collision_only", false) and _can_use_gpu_wall_renderer():
+			continue
 		# Keep the source wall's complete physical endpoints.  A ray-visible span
 		# may tell us that only half this wall is exposed, but shortening the quad
 		# here incorrectly remaps the *entire* master texture into that half.  The
@@ -2522,18 +2800,32 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var face_top := Vector2.ONE * WALL_HEIGHT
 		var face_bottom := float(edge.get("bottom", 0.0))
 		var storefront_paint := 0
+		var variant: Dictionary = {}
 		if controller.outdoor_town:
 			var style: Resource = controller.STOREFRONT_STYLE
 			var footprint: Rect2i = style.FOOTPRINT
 			var a := Vector2(edge["a"])
 			var b := Vector2(edge["b"])
-			if edge.has("height"):
+			variant = edge.get("variant", town_variant_walls.get(edge["key"], {}))
+			if edge.has("town_partition"):
+				variant = {"style": edge["town_partition"], "role": 8, "top": WALL_HEIGHT}
+				face_bottom = TownBuildingStyle.FLOOR_HEIGHT
+			if edge.has("variant_style"):
+				variant = {"style": edge["variant_style"], "role": 6, "top": edge["height"]}
+			if not variant.is_empty():
+				face_top = Vector2.ONE * float(variant["top"])
+				if variant["role"] == 6:
+					face_bottom = TownBuildingStyle.FLOOR_HEIGHT
+			elif edge.has("height"):
 				face_top = Vector2.ONE * float(edge["height"])
 				storefront_paint = int(edge.get("paint", 1))
 			elif is_equal_approx(a.x, b.x) and (is_equal_approx(a.x, footprint.position.x) or is_equal_approx(a.x, footprint.end.x)) and minf(a.y, b.y) >= footprint.position.y and maxf(a.y, b.y) <= footprint.end.y:
 				face_top = Vector2(style.roof_height(a.y), style.roof_height(b.y))
 				storefront_paint = 1
+		var batch: Dictionary = edge.get("timber_batch", {})
 		var quad := _project_wall_quad(first_local, second_local, face_top, face_bottom)
+		if not batch.is_empty():
+			quad = _project_town_timber_bounds(batch["minimum"], batch["maximum"], camera_origin, forward, right)
 		var average_depth := (maxf(first_local.y, NEAR_CLIP) + maxf(second_local.y, NEAR_CLIP)) * 0.5
 		var facing_cell := _wall_facing_cell(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin)
 		var facing_center := Vector2(float(facing_cell.x) + 0.5, float(facing_cell.y) + 0.5)
@@ -2545,6 +2837,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 		var casing_ends: Vector2 = edge.get("door_casing_ends", Vector2.ZERO)
 		var projected_entry := {
 			"edge_key": String(edge["key"]),
+			"variant": variant,
+			"timber_batch": batch,
 			"door_casing_ends": casing_ends,
 			"lintel": bool(edge.get("lintel", false)),
 			"face_top": face_top,
@@ -2571,8 +2865,8 @@ func _visible_wall_entries() -> Array[Dictionary]:
 			"cell_draw_depth": cell_draw_depth,
 			"facing_cell": facing_cell,
 			"light": _depth_light(average_depth),
-			"corner_tone_a": 0.0 if casing_ends.x > 0.0 else _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
-			"corner_tone_b": 0.0 if casing_ends.y > 0.0 else _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
+			"corner_tone_a": 0.0 if ray_visible_edge_keys.is_empty() or not variant.is_empty() or casing_ends.x > 0.0 else _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["a"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
+			"corner_tone_b": 0.0 if ray_visible_edge_keys.is_empty() or not variant.is_empty() or casing_ends.y > 0.0 else _wall_endpoint_corner_tone(String(edge["key"]), Vector2(edge["b"]), Vector2(edge["b"]) - Vector2(edge["a"]), facing_cell, ray_visible_edge_keys),
 			"local_player_fan_contact": local_player_fan_keys.has(String(edge.get("blocking_key", edge["key"]))),
 		}
 		if local_player_fan_keys.is_empty():
@@ -2609,13 +2903,14 @@ func _visible_wall_entries() -> Array[Dictionary]:
 	if controller.outdoor_town:
 		for entry in result:
 			# Keep perimeter spans connected when nearer building walls fill the budget.
-			wall_budget += int(entry["storefront_paint"] != 0 or _is_exterior_wall_entry(entry))
+			wall_budget += int(entry["storefront_paint"] != 0 or not entry["variant"].is_empty() or _is_exterior_wall_entry(entry))
 	if result.size() > wall_budget:
 		result = result.slice(0, wall_budget)
 	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["depth"]) > float(b["depth"]))
 	_assign_overlapping_wall_draw_layers(result)
 	_apply_local_player_fan_draw_layers(result)
 	if controller.outdoor_town:
+		_order_town_porch_against_facade(result, camera_origin)
 		var front: float = controller.STOREFRONT_STYLE.FOOTPRINT.position.y
 		if camera_origin.y < front:
 			# Leave a painter layer between the facade and the porch railing
@@ -2765,6 +3060,8 @@ func _compute_camera_cutaway(camera_origin: Vector2) -> Dictionary:
 	# Test every physical wall against the solid camera-to-sprite triangle. A
 	# wall only fades when it overlaps actual character pixels in this view.
 	for edge in controller._all_physical_wall_edges():
+		if edge.get("projectile_only", false):
+			continue
 		var contact_positions := _segment_contact_points_in_cutaway_fan(Vector2(edge["a"]), Vector2(edge["b"]), camera_origin, fan_left, fan_right)
 		if contact_positions.is_empty():
 			continue
@@ -2911,14 +3208,26 @@ func runtime_world_point_has_clear_camera_line_for_current_pose(target_world: Ve
 	var direction := camera_to_target / target_distance
 	var ignored_obstruction_keys := _local_camera_obstruction_edge_keys(camera_origin)
 	var maximum_distance := maxf(target_distance - 0.002, 0.0)
+	var lo := camera_origin.min(target_world)
+	var hi := camera_origin.max(target_world)
 	for edge in controller._all_physical_wall_edges():
+		var a: Vector2 = edge["a"]
+		var b: Vector2 = edge["b"]
+		if maxf(a.x, b.x) < lo.x or minf(a.x, b.x) > hi.x or maxf(a.y, b.y) < lo.y or minf(a.y, b.y) > hi.y:
+			continue
+		if projectile_height < 0.0 and edge.get("projectile_only", false):
+			continue
 		if ignored_obstruction_keys.has(String(edge["key"])) or (see_through_porch_rail and edge.get("porch_rail", false)):
 			continue
 		var hit_distance: float = controller._ray_segment_hit_distance_limited(camera_origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), maximum_distance)
 		if hit_distance >= 0.0 and hit_distance < target_distance - 0.002:
-			if projectile_height >= 0.0:
-				var hit_height := lerpf(VIRTUAL_CAMERA_HEIGHT, projectile_height, hit_distance / target_distance)
-				if not controller._projectile_edge_blocks_at_height(edge, camera_origin + direction * hit_distance, hit_height):
+			if projectile_height >= 0.0 or edge.has("town_window") or edge.get("window", false):
+				var target_height := projectile_height if projectile_height >= 0.0 else VIRTUAL_CAMERA_HEIGHT
+				var hit_height := lerpf(VIRTUAL_CAMERA_HEIGHT, target_height, hit_distance / target_distance)
+				var hit_world := camera_origin + direction * hit_distance
+				if controller.town_window_has_opening(edge, hit_world, hit_height):
+					continue
+				if projectile_height >= 0.0 and not controller._projectile_edge_blocks_at_height(edge, hit_world, hit_height):
 					continue
 			return false
 	return true
@@ -2959,6 +3268,13 @@ func _edge_can_be_seen(first: Vector2, second: Vector2) -> bool:
 func _town_edge_visibility_margin(edge: Dictionary) -> float:
 	if not controller.outdoor_town:
 		return 0.0
+	var batch: Dictionary = edge.get("timber_batch", {})
+	if not batch.is_empty():
+		var lower: Vector3 = batch["minimum"]
+		var upper: Vector3 = batch["maximum"]
+		var a: Vector2 = edge["a"]
+		var across := 0 if is_equal_approx(a.x, Vector2(edge["b"]).x) else 1
+		return maxf(a[across] - lower[across], upper[across] - a[across])
 	return 0.065 if _is_exterior_wall_entry({"world_a": edge["a"], "world_b": edge["b"]}) else 0.0
 
 
@@ -3202,6 +3518,7 @@ func _max_view_depth() -> float:
 
 # The three world-space planes share the same logical camera as the wall cage.
 func _update_storefront_planes() -> void:
+	_prepare_town_building_planes()
 	var style: Resource = controller.STOREFRONT_STYLE
 	var roof := Rect2(style.FOOTPRINT).grow(0.025)
 	var porch: Rect2 = style.porch_rect()
@@ -3211,6 +3528,9 @@ func _update_storefront_planes() -> void:
 		Vector2.ONE * float(style.porch_height),
 		Vector2(style.AWNING_FRONT, style.AWNING_BACK),
 	]
+	var coffee_bounds := PackedVector4Array()
+	for rect: Rect2 in bounds:
+		coffee_bounds.append(_town_rect_vector(rect))
 	var forward: Vector2 = controller._view_forward_vector().normalized()
 	var right: Vector2 = controller._view_right_vector().normalized()
 	var origin := _runtime_camera_origin(forward, right)
@@ -3255,6 +3575,166 @@ func _update_storefront_planes() -> void:
 		material.set_shader_parameter("roof_rust_color", style.roof_rust_color)
 		material.set_shader_parameter("ledge_shadow", style.ledge_shadow)
 		material.set_shader_parameter("surface_color", style.roof_color)
+		material.set_shader_parameter("town_ceiling_height", WALL_HEIGHT)
+		material.set_shader_parameter("town_variant_plane_bounds", town_variant_plane_bounds)
+		material.set_shader_parameter("town_variant_plane_heights", town_variant_plane_heights)
+		material.set_shader_parameter("town_variant_plane_count", town_variant_plane_specs.size())
+
+	_update_town_building_planes(origin, forward, right, coffee_bounds, PackedVector2Array(heights))
+
+
+func _town_rect_vector(rect: Rect2) -> Vector4:
+	return Vector4(rect.position.x, rect.position.y, rect.end.x, rect.end.y)
+
+
+func _prepare_town_building_planes() -> void:
+	if not town_variant_plane_specs.is_empty():
+		return
+	for definition in controller.TOWN_BUILDINGS:
+		var building: TownBuildingStyle = definition
+		for spec in building.roof_planes():
+			spec["style"] = building
+			town_variant_plane_specs.append(spec)
+			town_variant_plane_bounds.append(_town_rect_vector(spec["rect"]))
+			var heights: Vector2 = spec["heights"]
+			town_variant_plane_heights.append(Vector4(heights.x, heights.y, float(spec.get("slope_x", false)), 0.0))
+	town_variant_plane_bounds.resize(TownBuildingStyle.PLANE_LIMIT)
+	town_variant_plane_heights.resize(TownBuildingStyle.PLANE_LIMIT)
+
+
+func _bind_town_building_wall(material: ShaderMaterial, building: TownBuildingStyle, entry: Dictionary) -> void:
+	var origin: Vector2 = entry["camera_origin"]
+	var lot := Rect2(building.footprint)
+	var text_bits := PackedInt32Array()
+	for character in building.sign_text.to_upper().left(8):
+		text_bits.append(_town_glyph(character))
+	text_bits.resize(8)
+	material.set_shader_parameter("town_variant_bounds", _town_rect_vector(lot))
+	material.set_shader_parameter("town_variant_form", Vector4(building.eave, building.rise, building.facade_height, building.direction()))
+	material.set_shader_parameter("town_variant_porch", Vector4(building.frontage(), building.porch_depth, building.door_x(), building.awning_heights().x if building.faces_south else building.awning_heights().y))
+	material.set_shader_parameter("town_variant_options", Vector3(float(building.second_story), float(building.balcony), float(building.framed_sign)))
+	material.set_shader_parameter("town_wallpaper", building.wallpaper)
+	material.set_shader_parameter("town_variant_timber", building.timber)
+	material.set_shader_parameter("town_variant_board", building.sign_board)
+	material.set_shader_parameter("town_variant_ink", building.sign_ink)
+	material.set_shader_parameter("town_variant_sign_rect", _town_rect_vector(building.sign_bounds()))
+	material.set_shader_parameter("town_variant_glyphs", text_bits)
+	material.set_shader_parameter("town_variant_glyph_count", mini(building.sign_text.length(), 8))
+	material.set_shader_parameter("town_variant_outside", not lot.has_point(origin))
+	material.set_shader_parameter("town_variant_opening", Vector2(building.DOOR_HALF_WIDTH, building.DOOR_HEIGHT))
+	var bounds := PackedVector4Array()
+	var broken_mask := 0
+	var role: int = entry["variant"]["role"]
+	var face := "front"
+	if role == 3:
+		face = "west" if is_equal_approx(Vector2(entry["world_a"]).x, lot.position.x) else "east"
+	var windows: Array[Rect2] = []
+	if role == 1 or role == 3:
+		windows = building.ground_windows(face)
+	for window: Rect2 in windows:
+		var index := bounds.size()
+		bounds.append(_town_rect_vector(window))
+		if controller.town_broken_windows.has(building.window_id(index, face)):
+			broken_mask |= 1 << index
+	material.set_shader_parameter("town_variant_window_count", bounds.size())
+	bounds.resize(2)
+	material.set_shader_parameter("town_variant_windows", bounds)
+	material.set_shader_parameter("town_variant_broken_windows", broken_mask)
+	material.set_shader_parameter("town_variant_window_trim", TownBuildingStyle.WINDOW_TRIM)
+	material.set_shader_parameter("town_variant_front_view", (origin.y - building.frontage()) * building.direction() > 0.0)
+
+
+# Five rows of five bits, top to bottom. Adjacent cells are joined in the shader.
+func _town_glyph(character: String) -> int:
+	const GLYPHS := {
+		"A": 0b1111110001111111000110001, "B": 0b1111110001111101000111111,
+		"C": 0b1111110000100001000011111, "D": 0b1111010001100011000111110,
+		"E": 0b1111110000111101000011111, "F": 0b1111110000111101000010000,
+		"G": 0b1111110000101111000111111, "H": 0b1000110001111111000110001,
+		"I": 0b1111100100001000010011111, "J": 0b0011100010000101001011110,
+		"K": 0b1000110010111001001010001, "L": 0b1000010000100001000011111,
+		"M": 0b1000111011101011000110001, "N": 0b1000111001101011001110001,
+		"O": 0b0111010001100011000101110, "P": 0b1111110001111111000010000,
+		"Q": 0b0111010001100011001101111, "R": 0b1111110001111101001010001,
+		"S": 0b1111110000111110000111111, "T": 0b1111100100001000010000100,
+		"U": 0b1000110001100011000111111, "V": 0b1000110001100010101000100,
+		"W": 0b1000110001101011101110001, "X": 0b1000101010001000101010001,
+		"Y": 0b1000101010001000010000100, "Z": 0b1111100010001000100011111,
+	}
+	return GLYPHS.get(character, 0)
+
+
+func _update_town_building_planes(origin: Vector2, forward: Vector2, right: Vector2, coffee_bounds: PackedVector4Array, coffee_heights: PackedVector2Array) -> void:
+	_prepare_town_building_planes()
+	while town_variant_planes.size() < town_variant_plane_specs.size():
+		var plane := ColorRect.new()
+		plane.size = VIEW_SIZE
+		plane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		plane.z_index = 3
+		var material := ShaderMaterial.new()
+		material.shader = STOREFRONT_PLANE_SHADER
+		var spec: Dictionary = town_variant_plane_specs[town_variant_planes.size()]
+		if spec.get("porch_deck", false):
+			var building: TownBuildingStyle = spec["style"]
+			var rails := PackedVector4Array()
+			for span in building.porch_rail_spans():
+				var a: Vector2 = span["a"]
+				var b: Vector2 = span["b"]
+				if a.distance_to(b) < 0.145:
+					continue
+				var half_width := (b - a).orthogonal().normalized().abs() * building.RAIL_WIDTH * 0.5
+				var lower := a.min(b) - half_width
+				var upper := a.max(b) + half_width
+				rails.append(Vector4(lower.x, lower.y, upper.x, upper.y))
+			material.set_shader_parameter("deck_rail_count", rails.size())
+			rails.resize(4)
+			material.set_shader_parameter("deck_rails", rails)
+			material.set_shader_parameter("deck_rail_rise", building.RAIL_TOP - building.FLOOR_HEIGHT)
+		plane.material = material
+		controller.environment_layer.add_child(plane)
+		town_variant_planes.append(plane)
+		_apply_semantic_floor_ewa_tuning_to_material(material)
+	for index in town_variant_plane_specs.size():
+		var spec := town_variant_plane_specs[index]
+		var building: TownBuildingStyle = spec["style"]
+		var plane := town_variant_planes[index]
+		var material := plane.material as ShaderMaterial
+		var rect: Rect2 = spec["rect"]
+		_set_town_lighting(material)
+		material.set_shader_parameter("bounds", town_variant_plane_bounds[index])
+		material.set_shader_parameter("edge_heights", spec["heights"])
+		material.set_shader_parameter("slope_along_x", spec.get("slope_x", false))
+		material.set_shader_parameter("camera_origin", origin)
+		material.set_shader_parameter("camera_forward", forward)
+		material.set_shader_parameter("camera_right", right)
+		material.set_shader_parameter("projection_center", Vector2(VIEW_SIZE.x * 0.5, HORIZON_Y) + _overscan_projection_offset())
+		material.set_shader_parameter("canvas_size", VIEW_SIZE)
+		material.set_shader_parameter("focal_length", FOCAL_LENGTH)
+		material.set_shader_parameter("camera_height", VIRTUAL_CAMERA_HEIGHT)
+		material.set_shader_parameter("far_depth", _max_view_depth())
+		material.set_shader_parameter("metal", not spec.get("wood", false))
+		material.set_shader_parameter("facade_y", building.frontage())
+		material.set_shader_parameter("floor_inward", -building.direction())
+		material.set_shader_parameter("floor_door_opening", Vector2(building.door_x() - building.DOOR_HALF_WIDTH, building.door_x() + building.DOOR_HALF_WIDTH))
+		material.set_shader_parameter("roof_rib_count", (rect.size.y if spec.get("slope_x", false) else rect.size.x) * 17.0)
+		material.set_shader_parameter("roof_rib_contrast", 0.27)
+		material.set_shader_parameter("roof_top_light", spec.get("light", 1.0))
+		material.set_shader_parameter("roof_rust_color", building.metal.lerp(Color("#835c40"), 0.48))
+		material.set_shader_parameter("ledge_shadow", 0.40)
+		material.set_shader_parameter("surface_color", building.metal)
+		material.set_shader_parameter("town_variant_plane_bounds", town_variant_plane_bounds)
+		material.set_shader_parameter("town_variant_plane_heights", town_variant_plane_heights)
+		material.set_shader_parameter("town_variant_plane_count", town_variant_plane_specs.size())
+		material.set_shader_parameter("town_ceiling_height", WALL_HEIGHT)
+		material.set_shader_parameter("town_variant_plane_index", index)
+		material.set_shader_parameter("coffee_plane_bounds", coffee_bounds)
+		material.set_shader_parameter("coffee_plane_heights", coffee_heights)
+		if spec.get("wood", false):
+			var use_mips := integer_uv_scale_snap_enabled and gpu_floor_mip_texture != null
+			material.set_shader_parameter("floor_texture", gpu_floor_mip_texture if use_mips else floor_source_texture)
+			material.set_shader_parameter("floor_texture_size", Vector2(floor_source_texture.get_size()))
+			material.set_shader_parameter("use_floor_mips", use_mips)
+			material.set_shader_parameter("use_semantic_floor_material", semantic_floor_material_enabled and active_floor_texture_label == "WoodFloor2")
 
 
 func _set_town_lighting(material: ShaderMaterial) -> void:
@@ -3763,4 +4243,4 @@ func _red_control_points(texture: Texture2D) -> Array[Vector2]:
 func _render_signature() -> String:
 	var continuous_world_position: Vector2 = controller._current_player_world_position() if controller.has_method("_current_player_world_position") else Vector2.ZERO
 	var continuous_yaw := float(controller.get("continuous_camera_yaw")) if bool(controller.get("continuous_third_person_camera")) else 0.0
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin(), continuous_world_position, continuous_yaw, bool(controller.get("walk_through_walls_cheat"))] + "|%s|%s|%s" % [controller.storefront_open_doors.hash(), controller.storefront_glass_broken, controller.storefront_window_vaulted]
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [controller.grid_position, controller.facing, controller.turn_step, controller.turn_45_direction, controller.forward_step, controller.forward_transition_name, controller.strafe_step, controller.strafe_transition_name, _diagonal_forward_fraction(), diagonal_forward_source_cell, diagonal_transition_kind, diagonal_transition_flip_h, controller.wall_edges.hash(), coordinate_overscan_test_enabled, _overscan_crop_origin(), continuous_world_position, continuous_yaw, bool(controller.get("walk_through_walls_cheat"))] + "|%s|%s|%s|%s" % [controller.storefront_open_doors.hash(), controller.storefront_glass_broken, controller.storefront_window_vaulted, controller.town_broken_windows.hash()]

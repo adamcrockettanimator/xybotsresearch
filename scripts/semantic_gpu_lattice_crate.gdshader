@@ -513,6 +513,7 @@ void fragment() {
 			} else discard;
 		}
 	}
+	if (use_town_lighting && face_index != 5) COLOR.rgb = town_weathered_wood(COLOR.rgb);
 	if (town_haze_depth > 0.85 && face_index != 5) {
 		COLOR.rgb = daylight_color(COLOR.rgb, town_haze_depth);
 	}

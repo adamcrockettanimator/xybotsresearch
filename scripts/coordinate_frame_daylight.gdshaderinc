@@ -32,6 +32,13 @@ float town_outdoor_depth(vec2 origin, vec2 target, float depth) {
 // The most distant ground takes on the ochre at the base of day_horizon.png.
 const vec3 DAY_HORIZON_COLOR = vec3(218.0, 171.0, 109.0) / 255.0;
 
+// Mineral dust shifts the red-brown wood toward ochre. The shift scales
+// with existing wood chroma so recesses and pale highlights keep their depth.
+vec3 town_weathered_wood(vec3 wood) {
+	float chroma = max(wood.r - wood.b, 0.0);
+	return (wood + chroma * vec3(-0.035, 0.065, -0.0225)) * 0.85;
+}
+
 vec3 daylight_color(vec3 base, float depth) {
 	float dust = 1.0 - exp(-max(depth - 0.85, 0.0) * 0.16);
 	float luminance = dot(base, vec3(0.299, 0.587, 0.114));

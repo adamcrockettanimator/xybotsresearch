@@ -1,0 +1,23 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/town_building_style.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+sign_text = "HOTEL"
+footprint = Rect2i(5, 1, 4, 2)
+faces_south = true
+eave = 1.30
+rise = 0.34
+facade_height = 1.57
+porch_depth = 0.66
+balcony = true
+second_story = true
+framed_sign = true
+timber = Color(0.305, 0.222, 0.16, 1)
+metal = Color(0.45, 0.42, 0.39, 1)
+sign_board = Color(0.41176, 0.26275, 0.21961, 1)
+sign_ink = Color(1.00000, 0.94118, 0.74902, 1)
+wallpaper = Color(0.64, 0.42, 0.43, 1)
+partitions = Array[Vector4i]([Vector4i(1, 0, 1, 0), Vector4i(2, 1, 1, 0), Vector4i(0, 0, 0, 1)])
+cover = PackedVector2Array(0.32, 0.31, 0.23, 1.48, 3.72, 0.33, 1.58, 1.66)

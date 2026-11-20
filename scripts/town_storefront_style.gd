@@ -1,7 +1,7 @@
 extends Resource
 ## The cage is authored facing south and placed facing north into town.
 
-const FOOTPRINT := Rect2i(2, 8, 1, 2)
+const FOOTPRINT := Rect2i(2, 6, 1, 2)
 const FRONT_DOOR := Vector2(0.16, 0.54)
 const REAR_DOOR := Vector2(0.31, 0.69)
 
@@ -9,9 +9,7 @@ enum EavePaint { PORCH_BEAM = 4, REAR_TRIM, FRONT_CORNICE }
 
 @export_range(0.22, 0.70, 0.01) var porch_depth := 0.47
 @export_range(0.01, 0.08, 0.005) var porch_height := 0.050
-@export var siding_color := Color("#97704b")
-@export var trim_color := Color("#513a28")
-@export var foundation_color := Color("#513a28")
+@export var wood_color := Color("#443421")
 @export var roof_color := Color("#666865")
 @export var roof_rust_color := Color("#795b49")
 @export_range(0.015, 0.065, 0.005) var door_casing_width := 0.04

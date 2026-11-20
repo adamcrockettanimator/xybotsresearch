@@ -1,0 +1,23 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/town_building_style.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+sign_text = "BANK"
+footprint = Rect2i(5, 6, 2, 2)
+faces_south = false
+eave = 1.36
+rise = 0.28
+facade_height = 1.55
+porch_depth = 0.44
+balcony = false
+second_story = true
+framed_sign = false
+timber = Color(0.35, 0.27, 0.195, 1)
+metal = Color(0.40, 0.40, 0.36, 1)
+sign_board = Color(0.29804, 0.31373, 0.25098, 1)
+sign_ink = Color(0.14902, 0.14510, 0.11765, 1)
+wallpaper = Color(0.44, 0.55, 0.64, 1)
+partitions = Array[Vector4i]([Vector4i(0, 1, 1, 0)])
+cover = PackedVector2Array(0.25, 1.72)

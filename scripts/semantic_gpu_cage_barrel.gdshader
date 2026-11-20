@@ -359,6 +359,7 @@ void fragment() {
 		float side_to_side_light = pow(clamp(cage_facing, 0.0, 1.0), 3.0);
 		COLOR = mix(metal_dark, metal_light, side_to_side_light);
 	}
+	if (use_town_lighting && (component == 0 || component == 1 || component == 3 || component == 4 || component >= 11)) COLOR.rgb = town_weathered_wood(COLOR.rgb);
 	if (town_haze_depth > 0.85 && component != 2) {
 		COLOR.rgb = daylight_color(COLOR.rgb, town_haze_depth);
 	}
