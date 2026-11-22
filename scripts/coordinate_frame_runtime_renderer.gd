@@ -1386,6 +1386,12 @@ func set_wall_depth_light_dither_debug_enabled(enabled: bool) -> void:
 	_show_tuning_readout("Depth dither view: %s" % ("ON" if enabled else "OFF"))
 
 
+func _set_plane_dither_parameters(material: ShaderMaterial) -> void:
+	material.set_shader_parameter("floor_light_dither_near_half_width_pixels", depth_dither_near_half_width_pixels)
+	material.set_shader_parameter("floor_light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
+	material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
+
+
 func _depth_dither_far_half_width_pixels() -> float:
 	# Retain the original 3 px near / 1 px far relationship as width changes.
 	return maxf(0.25, depth_dither_near_half_width_pixels / 3.0)
@@ -1432,6 +1438,8 @@ func set_depth_dither_matrix_size(matrix_size: int) -> void:
 	_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
 	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
+	if controller.outdoor_town:
+		_update_storefront_planes()
 	_refresh_runtime_status(last_wall_entries.size())
 	var label := "Smooth" if depth_dither_matrix_size == 0 else "Bayer %dÃƒâ€”%d" % [depth_dither_matrix_size, depth_dither_matrix_size]
 	_show_tuning_readout("Depth dither: %s" % label)
@@ -1442,6 +1450,8 @@ func set_depth_dither_gradient_width(near_width: float) -> void:
 	_rebuild_runtime_wall_surfaces(last_wall_entries)
 	_rebuild_runtime_floor_surfaces(_visible_floor_cells())
 	_rebuild_runtime_ceiling_surfaces(_visible_ceiling_cells())
+	if controller.outdoor_town:
+		_update_storefront_planes()
 	_refresh_runtime_status(last_wall_entries.size())
 	_show_tuning_readout("Depth gradient: %.1f px" % depth_dither_near_half_width_pixels)
 
@@ -1923,9 +1933,7 @@ func _rebuild_gpu_floor_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("wall_edge_mask", _cell_wall_edge_mask(Vector2i(entry["cell"]), Vector2(entry["origin"])))
 		material.set_shader_parameter("projection_offset", _overscan_projection_offset())
 		material.set_shader_parameter("use_depth_light_dither", true)                            # Blend only the authored depth-light boundaries; texture ownership stays exact.
-		material.set_shader_parameter("floor_light_dither_near_half_width_pixels", depth_dither_near_half_width_pixels)
-		material.set_shader_parameter("floor_light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
-		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
+		_set_plane_dither_parameters(material)
 		var daylight: bool = controller.outdoor_town and not controller.town_has_roof(Vector2i(entry["cell"]))
 		_set_town_lighting(material)
 		var ground := daylight
@@ -2158,9 +2166,7 @@ func _rebuild_gpu_ceiling_surfaces(entries: Array[Dictionary]) -> int:
 		material.set_shader_parameter("layer2_texture", gpu_ceiling_layer2_mip_texture if use_gpu_mips and gpu_ceiling_layer2_mip_texture != null else (ceiling_layer2_texture if ceiling_layer2_texture != null else ceiling_layer1_texture))
 		material.set_shader_parameter("use_layers", ceiling_parallax_enabled and ceiling_layer2_texture != null)
 		material.set_shader_parameter("use_depth_light_dither", true)                            # Use the same ordered transition as the floor so ceiling brightness bands do not form hard lines.
-		material.set_shader_parameter("floor_light_dither_near_half_width_pixels", depth_dither_near_half_width_pixels)
-		material.set_shader_parameter("floor_light_dither_far_half_width_pixels", _depth_dither_far_half_width_pixels())
-		material.set_shader_parameter("floor_light_dither_matrix_size", depth_dither_matrix_size)
+		_set_plane_dither_parameters(material)
 		material.set_shader_parameter("use_semantic_floor_material", false)
 		material.set_shader_parameter("use_semantic_ceiling_material", semantic_ceiling_material_enabled)
 		_apply_semantic_plane_ewa_tuning_to_material(material)
@@ -3562,6 +3568,7 @@ func _update_storefront_planes() -> void:
 		material.set_shader_parameter("far_depth", _max_view_depth())
 		material.set_shader_parameter("metal", index != 1)
 		if index == 1:
+			_set_plane_dither_parameters(material)
 			var use_mips := integer_uv_scale_snap_enabled and gpu_floor_mip_texture != null
 			material.set_shader_parameter("floor_texture", gpu_floor_mip_texture if use_mips else floor_source_texture)
 			material.set_shader_parameter("floor_texture_size", Vector2(floor_source_texture.get_size()))
@@ -3730,6 +3737,7 @@ func _update_town_building_planes(origin: Vector2, forward: Vector2, right: Vect
 		material.set_shader_parameter("coffee_plane_bounds", coffee_bounds)
 		material.set_shader_parameter("coffee_plane_heights", coffee_heights)
 		if spec.get("wood", false):
+			_set_plane_dither_parameters(material)
 			var use_mips := integer_uv_scale_snap_enabled and gpu_floor_mip_texture != null
 			material.set_shader_parameter("floor_texture", gpu_floor_mip_texture if use_mips else floor_source_texture)
 			material.set_shader_parameter("floor_texture_size", Vector2(floor_source_texture.get_size()))

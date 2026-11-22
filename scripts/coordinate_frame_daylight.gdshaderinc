@@ -7,19 +7,20 @@ const vec2 TOWN_SUN_DIRECTION = vec2(-1.0, 0.0);
 
 // Clip the camera-to-surface segment to each building's floor plan. The
 // covered fraction subtracts from the forward depth used by the dust painter.
+// Keep room_bounds distinct from the storefront plane's bounds uniform.
 float town_outdoor_depth(vec2 origin, vec2 target, float depth) {
 	vec2 delta = target - origin;
 	float covered = 0.0;
 	for (int room = 0; room < 4; room++) {
-		vec4 bounds = town_roof_bounds[room];
+		vec4 room_bounds = town_roof_bounds[room];
 		float enter = 0.0;
 		float exit = 1.0;
 		for (int axis = 0; axis < 2; axis++) {
 			if (abs(delta[axis]) < 0.00001) {
-				if (origin[axis] <= bounds[axis] || origin[axis] >= bounds[axis + 2]) exit = 0.0;
+				if (origin[axis] <= room_bounds[axis] || origin[axis] >= room_bounds[axis + 2]) exit = 0.0;
 			} else {
-				float a = (bounds[axis] - origin[axis]) / delta[axis];
-				float b = (bounds[axis + 2] - origin[axis]) / delta[axis];
+				float a = (room_bounds[axis] - origin[axis]) / delta[axis];
+				float b = (room_bounds[axis + 2] - origin[axis]) / delta[axis];
 				enter = max(enter, min(a, b));
 				exit = min(exit, max(a, b));
 			}

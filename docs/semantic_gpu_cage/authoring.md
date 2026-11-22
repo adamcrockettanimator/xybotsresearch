@@ -184,6 +184,39 @@ not the prop-specific numbers or names.
   contact shadow tucked close to the raised base, with a small eastward
   extension. Keep foot trim and cast shadows visually distinct.
 
+### Indoor depth and outdoor haze
+
+Use Classic shading as the baseline for enterable outdoor buildings. For each
+surface hit, clip the camera-to-hit ray against the building footprints.
+Darken the interior material using the covered part of the ray, then apply
+the town's ochre haze using the uncovered part. Looking through an open
+door from the street applies indoor depth first and street haze second. A
+ray wholly inside one building has zero exterior haze. Looking out through
+a door or window applies haze to the outdoor segment beyond the opening.
+
+For a new outdoor level, register its enclosed building rectangles through
+the controller's `town_roof_rects()` API. Use world-grid coordinates and
+non-overlapping footprints. Exclude the porch and awning overhang from the
+enclosure. The renderer's `_set_town_lighting()` supplies the same footprints
+to walls, cell floors and ceilings, and continuous storefront planes. The
+current shader uniform array bounds the number of footprints. If a level
+needs more entries, update the renderer and all shader consumers together.
+
+Reuse `town_outdoor_depth()` and `daylight_color()` from
+[`coordinate_frame_daylight.gdshaderinc`](../../scripts/coordinate_frame_daylight.gdshaderinc).
+In shader includes, keep `room_bounds` distinct from the storefront plane's
+`bounds` uniform. A name collision made the floor report zero outdoor depth
+while the back wall still received haze. For horizontal surfaces, use
+[`coordinate_frame_plane_depth_light.gdshaderinc`](../../scripts/coordinate_frame_plane_depth_light.gdshaderinc)
+with the indoor distance and the plane's own height delta. Classic uses
+the existing floor tone at the doorway and skips the experimental bright
+strip at the jamb.
+
+Compare the back wall and the floor directly beneath it at the same doorway
+from across the street and up close. Then step inside and check both the
+far interior wall and a view out through a window. Include a narrow shop
+and a deep room so short and long indoor rays both get exercised.
+
 ### Roofing and joinery
 
 - Paint corrugation on the roof and awning planes. The current storefront

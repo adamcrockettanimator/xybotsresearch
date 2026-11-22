@@ -3,6 +3,7 @@ render_mode unshaded;
 
 #include "res://scripts/coordinate_frame_daylight.gdshaderinc"
 #include "res://scripts/town_storefront_projection.gdshaderinc"
+#include "res://scripts/coordinate_frame_plane_depth_light.gdshaderinc"
 
 uniform vec4 bounds;
 uniform vec2 edge_heights;
@@ -88,6 +89,7 @@ void fragment() {
 		delta_y = direction * (depth * denominator / depth_steps.y - depth);
 	}
 	float detail = 1.0 - smoothstep(2.0, 6.5, depth);
+	float outdoor_depth = town_outdoor_depth(camera_origin, world, depth);
 	float band = 1.0;
 	vec3 material_color = surface_color.rgb;
 	if (!metal) {
@@ -123,6 +125,8 @@ void fragment() {
 		if (inside) {
 			float spill = 1.0 - smoothstep(0.0, 0.38, inward);
 			band *= mix(0.79, 0.88, spill);
+			float indoor_depth = max(depth - outdoor_depth, 0.0);
+			band *= depth_light_dither(indoor_depth, pixel, camera_height - edge_heights.x, focal_length);
 		}
 	} else {
 		int cross_axis = 1 - axis;
@@ -165,6 +169,5 @@ void fragment() {
 	}
 	float side_light = metal ? (camera_height < origin_plane_height ? 0.65 : roof_top_light) : 1.0;
 	vec3 paint = material_color * band * side_light;
-	float outdoor_depth = town_outdoor_depth(camera_origin, world, depth);
 	COLOR = vec4(daylight_color(paint, outdoor_depth), 1.0);
 }

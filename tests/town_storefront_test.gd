@@ -58,6 +58,11 @@ func _run() -> void:
 	assert(renderer.storefront_planes.size() == 3)
 	var floor_material: ShaderMaterial = renderer.storefront_planes[1].material
 	assert(floor_material.get_shader_parameter("use_semantic_floor_material"))
+	assert(floor_material.get_shader_parameter("town_roof_bounds") == renderer.town_roof_bounds)
+	var original_matrix: int = renderer.depth_dither_matrix_size
+	renderer.set_depth_dither_matrix_size(4)
+	assert(floor_material.get_shader_parameter("floor_light_dither_matrix_size") == 4)
+	renderer.set_depth_dither_matrix_size(original_matrix)
 	var floor: Rect2 = style.floor_rect()
 	assert(floor_material.get_shader_parameter("bounds") == Vector4(floor.position.x, floor.position.y, floor.end.x, floor.end.y))
 	assert(floor_material.get_shader_parameter("edge_heights") == Vector2.ONE * style.porch_height)
