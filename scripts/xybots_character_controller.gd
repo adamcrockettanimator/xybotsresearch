@@ -49,22 +49,36 @@ const BACKWARD_WALL_CONTACT_Y := 0.84                                           
 const INDOOR_MAP_SIZE := 6
 const OUTDOOR_MAP_WIDTH := 10
 const OUTDOOR_MAP_HEIGHT := 9
-const TOWN_STREET_Y := 4.5
+const LEGACY_TOWN_STREET_Y := 4.5
 const TOWN_DRAW_DEPTH_RANGE := 19.0
-const STOREFRONT_STYLE = preload("res://resources/town_storefront_style.tres")
-const TOWN_BUILDINGS := [
+const LEGACY_STOREFRONT_STYLE = preload("res://resources/town_storefront_style.tres")
+const LEGACY_TOWN_BUILDINGS := [
 	preload("res://resources/town_store_style.tres"),
 	preload("res://resources/town_hotel_style.tres"),
 	preload("res://resources/town_bank_style.tres"),
+	preload("res://resources/town_saloon_style.tres"),
 ]
 const STOREFRONT_DEBUG_VIEW = preload("res://scripts/town_storefront_debug_view.gd")
-const TOWN_PLAYER_START := Vector2i(4, 8)
+const LEGACY_TOWN_PLAYER_START := Vector2i(4, 4)
 
 var outdoor_town := false
+var generated_town: GeneratedTown
+var town_room_shading_enabled := false
+var STOREFRONT_STYLE: Resource:
+	get: return generated_town.prototype if generated_town != null and generated_town.prototype != null else LEGACY_STOREFRONT_STYLE
+var TOWN_BUILDINGS: Array:
+	get: return generated_town.buildings if generated_town != null else LEGACY_TOWN_BUILDINGS
+var TOWN_PLAYER_START: Vector2i:
+	get: return generated_town.spawn if generated_town != null else LEGACY_TOWN_PLAYER_START
+var TOWN_STREET_Y: float:
+	get: return generated_town.street_center_y if generated_town != null else LEGACY_TOWN_STREET_Y
+
+func _town_start_facing() -> int:
+	return generated_town.spawn_facing if generated_town != null else 0
 var MAP_WIDTH: int:
-	get: return OUTDOOR_MAP_WIDTH if outdoor_town else INDOOR_MAP_SIZE
+	get: return generated_town.size.x if generated_town != null else (OUTDOOR_MAP_WIDTH if outdoor_town else INDOOR_MAP_SIZE)
 var MAP_HEIGHT: int:
-	get: return OUTDOOR_MAP_HEIGHT if outdoor_town else INDOOR_MAP_SIZE
+	get: return generated_town.size.y if generated_town != null else (OUTDOOR_MAP_HEIGHT if outdoor_town else INDOOR_MAP_SIZE)
 var town_doorways: Array[Array] = []
 
 const TEMP_EMPTY_GRID_AUDIT := false                                                        # Leave the floor-only audit available when isolated projection tuning is needed.
@@ -856,6 +870,8 @@ const AUDIT_P2_LOCAL_POSITION := Vector2(0.37, 0.84)                            
 @export var show_muzzle_anchor_debug := false                                                # Keep cyan/magenta barrel-anchor crosses off during normal play; expose them only as a deliberate F3 diagnostic.
 @export var show_barrel_lod_visualizer := false                                              # Keep the gallery readable; labels remain available from the F3 diagnostic toggle.
 @export var pause_round_timer_for_debug := false                                             # Normal matches start with the shared countdown running.
+var show_town_ground_grid := true
+
 @export var show_slot_grid_debug := false                                                    # Keep the retired slot-grid audit off by default; the coordinate renderer now uses actual wall edges.
 @export var show_selected_wall_slot_debug := false                                           # Show the renderer-selected green wall-slot overlay only when comparing selection logic.
 @export var render_wall_art := true                                                          # Let the debug menu hide only transparent wall artwork while retaining floor, collision, and source-map logic.
@@ -1016,6 +1032,14 @@ var bot_brains: Dictionary = {}                                                 
 var bot_decision_trace_path := ""                                                           # Save the current capture under user:// and print its absolute path when tracing starts.
 var bot_decision_trace_started_seconds := 0.0                                                # Rotate long unattended captures into manageable five-minute files.
 var match_started := false
+var town_waves_enabled := false
+var town_wave_number := 0
+var town_wave_countdown := 0.0
+var town_wave_active := false
+const TOWN_WAVE_BREAK_SECONDS := 12.0
+const TOWN_WAVE_START_SECONDS := 5.0
+const TOWN_WAVE_MAX_ENEMIES := 8
+
 var match_paused := false
 var scoreboard_visible := false
 var player_join_overlays: Array[ColorRect] = []
@@ -1029,6 +1053,9 @@ var options_overlay: ColorRect
 var options_label: Label
 var was_options_pressed := false
 var was_scoreboard_pressed := false
+var town_pause_stick_direction := 0
+var pending_shop_heart: Dictionary = {}
+var pending_shop_gun: Dictionary = {}
 var was_shop_heart_pressed := [false, false, false, false]
 var was_shop_gun_pressed := [false, false, false, false]
 var held_keycodes := {}                                                                      # Track key press/release events delivered to this controller as an input fallback.
@@ -1203,6 +1230,7 @@ var debug_menu_canvas: CanvasLayer                                              
 var storefront_debug_view: Control
 var show_storefront_cage := false
 var show_storefront_masks := false
+var show_town_wall_carriers := false
 var debug_menu_checks: Dictionary = {}                                                       # Store each debug-menu checkbox by its option key so displayed state stays synchronized.
 var debug_menu_tuning_spins: Dictionary = {}                                                 # Store live near-view SpinBoxes so F3 tuning never depends on the Remote debugger.
 var debug_menu_layer_tuning_spins: Dictionary = {}                                           # Store runtime wall/ceiling layer SpinBoxes in the same F3 menu.
@@ -2056,10 +2084,35 @@ func _build_pause_broadside() -> void:
 		keys = ["DRAG LEFT SIDE", "DRAG RIGHT SIDE", "TAP FIRE", "DUCK", "RELOAD", "HEART 5", "GUN 10", "LAYOUT", "RESUME", "MENU"]
 	elif not _public_build():
 		actions = ["Dive roll", "Crouch", "Reload", "Buy heart", "Buy dual pistols", "Close"]
-		keys = ["SPACE / A", "SHIFT / LT", "R / X", "LB", "RB", "SELECT / ESC"]
+		keys = ["SPACE / A", "SHIFT / LT", "R / X", "Q / LB" if outdoor_town else "LB", "E / RB" if outdoor_town else "RB", "SELECT / ESC"]
 	for i in range(actions.size()):
 		_pause_label(panel, body, actions[i], 16, Rect2(45, 150 + i * 27, 220, 23), ink)
 		_pause_label(panel, body, keys[i], 14, Rect2(285, 152 + i * 27, 230, 22), ink)
+	if outdoor_town:
+		# Godot's default ui_accept has keyboard keys but may omit the gamepad A button.
+		var accept_button := InputEventJoypadButton.new()
+		accept_button.button_index = JOY_BUTTON_A
+		if not InputMap.action_has_event("ui_accept", accept_button):
+			InputMap.action_add_event("ui_accept", accept_button)
+		var waves := CheckBox.new()
+		waves.name = "TownWavesCheck"
+		waves.text = "START ENEMY WAVES"
+		waves.position = Vector2(100, 355)
+		waves.size = Vector2(360, 42)
+		waves.button_pressed = town_waves_enabled
+		waves.focus_mode = Control.FOCUS_ALL
+		var focus_style := StyleBoxFlat.new()
+		focus_style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+		focus_style.border_color = ink
+		focus_style.set_border_width_all(3)
+		focus_style.set_content_margin_all(5.0)
+		waves.add_theme_stylebox_override("focus", focus_style)
+		waves.add_theme_font_size_override("font_size", 18)
+		waves.add_theme_color_override("font_color", ink)
+		waves.add_theme_color_override("font_hover_color", ink)
+		waves.toggled.connect(_set_town_waves_enabled)
+		panel.add_child(waves)
+		_pause_label(panel, body, "LEFT STICK / D-PAD + A", 12, Rect2(100, 400, 360, 20), ink, true)
 	_pause_rule(panel, Rect2(35, 432, 490, 3), ink)
 	map_display_button = Button.new()
 	map_display_button.name = "MapDisplayButton"
@@ -2081,6 +2134,12 @@ func _build_pause_broadside() -> void:
 	_style_pause_button(aim_assist_button, ink, paper)
 	aim_assist_button.pressed.connect(_toggle_aim_assist)
 	panel.add_child(aim_assist_button)
+	if outdoor_town:
+		var waves := panel.get_node("TownWavesCheck") as CheckBox
+		waves.focus_neighbor_bottom = waves.get_path_to(map_display_button)
+		map_display_button.focus_neighbor_top = map_display_button.get_path_to(waves)
+		map_display_button.focus_neighbor_bottom = map_display_button.get_path_to(aim_assist_button)
+		aim_assist_button.focus_neighbor_top = aim_assist_button.get_path_to(map_display_button)
 	# Keep this button directly under the overlay for existing callers.
 	var feedback_button := FeedbackAccess.add_button(options_overlay, headline, ink)
 	feedback_button.text = "GIVE FEEDBACK"
@@ -2189,6 +2248,24 @@ func _public_build() -> bool:
 
 # _input: Records keyboard press and release events so movement does not depend only on raw polling.
 func _input(event: InputEvent) -> void:                                                     # Declare this function.
+	if outdoor_town and match_paused and event is InputEventJoypadMotion and event.axis == JOY_AXIS_LEFT_Y:
+		var direction := -1 if event.axis_value < -0.55 else (1 if event.axis_value > 0.55 else 0)
+		if direction != 0 and direction != town_pause_stick_direction:
+			var check := options_overlay.get_node_or_null("PauseBroadside/TownWavesCheck") as Control
+			var focus := get_viewport().gui_get_focus_owner()
+			if direction > 0:
+				(map_display_button if focus == check else aim_assist_button).grab_focus()
+			else:
+				(map_display_button if focus == aim_assist_button else check).grab_focus()
+		town_pause_stick_direction = direction
+		get_viewport().set_input_as_handled()
+		return
+	# Queue bumper presses so a quick tap is not lost between rendered frames.
+	if event is InputEventJoypadButton and event.pressed and not match_paused:
+		if event.button_index == JOY_BUTTON_LEFT_SHOULDER:
+			pending_shop_heart[event.device] = true
+		elif event.button_index == JOY_BUTTON_RIGHT_SHOULDER:
+			pending_shop_gun[event.device] = true
 	if _public_build() and FeedbackAccess.available() and FeedbackAccess.is_shortcut(event):
 		get_viewport().set_input_as_handled()
 		_open_feedback()
@@ -2212,6 +2289,23 @@ func _input(event: InputEvent) -> void:                                         
 		get_viewport().set_input_as_handled()
 		return
 	if outdoor_town and not _public_build() and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F5 and generated_town != null:
+			town_room_shading_enabled = not town_room_shading_enabled
+			for renderer in coordinate_renderers:
+				if is_instance_valid(renderer):
+					renderer.last_signature = ""
+					renderer._show_tuning_readout("Town lighting: %s" % ("Room shading" if town_room_shading_enabled else "Classic"))
+			_render_all_player_views()
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode == KEY_F1:
+			_set_debug_option(not show_town_wall_carriers, "town_wall_carriers")
+			get_viewport().set_input_as_handled()
+			return
+		if event.keycode == KEY_F11:
+			_set_debug_option(not show_town_ground_grid, "town_ground_grid")
+			get_viewport().set_input_as_handled()
+			return
 		if event.keycode == KEY_F9 or event.keycode == KEY_F10:
 			var option := "storefront_cage" if event.keycode == KEY_F9 else "storefront_masks"
 			_set_debug_option(not _debug_option_value(option), option)
@@ -2291,6 +2385,8 @@ func _setup_debug_menu() -> void:
 	_add_debug_menu_check(content, "muzzle_anchors", "Muzzle Anchors")                       # Compare PNG-local and shared-world muzzle positions only when diagnosing a shot.
 	_add_debug_menu_check(content, "barrel_lod_visualizer", "Barrel LOD Labels")             # Keep the currently selected static barrel LOD readable while moving through depth bands.
 	if outdoor_town:
+		_add_debug_menu_check(content, "town_ground_grid", "Ground Grid (F11)")
+		_add_debug_menu_check(content, "town_wall_carriers", "Wall Carriers & Porch Supports (F1)")
 		_add_debug_menu_check(content, "storefront_cage", "Storefront Cage (F9)")
 		_add_debug_menu_check(content, "storefront_masks", "Storefront Masks (F10)")
 	_add_debug_menu_check(content, "pause_round_timer", "Pause Timer")                       # Let long diagnostic sessions deliberately stop the match clock without hiding or showing any guides.
@@ -2700,6 +2796,10 @@ func _debug_option_value(option_key: String) -> bool:
 			return show_muzzle_anchor_debug                                                        # Return whether the temporary cyan/magenta barrel-origin comparison is enabled.
 		"barrel_lod_visualizer":
 			return show_barrel_lod_visualizer
+		"town_ground_grid":
+			return show_town_ground_grid
+		"town_wall_carriers":
+			return show_town_wall_carriers
 		"storefront_cage":
 			return show_storefront_cage
 		"storefront_masks":
@@ -2790,6 +2890,14 @@ func _set_debug_option(enabled: bool, option_key: String) -> void:
 				muzzle_anchor_debug_markers.clear()                                                  # Remove lingering snapshots immediately when the diagnostic closes.
 		"barrel_lod_visualizer":
 			show_barrel_lod_visualizer = enabled                                                   # F3's existing diagnostic menu owns this visual-only barrel LOD readout.
+		"town_ground_grid":
+			show_town_ground_grid = enabled
+		"town_wall_carriers":
+			show_town_wall_carriers = enabled
+			if not coordinate_renderers.is_empty() and is_instance_valid(coordinate_renderers[0]) and is_instance_valid(debug_menu_canvas):
+				_update_storefront_debug_view(coordinate_renderers[0])
+			_refresh_debug_menu()
+			return
 		"storefront_cage":
 			show_storefront_cage = enabled
 		"storefront_masks":
@@ -2876,7 +2984,7 @@ func _setup_local_multiplayer() -> void:                                        
 	if TEMP_GRID_AUDIT or barrel_authoring_single_player_mode:                                 # Keep focused audits and barrel paint authoring free of extra camera views.
 		player_views = [{"maze_viewport": maze_viewport, "maze_content": maze_content, "playfield": playfield, "player_sprite": player_sprite, "opponent_sprite": null}] # Retain only player one's existing view nodes.
 		player_states.clear()
-		player_states.append(_make_player_state(0, Vector2i(4, 4), 0) if TEMP_GRID_AUDIT else _make_player_state(0, TOWN_PLAYER_START if outdoor_town else Vector2i(0, MAP_HEIGHT - 1), 0)) # Preserve the audit start while the barrel gallery uses the normal P1 start.
+		player_states.append(_make_player_state(0, Vector2i(4, 4), 0) if TEMP_GRID_AUDIT else _make_player_state(0, TOWN_PLAYER_START if outdoor_town else Vector2i(0, MAP_HEIGHT - 1), _town_start_facing())) # Preserve the audit start while the barrel gallery uses the normal P1 start.
 		_bind_player_context(0)                                                                   # Bind the sole test player into the legacy renderer globals.
 		return                                                                                    # Skip creating player two's view and opponent sprites.
 	status_label.visible = false                                                                  # The separate player windows use focused HUD elements instead of the old shared debug readout.
@@ -3022,7 +3130,7 @@ func _make_start_player_states() -> Array[Dictionary]:                          
 			_make_audit_player_state(0, AUDIT_P1_CELL, AUDIT_P1_FACING, AUDIT_P1_TURN_45_DIRECTION, AUDIT_P1_LOCAL_POSITION), # Start player one on the NE guide panel state.
 			_make_audit_player_state(1, AUDIT_P2_CELL, AUDIT_P2_FACING, AUDIT_P2_TURN_45_DIRECTION, AUDIT_P2_LOCAL_POSITION), # Start player two on the north guide panel state.
 		]                                                                                         # Close the audit state list.
-	var states: Array[Dictionary] = [_make_player_state(0, TOWN_PLAYER_START if outdoor_town else Vector2i(0, MAP_HEIGHT - 1), 0)]
+	var states: Array[Dictionary] = [_make_player_state(0, TOWN_PLAYER_START if outdoor_town else Vector2i(0, MAP_HEIGHT - 1), _town_start_facing())]
 	for player_index in range(1, player_joined.size()):
 		states.append(_make_player_state(player_index, _greenshirt_spawn_cell(player_index), 2 if _greenshirt_spawn_cell(player_index).y == 0 else 0))
 	return states
@@ -4291,16 +4399,35 @@ func _nearest_projectile_topology_clear(origin: Vector2, sight: Vector2) -> bool
 
 
 # Prefer reachable, recently unseen spaces; avoid dead ends when other routes exist.
+func _bot_cell_distances(start_cell: Vector2i) -> Dictionary:
+	if not _is_open_cell(start_cell):
+		return {}
+	var distances := {start_cell: 0}
+	var frontier: Array[Vector2i] = [start_cell]
+	var next_index := 0
+	var directions: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	while next_index < frontier.size():
+		var current := frontier[next_index]
+		next_index += 1
+		for direction in directions:
+			var next_cell := current + direction
+			if distances.has(next_cell) or not _can_cross_edge(current, direction):
+				continue
+			distances[next_cell] = int(distances[current]) + 1
+			frontier.append(next_cell)
+	return distances
+
+
 func _bot_search_goal(player_index: int, cell: Vector2i, cleared: Dictionary, now: float, step: int, visited: Dictionary = {}) -> Vector2i:
 	var best := cell
 	var best_score := -INF
+	var distances := _bot_cell_distances(cell)
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
 			var candidate := Vector2i(x, y)
 			if candidate == cell or not _is_open_cell(candidate) or not _bot_cell_is_clear(candidate) or _bot_goal_is_reserved(player_index, candidate):
 				continue
-			var route := _bot_cell_route(cell, candidate)
-			if route.size() < 2:
+			if not distances.has(candidate):
 				continue
 			var exits := 0
 			for direction in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
@@ -4308,7 +4435,7 @@ func _bot_search_goal(player_index: int, cell: Vector2i, cleared: Dictionary, no
 					exits += 1
 			var age := minf(now - float(cleared.get(candidate, now - 30.0)), 30.0)
 			var recently_visited := visited.has(candidate) and now - float(visited[candidate]) < 45.0
-			var score := age - float(route.size()) * 0.4 - (8.0 if exits <= 1 else 0.0)
+			var score := age - float(int(distances[candidate]) + 1) * 0.4 - (8.0 if exits <= 1 else 0.0)
 			if recently_visited:
 				score -= 100.0
 			score += float(posmod(x * 17 + y * 31 + player_index * 13 + step * 7, 11)) * 0.05
@@ -4320,6 +4447,7 @@ func _bot_search_goal(player_index: int, cell: Vector2i, cleared: Dictionary, no
 
 func _bot_next_patrol_goal(player_index: int, cell: Vector2i, previous: Vector2i, step: int) -> Vector2i:
 	var candidates: Array[Vector2i] = []
+	var distances := _bot_cell_distances(cell)
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
 			var candidate := Vector2i(x, y)
@@ -4327,8 +4455,7 @@ func _bot_next_patrol_goal(player_index: int, cell: Vector2i, previous: Vector2i
 				continue
 			if not _is_open_cell(candidate) or _bot_goal_is_reserved(player_index, candidate) or not _bot_cell_is_clear(candidate):
 				continue
-			var route := _bot_cell_route(cell, candidate)
-			if route.size() < 2 or route.size() > 3:
+			if not distances.has(candidate) or int(distances[candidate]) > 2:
 				continue
 			candidates.append(candidate)
 	if candidates.is_empty():
@@ -4820,7 +4947,7 @@ func _living_enemy_count() -> int:
 
 
 func _make_player_state(player_index: int, start_cell: Vector2i, start_facing: int) -> Dictionary: # Declare this function.
-	var enemy_type := _enemy_type_for_slot(player_index) if clear_the_map_mode and single_player_combat_view and player_index > 0 else "player"
+	var enemy_type := _enemy_type_for_slot(player_index) if (clear_the_map_mode or (outdoor_town and town_waves_enabled)) and single_player_combat_view and player_index > 0 else "player"
 	var starting_health := 1 if enemy_type == "weak" else 2 if enemy_type == "clever" else 3
 	var actors := ["zach", "devin"] if enemy_type == "weak" else ["devin", "rowan"] if enemy_type == "clever" else ["rowan", "adam"] if enemy_type == "strong" else []
 	return {
@@ -4918,11 +5045,14 @@ func _reset_combat_collectibles() -> void:
 	world_barrel_guns.clear()
 	_reset_world_barrels()                                                                     # Scatter normal props, or place the one centered review barrel.
 	_reset_combat_round()                                                                     # Restart the shared match clock and clear any prior frozen result with the new map.
-	if BARREL_LOD_REVIEW_LEVEL or outdoor_town:
+	if BARREL_LOD_REVIEW_LEVEL:
 		combat_total_coin_value = 0                                                             # Exploration and visual review have no collectible objective.
 		machine_gun_pickup = {}                                                                  # Exclude every unrelated prop from the visual LOD review.
 		machine_gun_respawn_timer = 0.0
 		return                                                                                   # Leave the arena containing only its players and the one barrel.
+	if outdoor_town:
+		_setup_town_collectibles()
+		return
 	combat_total_coin_value = MAP_WIDTH * MAP_HEIGHT                                          # Keep the original map total stable for both players' score readouts.
 	for y in range(MAP_HEIGHT):                                                                # Visit every walkable maze cell exactly once.
 		for x in range(MAP_WIDTH):                                                              # Place one coin or heart pickup at the center of each cell.
@@ -4935,6 +5065,135 @@ func _reset_combat_collectibles() -> void:
 	machine_gun_pickup = {}                                                                   # Clear any pickup held by the old map before choosing a fresh contested location.
 	machine_gun_respawn_timer = 0.0                                                          # Allow the first pickup to appear immediately.
 	_spawn_machine_gun_pickup()                                                              # Place the pickup away from the starting players when possible.
+
+
+# Put pickups on clear cell centers throughout the town, including interiors.
+func _setup_town_collectibles() -> void:
+	combat_total_coin_value = 0
+	machine_gun_pickup = {}
+	machine_gun_respawn_timer = 0.0
+	if generated_town != null and not generated_town.populate_pickups:
+		return
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			if not _bot_cell_is_clear(cell):
+				continue
+			var position := Vector2(cell) + Vector2(0.5, 0.5)
+			if randf() < HEART_MAP_SPAWN_CHANCE:
+				world_hearts.append({"id": next_combat_visual_id, "position": position})
+			else:
+				world_coins.append({"id": next_combat_visual_id, "position": position, "value": 1})
+				combat_total_coin_value += 1
+			next_combat_visual_id += 1
+	_spawn_machine_gun_pickup()
+
+
+# Town exploration and wave combat use the same world and existing AI actors.
+func _set_town_waves_enabled(enabled: bool) -> void:
+	if not outdoor_town or town_waves_enabled == enabled:
+		return
+	town_waves_enabled = enabled
+	town_wave_number = 0
+	town_wave_active = false
+	town_wave_countdown = TOWN_WAVE_START_SECONDS if enabled else 0.0
+	for index in range(1, player_joined.size()):
+		player_joined[index] = false
+		player_bots[index] = false
+	bot_brains.clear()
+	bot_inputs.clear()
+	if not enabled:
+		_release_town_wave_blood()
+		for index in range(active_projectiles.size() - 1, -1, -1):
+			if int(active_projectiles[index].get("owner", 0)) > 0:
+				active_projectiles.remove_at(index)
+
+
+# Wave enemies never enter the usual respawn phase that releases killing-shot
+# marks. When their bodies are replaced, let those marks fade normally instead
+# of accumulating forever; airborne droplets retain their normal flight.
+func _release_town_wave_blood() -> void:
+	for blood in active_blood_splatters:
+		if int(blood.get("victim_player_index", -1)) <= 0 or not bool(blood.get("persistent_killing_shot", false)):
+			continue
+		blood["persistent_killing_shot"] = false
+		if bool(blood.get("stuck", false)):
+			blood["timer"] = BLOOD_SPLATTER_STUCK_LIFETIME
+
+
+func _advance_town_waves(delta: float) -> void:
+	if town_wave_active:
+		if _living_enemy_count() > 0:
+			return
+		town_wave_active = false
+		town_wave_countdown = TOWN_WAVE_BREAK_SECONDS
+		return
+	town_wave_countdown = maxf(0.0, town_wave_countdown - delta)
+	if town_wave_countdown > 0.0 or bool(player_states[0].get("is_dying", false)):
+		return
+	if not _spawn_town_wave():
+		# Wait for the player to move if no fair spawn can be found.
+		town_wave_countdown = 1.0
+
+
+# Transparent glass is not a hiding place for a spawning cowboy.
+func _town_spawn_occluded(origin: Vector2, target: Vector2) -> bool:
+	var offset := target - origin
+	var distance := offset.length()
+	if distance < 0.001:
+		return false
+	var direction := offset / distance
+	var height := town_walk_height(origin) + 0.30
+	for edge: Dictionary in _all_physical_wall_edges():
+		if edge.get("projectile_only", false):
+			continue
+		var hit := _ray_segment_hit_distance_limited(origin, direction, Vector2(edge["a"]), Vector2(edge["b"]), distance)
+		if hit < 0.0 or hit >= distance - 0.01:
+			continue
+		var point := origin + direction * hit
+		if town_window_has_opening(edge, point, height):
+			continue
+		if _projectile_edge_blocks_at_height(edge, point, height):
+			return true
+	return false
+
+
+func _spawn_town_wave() -> bool:
+	var player_position := _player_state_world_position(player_states[0])
+	var player_cell := Vector2i(player_position.floor())
+	var player_forward := _view_forward_vector_for_state(player_states[0]).normalized()
+	var candidates: Array[Vector2i] = []
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			var point := Vector2(cell) + Vector2(0.5, 0.5)
+			var offset := point - player_position
+			if offset.length() < 3.0 or not _bot_cell_is_clear(cell):
+				continue
+			if _maze_cell_path_distance(player_cell, cell) > MAP_WIDTH * MAP_HEIGHT:
+				continue
+			# Spawn out of sight, either behind the camera or behind solid cover.
+			if offset.normalized().dot(player_forward) > 0.25 and not _town_spawn_occluded(player_position, point):
+				continue
+			candidates.append(cell)
+	if candidates.is_empty():
+		return false
+	candidates.shuffle()
+	var count := mini(mini(2 + town_wave_number + 1, TOWN_WAVE_MAX_ENEMIES), candidates.size())
+	_release_town_wave_blood()
+	_ensure_clear_map_roster_capacity(count)
+	for index in range(1, player_joined.size()):
+		player_joined[index] = index <= count
+		player_bots[index] = index <= count
+		if index <= count:
+			var cell: Vector2i = candidates[index - 1]
+			player_states[index] = _make_player_state(index, cell, randi() % 4)
+	bot_brains.clear()
+	bot_inputs.clear()
+	_assign_round_bot_voices()
+	town_wave_number += 1
+	town_wave_active = true
+	return true
 
 
 # _barrel_position_in_cell: Bias props toward useful wall dressing while reserving each cell's pickup center.
@@ -4975,6 +5234,9 @@ func _reset_world_barrels() -> void:
 		# review pair here, or the room silently becomes a four-barrel test.
 		if calibration_sprite_gallery_enabled and calibration_semantic_stress_props_enabled:
 			_setup_semantic_stress_props()
+		return
+	if generated_town != null:
+		_spawn_storefront_furnishings()
 		return
 	var candidates: Array[Vector2i] = []                                                       # Build a pool so props never begin underneath a player spawn.
 	for y in range(MAP_HEIGHT):
@@ -5052,16 +5314,44 @@ func _reset_world_barrels() -> void:
 		_spawn_storefront_furnishings()
 
 
-func _spawn_storefront_furnishings() -> void:
-	var front_left := Vector2(STOREFRONT_STYLE.FOOTPRINT.position)
+func _spawn_generated_town_furnishings() -> void:
+	var width := gpu_lattice_barrel_radius * 2.0
+	for index in generated_town.cover.size():
+		var spec: Dictionary = generated_town.cover[index]
+		var point: Vector2 = spec["position"]
+		var center := _ensure_prop_wall_passage(point, Vector2.ONE * width * 0.55)
+		if not center.is_finite() or center.distance_to(point) > 0.20:
+			continue
+		var barrel: bool = spec["barrel"]
+		var prefix := "barrel_gpu_lattice_instanced" if barrel else "crate_gpu_fragment_raster"
+		var prop := {"id": "%s_generated_cover_%d" % [prefix, index], "position": center,
+			"side_length": width, "depth": width, "height": gpu_lattice_barrel_height if barrel else width,
+			"low_resolution_vector": true, "typical_spawn": true, "town_cover": true}
+		semantic_lod_floor_footprints.append(prop)
+		_register_semantic_gameplay_prop(prop)
+	for center in generated_town.dining:
+		_spawn_semantic_dining_set(center)
+	for index in generated_town.benches.size():
+		_spawn_town_bench("chair_semantic_bench_yard_%d" % index, generated_town.benches[index])
+
+
+func _spawn_town_bench(id: String, position: Vector2) -> Dictionary:
 	var bench := {
-		"id": "chair_semantic_bench_storefront",
-		"position": front_left + Vector2(0.235, -0.075),
+		"id": id, "position": position,
 		"side_length": 0.33, "depth": 0.10, "height": 0.10,
 		"low_resolution_vector": true, "typical_spawn": true, "dining_set_spawn": true,
 	}
 	semantic_lod_floor_footprints.append(bench)
 	_register_semantic_gameplay_prop(bench)
+	return bench
+
+
+func _spawn_storefront_furnishings() -> void:
+	if generated_town != null and generated_town.prototype == null:
+		_spawn_generated_town_furnishings()
+		return
+	var front_left := Vector2(STOREFRONT_STYLE.FOOTPRINT.position)
+	var bench := _spawn_town_bench("chair_semantic_bench_storefront", front_left + Vector2(0.235, -0.075))
 
 	var props := {
 		"barrel_gpu_lattice_instanced_storefront_rear": Vector2(0.135, 2.15),
@@ -5085,6 +5375,11 @@ func _spawn_storefront_furnishings() -> void:
 	# Seat the full dinette against the west wall, between the door swings.
 	# Its east side leaves a passage between the front and rear doors.
 	_spawn_semantic_dining_set(front_left + Vector2(0.205, 1.0))
+	if generated_town != null:
+		var copy_origin := Vector2(generated_town.prototype_copy.FOOTPRINT.position)
+		_spawn_semantic_dining_set(copy_origin + Vector2(0.205, 1.0))
+		_spawn_generated_town_furnishings()
+		return
 	for building in TOWN_BUILDINGS:
 		var deck: Rect2 = building.porch()
 		# Leave the deck clear on both sides of each vaultable window.
@@ -5097,6 +5392,9 @@ func _spawn_storefront_furnishings() -> void:
 		_register_semantic_gameplay_prop(town_bench)
 		if building.balcony:
 			_spawn_semantic_dining_set(Vector2(deck.position.x + 1.42, lot.get_center().y))
+		if building.sign_text == "GENERAL STORE":
+			_spawn_semantic_dining_set(Vector2(lot.position) + Vector2(0.75, 1.0))
+			_spawn_semantic_dining_set(Vector2(lot.position) + Vector2(2.25, 1.0))
 		var cover: PackedVector2Array = building.cover.duplicate()
 		# Keep the rear entrance and the route along the fence clear.
 		var rear_offset: float = building.rear_wall_y() - lot.position.y - building.direction() * 0.25
@@ -5118,6 +5416,37 @@ func _spawn_storefront_furnishings() -> void:
 				"height": gpu_lattice_barrel_height if barrel else width,
 				"low_resolution_vector": true, "typical_spawn": true, "town_cover": true,
 			}
+			semantic_lod_floor_footprints.append(prop)
+			_register_semantic_gameplay_prop(prop)
+
+
+	# Small piles just beyond the porch edge leave the doorway and the boardwalk clear.
+	var frontage_specs: Array[Dictionary] = [{"x0": float(STOREFRONT_STYLE.FOOTPRINT.position.x), "x1": float(STOREFRONT_STYLE.FOOTPRINT.end.x), "y": float(STOREFRONT_STYLE.FOOTPRINT.position.y) - STOREFRONT_STYLE.porch_depth - 0.42, "door": STOREFRONT_STYLE.door_frame_center(true).x, "name": "coffee"}]
+	for building in TOWN_BUILDINGS:
+		frontage_specs.append({"x0": float(building.footprint.position.x), "x1": float(building.footprint.end.x), "y": building.frontage() + building.direction() * (building.porch_depth + 0.42), "door": building.door_x(), "name": building.sign_text.to_lower()})
+	for spec in frontage_specs:
+		var candidates := [float(spec.x0) + 0.13, float(spec.x0) + 0.31, float(spec.x1) - 0.31, float(spec.x1) - 0.13]
+		if spec.name == "coffee":
+			candidates = [float(spec.x0) - 0.30, float(spec.x0) - 0.11, float(spec.x0) + 0.07]
+		for index in candidates.size():
+			var x: float = candidates[index]
+			if absf(x - float(spec.door)) < 0.55:
+				continue
+			var center := _ensure_prop_wall_passage(Vector2(x, float(spec.y)), Vector2.ONE * width * 0.55)
+			if not center.is_finite() or absf(center.x - float(spec.door)) < 0.55:
+				continue
+			var overlaps := false
+			for existing in world_barrels:
+				if Vector2(existing.get("position", Vector2.INF)).distance_to(center) < width * 1.15:
+					overlaps = true
+					break
+			if overlaps:
+				continue
+			var barrel := index % 2 == 0
+			var prefix := "barrel_gpu_lattice_instanced" if barrel else "crate_gpu_fragment_raster"
+			var prop := {"id": "%s_%s_front_pile_%d" % [prefix, spec.name, index], "position": center,
+				"side_length": width, "depth": width, "height": gpu_lattice_barrel_height if barrel else width,
+				"low_resolution_vector": true, "typical_spawn": true, "town_cover": true}
 			semantic_lod_floor_footprints.append(prop)
 			_register_semantic_gameplay_prop(prop)
 
@@ -5479,12 +5808,12 @@ func _advance_combat_round(delta: float) -> void:
 
 # _spawn_machine_gun_pickup: Places the one contested pickup in a random non-occupied maze cell.
 func _spawn_machine_gun_pickup() -> void:
-	if outdoor_town:
-		return
 	var candidates: Array[Vector2i] = []                                                     # Build eligible cell choices rather than assuming a particular maze layout.
 	for y in range(MAP_HEIGHT):                                                               # Check every cell because all maze cells are traversable.
 		for x in range(MAP_WIDTH):                                                             # Add non-occupied cells to the spawn pool.
 			var cell := Vector2i(x, y)                                                          # Keep the integer cell so player spawn tests are exact.
+			if outdoor_town and not _bot_cell_is_clear(cell):
+				continue
 			var occupied := false                                                               # Avoid placing the pickup directly beneath a living player.
 			for state in player_states:
 				if cell == state.get("grid_position", Vector2i(-99, -99)):
@@ -5510,7 +5839,9 @@ func _collect_combat_pickups(delta: float) -> void:
 		var collected_by := -1                                                                 # Let at most one player receive this coin.
 		var coin_position: Vector2 = coin.get("position", Vector2.ZERO)                       # Read the camera-independent world location.
 		if allow_pickups and not bool(coin.get("loot_airborne", false)):             # Let thrown loot land before it can be collected.
-			for player_index in range(player_states.size()):                                   # Test both living local players against the shared pickup.
+			for player_index in range(player_states.size()):                                   # Test active actors against the shared pickup.
+				if player_index >= player_joined.size() or not player_joined[player_index]:
+					continue
 				var state := player_states[player_index]
 				if bool(state.get("is_dying", false)):
 					continue
@@ -5569,6 +5900,8 @@ func _collect_combat_pickups(delta: float) -> void:
 		if not collected:
 			remaining_barrel_guns.append(gun)
 	world_barrel_guns = remaining_barrel_guns
+	if generated_town != null and not generated_town.populate_pickups:
+		return
 	if not machine_gun_pickup.is_empty():                                                    # Test the active pickup only while it exists in the world.
 		var pickup_position: Vector2 = machine_gun_pickup.get("position", Vector2.ZERO)
 		for player_index in range(player_states.size()):
@@ -6290,7 +6623,7 @@ func _update_combat_hud() -> void:
 				var coins := int(state.get("coins", 0))
 				var heart_color := "#ffe25c" if coins >= 5 else "#dddddd"
 				var gun_color := "#ffe25c" if coins >= 10 else "#dddddd"
-				shop.text = "[color=%s]%s 5 [img=15x15]res://assets/Items/Heart/hud_heart_icon.tres[/img][/color]\n[color=%s]%s 10 [img=15x15]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if _public_build() else "LB", gun_color, "E/RB" if _public_build() else "RB"]
+				shop.text = "[color=%s]%s 5 [img=15x15]res://assets/Items/Heart/hud_heart_icon.tres[/img][/color]\n[color=%s]%s 10 [img=15x15]res://assets/Items/Gun/gun_01.png[/img][/color]" % [heart_color, "Q/LB" if (_public_build() or outdoor_town) else "LB", gun_color, "E/RB" if (_public_build() or outdoor_town) else "RB"]
 			if board_visible:
 				var lawmen: Array[Dictionary] = []
 				var outlaws: Array[Dictionary] = []
@@ -6372,7 +6705,10 @@ func _update_combat_hud() -> void:
 				if timer_view != null:
 					timer_label.position = timer_view.position + Vector2((VIEWPORT_SIZE.x * timer_view.scale.x - timer_label.size.x * timer_view.scale.x) * 0.5, 3.0)
 					timer_label.scale = timer_view.scale
-				if clear_the_map_mode or outdoor_town:
+				if outdoor_town and town_waves_enabled:
+					timer_label.visible = true
+					timer_label.text = "WAVE %d  %d LEFT" % [town_wave_number, _living_enemy_count()] if town_wave_active else "WAVE %d IN %d" % [town_wave_number + 1, maxi(1, ceili(town_wave_countdown))]
+				elif clear_the_map_mode or outdoor_town:
 					timer_label.visible = false
 					timer_label.text = ""
 				elif pause_round_timer_for_debug:
@@ -6588,7 +6924,7 @@ func _process_combat(delta: float) -> void:
 			if String(state.get("death_phase", "")) == "fall" and not bool(state.get("death_ground_sound_played", false)) and float(state.get("death_timer", 0.0)) + delta >= DEATH_FALL_SECONDS:
 				_play_actor_surface_sound(player_index, "Drop")
 				state["death_ground_sound_played"] = true
-			if clear_the_map_mode:
+			if clear_the_map_mode or (outdoor_town and town_waves_enabled and player_index > 0):
 				# A cleared-map run has no respawns. Preserve the death fall at its
 				# final frame so the body remains a readable result of the encounter.
 				state["death_timer"] = float(state.get("death_timer", 0.0)) + delta
@@ -6965,18 +7301,30 @@ func _is_storefront_pane(edge: Dictionary, world: Vector2, height: float) -> boo
 	var a: Vector2 = edge["a"]
 	var span := Vector2(edge["b"]) - a
 	var u := (world - a).dot(span) / span.length_squared()
-	return STOREFRONT_STYLE.window_has_opening(Vector2(u, height))
+	return edge.get("storefront_style", STOREFRONT_STYLE).window_has_opening(Vector2(u, height))
 
 
 func town_window_has_opening(edge: Dictionary, world: Vector2, height: float) -> bool:
 	var window: Dictionary = edge.get("town_window", {})
 	if not window.is_empty():
-		return _town_variant_window_has_opening(window, world, height)
+		return not _town_window_at(window, world, height).is_empty()
 	return _is_storefront_pane(edge, world, height)
 
 
 func _town_variant_window_has_opening(window: Dictionary, world: Vector2, height: float) -> bool:
 	return Rect2(window["aperture"]).has_point(Vector2(world[int(window["axis"])], height))
+
+
+# A legacy wall has one aperture. Generated bays can also carry a second one.
+func _town_window_at(window: Dictionary, world: Vector2, height: float) -> Dictionary:
+	if window.is_empty():
+		return {}
+	if _town_variant_window_has_opening(window, world, height):
+		return window
+	for other: Dictionary in window.get("more", []):
+		if _town_variant_window_has_opening(other, world, height):
+			return other
+	return {}
 
 
 func _projectile_edge_blocks_at_height(edge: Dictionary, world: Vector2, height: float) -> bool:
@@ -6993,8 +7341,10 @@ func _projectile_edge_blocks_at_height(edge: Dictionary, world: Vector2, height:
 		return false
 	var window: Dictionary = edge.get("town_window", {})
 	if not window.is_empty():
-		return not (town_broken_windows.has(window["id"]) and _town_variant_window_has_opening(window, world, height))
-	return not (storefront_glass_broken and _is_storefront_pane(edge, world, height))
+		return not town_broken_windows.has(_town_window_at(window, world, height).get("id", ""))
+	if not _is_storefront_pane(edge, world, height):
+		return true
+	return not town_storefront_glass_broken(edge.get("storefront_style", STOREFRONT_STYLE))
 
 
 func _try_break_storefront_glass(edge_key: String, world: Vector2, direction: Vector2, height: float) -> bool:
@@ -7002,13 +7352,21 @@ func _try_break_storefront_glass(edge_key: String, world: Vector2, direction: Ve
 		return false
 	var window: Dictionary = town_window_edges.get(edge_key, {})
 	if not window.is_empty():
-		if not _town_variant_window_has_opening(window, world, height):
-			return false
-		return _break_town_window(window["id"], world, direction, height)
+		var pane := _town_window_at(window, world, height)
+		return not pane.is_empty() and _break_town_window(pane["id"], world, direction, height)
 	for edge: Dictionary in _all_physical_wall_edges():
+		if edge["key"] == edge_key and edge.has("town_window"):
+			var pane := _town_window_at(edge["town_window"], world, height)
+			return not pane.is_empty() and _break_town_window(pane["id"], world, direction, height)
 		if edge["key"] == edge_key and _is_storefront_pane(edge, world, height):
-			return _break_town_window("", world, direction, height)
+			var shop: Resource = edge.get("storefront_style", STOREFRONT_STYLE)
+			return _break_town_window(shop.window_id(), world, direction, height)
 	return false
+
+
+func town_storefront_glass_broken(style: Resource) -> bool:
+	var id: String = style.window_id()
+	return storefront_glass_broken if id.is_empty() else town_broken_windows.has(id)
 
 
 func _break_town_window(id: String, world: Vector2, direction: Vector2, height: float) -> bool:
@@ -7094,8 +7452,8 @@ func _projectile_topology_edge_blocks(cell: Vector2i, delta: Vector2i, allow_tow
 	if allow_town_exit:
 		var segment := _physical_cell_edge_segment(cell, delta)
 		var window: Dictionary = town_window_edges.get(_physical_edge_key(segment[0], segment[1]), {})
-		if not window.is_empty() and town_broken_windows.has(window["id"]):
-			return not _town_variant_window_has_opening(window, hit_world, glass_height)
+		if town_broken_windows.has(_town_window_at(window, hit_world, glass_height).get("id", "")):
+			return false
 	return true
 
 
@@ -7879,7 +8237,7 @@ func _apply_projectile_hit(player_index: int, shot_direction: Vector2, owner_ind
 
 # _begin_combat_death: Stores a safe respawn destination while leaving the defeated body visible at its old location.
 func _begin_combat_death(player_index: int) -> void:
-	if clear_the_map_mode and player_index > 0:
+	if (clear_the_map_mode or (outdoor_town and town_waves_enabled)) and player_index > 0:
 		_drop_greenshirt_loot(player_index)
 	else:
 		_drop_coins_for_defeat(player_index)                                                        # Transfer a small random share of this player's score into collectable world coins.
@@ -7914,7 +8272,7 @@ func _combat_respawn_destination(player_index: int) -> Dictionary:
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
 			var candidate := Vector2i(x, y)
-			if not _is_open_cell(candidate) or not _respawn_cell_is_safe(player_index, candidate):
+			if not _is_open_cell(candidate) or (outdoor_town and not _bot_cell_is_clear(candidate)) or not _respawn_cell_is_safe(player_index, candidate):
 				continue
 			var occupied := false
 			var nearest_enemy_distance := MAP_WIDTH * MAP_HEIGHT + 1
@@ -7931,7 +8289,11 @@ func _combat_respawn_destination(player_index: int) -> Dictionary:
 					break
 				if PLAYER_TEAMS[other_index] != PLAYER_TEAMS[player_index]:
 					has_living_enemy = true
-					nearest_enemy_distance = mini(nearest_enemy_distance, _maze_cell_path_distance(candidate, other_cell))
+					var path_distance := _maze_cell_path_distance(candidate, other_cell)
+					if outdoor_town and path_distance > MAP_WIDTH * MAP_HEIGHT:
+						occupied = true
+						break
+					nearest_enemy_distance = mini(nearest_enemy_distance, path_distance)
 			if occupied:
 				continue
 			var safety := nearest_enemy_distance if has_living_enemy else 0
@@ -7941,10 +8303,35 @@ func _combat_respawn_destination(player_index: int) -> Dictionary:
 			elif safety == best_safety:
 				best_cells.append(candidate)
 	if best_cells.is_empty():
+		if outdoor_town and player_index == 0:
+			return _town_farthest_respawn_fallback(player_index)
 		return {}
 	var chosen := best_cells[randi() % best_cells.size()]
 	var respawn_facing := 0 if chosen.y == MAP_HEIGHT - 1 else 2
 	return {"cell": chosen, "facing": respawn_facing}
+
+
+# If every cell is exposed, pick the clearest available cell furthest from
+# living enemies rather than leaving the player stuck in the death countdown.
+func _town_farthest_respawn_fallback(player_index: int) -> Dictionary:
+	var best := Vector2i(-1, -1)
+	var best_distance := -1.0
+	for y in range(MAP_HEIGHT):
+		for x in range(MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			if not _bot_cell_is_clear(cell):
+				continue
+			var point := Vector2(cell) + Vector2(0.5, 0.5)
+			var nearest := INF
+			for index in range(1, player_states.size()):
+				if index < player_joined.size() and player_joined[index] and not bool(player_states[index].get("is_dying", false)):
+					nearest = minf(nearest, point.distance_to(_player_state_world_position(player_states[index])))
+			if nearest > best_distance and nearest >= PLAYER_CAPSULE_RADIUS * 2.0:
+				best_distance = nearest
+				best = cell
+	if best.x < 0:
+		return {}
+	return {"cell": best, "facing": 0 if best.y == MAP_HEIGHT - 1 else 2}
 
 
 func _respawn_cell_is_safe(player_index: int, candidate: Vector2i) -> bool:
@@ -8026,7 +8413,7 @@ func _advance_combat_death_state(state: Dictionary, delta: float) -> Dictionary:
 		state["world_run_dir"] = _direction_string_for_facing(int(state["facing"]))            # Face the restored actor consistently in other players' views.
 		state["world_aim_dir"] = _direction_string_for_facing(int(state["facing"]))            # Face the restored actor consistently in other players' views.
 	elif phase == "respawn" and timer >= DEATH_RESPAWN_SECONDS:                               # Finish the reverse Death animation.
-		if not _respawn_cell_is_safe(int(state.get("player_index", 0)), state["grid_position"]):
+		if not _respawn_cell_is_safe(int(state.get("player_index", 0)), state["grid_position"]) and not (outdoor_town and int(state.get("player_index", 0)) == 0 and _combat_respawn_destination(0).get("cell", Vector2i(-1, -1)) == state["grid_position"]):
 			state["death_phase"] = "countdown"
 			state["death_timer"] = DEATH_COUNTDOWN_SECONDS
 			return state
@@ -9110,7 +9497,19 @@ func _render_storefront_grass(used: Dictionary) -> void:
 	if not is_instance_valid(renderer):
 		return
 	var front_left := Vector2(STOREFRONT_STYLE.FOOTPRINT.position)
-	var clumps: Array[Vector4] = STOREFRONT_STYLE.grass_clumps.duplicate()
+	var all_town_floors: Array[Rect2] = []
+	for shop in town_storefronts():
+		all_town_floors.append(shop.floor_rect())
+	for building in TOWN_BUILDINGS:
+		all_town_floors.append(building.floor_bounds())
+	var floor_vectors := PackedVector4Array()
+	for rect in all_town_floors:
+		floor_vectors.append(Vector4(rect.position.x, rect.position.y, rect.end.x, rect.end.y))
+	floor_vectors.resize(6)
+	var clumps: Array[Vector4] = []
+	if generated_town == null or generated_town.prototype != null:
+		clumps.assign(STOREFRONT_STYLE.grass_clumps)
+	var prototype_clump_count := clumps.size()
 	var floor_rects: Array[Rect2] = []
 	floor_rects.resize(clumps.size())
 	floor_rects.fill(STOREFRONT_STYLE.floor_rect())
@@ -9136,7 +9535,7 @@ func _render_storefront_grass(used: Dictionary) -> void:
 		var cluster := storefront_grass_layout[index]
 		var floor := floor_rects[index]
 		var floor_bounds := Vector4(floor.position.x, floor.position.y, floor.end.x, floor.end.y)
-		var grass_floor_height: float = STOREFRONT_STYLE.porch_height if index < STOREFRONT_STYLE.grass_clumps.size() else TownBuildingStyle.FLOOR_HEIGHT
+		var grass_floor_height: float = STOREFRONT_STYLE.porch_height if index < prototype_clump_count else TownBuildingStyle.FLOOR_HEIGHT
 		var center := front_left + Vector2(cluster.x, cluster.y)
 		var view: Dictionary = renderer.runtime_project_world_effect_point_for_current_pose(center)
 		if not view.get("visible", false):
@@ -9174,7 +9573,7 @@ func _render_storefront_grass(used: Dictionary) -> void:
 			var blade := blades[blade_index]
 			var offset := Vector2(blade.x, blade.y)
 			var root := center + offset
-			if floor.has_point(root):
+			if all_town_floors.any(func(rect: Rect2) -> bool: return rect.has_point(root)):
 				continue
 			var lean := Vector2.from_angle(blade.w) * blade.z * 0.30
 			var root_local: Vector2 = renderer._to_view(root, origin, forward, right)
@@ -9231,6 +9630,8 @@ func _render_storefront_grass(used: Dictionary) -> void:
 		material.set_shader_parameter("bends", projected_bends)
 		material.set_shader_parameter("inverse_depths", inverse_depths)
 		material.set_shader_parameter("floor_bounds", floor_bounds)
+		material.set_shader_parameter("all_floor_bounds", floor_vectors)
+		material.set_shader_parameter("all_floor_count", all_town_floors.size())
 		material.set_shader_parameter("floor_height", grass_floor_height)
 		material.set_shader_parameter("camera_origin", origin)
 		material.set_shader_parameter("camera_forward", forward)
@@ -9275,7 +9676,10 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	var is_in_player_cell := _world_position_is_in_active_player_cell(world_position)          # The local-cell pickup must remain visible while the body presses toward a wall.
 	if not is_in_player_cell and (not _world_pickup_is_in_front_of_current_camera(world_position) or not _world_actor_overlaps_current_camera_fan(world_position, 0.16)): # Keep remote collectibles inside the camera fan; normal back-to-front Canvas drawing resolves wall coverage.
 		return                                                                                    # Let stale-node hiding remove a pickup from this view.
-	if not _world_footprint_has_visible_camera_span(_world_item_footprint(footprint_kind, world_position)):
+	var footprint := _world_item_footprint(footprint_kind, world_position)
+	if generated_town != null:
+		footprint["see_through_porch_rail"] = true
+	if not _world_footprint_has_visible_camera_span(footprint):
 		return                                                                                    # A completely covered visual circle cannot leak through a nearer opaque wall.
 	# Collectibles are fixed points in the map, not protected near-cell bodies.
 	# In the continuous third-person view they must use the raw live-camera
@@ -9298,7 +9702,9 @@ func _render_world_pickup(key: String, texture: Texture2D, world_position: Vecto
 	sprite.position = Vector2(float(projection["screen_x"]), float(projection["feet_y"]) - actor_height * (lift_fraction + extra_height)) # Lift the pickup slightly from the floor at its projected depth.
 	sprite.scale = Vector2.ONE * clampf(actor_height / 42.0, 0.32, 0.86) * size_multiplier     # Keep far items visible while allowing deliberately smaller coins.
 	_apply_runtime_world_sprite_style(sprite, sprite.scale.x, 0, world_view_depth, not (use_authored_coin_lod or use_authored_heart_lod)) # Keep non-LOD pickups on the shader grid while authored coin and heart LODs remain unmodified.
-	sprite.z_index = _world_footprint_draw_layer(_world_item_footprint(footprint_kind, world_position))
+	if (use_authored_coin_lod or use_authored_heart_lod) and has_meta("shared_pixel_adapter"):
+		get_meta("shared_pixel_adapter").align_pickup(sprite)
+	sprite.z_index = _world_footprint_draw_layer(footprint)
 	sprite.visible = true                                                                       # Reveal the projected pickup.
 	used[key] = true                                                                            # Preserve it through cached-node cleanup.
 
@@ -10821,6 +11227,9 @@ func _dive_town_edge_vault(origin: Vector2, direction: Vector2, remaining_distan
 		if not rail and window.is_empty():
 			margin = (high - low) * 0.22 + 0.065 + absf(direction[axis]) * clearance
 		if not window.is_empty():
+			window = _town_window_at(window, crossing, 0.33)
+			if window.is_empty():
+				continue
 			var aperture: Rect2 = window["aperture"]
 			low = aperture.position.x
 			high = aperture.end.x
@@ -10832,7 +11241,8 @@ func _dive_town_edge_vault(origin: Vector2, direction: Vector2, remaining_distan
 			"lift": float(edge["height"]) - town_walk_height(origin) + 0.055 if rail else 0.25,
 		}
 		if not rail:
-			vault["window_id"] = window.get("id", "")
+			var shop: Resource = edge.get("storefront_style", STOREFRONT_STYLE)
+			vault["window_id"] = window.get("id", shop.window_id())
 			vault["impact_distance"] = maxf(distance - clearance, 0.0)
 	return vault
 
@@ -11198,7 +11608,7 @@ func _update_continuous_camera_yaw(delta: float) -> void:
 		stick_x = 0.0
 	if absf(stick_x) < XBOX_STICK_DEADZONE:
 		stick_x = 0.0
-	var key_turn := 0.0 if _public_build() and active_player_index == 0 else float(int(_is_player_turn_right_pressed()) - int(_is_player_turn_left_pressed()))
+	var key_turn := 0.0 if (_public_build() or outdoor_town) and active_player_index == 0 else float(int(_is_player_turn_right_pressed()) - int(_is_player_turn_left_pressed()))
 	continuous_camera_yaw = wrapf(continuous_camera_yaw + (stick_x + key_turn) * continuous_camera_turn_radians_per_second * delta, -PI, PI)
 
 
@@ -11254,6 +11664,8 @@ func _render_bound_player_context() -> void:                                    
 			_update_storefront_debug_view(coordinate_renderer)
 		var player_started_us := Time.get_ticks_usec()
 		_position_player()                                                                        # Keep the active player's sprite synchronized with movement and authored transition frames.
+		if has_meta("shared_pixel_adapter"):
+			get_meta("shared_pixel_adapter").align_player(self, player_sprite)
 		# Player positioning can change the sprite scale that defines the cutaway fan.
 		coordinate_renderer.begin_view_visibility()
 		var player_elapsed_us := Time.get_ticks_usec() - player_started_us
@@ -11313,7 +11725,7 @@ func _render_bound_player_context() -> void:                                    
 
 # _render_all_player_views: Redraws every local player view after setup or a map reset.
 func _update_storefront_debug_view(renderer: Node) -> void:
-	var enabled := show_storefront_cage or show_storefront_masks
+	var enabled := not _public_build() and (show_storefront_cage or show_storefront_masks or show_town_wall_carriers)
 	if not enabled and storefront_debug_view == null:
 		return
 	if storefront_debug_view == null:
@@ -11321,7 +11733,7 @@ func _update_storefront_debug_view(renderer: Node) -> void:
 		debug_menu_canvas.add_child(storefront_debug_view)
 	storefront_debug_view.visible = enabled
 	if enabled:
-		storefront_debug_view.update_view(renderer, maze_viewport, maze_content, show_storefront_cage, show_storefront_masks)
+		storefront_debug_view.update_view(renderer, maze_viewport, maze_content, show_storefront_cage, show_storefront_masks, show_town_wall_carriers)
 
 
 func _render_all_player_views() -> void:                                                   # Declare this function.
@@ -11358,11 +11770,17 @@ func _apply_wall_art_debug_visibility() -> void:
 func _update_scoreboard_shop_input() -> void:
 	for player_index in range(player_states.size()):
 		var joypad_id := _xbox_joypad_id_for_player(player_index)
-		var heart_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_LEFT_SHOULDER)
-		var gun_pressed := joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_RIGHT_SHOULDER)
+		var event_device := int(player_device_ids[player_index]) if player_index < player_device_ids.size() else -1
+		if event_device < 0 and player_index == 0 and pending_shop_heart.size() + pending_shop_gun.size() > 0:
+			# The first pad may deliver a button event just before device discovery.
+			var pending_devices := pending_shop_heart.keys() + pending_shop_gun.keys()
+			event_device = int(pending_devices[0])
+			player_device_ids[player_index] = event_device
+		var heart_pressed := (joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_LEFT_SHOULDER)) or pending_shop_heart.has(event_device)
+		var gun_pressed := (joypad_id >= 0 and Input.is_joy_button_pressed(joypad_id, JOY_BUTTON_RIGHT_SHOULDER)) or pending_shop_gun.has(event_device)
 		if player_index == 0:
-			heart_pressed = heart_pressed or (mobile_controls != null and mobile_controls.pressed("heart")) or _is_key_down(KEY_Q if _public_build() else KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
-			gun_pressed = gun_pressed or (mobile_controls != null and mobile_controls.pressed("gun")) or _is_key_down(KEY_E if _public_build() else KEY_2)
+			heart_pressed = heart_pressed or (mobile_controls != null and mobile_controls.pressed("heart")) or _is_key_down(KEY_Q if (_public_build() or outdoor_town) else KEY_1)                                  # Give the primary keyboard player a practical shop fallback while holding Tab.
+			gun_pressed = gun_pressed or (mobile_controls != null and mobile_controls.pressed("gun")) or _is_key_down(KEY_E if (_public_build() or outdoor_town) else KEY_2)
 		if player_index < player_joined.size() and player_joined[player_index] and not bool(player_states[player_index].get("is_dying", false)) and not combat_round_complete:
 			var state := player_states[player_index]
 			var coins := int(state.get("coins", 0))
@@ -11379,6 +11797,8 @@ func _update_scoreboard_shop_input() -> void:
 				_play_pickup_sound(machine_gun_pickup_player, player_index)                           # Reuse the weapon cue for a successful controller gun purchase.
 		was_shop_heart_pressed[player_index] = heart_pressed
 		was_shop_gun_pressed[player_index] = gun_pressed
+	pending_shop_heart.clear()
+	pending_shop_gun.clear()
 
 
 # _process: Runs the per-frame input, movement, transition, animation, player positioning, and status update loop.
@@ -11507,6 +11927,16 @@ func _process_pending_reload_barks() -> void:
 func _advance_storefront_doors(delta: float) -> void:
 	for door in storefront_open_doors.keys():
 		var swing := float(storefront_open_doors[door])
+		if String(door) == "saloon_swing_front" and absf(swing) >= 0.999:
+			var saloon: Resource = TOWN_BUILDINGS[3]
+			var doorway := Vector2(saloon.door_x(), saloon.frontage())
+			var doorway_clear := true
+			for index in range(player_states.size()):
+				if index < player_joined.size() and player_joined[index] and not bool(player_states[index].get("is_dying", false)) and _player_state_world_position(player_states[index]).distance_to(doorway) < 0.48:
+					doorway_clear = false
+					break
+			if doorway_clear:
+				storefront_closing_doors[door] = true
 		var target := 0.0 if storefront_closing_doors.has(door) else signf(swing)
 		var next := move_toward(swing, target, delta / 0.20)
 		if next == swing:
@@ -11538,12 +11968,16 @@ func _process(delta: float) -> void:                                            
 		options_pressed = options_pressed or Input.is_joy_button_pressed(device_id, JOY_BUTTON_BACK)
 	if options_pressed and not was_options_pressed:
 		match_paused = not match_paused
-		if _public_build() and mobile_controls == null:
+		if (_public_build() or outdoor_town) and mobile_controls == null:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if match_paused else Input.MOUSE_MODE_CAPTURED
 		if options_overlay != null:
 			options_overlay.visible = match_paused
 		if match_paused and is_instance_valid(map_display_button):
-			map_display_button.grab_focus()
+			var wave_check := options_overlay.get_node_or_null("PauseBroadside/TownWavesCheck") as CheckBox if outdoor_town else null
+			if is_instance_valid(wave_check):
+				wave_check.grab_focus()
+			else:
+				map_display_button.grab_focus()
 	was_options_pressed = options_pressed
 	if _public_build() and match_paused and (_is_key_down(KEY_M) or (mobile_controls != null and mobile_controls.pressed("menu"))):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -11556,7 +11990,7 @@ func _process(delta: float) -> void:                                            
 		if player_joypad >= 0 and Input.is_joy_button_pressed(player_joypad, JOY_BUTTON_START):
 			scoreboard_player_index = player_index
 	scoreboard_visible = scoreboard_player_index >= 0
-	if not clear_map_waiting_to_start and not match_paused:
+	if not (clear_the_map_mode and clear_map_waiting_to_start) and not match_paused:
 		_update_scoreboard_shop_input()
 	if _read_toggle_debug_menu():
 		_toggle_debug_menu()
@@ -11564,6 +11998,8 @@ func _process(delta: float) -> void:                                            
 	if match_paused:
 		_update_combat_hud()
 		return
+	if outdoor_town and town_waves_enabled:
+		_advance_town_waves(delta)
 	var next_round_pressed := _read_next_round()                                               # Latch the global replay key even while the round remains active.
 	var finish_was_pending := clear_map_finish_pending
 	if clear_the_map_mode and not clear_map_waiting_to_start and clear_map_banner_timer > 0.0 and not combat_round_complete:
@@ -11594,8 +12030,10 @@ func _process(delta: float) -> void:                                            
 	if combat_round_complete and not clear_map_finish_pending and next_round_pressed:           # Do not let a held Start key skip the final-kill fade/result cue.
 		_regenerate_runtime_map(true)                                                             # Show the next wanted posters before the player starts the round.
 		return                                                                                    # Keep the replay key from also moving a player this frame.
-	_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
-	_update_all_join_states()
+	if not outdoor_town:
+		_update_player_two_join_state()                                                            # Let the second controller or its keyboard fallback claim player two before input is processed.
+	if not outdoor_town:
+		_update_all_join_states()
 	for player_index in range(player_states.size()):                                          # First update every local player so all shared world positions are final for this frame.
 		if player_index >= player_joined.size() or not player_joined[player_index]:
 			continue
@@ -15268,42 +15706,62 @@ func _all_physical_wall_edges() -> Array:                                       
 					continue                                                                              # Continue to the next edge.
 				emitted_keys[key] = true                                                              # Mark this physical edge as emitted.
 				var edge := {"a": segment[0], "b": segment[1], "delta": delta, "key": key}
+				if outdoor_town:
+					var shop := town_storefront_at(cell)
+					if shop == null:
+						shop = town_storefront_at(cell + delta)
+					if shop != null:
+						edge["storefront_style"] = shop
 				if outdoor_town and town_window_edges.has(key):
 					edge["town_window"] = town_window_edges[key]
 				if outdoor_town and town_partition_edges.has(key):
 					edge["town_partition"] = town_partition_edges[key]
 				edges.append(edge)          # Store this unique wall edge and its source orientation.
 	if outdoor_town:
-		var partial_walls: Array[Dictionary] = STOREFRONT_STYLE.door_spans()
-		partial_walls.append_array(STOREFRONT_STYLE.door_leaf_spans(storefront_open_doors))
-		for trim: Dictionary in STOREFRONT_STYLE.trim_spans():
-			if trim.get("partial", false):
-				partial_walls.append(trim)
-		for building in TOWN_BUILDINGS:
-			var lot: Rect2i = building.footprint
-			var x: float = building.door_x()
-			for y in [float(lot.position.y), float(lot.end.y)]:
-				# Both entrances share the same usable opening. The full facade
-				# carrier paints these jambs in the wall pass.
-				for extent: Vector2 in [Vector2(-0.5, -building.DOOR_HALF_WIDTH), Vector2(building.DOOR_HALF_WIDTH, 0.5)]:
-					partial_walls.append({"a": Vector2(x + extent.x, y), "b": Vector2(x + extent.y, y), "variant_collision_only": true})
+		var partial_walls: Array[Dictionary] = []
+		for shop in town_storefronts():
+			var pieces: Array[Dictionary] = shop.door_spans()
+			pieces.append_array(shop.door_leaf_spans(storefront_open_doors))
+			for trim: Dictionary in shop.trim_spans():
+				if trim.get("partial", false):
+					pieces.append(trim)
+			for piece in pieces:
+				piece["storefront_style"] = shop
+			partial_walls.append_array(pieces)
+		for building: TownBuildingStyle in TOWN_BUILDINGS:
+			for door: Vector4i in building.exterior_door_cells():
+				var span: PackedVector2Array = building.door_edge(door)
+				var tangent := span[1] - span[0]
+				var center := span[0] + tangent * building.door_offset()
+				var opening: float = building.door_half_width()
+				var first := {"a": span[0], "b": center - tangent * opening, "variant_collision_only": true}
+				var last := {"a": center + tangent * opening, "b": span[1], "variant_collision_only": true}
+				var pane: Dictionary = town_window_edges.get(_physical_edge_key(span[0], span[1]), {})
+				if not pane.is_empty():
+					var window_side := first if Rect2(pane["rect"]).get_center().x < center[int(pane["axis"])] else last
+					window_side["town_window"] = pane
+				partial_walls.append(first)
+				partial_walls.append(last)
 				partial_walls.append({
-					"a": Vector2(x - building.DOOR_HALF_WIDTH, y), "b": Vector2(x + building.DOOR_HALF_WIDTH, y),
-					"bottom": building.DOOR_HEIGHT, "height": building.eave,
+					"a": center - tangent * opening, "b": center + tangent * opening,
+					"bottom": building.exterior_door_top(), "height": building.eave,
 					"projectile_only": true, "variant_collision_only": true,
 				})
 			partial_walls.append_array(building.door_leaf_spans(storefront_open_doors))
+			partial_walls.append_array(building.room_door_spans(storefront_open_doors))
+			if building.porch_depth <= 0.0:
+				continue
 			for rail in building.porch_rail_spans():
 				if Vector2(rail["a"]).is_equal_approx(rail["b"]):
 					continue
 				rail["variant_collision_only"] = true
-				rail["height"] = building.RAIL_TOP
+				rail["height"] = building.porch_rail_top()
 				rail["porch_rail"] = true
 				partial_walls.append(rail)
 		for span in partial_walls:
 			var a: Vector2 = span["a"]
 			var b: Vector2 = span["b"]
-			span["key"] = _physical_edge_key(a, b)
+			span["key"] = _physical_edge_key(a, b) + (":room_lintel" if span.get("room_lintel", false) else "")
 			span["delta"] = Vector2i.RIGHT if is_equal_approx(a.x, b.x) else Vector2i.UP
 			span["partial"] = true
 			edges.append(span)
@@ -15894,6 +16352,8 @@ func _is_key_down(keycode: int) -> bool:                                        
 func _xbox_joypad_id_for_player(player_index: int = active_player_index) -> int:            # Declare this function.
 	if not _is_human_controlled_slot(player_index):
 		return -1
+	if single_player_sandbox_mode and player_index > 0 and (player_index >= player_joined.size() or not player_joined[player_index]):
+		return -1
 	var assigned_device := int(player_device_ids[player_index])
 	var connected_joypads := Input.get_connected_joypads()
 	if connected_joypads.has(assigned_device):
@@ -16361,6 +16821,8 @@ func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vau
 	var push_door := ""
 	var close_door := ""
 	var hinge_side := 1.0
+	var open_rotation_sign := 0.0
+	var leaf_direction := Vector2.ZERO
 	var radius_squared := PLAYER_CAPSULE_RADIUS * PLAYER_CAPSULE_RADIUS
 	for edge: Dictionary in _all_physical_wall_edges():
 		if edge["key"] == vault_edge or edge.get("projectile_only", false):
@@ -16386,6 +16848,8 @@ func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vau
 					push_door = String(edge.get("push_door", ""))
 					close_door = String(edge.get("close_door", ""))
 					hinge_side = float(edge.get("hinge_side", 1.0))
+					open_rotation_sign = float(edge.get("open_rotation_sign", 0.0))
+					leaf_direction = edge_b - edge_a
 		for endpoint: Vector2 in [edge_a, edge_b]:
 			var offset: Vector2 = world_position - endpoint
 			var movement_toward_endpoint: float = offset.dot(world_delta)
@@ -16409,10 +16873,12 @@ func _wall_endpoint_sweep_hit(world_position: Vector2, world_delta: Vector2, vau
 				hit_normal = endpoint_normal
 				push_door = String(edge.get("push_door", ""))
 				close_door = String(edge.get("close_door", ""))
-			hinge_side = float(edge.get("hinge_side", 1.0))
+				hinge_side = float(edge.get("hinge_side", 1.0))
+				open_rotation_sign = float(edge.get("open_rotation_sign", 0.0))
+				leaf_direction = edge_b - edge_a
 	if earliest_hit > 1.0:
 		return {}
-	return {"time": earliest_hit, "normal": hit_normal, "push_door": push_door, "close_door": close_door, "hinge_side": hinge_side}
+	return {"time": earliest_hit, "normal": hit_normal, "push_door": push_door, "close_door": close_door, "hinge_side": hinge_side, "open_rotation_sign": open_rotation_sign, "leaf_direction": leaf_direction}
 
 
 func _player_edge_blocks_vault(cell: Vector2i, delta: Vector2i, vault: Dictionary) -> bool:
@@ -16478,10 +16944,16 @@ func _move_world_with_wall_slide(world_position: Vector2, world_delta: Vector2, 
 			var contact_normal: Vector2 = endpoint_hit["normal"]
 			# A push from the hinged side swings an open leaf back toward its jamb.
 			var hinge_side := float(endpoint_hit["hinge_side"])
-			if can_push_door and not open_leaf.is_empty() and remaining.x * hinge_side < 0.0 and contact_normal.x * hinge_side > 0.5:
-				storefront_closing_doors[open_leaf] = true
-			if can_push_door and not door.is_empty() and absf(remaining.y) > 0.00001 and absf(Vector2(endpoint_hit["normal"]).y) > 0.00001:
-				storefront_open_doors[door] = 0.05 * signf(-float(Vector2(endpoint_hit["normal"]).y))
+			if can_push_door and not open_leaf.is_empty():
+				var rotation_sign := float(endpoint_hit.get("open_rotation_sign", 0.0))
+				var current_swing := float(storefront_open_doors.get(open_leaf, 0.0))
+				var torque := Vector2(endpoint_hit.get("leaf_direction", Vector2.ZERO)).cross(remaining)
+				if (rotation_sign != 0.0 and torque * current_swing * rotation_sign < -0.00001) or (rotation_sign == 0.0 and remaining.x * hinge_side < 0.0 and contact_normal.x * hinge_side > 0.5):
+					storefront_closing_doors[open_leaf] = true
+			if can_push_door and not door.is_empty() and absf(remaining.dot(contact_normal)) > 0.00001:
+				var normal_component := contact_normal.y if absf(contact_normal.y) > absf(contact_normal.x) else -contact_normal.x
+				storefront_closing_doors.erase(door)
+				storefront_open_doors[door] = 0.05 * signf(-normal_component)
 				physical_wall_edges_cache_dirty = true
 				# Re-sweep this displacement against the leaf in its open position.
 				continue
@@ -16816,6 +17288,8 @@ func _position_one_opponent_sprite(target_index: int) -> void:                  
 		opponent_sprite.visible = false                                                           # Hide the opponent once the full sprite rectangle is outside the playfield.
 		return                                                                                    # Return without displaying this opponent.
 	var opponent_footprint := {"shape": OcclusionFootprintShape.CIRCLE, "position": target_world, "radius": PLAYER_CAPSULE_RADIUS}
+	if generated_town != null:
+		opponent_footprint["see_through_porch_rail"] = true
 	if not _world_footprint_has_visible_camera_span(opponent_footprint):
 		opponent_sprite.visible = false
 		return
@@ -17251,11 +17725,26 @@ func _world_footprint_draw_layer(footprint: Dictionary) -> int:
 			right = point
 	var foreground_limit := 4096
 	var background_limit := -4096
+	# Most town walls are nowhere near this footprint's camera cone. Reject
+	# segments wholly outside either side before the more expensive clipper.
+	# The small extra tolerance keeps borderline contacts on the original path.
+	var left_edge := left - origin
+	var right_edge := origin - right
+	var winding := signf(left_edge.cross(right - origin))
+	var bounds_half := Vector2(float(footprint.get("radius", 0.0)), float(footprint.get("radius", 0.0)))
+	if int(footprint.get("shape", OcclusionFootprintShape.CIRCLE)) == OcclusionFootprintShape.RECTANGLE:
+		bounds_half = Vector2(float(footprint.get("half_width", 0.0)), float(footprint.get("half_depth", 0.0)))
+	var bounds_min := center - bounds_half - Vector2.ONE * 0.022
+	var bounds_max := center + bounds_half + Vector2.ONE * 0.022
 	for entry in renderer.last_wall_entries:
-		var contacts: Array = renderer.call("_segment_contact_points_in_cutaway_fan", Vector2(entry["world_a"]), Vector2(entry["world_b"]), origin, left, right, false)
+		var a := Vector2(entry["world_a"])
+		var b := Vector2(entry["world_b"])
+		var outside_cone := absf(winding) < 0.00001 or (winding * left_edge.cross(a - origin) < -0.00002 and winding * left_edge.cross(b - origin) < -0.00002) or (winding * right_edge.cross(a - right) < -0.00002 and winding * right_edge.cross(b - right) < -0.00002)
+		var contacts: Array = [] if outside_cone else renderer.call("_segment_contact_points_in_cutaway_fan", a, b, origin, left, right, false)
 		var wall_layer := int(entry.get("wall_draw_layer", layer))
 		if contacts.is_empty():
-			if _wall_is_adjacent_behind_footprint(Vector2(entry["world_a"]), Vector2(entry["world_b"]), footprint, origin):
+			var near_bounds := maxf(a.x, b.x) >= bounds_min.x and minf(a.x, b.x) <= bounds_max.x and maxf(a.y, b.y) >= bounds_min.y and minf(a.y, b.y) <= bounds_max.y
+			if near_bounds and _wall_is_adjacent_behind_footprint(a, b, footprint, origin):
 				background_limit = maxi(background_limit, wall_layer + 1)
 			continue
 		if _wall_span_precedes_footprint(contacts, footprint, origin):
@@ -18751,17 +19240,47 @@ func _reset_player_states_after_map(player_one_cell: Vector2i) -> void:         
 
 
 
+func town_storefronts() -> Array[Resource]:
+	var shops: Array[Resource] = []
+	if generated_town == null or generated_town.prototype != null:
+		shops.append(STOREFRONT_STYLE)
+	if generated_town != null and generated_town.prototype_copy != null:
+		shops.append(generated_town.prototype_copy)
+	return shops
+
+
+func town_storefront_at(cell: Vector2i) -> Resource:
+	for shop in town_storefronts():
+		if shop.FOOTPRINT.has_point(cell):
+			return shop
+	return null
+
+
 func town_roof_rects() -> Array[Rect2i]:
-	var roofs: Array[Rect2i] = [STOREFRONT_STYLE.FOOTPRINT]
+	var roofs: Array[Rect2i] = []
+	if generated_town == null or generated_town.prototype != null:
+		roofs.append(STOREFRONT_STYLE.FOOTPRINT)
 	for building in TOWN_BUILDINGS:
 		roofs.append(building.footprint)
+	if generated_town != null and generated_town.prototype_copy != null:
+		roofs.append(generated_town.prototype_copy.FOOTPRINT)
 	return roofs
+
+
+func _town_building_owner(cell: Vector2i) -> int:
+	var shop := town_storefront_at(cell)
+	if shop != null:
+		return 0 if shop == STOREFRONT_STYLE else TOWN_BUILDINGS.size() + 1
+	for index in TOWN_BUILDINGS.size():
+		if TOWN_BUILDINGS[index].footprint.has_point(cell):
+			return index + 1
+	return -1
 
 
 func town_has_roof(cell: Vector2i) -> bool:
 	if not outdoor_town:
 		return false
-	if STOREFRONT_STYLE.FOOTPRINT.has_point(cell):
+	if town_storefront_at(cell) != null:
 		return true
 	for building in TOWN_BUILDINGS:
 		if building.footprint.has_point(cell):
@@ -18769,11 +19288,21 @@ func town_has_roof(cell: Vector2i) -> bool:
 	return false
 
 
+func town_has_ceiling(cell: Vector2i) -> bool:
+	if not outdoor_town or town_storefront_at(cell) != null:
+		return false
+	for building: TownBuildingStyle in TOWN_BUILDINGS:
+		if building.footprint.has_point(cell):
+			return not building.blueprint_gable
+	return false
+
+
 func town_walk_height(world: Vector2) -> float:
 	if not outdoor_town:
 		return 0.0
-	if STOREFRONT_STYLE.floor_rect().has_point(world):
-		return STOREFRONT_STYLE.porch_height
+	for shop in town_storefronts():
+		if shop.floor_rect().has_point(world):
+			return shop.porch_height
 	for building in TOWN_BUILDINGS:
 		if building.floor_bounds().has_point(world):
 			return building.FLOOR_HEIGHT
@@ -18791,33 +19320,46 @@ func _build_outdoor_town_wall_edges() -> void:
 	town_window_edges.clear()
 	town_partition_edges.clear()
 	town_doorways.clear()
-	for building in TOWN_BUILDINGS:
-		var lot: Rect2i = building.footprint
-		for face in ["front", "west", "east"]:
-			var windows: Array[Rect2] = building.ground_windows(face)
+	for building: TownBuildingStyle in TOWN_BUILDINGS:
+		var lot := building.footprint
+		for face: String in ["front", "rear", "west", "east"]:
+			if face == "rear" and building.coffee_kit == null:
+				continue
+			var windows := building.ground_windows(face)
 			for index in windows.size():
-				var aperture := windows[index].grow(-TownBuildingStyle.WINDOW_TRIM)
+				var trim: float = TownBuildingStyle.WINDOW_TRIM if building.coffee_kit == null else building.coffee_kit.window_trim
+				var aperture := windows[index].grow(-trim)
 				var along := floorf(aperture.get_center().x)
-				var axis := 0 if face == "front" else 1
-				var start := Vector2(along, building.frontage()) if axis == 0 else Vector2(lot.position.x if face == "west" else lot.end.x, along)
+				var axis := 0 if face in ["front", "rear"] else 1
+				var wall_y := building.frontage() if face == "front" else building.rear_wall_y()
+				var start := Vector2(along, wall_y) if axis == 0 else Vector2(lot.position.x if face == "west" else lot.end.x, along)
 				var end := start + (Vector2.RIGHT if axis == 0 else Vector2.DOWN)
-				town_window_edges[_physical_edge_key(start, end)] = {
-					"aperture": aperture, "axis": axis, "id": building.window_id(index, face),
-				}
-	for roof: Rect2i in town_roof_rects():
-		var north := roof.position + Vector2i(roof.size.x / 2, 0)
-		var south := north + Vector2i(0, roof.size.y - 1)
+				var key := _physical_edge_key(start, end)
+				var pane := {"aperture": aperture, "axis": axis, "id": building.window_id(index, face), "rect": windows[index]}
+				if town_window_edges.has(key) and building.coffee_kit != null:
+					if not town_window_edges[key].has("more"):
+						town_window_edges[key]["more"] = []
+					town_window_edges[key]["more"].append(pane)
+				else:
+					town_window_edges[key] = pane
+		for door in building.exterior_door_cells():
+			var cell := Vector2i(door.x, door.y)
+			town_doorways.append([cell, cell + Vector2i(door.z, door.w)])
+	for shop in town_storefronts():
+		var footprint: Rect2i = shop.FOOTPRINT
+		var north := footprint.position + Vector2i(footprint.size.x / 2, 0)
+		var south := north + Vector2i(0, footprint.size.y - 1)
 		town_doorways.append([north, north + Vector2i.UP])
 		town_doorways.append([south, south + Vector2i.DOWN])
 	for y in range(MAP_HEIGHT):
 		for x in range(MAP_WIDTH):
 			var cell := Vector2i(x, y)
-			var roofed := town_has_roof(cell)
+			var owner := _town_building_owner(cell)
 			var edges := {}
 			for direction: Vector2i in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
 				var neighbor := cell + direction
 				var doorway := town_doorways.has([cell, neighbor]) or town_doorways.has([neighbor, cell])
-				edges[_edge_from_delta(direction)] = not _is_open_cell(neighbor) or (roofed != town_has_roof(neighbor) and not doorway)
+				edges[_edge_from_delta(direction)] = not _is_open_cell(neighbor) or (owner != _town_building_owner(neighbor) and not doorway)
 			wall_edges[cell] = edges
 	for building in TOWN_BUILDINGS:
 		for partition: Vector4i in building.partition_edges():

@@ -6,6 +6,8 @@ const ORIGINAL_GAME := preload("res://main.tscn")
 const RUNTIME_RENDERER := preload("res://scripts/coordinate_frame_runtime_renderer.gd")
 
 @export var outdoor_town := false
+@export var outdoor_town_music_enabled := false
+@export var town_level: TownLevelRecipe
 
 
 func _ready() -> void:
@@ -13,8 +15,12 @@ func _ready() -> void:
 	game.name = "CoordinateFrameGame"
 	if outdoor_town:
 		game.outdoor_town = true
-		game.music_enabled = false
+		if town_level != null:
+			game.generated_town = town_level.generate()
+			game.show_town_ground_grid = false
+		game.music_enabled = outdoor_town_music_enabled
 		game.clear_the_map_mode = false
+		game.clear_map_waiting_to_start = false
 		game.single_player_sandbox_mode = true
 		game.combat_round_duration_seconds = 0.0
 		game.show_top_down_source_overlay = false

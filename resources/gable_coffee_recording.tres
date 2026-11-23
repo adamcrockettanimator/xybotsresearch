@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="TownLevelRecipe" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/town_level_recipe.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/town_lot_recipe.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/town_coffee_kit.tres" id="3"]
+
+[sub_resource type="Resource" id="RecordingShop"]
+script = ExtResource("2")
+sign_text = "COFFEE"
+blueprint_gable = true
+prototype_yard = true
+
+[resource]
+script = ExtResource("1")
+kit = ExtResource("3")
+shops = Array[ExtResource("2")]([SubResource("RecordingShop")])
+include_prototypes = false
+populate_pickups = false
+square_bounds = true
+alley_cells = 2
+street_cells = 2

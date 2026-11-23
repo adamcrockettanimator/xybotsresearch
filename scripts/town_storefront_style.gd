@@ -1,7 +1,8 @@
 extends Resource
 ## The cage is authored facing south and placed facing north into town.
 
-const FOOTPRINT := Rect2i(2, 6, 1, 2)
+var instance_prefix := ""
+var FOOTPRINT := Rect2i(1, 6, 1, 2)
 const FRONT_DOOR := Vector2(0.16, 0.54)
 const REAR_DOOR := Vector2(0.31, 0.69)
 
@@ -19,6 +20,8 @@ enum EavePaint { PORCH_BEAM = 4, REAR_TRIM, FRONT_CORNICE }
 @export_group("Storefront construction")
 @export_range(0.02, 0.08, 0.001) var corner_post_width := 0.043
 @export_range(0.005, 0.045, 0.001) var floor_apron_depth := 0.027
+## Siding overhang shadow on the top logical row of the foundation.
+@export_range(0.0, 0.8, 0.01) var siding_foundation_shadow := 0.48
 @export_range(0.02, 0.16, 0.005) var foundation_shadow_reach := 0.095
 @export_range(0.0, 0.85, 0.01) var foundation_shadow_strength := 0.62
 @export_range(4, 24) var siding_course_count := 8
@@ -116,6 +119,10 @@ func door_frame_center(front: bool) -> Vector2:
 	return Vector2(FOOTPRINT.end.x - (opening.x + opening.y) * 0.5, FOOTPRINT.position.y if front else FOOTPRINT.end.y)
 
 
+func window_id() -> String:
+	return "" if instance_prefix.is_empty() else instance_prefix + "front_window"
+
+
 func window_has_opening(point: Vector2) -> bool:
 	return point.x > WINDOW_APERTURE.position.x and point.x < WINDOW_APERTURE.end.x and point.y > WINDOW_APERTURE.position.y and point.y < WINDOW_APERTURE.end.y
 
@@ -185,7 +192,7 @@ func trim_spans() -> Array[Dictionary]:
 func door_leaf_spans(open_doors: Dictionary) -> Array[Dictionary]:
 	var spans: Array[Dictionary] = []
 	for front in [false, true]:
-		var id := "front" if front else "rear"
+		var id := instance_prefix + ("front" if front else "rear")
 		var opening := FRONT_DOOR if front else REAR_DOOR
 		var y := float(FOOTPRINT.end.y if front else FOOTPRINT.position.y)
 		var hinge := Vector2(float(FOOTPRINT.position.x) + opening.x, y)
@@ -199,7 +206,7 @@ func door_leaf_spans(open_doors: Dictionary) -> Array[Dictionary]:
 			"push_door": id if is_zero_approx(swing) else "",
 			"open_leaf": not is_zero_approx(swing),
 			"front_door": front,
-			"close_door": id if absf(swing) >= 0.999 else "",
+			"close_door": id if absf(swing) >= 0.999 else "", "open_rotation_sign": -1.0,
 		})
 	return _rotate_into_town(spans)
 

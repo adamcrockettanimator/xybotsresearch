@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="TownLevelRecipe" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/town_level_recipe.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/town_lot_recipe.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/town_coffee_kit.tres" id="3"]
+
+[sub_resource type="Resource" id="Lot2"]
+script = ExtResource("2")
+size = Vector2i(2, 2)
+
+[sub_resource type="Resource" id="Lot3"]
+script = ExtResource("2")
+size = Vector2i(3, 2)
+
+[sub_resource type="Resource" id="GableShop"]
+script = ExtResource("2")
+blueprint_gable = true
+sign_text = ""
+
+[sub_resource type="Resource" id="Lot4"]
+script = ExtResource("2")
+size = Vector2i(4, 2)
+faces_south = true
+
+[sub_resource type="Resource" id="Hall"]
+script = ExtResource("2")
+size = Vector2i(6, 6)
+sign_text = "COFFEE HALL"
+faces_south = true
+porch_cells = 1
+side_windows_per_bay = 1
+rear_windows_per_bay = 1
+rear_window_bays = PackedInt32Array(0, 5)
+rooms = Array[Rect2i]([Rect2i(0, 0, 2, 2), Rect2i(0, 2, 2, 1), Rect2i(0, 4, 2, 2), Rect2i(4, 0, 2, 2), Rect2i(4, 2, 2, 1), Rect2i(4, 4, 2, 2)])
+room_doors = Array[Vector4i]([Vector4i(1, 1, 1, 0), Vector4i(1, 2, 1, 0), Vector4i(1, 5, 1, 0), Vector4i(4, 1, -1, 0), Vector4i(4, 2, -1, 0), Vector4i(4, 4, -1, 0), Vector4i(0, 1, 0, 1), Vector4i(5, 1, 0, 1), Vector4i(0, 4, 0, -1), Vector4i(5, 4, 0, -1)])
+extra_exterior_doors = Array[Vector4i]([Vector4i(0, 1, -1, 0), Vector4i(5, 4, 1, 0)])
+furnished_room_indices = PackedInt32Array(0, 2, 3, 5)
+
+[resource]
+script = ExtResource("1")
+kit = ExtResource("3")
+shops = Array[ExtResource("2")]([SubResource("GableShop"), SubResource("Lot2"), SubResource("Lot3")])
+shops_beside_hall = Array[ExtResource("2")]([SubResource("Lot4")])
+hall = SubResource("Hall")

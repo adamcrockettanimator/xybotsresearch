@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1")
-sign_text = "STORE"
+sign_text = "GENERAL STORE"
 footprint = Rect2i(1, 1, 3, 2)
 faces_south = true
 eave = 0.83
@@ -19,5 +19,5 @@ metal = Color(0.44, 0.43, 0.39, 1)
 sign_board = Color(0.23529, 0.31765, 0.28627, 1)
 sign_ink = Color(0.96471, 0.87059, 0.67451, 1)
 wallpaper = Color(0.49, 0.57, 0.43, 1)
-partitions = Array[Vector4i]([Vector4i(0, 0, 1, 0), Vector4i(1, 1, 1, 0)])
-cover = PackedVector2Array(0.27, 0.19, 2.77, 1.13)
+partitions = Array[Vector4i]([])
+cover = PackedVector2Array(0.27, 0.25, 0.28, 0.63, 0.28, 1.14, 0.29, 1.66, 2.72, 0.28, 2.72, 0.68, 2.72, 1.17, 2.72, 1.67)

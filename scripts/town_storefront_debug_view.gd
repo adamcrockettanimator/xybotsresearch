@@ -7,6 +7,9 @@ const STRIPES := Color("#8ce997")
 const DOOR := Color("#ff9961")
 const WINDOW := Color("#a5c8ff")
 const SHADOW := Color("#da9cff")
+const CARRIER := Color(0.32, 0.85, 1.0, 0.65)
+const TIMBER_CARRIER := Color(1.0, 0.72, 0.34, 0.80)
+const SUPPORT := Color("#a7fb86")
 
 var _renderer: Node
 var _style: Resource
@@ -18,6 +21,7 @@ var _right := Vector2.ZERO
 var _logical_to_overlay := Transform2D.IDENTITY
 var _show_cage := false
 var _show_masks := false
+var _show_carriers := false
 var _broken_glass := false
 var _line_width := 1.6
 var _legend_font_size := 15
@@ -29,21 +33,28 @@ func _ready() -> void:
 	clip_contents = true
 
 
-func update_view(renderer: Node, view: Node2D, content: Node2D, cage: bool, masks: bool) -> void:
+func update_view(renderer: Node, view: Node2D, content: Node2D, cage: bool, masks: bool, carriers: bool) -> void:
 	_renderer = renderer
 	_style = renderer.controller.STOREFRONT_STYLE
 	_show_cage = cage
 	_show_masks = masks
+	_show_carriers = carriers
 	_broken_glass = renderer.controller.storefront_glass_broken
 	var view_transform := view.get_global_transform_with_canvas()
 	position = view_transform.origin
 	size = renderer.VIEW_SIZE * view_transform.get_scale()
-	_logical_to_overlay = Transform2D(0.0, -position) * content.get_global_transform_with_canvas()
+	var content_transform := content.get_global_transform_with_canvas()
+	if content.get_viewport() != view.get_viewport():
+		content_transform = view_transform * content_transform
+	_logical_to_overlay = Transform2D(0.0, -position) * content_transform
 	var viewport_size := get_viewport_rect().size
 	var window_size := Vector2(get_window().size)
 	var output_scale := maxf(1.0, minf(window_size.x / viewport_size.x, window_size.y / viewport_size.y))
 	_line_width = 1.8 / output_scale
 	_legend_font_size = maxi(9, roundi(16.0 / sqrt(output_scale)))
+	if not (cage or masks):
+		queue_redraw()
+		return
 	_planes.clear()
 	for plane: ColorRect in renderer.storefront_planes:
 		var material := plane.material as ShaderMaterial
@@ -67,11 +78,24 @@ func update_view(renderer: Node, view: Node2D, content: Node2D, cage: bool, mask
 
 
 func _draw() -> void:
-	if not is_instance_valid(_renderer) or _planes.is_empty():
+	if not is_instance_valid(_renderer):
+		return
+	var carrier_stats := Vector2i.ZERO
+	if _show_carriers:
+		carrier_stats = _draw_wall_carriers()
+	if _show_cage or _show_masks:
+		_draw_storefront_guides()
+	_draw_legend(carrier_stats)
+
+
+func _draw_storefront_guides() -> void:
+	if _planes.is_empty():
 		return
 	for plane in _planes:
 		_draw_plane(plane)
 	for wall in _walls:
+		_style = wall["storefront_style"]
+		_broken_glass = _renderer.controller.town_storefront_glass_broken(_style)
 		var top: Vector2 = wall["face_top"]
 		var bottom: float = wall["face_bottom"]
 		if _show_cage:
@@ -92,7 +116,65 @@ func _draw() -> void:
 				_plane_outline(cap, Vector2.ONE * top.x, CAGE)
 		if _show_masks:
 			_draw_wall_masks(wall)
-	_draw_legend()
+
+
+func _draw_wall_carriers() -> Vector2i:
+	var entries: Array[Dictionary] = _renderer.last_wall_entries
+	var sprites: Array[Sprite2D] = _renderer.gpu_wall_sprites
+	var buildings := {}
+	var pixels := 0
+	var carriers := 0
+	for index in mini(sprites.size(), entries.size()):
+		var sprite := sprites[index]
+		if not sprite.is_visible_in_tree():
+			continue
+		var entry := entries[index]
+		var timber: Dictionary = entry["timber_batch"]
+		var rect := sprite.get_rect()
+		var clipped := (_logical_to_overlay * rect).intersection(Rect2(Vector2.ZERO, size))
+		if clipped.has_area():
+			draw_rect(clipped, TIMBER_CARRIER if not timber.is_empty() else CARRIER, false, _line_width)
+		pixels += roundi(rect.get_area())
+		carriers += 1
+		var variant: Dictionary = entry["variant"]
+		if not variant.is_empty():
+			buildings[variant["style"]] = entry["camera_origin"]
+
+	var forward: Vector2 = _renderer.controller._view_forward_vector().normalized()
+	var right: Vector2 = _renderer.controller._view_right_vector().normalized()
+	for building in buildings:
+		var support_data: Dictionary = _renderer.town_porch_supports.get(building, {})
+		if support_data.is_empty():
+			continue
+		var boxes: PackedVector4Array = support_data["boxes"]
+		var origin: Vector2 = buildings[building]
+		for index in int(support_data["count"]):
+			_draw_support_box(boxes[index], support_data["top"], origin, forward, right)
+	return Vector2i(carriers, pixels)
+
+
+func _draw_support_box(box: Vector4, height: float, origin: Vector2, forward: Vector2, right: Vector2) -> void:
+	var corners := PackedVector2Array([Vector2(box.x, box.y), Vector2(box.z, box.y),
+		Vector2(box.z, box.w), Vector2(box.x, box.w)])
+	var outward := PackedVector2Array([Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT])
+	for index in corners.size():
+		var a := corners[index]
+		var b := corners[(index + 1) % corners.size()]
+		if (origin - (a + b) * 0.5).dot(outward[index]) <= 0.0:
+			continue
+		var first: Vector2 = _renderer._to_view(a, origin, forward, right)
+		var second: Vector2 = _renderer._to_view(b, origin, forward, right)
+		if maxf(first.y, second.y) <= _renderer.NEAR_CLIP:
+			continue
+		if first.y < _renderer.NEAR_CLIP:
+			first = first.lerp(second, (_renderer.NEAR_CLIP - first.y) / (second.y - first.y))
+		elif second.y < _renderer.NEAR_CLIP:
+			second = second.lerp(first, (_renderer.NEAR_CLIP - second.y) / (first.y - second.y))
+		var bottom_a: Vector2 = _logical_to_overlay * _renderer._project_view_point(first, 0.0)
+		var bottom_b: Vector2 = _logical_to_overlay * _renderer._project_view_point(second, 0.0)
+		var top_a: Vector2 = _logical_to_overlay * _renderer._project_view_point(first, height)
+		var top_b: Vector2 = _logical_to_overlay * _renderer._project_view_point(second, height)
+		draw_polyline(PackedVector2Array([bottom_a, bottom_b, top_b, top_a, bottom_a]), SUPPORT, _line_width, true)
 
 
 func _draw_plane(plane: Dictionary) -> void:
@@ -207,8 +289,8 @@ func _draw_wall_masks(wall: Dictionary) -> void:
 			_wall_stroke(window, Vector2(0.12, 0.148), Vector2(0.88, 0.148), SHADOW, 0.55)
 
 
-func _corner_distance(point: Vector2) -> float:
-	var footprint := Rect2(_style.FOOTPRINT)
+func _corner_distance(point: Vector2, style: Resource = null) -> float:
+	var footprint := Rect2((style if style != null else _style).FOOTPRINT)
 	var from_start := (point - footprint.position).abs()
 	var from_end := (point - footprint.end).abs()
 	return maxf(minf(from_start.x, from_end.x), minf(from_start.y, from_end.y))
@@ -397,19 +479,20 @@ func _is_occluded(point: Vector3) -> bool:
 			continue
 		var height := eye + rise * t
 		var top: Vector2 = wall["face_top"]
+		var style: Resource = wall["storefront_style"]
 		if height >= float(wall["face_bottom"]) and height <= lerpf(top.x, top.y, u):
-			if wall["storefront_paint"] == 1 and height < _style.apron_bottom() and _corner_distance(a + span * u) > _style.corner_post_width:
+			if wall["storefront_paint"] == 1 and height < style.apron_bottom() and _corner_distance(a + span * u, style) > style.corner_post_width:
 				continue
 			var door: Vector2 = wall["storefront_doorway"]
-			if u > door.x and u < door.y and height < _style.DOOR_TOP:
+			if u > door.x and u < door.y and height < style.DOOR_TOP:
 				continue
 			var span_uv: Vector2 = wall["storefront_window_span"]
 			var window_uv := Vector2(inverse_lerp(span_uv.x, span_uv.y, u), height)
-			if wall["storefront_window"] and _style.window_has_opening(window_uv):
-				var aperture: Rect2 = _style.WINDOW_APERTURE
+			if wall["storefront_window"] and style.window_has_opening(window_uv):
+				var aperture: Rect2 = style.WINDOW_APERTURE
 				var cross: Vector2 = (window_uv - aperture.get_center()).abs()
-				var mullion: Vector2 = _style.WINDOW_MULLION_HALF_SIZE
-				if _broken_glass or (cross.x >= mullion.x and cross.y >= mullion.y):
+				var mullion: Vector2 = style.WINDOW_MULLION_HALF_SIZE
+				if _renderer.controller.town_storefront_glass_broken(style) or (cross.x >= mullion.x and cross.y >= mullion.y):
 					continue
 			return true
 	for plane in _planes:
@@ -425,10 +508,14 @@ func _is_occluded(point: Vector3) -> bool:
 	return false
 
 
-func _draw_legend() -> void:
+func _draw_legend(carrier_stats: Vector2i) -> void:
 	var font := ThemeDB.fallback_font
 	var rows: Array[String] = []
 	var colors: Array[Color] = []
+	if _show_carriers:
+		rows.append_array(["F1   Wall carriers and porch supports", "Wall, fence and trim carriers", "Porch timber carriers", "Shared porch support boxes",
+			"%d carriers   %d logical px submitted" % [carrier_stats.x, carrier_stats.y]])
+		colors.append_array([Color.WHITE, CARRIER, TIMBER_CARRIER, SUPPORT, Color.WHITE])
 	if _show_cage:
 		rows.append("F9   Construction edges")
 		colors.append(CAGE)

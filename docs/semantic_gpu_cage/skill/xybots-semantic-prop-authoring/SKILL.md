@@ -96,6 +96,31 @@ footprint ordering, and grass-to-floor depth check answer different
 questions. See `docs/semantic_gpu_cage/debugging.md` for F9, F10, and the
 Fan Draw Order overlay.
 
+### Translating a Blender model
+
+- Compare the detailed source with its outline cage, when available. Measure
+  the outline, openings, major silhouette, contact faces, member sections,
+  and joins. Preserve visible depth changes as carrier geometry when they
+  affect parallax, occlusion, or silhouette. Paint repeated surface relief
+  and small bevels as projected semantic strokes.
+- Give each joint shadow a receiving face. A brace under a header shades its
+  underside, and a rail at a post shades the face it enters. Keep the other
+  faces flat. Let a protruding member hide its shadow at oblique angles.
+  Use a soft falloff up close and keep a one-logical-pixel core where the
+  joint needs to read at distance. Shade the material before atmospheric haze.
+- Keep structural strokes independent of repeating texture. Let distant
+  siding become broad color blocks while posts, roof lips, and intact window
+  crosses remain legible. Snap each crossbar to its own screen axis when it
+  gets too thin, and remove the cross when the window breaks.
+- Compare interior and exterior views, including the player inside while the
+  follow camera trails outside. For stray pixels, reproduce the pose, hide
+  candidate render layers individually, and compare the same logical cells
+  before changing the owner.
+
+Read the **Blender-to-GPU example: Gable Coffee Shop** in
+`docs/semantic_gpu_cage/authoring.md` for the source collection, shader
+entry points, joinery and palette decisions, and shared-viewport checks.
+
 ## Delivery and verification
 
 For a new prop, create or update the component script, shader, style resource,

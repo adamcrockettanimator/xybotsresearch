@@ -1,0 +1,25 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/town_building_style.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+sign_text = "SALOON"
+footprint = Rect2i(3, 6, 4, 2)
+faces_south = false
+east_windows = false
+eave = 1.10
+rise = 0.30
+facade_height = 1.42
+porch_depth = 0.48
+balcony = false
+second_story = false
+framed_sign = true
+timber = Color(0.325, 0.245, 0.170, 1)
+metal = Color(0.44, 0.43, 0.39, 1)
+sign_board = Color(0.31, 0.19, 0.14, 1)
+sign_ink = Color(0.96, 0.87, 0.67, 1)
+wallpaper = Color(0.55, 0.43, 0.32, 1)
+partition_doors = Array[Vector4i]([Vector4i(0, 0, 1, 0), Vector4i(0, 1, 1, 0), Vector4i(2, 0, 1, 0), Vector4i(2, 1, 1, 0)])
+partitions = Array[Vector4i]([Vector4i(0, 0, 0, 1), Vector4i(3, 0, 0, 1)])
+cover = PackedVector2Array(0.25, 1.72, 3.75, 1.72)

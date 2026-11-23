@@ -9,6 +9,8 @@ uniform vec2 inverse_depths[8];
 uniform int blade_count;
 uniform vec4 pixel_rect;
 uniform vec4 floor_bounds;
+uniform vec4 all_floor_bounds[6];
+uniform int all_floor_count;
 uniform float floor_height;
 uniform vec2 camera_origin;
 uniform vec2 camera_forward;
@@ -19,7 +21,11 @@ void fragment() {
 	vec2 pixel = floor(pixel_rect.xy + UV * pixel_rect.zw);
 	vec2 screen = (pixel + 0.5 - projection.xy) / projection.z;
 	vec2 ray = camera_forward + screen.x * camera_right;
-	float floor_depth = storefront_plane_depth(camera_origin, ray, projection.w, screen.y, floor_bounds, vec2(floor_height));
+	float floor_depth = -1.0;
+	for (int i = 0; i < all_floor_count; i++) {
+		float hit = storefront_plane_depth(camera_origin, ray, projection.w, screen.y, all_floor_bounds[i], vec2(floor_height));
+		if (hit > 0.075 && (floor_depth < 0.0 || hit < floor_depth)) floor_depth = hit;
+	}
 	float rise = 0.0;
 	float opacity = 0.0;
 	for (int blade = 0; blade < blade_count; blade++) {

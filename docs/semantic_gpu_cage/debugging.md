@@ -64,6 +64,12 @@ evidence, not decorative outlines.
 
 ## Storefront diagnostics
 
+- **F1** toggles Wall Carriers & Porch Supports in the local outdoor town.
+  Cyan rectangles are the GPU carriers for walls, trim, and fences. Amber
+  rectangles are carriers for the porch timber batches. Green wireframes show
+  the cached post volumes shared by a building's materials. The logical pixel
+  count totals the area of the submitted rectangles, including overlap.
+
 - **F9** toggles the cage. **F10** toggles semantic mask guides. The live
   legend in `scripts/town_storefront_debug_view.gd` identifies the stroke
   families. Cyan represents projected carrier edges. A shader-painted

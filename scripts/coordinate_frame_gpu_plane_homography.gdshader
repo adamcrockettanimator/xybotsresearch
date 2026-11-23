@@ -167,9 +167,10 @@ vec3 semantic_plane_distance_contrast(vec3 material_color, vec3 material_average
 
 uniform float far_depth = 5.5;
 uniform bool use_town_dirt = false;
-uniform bool storefront_shadow_enabled = false;
-uniform vec4 storefront_shadow_rect;
-uniform vec4 town_cast_shadow_length;
+uniform bool show_town_ground_grid = false;
+uniform vec4 town_foundation_bounds[TOWN_ROOF_LIMIT];
+uniform int town_foundation_count = 0;
+uniform float town_cast_shadow_length[TOWN_ROOF_LIMIT];
 uniform float town_street_y;
 uniform vec2 storefront_shadow_tuning;
 
@@ -212,7 +213,7 @@ void fragment() {
 		float worn = 1.0 - smoothstep(1.05, 2.40, shoulder);
 		result.rgb = mix(result.rgb, result.rgb * vec3(0.95, 0.94, 0.90), worn);
 		float shade = 0.0;
-		for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < TOWN_ROOF_LIMIT; i++) {
 			vec4 body = town_roof_bounds[i];
 			float length = town_cast_shadow_length[i];
 			vec2 end_shadow = body.zw - TOWN_SUN_DIRECTION * length;
@@ -220,17 +221,20 @@ void fragment() {
 				ground_point.y >= body.y && ground_point.y <= body.w) shade = 0.19;
 		}
 		result.rgb *= 1.0 - shade;
-		if (storefront_shadow_enabled) {
-			float reach = storefront_shadow_tuning.x;
-			// Stretch the contact shadow a little farther away from the west sun.
-			vec2 cast = ground_point + (TOWN_SUN_DIRECTION * 0.22 + vec2(0.0, 0.29)) * reach;
-			vec2 outside = max(max(storefront_shadow_rect.xy - cast, cast - storefront_shadow_rect.zw), vec2(0.0));
-			// Sample a single hard shadow at the logical pixel center.
-			vec2 normalized_edge = outside / vec2(0.28, 0.50);
-			in_foundation_shadow = dot(normalized_edge, normalized_edge) <= reach * reach;
-			if (in_foundation_shadow) {
-				result.rgb *= mix(vec3(1.0), vec3(0.36, 0.29, 0.23), storefront_shadow_tuning.y);
+		float reach = storefront_shadow_tuning.x;
+		// One hard contact shadow, nudged away from the west sun. Check
+		// both foundations when the same ground cell lies in an alley.
+		vec2 cast = ground_point + (TOWN_SUN_DIRECTION * 0.22 + vec2(0.0, 0.29)) * reach;
+		for (int i = 0; i < town_foundation_count; i++) {
+			vec4 rect = town_foundation_bounds[i];
+			vec2 outside = max(max(rect.xy - cast, cast - rect.zw), vec2(0.0)) / vec2(0.28, 0.50);
+			if (dot(outside, outside) <= reach * reach) {
+				in_foundation_shadow = true;
+				break;
 			}
+		}
+		if (in_foundation_shadow) {
+			result.rgb *= mix(vec3(1.0), vec3(0.36, 0.29, 0.23), storefront_shadow_tuning.y);
 		}
 	} else if (use_semantic_floor_material) {
 		// Preserve the original cell renderer's wider filter tap spacing.
@@ -282,5 +286,13 @@ void fragment() {
 	}
 	float light = use_depth_light_dither ? depth_light_dither(indoor_depth, pixel, plane_height_delta, focal_length) : depth_light(indoor_depth);
 	vec3 shaded = result.rgb * (use_town_dirt ? 1.0 : light);
-	COLOR = vec4(use_town_lighting ? daylight_color(shaded, outdoor_depth) : shaded, result.a);
+	if (use_town_room_shading && !use_town_dirt) shaded = town_room_color(result.rgb, light);
+	vec3 final_color = use_town_lighting ? daylight_color(shaded, outdoor_depth) : shaded;
+	// Grid lines follow the actual one-unit map cells, one logical pixel wide.
+	if (show_town_ground_grid &&
+		(any(notEqual(floor(cell_world + source_uv), floor(cell_world + uv_x))) ||
+		 any(notEqual(floor(cell_world + source_uv), floor(cell_world + uv_y))))) {
+		final_color = mix(final_color, vec3(0.0), 0.10);
+	}
+	COLOR = vec4(final_color, result.a);
 }

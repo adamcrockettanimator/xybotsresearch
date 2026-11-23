@@ -93,6 +93,7 @@ uniform float door_reveal_width;
 uniform float door_panel_depth;
 // Foundation height above ground and header trim depth below the wall top.
 uniform vec2 storefront_trim_bands = vec2(0.035, 0.042);
+uniform float siding_foundation_shadow = 0.48;
 uniform float focal_length = 128.0;
 uniform float horizon_y = 31.5;
 uniform vec2 projection_offset = vec2(0.0);
@@ -343,7 +344,9 @@ float trim_detail_line_coverage(float source_texel_y, float line_center_y, float
 	return max(0.0, 1.0 - abs(logical_pixel_distance));
 }
 
-vec4 semantic_wall_material(vec2 source_uv, vec2 source_size, float x_texels_per_logical_pixel, float y_texels_per_logical_pixel, vec2 span_x, vec2 span_y, vec2 pixel, float ray_depth) {
+vec4 semantic_wall_material_with_crown(vec2 source_uv, vec2 source_size, float x_texels_per_logical_pixel,
+		float y_texels_per_logical_pixel, vec2 span_x, vec2 span_y, vec2 pixel, float ray_depth,
+		bool vaulted, float crown_edge_pixels) {
 	vec2 texel = floor(source_uv * source_size);
 	float y = texel.y;
 	float source_texel_y = source_uv.y * source_size.y;
@@ -361,7 +364,9 @@ vec4 semantic_wall_material(vec2 source_uv, vec2 source_size, float x_texels_per
 	// logical pixel wide while visible, but does not stay conspicuously bright
 	// in a nearly black distant corridor.
 	float detail_fade = smoothstep(0.18, 0.78, depth_light_dither(ray_depth, pixel));
-	if (y < 8.0) return vec4(semantic_window_over_wall(trim, source_uv, source_size), 1.0);
+	if (vaulted ? crown_edge_pixels < 0.0 : y < 8.0) {
+		return vec4(semantic_window_over_wall(trim, source_uv, source_size), 1.0);
+	}
 	if (y >= 83.0) {
 		float lower_highlight = trim_detail_line_coverage(source_texel_y, 83.5, y_texels_per_logical_pixel);
 		return vec4(semantic_window_over_wall(mix(trim, trim_highlight, lower_highlight * detail_fade), source_uv, source_size), 1.0);
@@ -423,12 +428,14 @@ vec4 semantic_wall_material(vec2 source_uv, vec2 source_size, float x_texels_per
 	float footprint_major = max(length(span_x), length(span_y));
 	float footprint_minor = max(0.001, min(length(span_x), length(span_y)));
 	bool needs_ewa = footprint_major > 1.25 && footprint_major / footprint_minor > 1.5;
+	float top_trim_shadow = vaulted
+		? 1.0 - step(1.0, crown_edge_pixels)
+		: trim_detail_line_coverage(source_texel_y, 8.5, y_texels_per_logical_pixel);
 	if (use_semantic_lattice_anisotropic_filter && needs_ewa) {
 		// Gaussian EWA-style footprint of the same artist-tuned small-line
 		// lattice. The filter changes sampling only, not the LOD grammar.
 		float coverage = ewa_lattice_coverage(pattern_position, span_x, span_y, literal_stroke_half_width);
 		vec3 wallpaper_color = bayer2_threshold(pixel) < coverage ? lattice : paper;
-		float top_trim_shadow = trim_detail_line_coverage(source_texel_y, 8.5, y_texels_per_logical_pixel);
 		wallpaper_color = semantic_window_over_wall(wallpaper_color, source_uv, source_size);
 		return vec4(mix(wallpaper_color, trim_shadow, top_trim_shadow * detail_fade), 1.0);
 	}
@@ -436,8 +443,13 @@ vec4 semantic_wall_material(vec2 source_uv, vec2 source_size, float x_texels_per
 	// with [. Do not fall into any alternate coverage/symbol LOD here.
 	vec3 wallpaper_color = nearest_line_distance <= literal_stroke_half_width ? lattice : paper;
 	wallpaper_color = semantic_window_over_wall(wallpaper_color, source_uv, source_size);
-	float top_trim_shadow = trim_detail_line_coverage(source_texel_y, 8.5, y_texels_per_logical_pixel);
 	return vec4(mix(wallpaper_color, trim_shadow, top_trim_shadow * detail_fade), 1.0);
+}
+
+vec4 semantic_wall_material(vec2 source_uv, vec2 source_size, float x_texels_per_logical_pixel,
+		float y_texels_per_logical_pixel, vec2 span_x, vec2 span_y, vec2 pixel, float ray_depth) {
+	return semantic_wall_material_with_crown(source_uv, source_size, x_texels_per_logical_pixel,
+		y_texels_per_logical_pixel, span_x, span_y, pixel, ray_depth, false, 0.0);
 }
 
 uniform vec2 town_camera_origin;
@@ -452,8 +464,14 @@ uniform vec4 fence_heights;
 uniform bool use_town_lintel = false;
 uniform vec4 storefront_awning_rect;
 uniform vec2 storefront_awning_heights;
+uniform bool storefront_door_shell = true;
 uniform bool storefront_open_leaf = false;
 uniform bool storefront_front_door = false;
+uniform vec3 gable_door_knob; // Hinge-to-latch, head-to-sill, world radius.
+uniform vec2 gable_knob_normal;
+uniform vec4 gable_knob_color : source_color;
+uniform vec4 gable_panel_rows;
+uniform float gable_panel_inset;
 // Shared-corner endpoint, overhang height, and timber enable flag.
 uniform vec3 porch_timber;
 // Edge highlight, ledge contact shadow, and awning shadow strengths.
@@ -494,12 +512,12 @@ float storefront_corner_distance(vec2 world) {
 
 // Distance along this wall to its far post, and how much of the return faces
 // the viewer. Use the footprint so internal wall splits agree on the far end.
-vec2 storefront_far_corner(vec2 world) {
+vec2 storefront_far_corner(vec2 world, vec4 footprint) {
 	vec2 edge = wall_world_b - wall_world_a;
 	bool runs_x = abs(edge.x) > abs(edge.y);
 	float axis = runs_x ? world.x : world.y;
-	float min_axis = runs_x ? storefront_footprint.x : storefront_footprint.y;
-	float max_axis = runs_x ? storefront_footprint.z : storefront_footprint.w;
+	float min_axis = runs_x ? footprint.x : footprint.y;
+	float max_axis = runs_x ? footprint.z : footprint.w;
 	float eye_axis = runs_x ? town_camera_origin.x : town_camera_origin.y;
 	float eye_offset = eye_axis - (min_axis + max_axis) * 0.5;
 	float far_post = eye_offset >= 0.0 ? min_axis : max_axis;
@@ -553,7 +571,7 @@ vec3 storefront_lapped_siding(vec3 base, vec2 world, float height, float depth, 
 	vec3 board = wood * mix(flat_tone, tone, detail);
 	if (!coffee_return) return board;
 
-	vec2 far_corner = storefront_far_corner(world);
+	vec2 far_corner = storefront_far_corner(world, storefront_footprint);
 	// The return masks the recessed upper edge. At the bright lower lip
 	// it narrows to zero so the board face reaches the post.
 	float extension = storefront_construction.z * far_corner.y * phase;
@@ -562,30 +580,34 @@ vec3 storefront_lapped_siding(vec3 base, vec2 world, float height, float depth, 
 	return mix(board, storefront_trim.rgb * STOREFRONT_TRIM_RETURN, end_face * end_detail);
 }
 
-vec3 storefront_corner_timber(vec2 world, vec2 pixel, float depth) {
+vec3 storefront_corner_timber(vec2 world, vec2 pixel, float depth, vec4 footprint, float post_width, vec3 wood, bool gable_post) {
 	vec2 span = wall_world_b - wall_world_a;
 	bool side_wall = abs(span.y) > abs(span.x);
-	vec2 midpoint = (storefront_footprint.xy + storefront_footprint.zw) * 0.5;
-	vec2 corner = mix(storefront_footprint.xy, storefront_footprint.zw, step(midpoint, world));
+	vec2 midpoint = (footprint.xy + footprint.zw) * 0.5;
+	vec2 corner = mix(footprint.xy, footprint.zw, step(midpoint, world));
 	vec2 outward = sign(corner - midpoint);
 	vec2 view = (town_camera_origin - corner) * outward;
-	float face_light = side_wall ? 0.86 : 1.14;
-	vec2 far_corner = storefront_far_corner(world);
-	float post_width = storefront_construction.x;
+	float face_light = gable_post ? town_post_face_tone(side_wall, town_camera_origin.x < wall_world_a.x)
+		: (side_wall ? 0.86 : 1.14);
+	vec2 far_corner = storefront_far_corner(world, footprint);
 	if (far_corner.x < post_width) {
 		float return_width = post_width * 0.60 * far_corner.y;
 		float return_pixels = return_width * focal_length / depth;
 		float visible_return = smoothstep(0.45, 1.35, return_pixels);
 		float dark_side = step(post_width - return_width, far_corner.x);
-		face_light = mix(face_light, STOREFRONT_TRIM_FACE, visible_return);
-		face_light = mix(face_light, STOREFRONT_TRIM_RETURN, dark_side * visible_return);
+		if (gable_post) {
+			face_light = mix(face_light, face_light * 0.82, dark_side * visible_return);
+		} else {
+			face_light = mix(face_light, STOREFRONT_TRIM_FACE, visible_return);
+			face_light = mix(face_light, STOREFRONT_TRIM_RETURN, dark_side * visible_return);
+		}
 	}
 	if (view.x > 0.0 && view.y > 0.0 && side_wall == (view.x >= view.y)) {
 		// Snap the common edge once, then give the first pixel on the owning face
 		// the highlight. A narrow face keeps its base tone as it recedes.
 		float corner_u = dot(corner - wall_world_a, span) / dot(span, span);
 		vec2 local = mix(wall_local_a, wall_local_b, corner_u);
-		vec2 inner = mix(wall_local_a, wall_local_b, corner_u + (corner_u < 0.5 ? 1.0 : -1.0) * storefront_construction.x / length(span));
+		vec2 inner = mix(wall_local_a, wall_local_b, corner_u + (corner_u < 0.5 ? 1.0 : -1.0) * post_width / length(span));
 		if (min(local.y, inner.y) > 0.005) {
 			float offset = canvas_size.x * 0.5 + projection_offset.x;
 			float edge_x = offset + local.x * focal_length / local.y;
@@ -596,7 +618,15 @@ vec3 storefront_corner_timber(vec2 world, vec2 pixel, float depth) {
 			}
 		}
 	}
-	return storefront_trim.rgb * face_light;
+	return wood * face_light;
+}
+
+vec3 storefront_foundation_timber(vec3 wood, float pixel_y, float depth) {
+	float foundation_top = storefront_floor_height + storefront_trim_bands.x;
+	float boundary_y = horizon_y + projection_offset.y + (camera_height - foundation_top) * focal_length / depth;
+	float shadow_row = ceil(boundary_y - 0.5);
+	float shade = floor(pixel_y) == shadow_row ? 1.0 - siding_foundation_shadow : 1.0;
+	return wood * (0.90 * shade);
 }
 
 bool storefront_clear_pane(vec2 point) {
@@ -790,7 +820,104 @@ vec2 storefront_project_uv(vec2 uv) {
 		vec2(local.x, camera_height - height) * focal_length / max(local.y, 0.005);
 }
 
+bool storefront_edge_cell(vec2 pixel, vec3 first, vec3 last) {
+	vec2 center = vec2(canvas_size.x * 0.5, horizon_y) + projection_offset;
+	return town_projected_edge_cell(pixel, first, last, vec3(town_camera_origin, camera_height),
+		town_camera_forward, town_camera_right, center, focal_length);
+}
+
+vec4 gable_door_surface(vec2 uv, vec2 pixel, float depth, out float glint) {
+	vec3 wood = storefront_trim.rgb * 0.99;
+	// The two raised-border rectangles share the same stiles. The upper
+	// panel extends farther than the lower one, as on both Blender leaves.
+	vec2 rows = uv.y < (gable_panel_rows.y + gable_panel_rows.z) * 0.5 ? gable_panel_rows.xy : gable_panel_rows.zw;
+	float left = gable_panel_inset;
+	float right = 1.0 - left;
+	float leaf_width = abs(storefront_project_uv(vec2(1.0, uv.y)).x - storefront_project_uv(vec2(0.0, uv.y)).x);
+	float pixels_per_unit = focal_length / depth;
+	float leaf_height = (face_top.x - face_bottom) * pixels_per_unit;
+	float panel_pixels = (right - left) * leaf_width;
+	float detail = smoothstep(5.0, 9.0, panel_pixels) * (1.0 - smoothstep(1.6, 2.8, depth));
+	vec2 panel_edge = min(uv - vec2(left, rows.x), vec2(right, rows.y) - uv) * vec2(leaf_width, leaf_height);
+	float inside = min(panel_edge.x, panel_edge.y);
+	float panel = mix(smoothstep(-0.6, 0.6, inside), step(0.0, inside), detail);
+	float panel_tone = mix(0.87, 0.91, detail);
+	wood *= mix(1.0, panel_tone, panel * smoothstep(1.0, 2.5, panel_pixels));
+	if (detail > 0.0 && inside >= 0.0) {
+		vec2 a = mix(wall_world_a, wall_world_b, left);
+		vec2 b = mix(wall_world_a, wall_world_b, right);
+		vec2 heights = mix(vec2(face_top.x), vec2(face_bottom), rows);
+		float tone = panel_tone;
+		// Each bevel owns a complete screen-space stroke. The crossbar
+		// corners belong to the header and sill so their rows join cleanly.
+		if (storefront_edge_cell(pixel, vec3(a, heights.x), vec3(b, heights.x))) {
+			tone = 0.63;
+		} else if (storefront_edge_cell(pixel, vec3(a, heights.y), vec3(b, heights.y))) {
+			tone = 1.22;
+		} else {
+			float west = dot(normalize(b - a), TOWN_SUN_DIRECTION);
+			if (storefront_edge_cell(pixel, vec3(a, heights.x), vec3(a, heights.y))) tone = 0.91 + 0.25 * west;
+			if (storefront_edge_cell(pixel, vec3(b, heights.x), vec3(b, heights.y))) tone = 0.91 - 0.25 * west;
+		}
+		wood *= mix(1.0, tone / panel_tone, detail);
+	}
+
+	// The frame shades the face of the leaf, with the deepest cast shadow
+	// below its header. The reveal lifts off the leaf as the door swings.
+	float in_frame = 1.0 - smoothstep(0.04, 0.20, abs(gable_knob_normal.x));
+	if (in_frame > 0.0) {
+		float jamb_side = step(0.5, uv.x);
+		float jamb_x = storefront_project_uv(vec2(jamb_side, uv.y)).x;
+		vec3 edge_px = vec3(abs(pixel.x - jamb_x), uv.y * leaf_height, (1.0 - uv.y) * leaf_height);
+		vec3 contact = vec3(town_contact_coverage(edge_px.x, 0.021 * pixels_per_unit),
+			town_contact_coverage(edge_px.y, 0.029 * pixels_per_unit), town_contact_coverage(edge_px.z, 0.015 * pixels_per_unit));
+		contact = mix(clamp(1.5 - edge_px, vec3(0.0), vec3(1.0)), contact, detail);
+		vec2 tangent = normalize(wall_world_b - wall_world_a);
+		vec2 toward_eye = normalize(town_camera_origin - mix(wall_world_a, wall_world_b, uv.x));
+		float near_jamb = max(0.0, dot(tangent, toward_eye) * (jamb_side * 2.0 - 1.0));
+		float jamb_room = smoothstep(3.0, 6.0, leaf_width) * (1.0 - smoothstep(0.28, 0.80, near_jamb));
+		float cap_room = min(smoothstep(2.0, 4.0, leaf_width), smoothstep(4.0, 8.0, leaf_height));
+		wood *= 1.0 - in_frame * max(0.33 * contact.x * jamb_room, cap_room * max(0.44 * contact.y, 0.25 * contact.z));
+	}
+
+	glint = 0.0;
+	vec2 knob_uv = gable_door_knob.xy;
+	vec2 at_knob = mix(wall_world_a, wall_world_b, knob_uv.x);
+	vec2 toward_eye = town_camera_origin - at_knob;
+	float face_alignment = dot(normalize(toward_eye), gable_knob_normal);
+	float facing = abs(face_alignment);
+	if (depth < 7.0 && leaf_width > 2.5) {
+		float radius = gable_door_knob.z;
+		vec2 visible_normal = gable_knob_normal * (face_alignment < 0.0 ? -1.0 : 1.0);
+		vec2 normal_view = vec2(dot(visible_normal, town_camera_right), dot(visible_normal, town_camera_forward));
+		vec2 knob_local = mix(wall_local_a, wall_local_b, knob_uv.x) + normal_view * radius * 0.60;
+		float knob_height = mix(face_top.x, face_bottom, knob_uv.y);
+		float scale = focal_length / max(knob_local.y, 0.005);
+		vec2 center = vec2(canvas_size.x * 0.5, horizon_y) + projection_offset
+			+ vec2(knob_local.x, camera_height - knob_height) * scale;
+		vec2 size = radius * scale * vec2(sqrt(0.25 + 0.75 * facing * facing), 1.0);
+		vec2 shape = (pixel - center) / max(size, vec2(0.001));
+		float fade = (1.0 - smoothstep(4.5, 7.0, depth)) * smoothstep(2.5, 4.0, leaf_width);
+		float resolved = smoothstep(0.70, 1.25, max(size.x, size.y));
+		if (length(shape - vec2(0.27, 0.35)) < 1.0) wood *= 1.0 - 0.26 * fade * resolved;
+		vec2 latch_center = storefront_project_uv(vec2(min(knob_uv.x, 1.0 - 0.65 / leaf_width), knob_uv.y));
+		float one_cell = float(all(equal(floor(pixel), floor(latch_center))));
+		float radial = dot(shape, shape);
+		float knob_coverage = mix(one_cell, step(radial, 1.0), resolved);
+		if (knob_coverage > 0.0) {
+			vec2 shade_point = radial <= 1.0 ? shape : vec2(0.0);
+			vec3 normal = vec3(shade_point.x, -shade_point.y, sqrt(1.0 - dot(shade_point, shade_point)));
+			float tone = 0.68 + 0.38 * max(dot(normal, vec3(-0.43, 0.56, 0.71)), 0.0);
+			wood = mix(wood, gable_knob_color.rgb * tone, fade * knob_coverage);
+			vec2 sparkle = center - size * vec2(0.36, 0.41);
+			glint = 0.30 * fade * step(1.7, size.y) * float(all(equal(floor(pixel), floor(sparkle))));
+		}
+	}
+	return vec4(wood, 1.0);
+}
+
 vec4 storefront_door_surface(vec2 uv, vec2 uv_x, vec2 pixel, float depth, out float glint) {
+	if (gable_door_knob.z > 0.0) return gable_door_surface(uv, pixel, depth, glint);
 	float board = floor(uv.x * 5.0);
 	float visible = 1.0 - smoothstep(0.4, 0.9, abs(uv_x.x - uv.x) * 5.0);
 	float tone = rectangular_slat_tone(vec2(0.0, board));
@@ -914,8 +1041,9 @@ vec4 storefront_surface(vec2 uv, vec2 uv_x, vec2 pixel, float depth, bool exteri
 		}
 	}
 	if (height < storefront_floor_height + storefront_trim_bands.x) {
-		color = storefront_trim.rgb;
-		if (height > storefront_floor_height + storefront_trim_bands.x - 0.013) color *= mix(0.83, 1.0, smoothstep(2.0, 5.0, depth));
+		// Slightly darker foundation, with a solid logical-pixel shadow
+		// immediately below the projecting lower edge of the siding.
+		color = storefront_foundation_timber(storefront_trim.rgb, pixel.y, depth);
 	} else if (top - height < storefront_trim_bands.y) {
 		color = storefront_trim.rgb;
 	} else if (exterior_light) {
@@ -1145,8 +1273,8 @@ vec2 town_screen_ray(vec2 pixel) {
 	return town_camera_forward + town_camera_right * screen_x;
 }
 
-uniform vec4 town_variant_plane_bounds[16];
-uniform vec4 town_variant_plane_heights[16];
+uniform vec4 town_variant_plane_bounds[24];
+uniform vec4 town_variant_plane_heights[24];
 uniform int town_variant_plane_count = 0;
 uniform float town_ceiling_height;
 
@@ -1179,8 +1307,15 @@ float porch_cap_depth(vec2 world_ray, float eye_slope) {
 	return depth;
 }
 
+// Sprite offsets keep the carrier's vertices in logical canvas coordinates.
+varying vec2 logical_position;
+
+void vertex() {
+	logical_position = VERTEX;
+}
+
 void fragment() {
-	vec2 pixel = UV * canvas_size;
+	vec2 pixel = logical_position;
 	if (quantize_logical_pixels) {
 		pixel = floor(pixel) + vec2(0.5);
 	}
@@ -1212,12 +1347,14 @@ void fragment() {
 		if (use_town_lighting) {
 			vec2 world_ray = (wall_world_position - town_camera_origin) / ray_depth;
 			if (porch_plane_blocks(world_ray, eye_slope, ray_depth) || town_plane_blocks_wall(world_ray, eye_slope, ray_depth)) discard;
+			if ((town_variant_role == 4 || town_variant_role == 5) &&
+				town_support_precedes(vec3(town_camera_origin, camera_height), vec3(world_ray, -eye_slope), ray_depth)) discard;
 			if (town_ceiling_precedes(town_camera_origin, world_ray, camera_height, eye_slope, ray_depth,
-					town_roof_bounds, town_ceiling_height)) discard;
+					town_roof_bounds, town_ceiling_height, town_ceiling_mask)) discard;
 			if (storefront_paint == 2 && porch_box_in_front(world_ray, eye_slope, ray_depth)) discard;
 			// The shell's painter layer supplies occlusion for porch trim, including
 			// the transparent pixels of the active camera cutaway.
-			if (storefront_open_leaf && storefront_wall_blocks_door(world_ray, eye_slope, ray_depth)) discard;
+			if (storefront_open_leaf && storefront_door_shell && storefront_wall_blocks_door(world_ray, eye_slope, ray_depth)) discard;
 		}
 		float outdoor_depth = use_town_lighting ? town_outdoor_depth(town_camera_origin, wall_world_position, ray_depth) : 0.0;
 		float indoor_depth = max(ray_depth - outdoor_depth, 0.0);
@@ -1239,33 +1376,59 @@ void fragment() {
 			mip_level = clamp(floor(log2(minor_footprint)), 0.0, 7.0);
 		}
 		vec4 result;
+		bool structural_outline = false;
+		float contact_shadow = 0.0;
 		float glint = 0.0;
 		// Above the main roof the back of the false front is exposed siding too.
 		bool exposed_facade = storefront_paint == 1 && world_height >= storefront_facade_base &&
 			abs(wall_world_a.y - storefront_awning_rect.w) < 0.0001 &&
 			abs(wall_world_b.y - storefront_awning_rect.w) < 0.0001;
-		bool exterior_light = use_daylight || exposed_facade;
-		if (town_variant_role >= 4 && town_variant_role <= 7) {
+		bool room_wall = false;
+		if (use_town_room_shading && world_height <= town_ceiling_height &&
+				(storefront_paint == 1 || storefront_paint == 3 ||
+				 (town_variant_role >= 1 && town_variant_role <= 3) || town_variant_role == 8)) {
+			// The near side of the hit wall is what the ray actually sees.
+			// This also works looking into the room through a door from the street.
+			vec2 span = normalize(wall_world_b - wall_world_a);
+			vec2 normal = vec2(-span.y, span.x);
+			float side = sign(dot(town_camera_origin - wall_world_position, normal));
+			room_wall = town_point_is_inside(wall_world_position + normal * side * 0.015);
+		}
+		bool vaulted_wall = town_gable_blueprint && town_variant_role >= 1 && town_variant_role <= 3;
+		float crown_height = vaulted_wall ? town_gable_lining_top(wall_world_position) : 0.0;
+		bool inward_vault = vaulted_wall && town_gable_room_face(wall_world_position);
+		// The camera can trail outside the room while the player is indoors.
+		// The inward wall still terminates at the ceiling in that view.
+		if (inward_vault && town_gable_room_view && world_height > crown_height) discard;
+		bool vaulted_lining = inward_vault && world_height <= crown_height;
+		if (vaulted_wall) room_wall = use_town_room_shading && vaulted_lining;
+		bool exterior_light = (use_daylight || exposed_facade) && !room_wall && !vaulted_lining;
+		if ((town_variant_role >= 4 && town_variant_role <= 7) || town_variant_role == 10) {
 			result = town_porch_paint(wall_world_position, world_height, source_uv);
 			result.rgb *= storefront_sunlight();
 		} else if (town_variant_role > 0) {
 			float width = length(wall_world_b - wall_world_a);
 			float world_pixel = abs(uv_x.x - source_uv.x) * width;
-			bool lined = town_variant_role == 8 || (!use_daylight && world_height < town_ceiling_height);
+			bool lined = vaulted_wall ? vaulted_lining : town_variant_role == 8 || ((!use_daylight || room_wall) && world_height < town_ceiling_height);
 			vec4 lining = vec4(0.0);
 			if (lined) {
 				vec2 segment = (wall_world_b - wall_world_a) / width;
 				float along = abs(segment.x) > abs(segment.y) ? wall_world_position.x : wall_world_position.y;
 				float lining_height = town_ceiling_height - storefront_floor_height;
-				vec2 interior_uv = vec2(along, clamp(1.0 - (world_height - storefront_floor_height) / lining_height, 0.0, 1.0));
+				float paper_y = 1.0 - (world_height - storefront_floor_height) / lining_height;
+				vec2 interior_uv = vec2(along, vaulted_lining ? paper_y : clamp(paper_y, 0.0, 1.0));
 				vec2 scale_uv = vec2(width, (wall_top - face_bottom) / lining_height);
 				vec2 step_x = span_x * scale_uv;
 				vec2 step_y = span_y * scale_uv;
-				lining = semantic_wall_material(interior_uv, base_texture_size, abs(step_x.x), abs(step_y.y), step_x, step_y, pixel, indoor_depth);
+				float crown_edge_pixels = (crown_height - world_height - 0.050) * focal_length / ray_depth;
+				lining = semantic_wall_material_with_crown(interior_uv, base_texture_size, abs(step_x.x),
+					abs(step_y.y), step_x, step_y, pixel, indoor_depth, vaulted_lining, crown_edge_pixels);
 			}
-			result = town_variant_role == 8 ? lining : town_building_paint(wall_world_position, world_height, ray_depth, world_pixel, use_daylight, lining);
+			result = town_variant_role == 8 ? lining : town_building_paint(wall_world_position, pixel, world_height,
+				ray_depth, world_pixel, use_daylight, lining, structural_outline, contact_shadow);
 		} else if (corner_post) {
-			vec3 timber = storefront_corner_timber(wall_world_position, pixel, ray_depth);
+			vec3 timber = storefront_corner_timber(wall_world_position, pixel, ray_depth,
+				storefront_footprint, storefront_construction.x, storefront_trim.rgb, false);
 			result = vec4(timber * (exterior_light ? 1.0 : 0.82), 1.0);
 		} else if (use_town_lintel) {
 			if (source_uv.y > 0.17) discard;
@@ -1354,7 +1517,9 @@ void fragment() {
 			COLOR = vec4(vec3(dither_light), result.a * cutaway_opacity);
 		} else {
 			vec3 shaded = result.rgb * (exterior_light ? 1.0 : wall_light);
-			if (use_town_lighting) shaded = daylight_color(shaded, outdoor_depth);
+			if (room_wall) shaded = town_room_color(result.rgb * 0.83, wall_light);
+			shaded *= 1.0 - contact_shadow;
+			if (use_town_lighting) shaded = daylight_color(shaded, structural_outline ? town_outline_haze_depth(outdoor_depth) : outdoor_depth);
 			COLOR = vec4(mix(shaded, vec3(1.0), glint), result.a * cutaway_opacity);
 		}
 	}

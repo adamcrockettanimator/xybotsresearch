@@ -178,6 +178,11 @@ not the prop-specific numbers or names.
   in face coordinates and use the projected footprint to keep strokes
   legible at roughly one logical pixel farther away. Apply the same siding
   gradients, lap shadows, face light, and haze to the near-black ink.
+  For framed town signs, allocate projected logical-pixel columns and rows
+  to whole glyphs, preserving letter spacing and interior gaps where the
+  projection permits. Switch to the compact three-column form before a
+  five-column glyph loses strokes; below three columns or five rows, use
+  restrained coverage as a fallback rather than claiming full legibility.
 - The town sun is in the west, which is negative world X. Shade fixed world
   faces accordingly. West is brightest, east darkest, and north and south
   sit between them. Give the roof top its own tone. Keep the hard foundation
@@ -217,7 +222,26 @@ from across the street and up close. Then step inside and check both the
 far interior wall and a view out through a window. Include a narrow shop
 and a deep room so short and long indoor rays both get exercised.
 
+### Line continuity and motion
+
+- An intentional line is a solid, connected aliased stroke while its semantic
+  layer is visible. Choose logical pixel cells from the projected feature;
+  sampling a narrow world-space band at pixel centres can leave holes or make
+  the whole line disappear between columns. Diagonals need connected raster
+  coverage, not independently sampled fragments.
+- At a fixed distance and angle, small camera translations must not switch a
+  visible line on and off. Fade or simplify details deliberately by their
+  authored distance and angle rules. Check a sequence of subpixel camera
+  positions, both face ownership transitions and occlusion, not just stills.
+- The porch timber pass selects projected face-edge pixels for post rims and
+  top/bottom rows for rails and braces. Verify those selections on real
+  geometry, including grazing angles, short braces and overlapping members;
+  a selected cell can still be clipped by a carrier or another surface.
+
 ### Roofing and joinery
+
+These notes describe the storefront kit. The gable shop uses the simpler
+cornice, beam, and frame treatments in the Blender-to-GPU example below.
 
 - Paint corrugation on the roof and awning planes. The current storefront
   uses 18 fine ribs with linear ramps, a darker slope on one side, and a
@@ -230,11 +254,19 @@ and a deep room so short and long indoor rays both get exercised.
   and fade their fine variation as projected texels become too small. Keep
   the oxidation scale independent of corrugation density. Use the nearby
   metal highlights to convey form, with rust providing color variation.
+- Keep broad porch shading legible as fine details simplify: the facade is
+  darkest directly below the awning and lightens toward the floor; the deck
+  is darkest at the wall and lightens toward the street. Balusters receive
+  a contact shadow below the handrail. These structural shadows do not use
+  the close-only highlight fade.
 - Put the porch beam between the posts and below the awning plane. Paint a
   roof shadow on the upper face, and check oblique views for floating strips
   or roof overlap. Give the front cornice a lit lip, dark groove, beveled face,
   and lower bead. Keep rear trim slim, close to the wall, with a shadow below.
-  Keep porch posts at the outer corners and the rail gap aligned with the door.
+  Center porch posts on the deck corners so their outer faces extend beyond
+  both deck edges, with the same section as the
+  building corner posts. Carry supports to ground below the raised apron, and
+  show the ground shadow beneath the floor. Keep the rail gap aligned with the door.
 - Give the door header a continuous tone and the visible jamb a return that
   narrows head-on. Use a thin full-height side return on the window and keep
   its head and sill lighting. Treat the center cross as one piece by shading
@@ -276,3 +308,129 @@ The storefront examples live in `scripts/town_storefront_style.gd`,
 and renderer. `tests/town_storefront_test.gd` and
 `tests/footprint_wall_visibility_test.gd` cover the relevant gameplay and
 ordering rules.
+
+## Blender-to-GPU example: Gable Coffee Shop
+
+The gable shop is the reference for reading an authored Blender building and
+rebuilding it as semantic pixel art. The source is
+`D:/Godot/xybotsResearch/blender/syntyCowboyTown.blend`, collection
+`Shop_1x2.5_gableRoof`. Use the detailed model for the construction and
+lighting reference and `OUTLINE.001` for the shell and cutouts. The Coffee
+Town example is north-facing at `Rect2i(5, 11, 1, 2)`, beside the two earlier
+1×2 shops. Those neighbors are useful comparisons for the distant palette,
+simple foundation, and the dimensional joinery.
+
+### Read the model before choosing the carriers
+
+- Measure relative to the footprint, street orientation, and finished floor.
+  This asset uses four Blender units per town cell. Record the wall, gable,
+  false front, roof slopes, porch, foundation, door and window openings,
+  post sections, brace joints, and roof lining. Treat the model's bevels as
+  evidence for where a pixel highlight or crevice belongs. Check both sides
+  of moving parts. The model supplied exterior knobs, and the game doors also
+  needed hardware on the inside.
+- Keep geometry where it changes the silhouette, occlusion, parallax, or how
+  a part attaches. The shell and roof planes, the door leaf, and the analytic
+  timber members carry depth. Shaders paint the repeating siding, metal ribs,
+  rust, panel bevels, and small hardware details. Use the authored opening
+  bounds for both the visible window and gameplay breakage and vaulting.
+- Keep related dimensions shared. The two rear, two front, and two porch
+  posts use the same square section. Their heights vary, and the tall front
+  posts keep their side face and the same shading above the porch roof.
+  Preserve the deck as one walkable plane with a dark fascia below it and
+  a single simple contact shadow at ground level.
+
+### Paint form and contact shadows
+
+- Give the porch beam and rafters flat directional face tones, with darker
+  undersides. The overhanging metal shades the timber immediately below
+  it. The false-front cornice casts its own contact stroke on the siding
+  directly below the cornice. Keep that stroke off the corner posts.
+  Keep one metal-colored pixel along the exposed gable/eave edge when
+  the sheet is edge-on. Avoid painting a line down the roof ridge or
+  stacking decorative bands under the metal. At the prototype comparison
+  distance, omit an extra siding seam when it competes with the overhang.
+- End a knee brace vertically into its post and horizontally against the
+  underside of the header. Show the brace's actual visible planes. Select an
+  edge highlight or shadow from the adjacent visible face and fade the
+  accent as it becomes too small. Limit joint shadows to their receivers.
+  The brace meets the header underside, rafters meet the header's back, and
+  the brace and railing shade the inward face of the post where they enter.
+  Use the actual member face and contact extent. A distance to the entire
+  neighbor box by itself paints across corners and wraps the beam.
+- Project the post return so it hides part of the shadow on a receding
+  wall. Follow the joint from the top trim down across the foundation.
+  Shade the foundation under the lowest siding course. On the porch,
+  put the rail's deck shadow directly below the rail and extend it to the
+  fascia. Keep small foot contacts local to the posts and balusters.
+- Use two distinct door shadows. On the wall outside the casing, use
+  rounded falloff around the corners, a shorter shadow above and a broader
+  shadow below the threshold. On the closed door leaf, put the darkest
+  reveal under the header and a narrower contact at the sill and jambs.
+  Fade the reveal as the leaf swings out. Keep the casing a solid flat
+  ring with a continuous side return at oblique angles. At distance, reserve
+  the first logical stroke for the casing. Draw the reveal only where there
+  is room inside the opening and the view exposes it. Give a shadow caster
+  priority whenever its silhouette and its shadow compete for one pixel.
+  Paint the two inset
+  panels with coherent projected bevel strokes. Keep knob positions tied to
+  the leaf, with hardware on both faces.
+- Place contact shadows on the material before outdoor haze. Up close,
+  allow a wider soft falloff. At distance retain one logical pixel where it
+  conveys form, with less contrast as atmospheric perspective increases.
+  Resolve overlapping contact masks without piling multiple dark bands
+  onto the same joint. Fade periodic siding detail into broad blocks
+  of color. Hold subpixel posts and the metal roof lip independently of
+  those texture fades. The intact window cross is a single piece. Select
+  the center column and projected row separately when each bar becomes
+  subpixel, even if its world-space band falls between pixel centers.
+  Preserve the broken window's opening and fragments after removing the cross.
+
+### Interior and render ownership
+
+- Keep wallpaper above the wainscot all the way to the vaulted roof
+  lining. Show the transverse rafters, ridge timber, and eave plates.
+  Use the darkest wood samples already present in the room for the ceiling,
+  with a small value difference on the rafters to keep them readable.
+  Select the interior roof from the player's room as well as the actual
+  camera position. A trailing camera can sit outside while the player is
+  inside. Clip inward-facing walls at the same lining as the roof and keep
+  exterior porch members behind the solid upper wall. Preserve the view
+  through the window and door openings and check intentional wall cutaway.
+- Assign one owner per visible surface. The gable deck owns its entire top
+  and the depth-tested timber skirt owns the outside fascia. A legacy flat
+  skirt under the railing and opening caused isolated dark pixels up on the
+  boards. Hiding render layers individually and comparing the same logical
+  cells identified the wall carrier drawing the duplicate. Scope fixes to
+  that carrier so legacy storefronts retain their treatment.
+
+### Where to look and how to verify
+
+- Dimensions and material controls live in
+  [TownCoffeeKit](../../scripts/town_coffee_kit.gd) and
+  [its resource](../../resources/town_coffee_kit.tres). The
+  [lot recipe](../../resources/generated_coffee_town.tres) places the shops.
+  [TownBuildingStyle](../../scripts/town_building_style.gd) defines the
+  physical spans and timber members.
+- Start with [wall paint](../../scripts/town_building_paint.gdshaderinc),
+  [the door leaf shader](../../scripts/coordinate_frame_gpu_wall_homography.gdshader),
+  [porch timbers](../../scripts/town_porch_timber.gdshader), and
+  [deck and roof planes](../../scripts/town_storefront_plane.gdshader).
+  [Shared projection](../../scripts/town_storefront_projection.gdshaderinc)
+  has `town_projected_edge_distance` and `town_contact_coverage`.
+  [The runtime renderer](../../scripts/coordinate_frame_runtime_renderer.gd)
+  binds the cage, materials, and occlusion.
+- Use [the shared viewport experiment](../../tests/calibration/town_shared_viewport_experiment.tscn)
+  for the 160×120 render of [Generated Coffee Town](../../generated_coffee_town.tscn).
+  Revisit exact close, oblique, rear, edge-on, and distance poses. Use
+  slight camera offsets to check projected strokes and the window cross.
+  Compare closed and open doors, intact and broken windows, and interior
+  views with the camera on both sides of the threshold. Capture through
+  the graphical renderer, preferably offscreen while the user needs the
+  mouse. Inspect at native resolution or nearest-neighbor enlargement.
+  Count logical pixels for exact-width claims and compare matching cells
+  before and after a fix.
+- Run `tests/generated_coffee_town_test.gd`, `tests/town_storefront_test.gd`,
+  and `tests/town_shared_prop_bridge_test.gd` with
+  `tools/run_godot_smoke.ps1`. Headless checks cover gameplay and routing.
+  Use the graphical capture and shader diagnostics to verify what was drawn.

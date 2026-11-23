@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://coordinate_frame_navigation.tscn" id="1"]
+[ext_resource type="Resource" path="res://resources/generated_coffee_town.tres" id="2"]
+
+[node name="GeneratedCoffeeTown" instance=ExtResource("1")]
+outdoor_town = true
+town_level = ExtResource("2")
