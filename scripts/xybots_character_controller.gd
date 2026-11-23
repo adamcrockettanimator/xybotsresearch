@@ -9812,6 +9812,7 @@ func enable_calibration_primitive_gallery() -> void:
 	calibration_sprite_gallery_enabled = true
 	if calibration_semantic_stress_props_enabled:
 		_setup_semantic_stress_props()
+	_render_all_player_views()
 
 
 func _setup_semantic_stress_props() -> void:
