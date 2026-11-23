@@ -1,6 +1,12 @@
 # Xybots Research — Compact Working Context
 
-Updated: 2026-10-26
+Updated: 2026-11-23
+
+## Active development
+
+- Open `Project/xybots-research/project.godot` in the Xybots Research workspace. The desktop run scene is [Generated Coffee Town](generated_coffee_town.tscn), with Classic interior shading. The earlier [Outdoor Town](outdoor_town.tscn) scene is a comparison level.
+- Author town buildings from the [Gable Coffee Shop example](docs/semantic_gpu_cage/authoring.md#blender-to-gpu-example-gable-coffee-shop). Keep the [repository copy of the semantic prop authoring skill](docs/semantic_gpu_cage/skill/xybots-semantic-prop-authoring/SKILL.md) in sync with the workflow and examples.
+- The web entry point is [Public Title](public_title.tscn). The public Grudge County package is published separately from this source repository.
 
 Use this file when resuming work. It is the compact working reference for the project, not a replacement for the source art, Blender scenes, or task-specific visual guides.
 
